@@ -268,19 +268,189 @@
       (when (and (not related-loading?) (empty? price-history) (not (seq stores)))
         ($ :p {:class "text-sm text-base-content/40 pt-2"} (t :search/article-no-history))))))
 
+;; Store-specific detail body with articles table
+(defui store-detail-body [{:keys [related related-loading? t]}]
+  (let [[[sort-col sort-dir] set-sort!] (use-state [:total_bam :desc])
+        detail (:detail related)
+        articles (:articles related)
+        ;; Sort
+        sorted-articles (let [key-fn (case sort-col
+                                       :canonical_name :canonical_name
+                                       :last_price :last_price
+                                       :total_qty :total_qty
+                                       :total_bam :total_bam
+                                       :total_bam)
+                              cmp    (fn [a b]
+                                       (let [va (get a key-fn)
+                                             vb (get b key-fn)]
+                                         (cond
+                                           (and (number? va) (number? vb)) (compare va vb)
+                                           (and (string? va) (string? vb)) (.localeCompare va vb)
+                                           (nil? va) -1
+                                           (nil? vb) 1
+                                           :else (compare (str va) (str vb)))))
+                              sorted (sort cmp articles)]
+                          (if (= sort-dir :desc) (reverse sorted) sorted))
+        toggle-sort (fn [col]
+                      (if (= col sort-col)
+                        (set-sort! [col (if (= sort-dir :asc) :desc :asc)])
+                        (set-sort! [col (if (= col :canonical_name) :asc :desc)])))]
+    ($ :div {:class "space-y-4"}
+      ;; Store metadata rows
+      ($ :div {:class "space-y-0"}
+        (detail-row (t :search/detail-supplier) (:supplier_display_name detail))
+        (detail-row (t :search/store-city) (:city_name detail))
+        (detail-row (t :search/detail-address) (:address detail)))
+
+      ;; Loading spinner
+      (when related-loading?
+        ($ :div {:class "flex items-center gap-2 text-xs text-base-content/40 pt-2"}
+          ($ :span {:class "ds-loading ds-loading-spinner ds-loading-xs"})
+          (t :search/related-loading)))
+
+      ;; Articles table
+      (when (and (not related-loading?) (seq articles))
+        ($ :div {:class "pt-2"}
+          ($ :p {:class "text-sm font-semibold uppercase tracking-wide text-base-content/50 mb-2"}
+            (str (t :search/store-articles) " (" (count articles) ")"))
+          ($ :div {:class "max-h-[360px] overflow-y-auto overflow-x-auto"}
+            ($ :table {:class "w-full text-sm"}
+              ($ :thead {:class "sticky top-0 bg-base-100"}
+                ($ :tr {:class "border-b border-base-300 text-base-content/50"}
+                  (sort-header {:label (t :search/store-article-name) :col :canonical_name
+                                :sort-col sort-col :sort-dir sort-dir :on-sort toggle-sort
+                                :class "text-left py-1.5 pr-2 font-medium"})
+                  (sort-header {:label (t :search/store-last-price) :col :last_price
+                                :sort-col sort-col :sort-dir sort-dir :on-sort toggle-sort
+                                :class "text-right py-1.5 px-1 font-medium"})
+                  (sort-header {:label (t :search/store-total-qty) :col :total_qty
+                                :sort-col sort-col :sort-dir sort-dir :on-sort toggle-sort
+                                :class "text-right py-1.5 px-1 font-medium"})
+                  (sort-header {:label (t :search/store-total-bam) :col :total_bam
+                                :sort-col sort-col :sort-dir sort-dir :on-sort toggle-sort
+                                :class "text-right py-1.5 pl-1 font-medium"})))
+              ($ :tbody
+                (for [art sorted-articles]
+                  ($ :tr {:key (str (:id art))
+                          :class "border-b border-base-200/50 hover:bg-base-200/30"}
+                    ($ :td {:class "py-1.5 pr-2"} (or (:canonical_name art) "\u2014"))
+                    ($ :td {:class "py-1.5 px-1 text-right font-medium"}
+                      (format-amount (:last_price art) "BAM"))
+                    ($ :td {:class "py-1.5 px-1 text-right"} (some-> (:total_qty art) str))
+                    ($ :td {:class "py-1.5 pl-1 text-right font-semibold"}
+                      (format-amount (:total_bam art) "BAM")))))))))
+
+      ;; No articles
+      (when (and (not related-loading?) (empty? articles))
+        ($ :p {:class "text-sm text-base-content/40 pt-2"} (t :search/store-no-articles))))))
+
+;; Supplier-specific detail body with stores list + articles table
+(defui supplier-detail-body [{:keys [related related-loading? t]}]
+  (let [[[sort-col sort-dir] set-sort!] (use-state [:total_bam :desc])
+        stores (:stores related)
+        articles (:articles related)
+        ;; Sort articles
+        sorted-articles (let [key-fn (case sort-col
+                                       :canonical_name :canonical_name
+                                       :last_price :last_price
+                                       :total_qty :total_qty
+                                       :total_bam :total_bam
+                                       :total_bam)
+                              cmp    (fn [a b]
+                                       (let [va (get a key-fn)
+                                             vb (get b key-fn)]
+                                         (cond
+                                           (and (number? va) (number? vb)) (compare va vb)
+                                           (and (string? va) (string? vb)) (.localeCompare va vb)
+                                           (nil? va) -1
+                                           (nil? vb) 1
+                                           :else (compare (str va) (str vb)))))
+                              sorted (sort cmp articles)]
+                          (if (= sort-dir :desc) (reverse sorted) sorted))
+        toggle-sort (fn [col]
+                      (if (= col sort-col)
+                        (set-sort! [col (if (= sort-dir :asc) :desc :asc)])
+                        (set-sort! [col (if (= col :canonical_name) :asc :desc)])))]
+    ($ :div {:class "space-y-4"}
+      ;; Loading spinner
+      (when related-loading?
+        ($ :div {:class "flex items-center gap-2 text-xs text-base-content/40 pt-2"}
+          ($ :span {:class "ds-loading ds-loading-spinner ds-loading-xs"})
+          (t :search/related-loading)))
+
+      ;; Stores list
+      (when (and (not related-loading?) (seq stores))
+        ($ :div {:class "pt-2"}
+          ($ :p {:class "text-sm font-semibold uppercase tracking-wide text-base-content/50 mb-2"}
+            (str (t :search/supplier-stores) " (" (count stores) ")"))
+          ($ :div {:class "space-y-1.5"}
+            (for [store stores]
+              ($ :div {:key (str (:id store))
+                       :class "flex items-center justify-between px-3 py-2 rounded-lg border border-base-300 bg-base-100"}
+                ($ :div {:class "min-w-0 flex-1"}
+                  ($ :p {:class "text-sm font-medium truncate"} (or (:display_name store) "\u2014"))
+                  (when (:address store)
+                    ($ :p {:class "text-xs text-base-content/60 truncate mt-0.5"} (:address store))))
+                ($ :p {:class "text-sm font-semibold flex-shrink-0 pl-3"}
+                  (format-amount (:total_spendings store) "BAM")))))))
+
+      ;; No stores
+      (when (and (not related-loading?) (empty? stores))
+        ($ :p {:class "text-sm text-base-content/40 pt-2"} (t :search/supplier-no-stores)))
+
+      ;; Articles table
+      (when (and (not related-loading?) (seq articles))
+        ($ :div {:class "pt-2"}
+          ($ :p {:class "text-sm font-semibold uppercase tracking-wide text-base-content/50 mb-2"}
+            (str (t :search/supplier-articles) " (" (count articles) ")"))
+          ($ :div {:class "max-h-[360px] overflow-y-auto overflow-x-auto"}
+            ($ :table {:class "w-full text-sm"}
+              ($ :thead {:class "sticky top-0 bg-base-100"}
+                ($ :tr {:class "border-b border-base-300 text-base-content/50"}
+                  (sort-header {:label (t :search/store-article-name) :col :canonical_name
+                                :sort-col sort-col :sort-dir sort-dir :on-sort toggle-sort
+                                :class "text-left py-1.5 pr-2 font-medium"})
+                  (sort-header {:label (t :search/store-last-price) :col :last_price
+                                :sort-col sort-col :sort-dir sort-dir :on-sort toggle-sort
+                                :class "text-right py-1.5 px-1 font-medium"})
+                  (sort-header {:label (t :search/store-total-qty) :col :total_qty
+                                :sort-col sort-col :sort-dir sort-dir :on-sort toggle-sort
+                                :class "text-right py-1.5 px-1 font-medium"})
+                  (sort-header {:label (t :search/store-total-bam) :col :total_bam
+                                :sort-col sort-col :sort-dir sort-dir :on-sort toggle-sort
+                                :class "text-right py-1.5 pl-1 font-medium"})))
+              ($ :tbody
+                (for [art sorted-articles]
+                  ($ :tr {:key (str (:id art))
+                          :class "border-b border-base-200/50 hover:bg-base-200/30"}
+                    ($ :td {:class "py-1.5 pr-2"} (or (:canonical_name art) "\u2014"))
+                    ($ :td {:class "py-1.5 px-1 text-right font-medium"}
+                      (format-amount (:last_price art) "BAM"))
+                    ($ :td {:class "py-1.5 px-1 text-right"} (some-> (:total_qty art) str))
+                    ($ :td {:class "py-1.5 pl-1 text-right font-semibold"}
+                      (format-amount (:total_bam art) "BAM")))))))))
+
+      ;; No articles
+      (when (and (not related-loading?) (empty? articles))
+        ($ :p {:class "text-sm text-base-content/40 pt-2"} (t :search/supplier-no-articles))))))
+
 (defui detail-panel [{:keys [selected results related related-loading? t on-close]}]
   (when selected
     (let [{:keys [type id]} selected
           items (get results (keyword type))
           item  (first (filter #(= (str (:id %)) (str id)) (or items [])))
-          is-article? (= (keyword type) :articles)]
+          is-article? (= (keyword type) :articles)
+          is-store? (= (keyword type) :stores)
+          is-supplier? (= (keyword type) :suppliers)]
       ($ :div {:class "h-full flex flex-col bg-base-100 border-l border-base-300"}
         ;; Header
         ($ :div {:class "flex items-center justify-between px-5 py-3 border-b border-base-300 flex-shrink-0"}
           ($ :p {:class "text-base font-semibold"}
-            (if is-article?
-              (or (:canonical_name item) (t (keyword "search" (str "type-" (name type)))))
-              (t (keyword "search" (str "type-" (name type))))))
+            (cond
+              is-article?  (or (:canonical_name item) (t (keyword "search" (str "type-" (name type)))))
+              is-store?    (or (:display_name item) (t (keyword "search" (str "type-" (name type)))))
+              is-supplier? (or (:display_name item) (t (keyword "search" (str "type-" (name type)))))
+              :else        (t (keyword "search" (str "type-" (name type))))))
           ($ :button {:class "text-base-content/40 hover:text-base-content transition-colors"
                       :on-click on-close}
             ($ :svg {:class "w-4 h-4" :fill "none" :stroke "currentColor" :viewBox "0 0 24 24"}
@@ -289,46 +459,31 @@
         ;; Body
         ($ :div {:class "flex-1 overflow-y-auto p-5"}
           (if item
-            (if is-article?
+            (cond
               ;; Rich article detail with price history + store filtering
+              is-article?
               ($ article-detail-body
                 {:related related
                  :related-loading? related-loading?
                  :t t})
+              ;; Rich store detail with supplier/city + articles list
+              is-store?
+              ($ store-detail-body
+                {:related related
+                 :related-loading? related-loading?
+                 :t t})
+              ;; Rich supplier detail with stores + articles list
+              is-supplier?
+              ($ supplier-detail-body
+                {:related related
+                 :related-loading? related-loading?
+                 :t t})
               ;; Standard entity detail
+              :else
               ($ :div {:class "space-y-4"}
                 ;; Entity key-value rows
                 ($ :div {:class "space-y-0"}
                   (case (keyword type)
-                    :expenses
-                    ($ :<>
-                      (detail-row (t :search/detail-supplier) (:supplier_display_name item))
-                      (detail-row (t :search/detail-payer) (:payer_label item))
-                      (detail-row (t :search/detail-date) (format-date (:purchased_at item)))
-                      (detail-row (t :search/detail-total) (format-amount (:total_amount item) (:currency item)))
-                      (detail-row (t :search/detail-currency) (:currency item))
-                      (detail-row (t :search/detail-notes) (:notes item)))
-
-                    :receipts
-                    ($ :<>
-                      (detail-row (t :search/detail-filename) (:original_filename item))
-                      (detail-row (t :search/detail-supplier-guess) (:supplier_guess item))
-                      (detail-row (t :search/detail-store-guess) (:store_guess item))
-                      (detail-row (t :search/detail-status) (:status item))
-                      (detail-row (t :search/detail-created) (format-date (:created_at item))))
-
-                    :suppliers
-                    ($ :<>
-                      (detail-row (t :search/detail-name) (:display_name item))
-                      (detail-row (t :search/detail-key) (:normalized_key item))
-                      (detail-row (t :search/detail-address) (:address item)))
-
-                    :stores
-                    ($ :<>
-                      (detail-row (t :search/detail-name) (:display_name item))
-                      (detail-row (t :search/detail-key) (:normalized_key item))
-                      (detail-row (t :search/detail-address) (:address item)))
-
                     :payers
                     ($ :<>
                       (detail-row (t :search/detail-label) (:label item)))
@@ -358,12 +513,12 @@
                                  :class "flex items-center justify-between py-1.5"}
                           ($ :div
                             ($ :p {:class "text-xs font-medium"}
-                              (or (:supplier_display_name e) (:payer_label e) "—"))
+                              (or (:supplier_display_name e) (:payer_label e) "\u2014"))
                             ($ :p {:class "text-xs text-base-content/50"}
                               (format-date (:purchased_at e))))
                           ($ :p {:class "text-xs font-semibold shrink-0 pl-2"}
                             (format-amount (:total_amount e) (:currency e))))))))))
-            ($ :p {:class "text-sm text-base-content/40"} "—")))))))
+            ($ :p {:class "text-sm text-base-content/40"} "\u2014")))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Main page
@@ -430,38 +585,6 @@
 
               has-results?
               ($ :<>
-                ;; Expenses
-                ($ result-group
-                  {:title (t :search/type-expense)
-                   :badge-class "bg-blue-100 text-blue-700"
-                   :items (:expenses results)
-                   :render-item (fn [item]
-                                  (let [id (str (:id item))
-                                        sel? (= selected {:type :expenses :id id})]
-                                    ($ expense-card
-                                      {:key id
-                                       :item item
-                                       :t t
-                                       :selected? sel?
-                                       :on-click #(rf/dispatch [:user-expenses/select-search-result
-                                                                {:type :expenses :id id}])})))})
-
-                ;; Receipts
-                ($ result-group
-                  {:title (t :search/type-receipt)
-                   :badge-class "bg-purple-100 text-purple-700"
-                   :items (:receipts results)
-                   :render-item (fn [item]
-                                  (let [id (str (:id item))
-                                        sel? (= selected {:type :receipts :id id})]
-                                    ($ receipt-card
-                                      {:key id
-                                       :item item
-                                       :t t
-                                       :selected? sel?
-                                       :on-click #(rf/dispatch [:user-expenses/select-search-result
-                                                                {:type :receipts :id id}])})))})
-
                 ;; Suppliers
                 ($ result-group
                   {:title (t :search/type-supplier)

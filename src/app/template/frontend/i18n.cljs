@@ -259,6 +259,20 @@
     :search/article-total          "Ukupno"
     :search/article-store          "Trgovina"
     :search/article-no-history     "Nema historije cijena"
+    :search/store-city             "Grad"
+    :search/store-articles         "Artikli"
+    :search/store-article-name     "Naziv"
+    :search/store-last-price       "Zadnja cijena"
+    :search/store-total-qty        "Ukupno kol."
+    :search/store-total-bam        "Ukupno BAM"
+    :search/store-no-articles      "Nema artikala"
+    :search/supplier-stores        "Trgovine"
+    :search/supplier-store-name    "Naziv"
+    :search/supplier-store-address "Adresa"
+    :search/supplier-total-spendings "Ukupna potrošnja"
+    :search/supplier-articles      "Artikli"
+    :search/supplier-no-stores     "Nema trgovina"
+    :search/supplier-no-articles   "Nema artikala"
 
     ;; Tenant pages
     :tenant/welcome          (fn [name] (str "Dobrodošli, " name "!"))
@@ -963,6 +977,20 @@
     :search/article-total          "Total"
     :search/article-store          "Store"
     :search/article-no-history     "No price history"
+    :search/store-city             "City"
+    :search/store-articles         "Articles"
+    :search/store-article-name     "Name"
+    :search/store-last-price       "Last Price"
+    :search/store-total-qty        "Total QTY"
+    :search/store-total-bam        "Total BAM"
+    :search/store-no-articles      "No articles"
+    :search/supplier-stores        "Stores"
+    :search/supplier-store-name    "Name"
+    :search/supplier-store-address "Address"
+    :search/supplier-total-spendings "Total Spendings"
+    :search/supplier-articles      "Articles"
+    :search/supplier-no-stores     "No stores"
+    :search/supplier-no-articles   "No articles"
 
     ;; Tenant pages
     :tenant/welcome          (fn [name] (str "Welcome, " name "!"))
