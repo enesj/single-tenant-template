@@ -8,7 +8,6 @@
     [app.admin.frontend.pages.audit :as audit]
     [app.admin.frontend.pages.domain.expenses.articles :as articles]
     [app.admin.frontend.pages.domain.expenses.categories :as categories]
-
     [app.admin.frontend.pages.domain.expenses.cities :as cities]
     [app.admin.frontend.pages.domain.expenses.countries :as countries]
     [app.admin.frontend.pages.dashboard :as dashboard]
@@ -16,9 +15,9 @@
     [app.admin.frontend.pages.login :as login]
     [app.admin.frontend.pages.login-events :as login-events]
     [app.admin.frontend.pages.domain.expenses.manufacturers :as manufacturers]
-
     [app.admin.frontend.pages.domain.expenses.reports :as reports]
     [app.admin.frontend.pages.reset-password :as reset-password]
+    [app.admin.frontend.pages.search :as search]
     [app.admin.frontend.pages.domain.expenses.store-aliases :as store-aliases]
     [app.admin.frontend.pages.domain.expenses.stores :as stores]
     [app.admin.frontend.pages.domain.expenses.subcategories :as subcategories]
@@ -162,6 +161,11 @@
           {:name :admin-reports
            :view reports/admin-reports-page
            :controllers [(guarded-start [:admin/load-reports])]}]
+
+         ["/search"
+          {:name :admin-search
+           :view search/admin-search-page
+           :controllers [(guarded-start [:admin/init-search])]}]
 
          ;; Audit Logs
          ["/audit"

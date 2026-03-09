@@ -12,7 +12,7 @@
                                                     chart-bar
                                                     dashboard-icon
                                                     login-events-icon
-
+                                                    search-icon
                                                     settings-icon
                                                     suppliers-icon
                                                     unmapped-items-icon
@@ -70,6 +70,11 @@
                          :href "/admin/reports"
                          :icon ($ chart-bar {:class "w-6 h-6"})
                          :active? (= route-name :admin-reports)}
+                        {:id "admin-sidebar-expenses-search"
+                         :label "Search"
+                         :href "/admin/search"
+                         :icon ($ search-icon {:class "w-6 h-6"})
+                         :active? (= route-name :admin-search)}
                         {:id "admin-sidebar-expenses-articles"
                          :label "Articles"
                          :href "/admin/articles"

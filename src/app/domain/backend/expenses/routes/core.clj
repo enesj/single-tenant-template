@@ -29,6 +29,7 @@
   ["/expenses"
    ;; Cross-entity admin search (global, no tenant filter)
    ["/search" {:get {:handler (search/admin-search-handler db)}}]
+   ["/search/related" {:get {:handler (search/admin-related-handler db)}}]
 
    (suppliers/routes db)
    (stores/routes db)

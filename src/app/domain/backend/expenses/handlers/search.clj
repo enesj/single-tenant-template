@@ -805,6 +805,39 @@
      :articles articles
      :store-articles store-articles}))
 
+(defn- related-results
+  [db entity-type entity-id limit tenant-id]
+  (case entity-type
+    "articles" (related-for-article db entity-id limit tenant-id)
+    "suppliers" (related-for-supplier db entity-id limit tenant-id)
+    "stores" (related-for-store db entity-id limit tenant-id)
+    "payers" (related-for-payer db entity-id limit tenant-id)
+    "expense-cats" (related-for-expense-cat db entity-id limit tenant-id)
+    "manufacturers" (related-for-manufacturer db entity-id limit tenant-id)
+    "categories" (related-for-category db entity-id limit tenant-id)
+    "subcategories" (related-for-subcategory db entity-id limit tenant-id)
+    {}))
+
+(defn- related-response
+  [db request tenant-id]
+  (let [params (:query-params request)
+        entity-type (get params "type")
+        entity-id (h/try-parse-uuid (get params "id"))
+        limit 8]
+    (if-not entity-id
+      (h/json-response {:error "Missing or invalid id"} 400)
+      (try
+        (let [related (related-results db entity-type entity-id limit tenant-id)]
+          (h/json-response {:related related
+                            :type entity-type
+                            :id (str entity-id)}))
+        (catch Exception e
+          (log/error e "Error fetching related records"
+            {:type entity-type
+             :id entity-id
+             :tenant-id tenant-id})
+          (h/json-response {:error "Failed to fetch related records"} 500))))))
+
 (defn user-related-handler
   "Fetch related records for a selected search result.
    Query params: type (string), id (uuid string)."
@@ -813,29 +846,14 @@
     (if-let [_user-id (h/get-user-id request)]
       (if-let [forbidden (h/ensure-role request h/expenses-read-roles "Role required")]
         forbidden
-        (let [tenant-id (h/get-tenant-id request)
-              params (:query-params request)
-              entity-type (get params "type")
-              entity-id (h/try-parse-uuid (get params "id"))
-              limit 8]
-          (if-not entity-id
-            (h/json-response {:error "Missing or invalid id"} 400)
-            (try
-              (let [related (case entity-type
-                              "articles"       (related-for-article db entity-id limit tenant-id)
-                              "suppliers"      (related-for-supplier db entity-id limit tenant-id)
-                              "stores"         (related-for-store db entity-id limit tenant-id)
-                              "payers"         (related-for-payer db entity-id limit tenant-id)
-                              "expense-cats"   (related-for-expense-cat db entity-id limit tenant-id)
-                              "manufacturers"  (related-for-manufacturer db entity-id limit tenant-id)
-                              "categories"     (related-for-category db entity-id limit tenant-id)
-                              "subcategories"  (related-for-subcategory db entity-id limit tenant-id)
-                              {})]
-                (h/json-response {:related related :type entity-type :id (str entity-id)}))
-              (catch Exception e
-                (log/error e "Error fetching related records" {:type entity-type :id entity-id})
-                (h/json-response {:error "Failed to fetch related records"} 500))))))
+        (related-response db request (h/get-tenant-id request)))
       (h/unauthorized-response))))
+
+(defn admin-related-handler
+  "Fetch related records for the admin search page using global scope."
+  [db]
+  (fn [request]
+    (related-response db request nil)))
 
 (comment
   ;; REPL test: load handler and call with mock request

@@ -919,19 +919,13 @@
 ;; Main page
 ;; ---------------------------------------------------------------------------
 
-(defui search-page []
-  (let [t               (use-t)
-        query           (use-subscribe [:user-expenses/search-query])
-        loading?        (use-subscribe [:user-expenses/search-loading?])
-        results         (use-subscribe [:user-expenses/search-results])
-        selected        (use-subscribe [:user-expenses/search-selected])
-        related         (use-subscribe [:user-expenses/search-related])
-        related-loading? (use-subscribe [:user-expenses/search-related-loading?])
-        input-ref       (use-ref nil)
-        has-results?    (some seq (vals (or results {})))
-        panel-open?     (some? selected)]
-
-    ;; Focus input on mount
+(defui search-page-content
+  [{:keys [query loading? results selected related related-loading?
+           set-query! select-result! clear-selection!]}]
+  (let [t            (use-t)
+        input-ref    (use-ref nil)
+        has-results? (some seq (vals (or results {})))
+        panel-open?  (some? selected)]
     (use-effect
       (fn []
         (when-let [el @input-ref]
@@ -940,14 +934,17 @@
       [])
 
     ($ :div {:class "flex flex-col h-full overflow-hidden"}
-
-      ;; Search bar — always full width
       ($ :div {:class "flex-shrink-0 p-4 border-b border-base-200"}
         ($ :h1 {:class "text-3xl font-bold mb-4"} (t :search/title))
         ($ :div {:class "relative"}
           ($ :div {:class "absolute inset-y-0 left-4 flex items-center pointer-events-none"}
-            ($ :svg {:class "w-5 h-5 text-base-content/40" :fill "none" :stroke "currentColor" :viewBox "0 0 24 24"}
-              ($ :path {:stroke-linecap "round" :stroke-linejoin "round" :stroke-width "2"
+            ($ :svg {:class "w-5 h-5 text-base-content/40"
+                     :fill "none"
+                     :stroke "currentColor"
+                     :viewBox "0 0 24 24"}
+              ($ :path {:stroke-linecap "round"
+                        :stroke-linejoin "round"
+                        :stroke-width "2"
                         :d "M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0"})))
           ($ :input
             {:ref input-ref
@@ -956,14 +953,13 @@
              :placeholder (t :search/placeholder)
              :value (or query "")
              :on-change (fn [e]
-                          (rf/dispatch [:user-expenses/set-search-query (.. e -target -value)]))})))
+                          (set-query! (.. e -target -value)))})))
 
-      ;; Two-column area: results + detail panel
       ($ :div {:class "flex flex-1 overflow-hidden"}
-
-        ;; Left column — results
         ($ :div {:class (str "flex flex-col overflow-hidden transition-all duration-300 "
-                          (if panel-open? "w-1/3 border-r border-base-300" "w-full"))}
+                          (if panel-open?
+                            "w-1/3 border-r border-base-300"
+                            "w-full"))}
           ($ :div {:class "flex-1 overflow-y-auto p-4"}
             (cond
               loading?
@@ -980,7 +976,6 @@
 
               has-results?
               ($ :<>
-                ;; Suppliers
                 ($ result-group
                   {:title (t :search/type-supplier)
                    :badge-class "bg-green-100 text-green-700"
@@ -993,10 +988,8 @@
                                        :label (:display_name item)
                                        :subtitle (:address item)
                                        :selected? sel?
-                                       :on-click #(rf/dispatch [:user-expenses/select-search-result
-                                                                {:type :suppliers :id id}])})))})
+                                       :on-click #(select-result! {:type :suppliers :id id})})))})
 
-                ;; Stores
                 ($ result-group
                   {:title (t :search/type-store)
                    :badge-class "bg-orange-100 text-orange-700"
@@ -1009,10 +1002,8 @@
                                        :label (:display_name item)
                                        :subtitle (:address item)
                                        :selected? sel?
-                                       :on-click #(rf/dispatch [:user-expenses/select-search-result
-                                                                {:type :stores :id id}])})))})
+                                       :on-click #(select-result! {:type :stores :id id})})))})
 
-                ;; Articles
                 ($ result-group
                   {:title (t :search/type-article)
                    :badge-class "bg-teal-100 text-teal-700"
@@ -1024,10 +1015,8 @@
                                       {:key id
                                        :label (:canonical_name item)
                                        :selected? sel?
-                                       :on-click #(rf/dispatch [:user-expenses/select-search-result
-                                                                {:type :articles :id id}])})))})
+                                       :on-click #(select-result! {:type :articles :id id})})))})
 
-                ;; Payers
                 ($ result-group
                   {:title (t :search/type-payer)
                    :badge-class "bg-pink-100 text-pink-700"
@@ -1039,10 +1028,8 @@
                                       {:key id
                                        :label (:label item)
                                        :selected? sel?
-                                       :on-click #(rf/dispatch [:user-expenses/select-search-result
-                                                                {:type :payers :id id}])})))})
+                                       :on-click #(select-result! {:type :payers :id id})})))})
 
-                ;; Expense categories
                 ($ result-group
                   {:title (t :search/type-expense-cat)
                    :badge-class "bg-yellow-100 text-yellow-700"
@@ -1054,10 +1041,8 @@
                                       {:key id
                                        :label (:name item)
                                        :selected? sel?
-                                       :on-click #(rf/dispatch [:user-expenses/select-search-result
-                                                                {:type :expense-cats :id id}])})))})
+                                       :on-click #(select-result! {:type :expense-cats :id id})})))})
 
-                ;; Categories
                 ($ result-group
                   {:title (t :search/type-category)
                    :badge-class "bg-violet-100 text-violet-700"
@@ -1070,10 +1055,8 @@
                                        :label (:name item)
                                        :subtitle (:description item)
                                        :selected? sel?
-                                       :on-click #(rf/dispatch [:user-expenses/select-search-result
-                                                                {:type :categories :id id}])})))})
+                                       :on-click #(select-result! {:type :categories :id id})})))})
 
-                ;; Subcategories
                 ($ result-group
                   {:title (t :search/type-subcategory)
                    :badge-class "bg-fuchsia-100 text-fuchsia-700"
@@ -1086,10 +1069,8 @@
                                        :label (:name item)
                                        :subtitle (:category_name item)
                                        :selected? sel?
-                                       :on-click #(rf/dispatch [:user-expenses/select-search-result
-                                                                {:type :subcategories :id id}])})))})
+                                       :on-click #(select-result! {:type :subcategories :id id})})))})
 
-                ;; Manufacturers
                 ($ result-group
                   {:title (t :search/type-manufacturer)
                    :badge-class "bg-indigo-100 text-indigo-700"
@@ -1101,10 +1082,8 @@
                                       {:key id
                                        :label (:display_name item)
                                        :selected? sel?
-                                       :on-click #(rf/dispatch [:user-expenses/select-search-result
-                                                                {:type :manufacturers :id id}])})))})
+                                       :on-click #(select-result! {:type :manufacturers :id id})})))})
 
-                ;; Cities
                 ($ result-group
                   {:title (t :search/type-city)
                    :badge-class "bg-sky-100 text-sky-700"
@@ -1115,19 +1094,25 @@
                                     ($ simple-card
                                       {:key id
                                        :label (:name item)
-                                       :subtitle (when (:zip item) (str (:zip item) (when (:country item) (str ", " (:country item)))))
+                                       :subtitle (when (:zip item)
+                                                   (str (:zip item)
+                                                     (when (:country item)
+                                                       (str ", " (:country item)))))
                                        :selected? sel?
-                                       :on-click #(rf/dispatch [:user-expenses/select-search-result
-                                                                {:type :cities :id id}])})))}))
+                                       :on-click #(select-result! {:type :cities :id id})})))}))
 
               :else
               ($ :div {:class "flex flex-col items-center justify-center py-16 text-base-content/30"}
-                ($ :svg {:class "w-12 h-12 mb-3" :fill "none" :stroke "currentColor" :viewBox "0 0 24 24"}
-                  ($ :path {:stroke-linecap "round" :stroke-linejoin "round" :stroke-width "1.5"
+                ($ :svg {:class "w-12 h-12 mb-3"
+                         :fill "none"
+                         :stroke "currentColor"
+                         :viewBox "0 0 24 24"}
+                  ($ :path {:stroke-linecap "round"
+                            :stroke-linejoin "round"
+                            :stroke-width "1.5"
                             :d "M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0"}))
                 ($ :p {:class "text-base"} (t :search/placeholder))))))
 
-        ;; Right column — detail panel (slides in)
         (when panel-open?
           ($ :div {:class "w-2/3 overflow-hidden"}
             ($ detail-panel
@@ -1136,4 +1121,22 @@
                :related related
                :related-loading? related-loading?
                :t t
-               :on-close #(rf/dispatch [:user-expenses/clear-search-selection])})))))))
+               :on-close clear-selection!})))))))
+
+(defui search-page []
+  (let [query (use-subscribe [:user-expenses/search-query])
+        loading? (use-subscribe [:user-expenses/search-loading?])
+        results (use-subscribe [:user-expenses/search-results])
+        selected (use-subscribe [:user-expenses/search-selected])
+        related (use-subscribe [:user-expenses/search-related])
+        related-loading? (use-subscribe [:user-expenses/search-related-loading?])]
+    ($ search-page-content
+      {:query query
+       :loading? loading?
+       :results results
+       :selected selected
+       :related related
+       :related-loading? related-loading?
+       :set-query! #(rf/dispatch [:user-expenses/set-search-query %])
+       :select-result! #(rf/dispatch [:user-expenses/select-search-result %])
+       :clear-selection! #(rf/dispatch [:user-expenses/clear-search-selection])})))
