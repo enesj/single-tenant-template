@@ -105,98 +105,280 @@
       {:builder-fn rs/as-unqualified-lower-maps})))
 
 (defn- search-suppliers
-  [db term limit]
+  [db term limit tenant-id]
   (let [p (pattern term)]
     (jdbc/execute!
       db
-      (sql/format {:select [:id :display_name :normalized_key :address]
-                   :from [:suppliers]
-                   :where [:or
-                           [:ilike :display_name p]
-                           [:ilike :address p]]
-                   :order-by [[:display_name :asc]]
-                   :limit limit})
+      (sql/format
+        (if tenant-id
+          {:select [[:s.id :id]
+                    [:s.display_name :display_name]
+                    [:s.normalized_key :normalized_key]
+                    [:s.address :address]]
+           :from [[:suppliers :s]]
+           :where [:and
+                   [:or
+                    [:ilike :s.display_name p]
+                    [:ilike :s.address p]]
+                   [:or
+                    [:exists {:select [1]
+                              :from [[:expenses :e]]
+                              :where [:and
+                                      [:= :e.tenant_id tenant-id]
+                                      [:= :e.supplier_id :s.id]]}]
+                    [:exists {:select [1]
+                              :from [[:receipts :r]]
+                              :join [[:supplier_aliases :sa] [:= :sa.id :r.supplier_alias_id]]
+                              :where [:and
+                                      [:= :r.tenant_id tenant-id]
+                                      [:= :sa.supplier_id :s.id]]}]
+                    [:exists {:select [1]
+                              :from [[:receipts :r]]
+                              :join [[:store_aliases :sta] [:= :sta.id :r.store_alias_id]
+                                     [:stores :st_receipt] [:= :st_receipt.id :sta.store_id]]
+                              :where [:and
+                                      [:= :r.tenant_id tenant-id]
+                                      [:= :st_receipt.supplier_id :s.id]]}]]]
+           :order-by [[:s.display_name :asc]]
+           :limit limit}
+          {:select [:id :display_name :normalized_key :address]
+           :from [:suppliers]
+           :where [:or
+                   [:ilike :display_name p]
+                   [:ilike :address p]]
+           :order-by [[:display_name :asc]]
+           :limit limit}))
       {:builder-fn rs/as-unqualified-lower-maps})))
 
 (defn- search-stores
-  [db term limit]
+  [db term limit tenant-id]
   (let [p (pattern term)]
     (jdbc/execute!
       db
-      (sql/format {:select [:id :display_name :normalized_key :address]
-                   :from [:stores]
-                   :where [:or
-                           [:ilike :display_name p]
-                           [:ilike :address p]]
-                   :order-by [[:display_name :asc]]
-                   :limit limit})
+      (sql/format
+        (if tenant-id
+          {:select [[:st.id :id]
+                    [:st.display_name :display_name]
+                    [:st.normalized_key :normalized_key]
+                    [:st.address :address]]
+           :from [[:stores :st]]
+           :where [:and
+                   [:or
+                    [:ilike :st.display_name p]
+                    [:ilike :st.address p]]
+                   [:or
+                    [:exists {:select [1]
+                              :from [[:expenses :e]]
+                              :where [:and
+                                      [:= :e.tenant_id tenant-id]
+                                      [:= :e.store_id :st.id]]}]
+                    [:exists {:select [1]
+                              :from [[:receipts :r]]
+                              :join [[:store_aliases :sta] [:= :sta.id :r.store_alias_id]]
+                              :where [:and
+                                      [:= :r.tenant_id tenant-id]
+                                      [:= :sta.store_id :st.id]]}]]]
+           :order-by [[:st.display_name :asc]]
+           :limit limit}
+          {:select [:id :display_name :normalized_key :address]
+           :from [:stores]
+           :where [:or
+                   [:ilike :display_name p]
+                   [:ilike :address p]]
+           :order-by [[:display_name :asc]]
+           :limit limit}))
       {:builder-fn rs/as-unqualified-lower-maps})))
 
 (defn- search-articles
-  [db term limit]
+  [db term limit tenant-id]
   (let [p (pattern term)]
     (jdbc/execute!
       db
-      (sql/format {:select [:id :canonical_name]
-                   :from [:articles]
-                   :where [:ilike :canonical_name p]
-                   :order-by [[:canonical_name :asc]]
-                   :limit limit})
+      (sql/format
+        (if tenant-id
+          {:select [[:a.id :id]
+                    [:a.canonical_name :canonical_name]]
+           :from [[:articles :a]]
+           :where [:and
+                   [:ilike :a.canonical_name p]
+                   [:or
+                    [:exists {:select [1]
+                              :from [[:expense_items :ei]]
+                              :where [:and
+                                      [:= :ei.tenant_id tenant-id]
+                                      [:= :ei.article_id :a.id]]}]
+                    [:exists {:select [1]
+                              :from [[:expense_items :ei]]
+                              :join [[:article_aliases :aa] [:= :aa.id :ei.alias_id]]
+                              :where [:and
+                                      [:= :ei.tenant_id tenant-id]
+                                      [:= :aa.article_id :a.id]]}]]]
+           :order-by [[:a.canonical_name :asc]]
+           :limit limit}
+          {:select [:id :canonical_name]
+           :from [:articles]
+           :where [:ilike :canonical_name p]
+           :order-by [[:canonical_name :asc]]
+           :limit limit}))
       {:builder-fn rs/as-unqualified-lower-maps})))
 
 (defn- search-categories
-  [db term limit]
+  [db term limit tenant-id]
   (let [p (pattern term)]
     (jdbc/execute!
       db
-      (sql/format {:select [:id :name :description]
-                   :from [:categories]
-                   :where [:ilike :name p]
-                   :order-by [[:name :asc]]
-                   :limit limit})
+      (sql/format
+        (if tenant-id
+          {:select [[:c.id :id]
+                    [:c.name :name]
+                    [:c.description :description]]
+           :from [[:categories :c]]
+           :where [:and
+                   [:ilike :c.name p]
+                   [:or
+                    [:exists {:select [1]
+                              :from [[:expense_items :ei]]
+                              :join [[:articles :a_item] [:= :a_item.id :ei.article_id]
+                                     [:subcategories :sub_item] [:= :sub_item.id :a_item.subcategory_id]]
+                              :where [:and
+                                      [:= :ei.tenant_id tenant-id]
+                                      [:= :sub_item.category_id :c.id]]}]
+                    [:exists {:select [1]
+                              :from [[:expense_items :ei]]
+                              :join [[:article_aliases :aa] [:= :aa.id :ei.alias_id]
+                                     [:articles :a_alias] [:= :a_alias.id :aa.article_id]
+                                     [:subcategories :sub_alias] [:= :sub_alias.id :a_alias.subcategory_id]]
+                              :where [:and
+                                      [:= :ei.tenant_id tenant-id]
+                                      [:= :sub_alias.category_id :c.id]]}]]]
+           :order-by [[:c.name :asc]]
+           :limit limit}
+          {:select [:id :name :description]
+           :from [:categories]
+           :where [:ilike :name p]
+           :order-by [[:name :asc]]
+           :limit limit}))
       {:builder-fn rs/as-unqualified-lower-maps})))
 
 (defn- search-subcategories
-  [db term limit]
+  [db term limit tenant-id]
   (let [p (pattern term)]
     (jdbc/execute!
       db
-      (sql/format {:select [[:s.id :id] [:s.name :name] [:c.name :category_name]]
-                   :from [[:subcategories :s]]
-                   :join [[:categories :c] [:= :c.id :s.category_id]]
-                   :where [:ilike :s.name p]
-                   :order-by [[:c.name :asc] [:s.name :asc]]
-                   :limit limit})
+      (sql/format
+        (if tenant-id
+          {:select [[:sub.id :id]
+                    [:sub.name :name]
+                    [:c.name :category_name]]
+           :from [[:subcategories :sub]]
+           :join [[:categories :c] [:= :c.id :sub.category_id]]
+           :where [:and
+                   [:ilike :sub.name p]
+                   [:or
+                    [:exists {:select [1]
+                              :from [[:expense_items :ei]]
+                              :join [[:articles :a_item] [:= :a_item.id :ei.article_id]]
+                              :where [:and
+                                      [:= :ei.tenant_id tenant-id]
+                                      [:= :a_item.subcategory_id :sub.id]]}]
+                    [:exists {:select [1]
+                              :from [[:expense_items :ei]]
+                              :join [[:article_aliases :aa] [:= :aa.id :ei.alias_id]
+                                     [:articles :a_alias] [:= :a_alias.id :aa.article_id]]
+                              :where [:and
+                                      [:= :ei.tenant_id tenant-id]
+                                      [:= :a_alias.subcategory_id :sub.id]]}]]]
+           :order-by [[:c.name :asc] [:sub.name :asc]]
+           :limit limit}
+          {:select [[:s.id :id] [:s.name :name] [:c.name :category_name]]
+           :from [[:subcategories :s]]
+           :join [[:categories :c] [:= :c.id :s.category_id]]
+           :where [:ilike :s.name p]
+           :order-by [[:c.name :asc] [:s.name :asc]]
+           :limit limit}))
       {:builder-fn rs/as-unqualified-lower-maps})))
 
 (defn- search-manufacturers
-  [db term limit]
+  [db term limit tenant-id]
   (let [p (pattern term)]
     (jdbc/execute!
       db
-      (sql/format {:select [:id :display_name :normalized_key]
-                   :from [:manufacturers]
-                   :where [:or
-                           [:ilike :display_name p]
-                           [:ilike :normalized_key p]]
-                   :order-by [[:display_name :asc]]
-                   :limit limit})
+      (sql/format
+        (if tenant-id
+          {:select [[:m.id :id]
+                    [:m.display_name :display_name]
+                    [:m.normalized_key :normalized_key]]
+           :from [[:manufacturers :m]]
+           :where [:and
+                   [:or
+                    [:ilike :m.display_name p]
+                    [:ilike :m.normalized_key p]]
+                   [:or
+                    [:exists {:select [1]
+                              :from [[:expense_items :ei]]
+                              :join [[:articles :a_item] [:= :a_item.id :ei.article_id]]
+                              :where [:and
+                                      [:= :ei.tenant_id tenant-id]
+                                      [:= :a_item.manufacturer_id :m.id]]}]
+                    [:exists {:select [1]
+                              :from [[:expense_items :ei]]
+                              :join [[:article_aliases :aa] [:= :aa.id :ei.alias_id]
+                                     [:articles :a_alias] [:= :a_alias.id :aa.article_id]]
+                              :where [:and
+                                      [:= :ei.tenant_id tenant-id]
+                                      [:= :a_alias.manufacturer_id :m.id]]}]]]
+           :order-by [[:m.display_name :asc]]
+           :limit limit}
+          {:select [:id :display_name :normalized_key]
+           :from [:manufacturers]
+           :where [:or
+                   [:ilike :display_name p]
+                   [:ilike :normalized_key p]]
+           :order-by [[:display_name :asc]]
+           :limit limit}))
       {:builder-fn rs/as-unqualified-lower-maps})))
 
 (defn- search-cities
-  [db term limit]
+  [db term limit tenant-id]
   (let [p (pattern term)]
     (jdbc/execute!
       db
-      (sql/format {:select-distinct [[:c.id :id] [:c.name :name] [:c.zip :zip] [:c.country :country]]
-                   :from [[:cities :c]]
-                   :join [[:stores :st] [:= :st.city_id :c.id]
-                          [:expenses :e] [:= :e.store_id :st.id]]
-                   :where [:or
-                           [:ilike :c.name p]
-                           [:ilike :c.zip p]]
-                   :order-by [[:c.name :asc]]
-                   :limit limit})
+      (sql/format
+        (if tenant-id
+          {:select [[:city.id :id]
+                    [:city.name :name]
+                    [:city.zip :zip]
+                    [:city.country :country]]
+           :from [[:cities :city]]
+           :where [:and
+                   [:or
+                    [:ilike :city.name p]
+                    [:ilike :city.zip p]]
+                   [:or
+                    [:exists {:select [1]
+                              :from [[:expenses :e]]
+                              :join [[:stores :st_exp] [:= :st_exp.id :e.store_id]]
+                              :where [:and
+                                      [:= :e.tenant_id tenant-id]
+                                      [:= :st_exp.city_id :city.id]]}]
+                    [:exists {:select [1]
+                              :from [[:receipts :r]]
+                              :join [[:store_aliases :sta] [:= :sta.id :r.store_alias_id]
+                                     [:stores :st_receipt] [:= :st_receipt.id :sta.store_id]]
+                              :where [:and
+                                      [:= :r.tenant_id tenant-id]
+                                      [:= :st_receipt.city_id :city.id]]}]]]
+           :order-by [[:city.name :asc]]
+           :limit limit}
+          {:select-distinct [[:c.id :id] [:c.name :name] [:c.zip :zip] [:c.country :country]]
+           :from [[:cities :c]]
+           :join [[:stores :st] [:= :st.city_id :c.id]
+                  [:expenses :e] [:= :e.store_id :st.id]]
+           :where [:or
+                   [:ilike :c.name p]
+                   [:ilike :c.zip p]]
+           :order-by [[:c.name :asc]]
+           :limit limit}))
       {:builder-fn rs/as-unqualified-lower-maps})))
 
 ;; ---------------------------------------------------------------------------
@@ -220,13 +402,13 @@
                                 (fn [[k f]] [k (search-entity f)])
                                 {:payers         #(search-payers db q limit tenant-id)
                                  :expense-cats   #(search-expense-cats db q limit tenant-id)
-                                 :suppliers      #(search-suppliers db q limit)
-                                 :stores         #(search-stores db q limit)
-                                 :articles       #(search-articles db q limit)
-                                 :categories     #(search-categories db q limit)
-                                 :subcategories  #(search-subcategories db q limit)
-                                 :manufacturers  #(search-manufacturers db q limit)
-                                 :cities         #(search-cities db q limit)}))]
+                                 :suppliers      #(search-suppliers db q limit tenant-id)
+                                 :stores         #(search-stores db q limit tenant-id)
+                                 :articles       #(search-articles db q limit tenant-id)
+                                 :categories     #(search-categories db q limit tenant-id)
+                                 :subcategories  #(search-subcategories db q limit tenant-id)
+                                 :manufacturers  #(search-manufacturers db q limit tenant-id)
+                                 :cities         #(search-cities db q limit tenant-id)}))]
                 (h/json-response {:results results}))
               (catch Exception e
                 (log/error e "Error executing user search" {:q q :tenant-id tenant-id})
@@ -247,13 +429,13 @@
                             (fn [[k f]] [k (search-entity f)])
                             {:payers         #(search-payers db q limit nil)
                              :expense-cats   #(search-expense-cats db q limit nil)
-                             :suppliers      #(search-suppliers db q limit)
-                             :stores         #(search-stores db q limit)
-                             :articles       #(search-articles db q limit)
-                             :categories     #(search-categories db q limit)
-                             :subcategories  #(search-subcategories db q limit)
-                             :manufacturers  #(search-manufacturers db q limit)
-                             :cities         #(search-cities db q limit)}))]
+                             :suppliers      #(search-suppliers db q limit nil)
+                             :stores         #(search-stores db q limit nil)
+                             :articles       #(search-articles db q limit nil)
+                             :categories     #(search-categories db q limit nil)
+                             :subcategories  #(search-subcategories db q limit nil)
+                             :manufacturers  #(search-manufacturers db q limit nil)
+                             :cities         #(search-cities db q limit nil)}))]
             (h/json-response {:results results}))
           (catch Exception e
             (log/error e "Error executing admin search" {:q q})
