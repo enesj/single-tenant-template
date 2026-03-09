@@ -89,9 +89,9 @@
                    (some (fn [[i n]] (when (and n (re-find re n)) i))
                      (map-indexed vector norms)))
         label-idx (or (find-idx #"^(?:label|naziv|name|oznaka|назив|opis|опис|description|item)$") 0)
-        qty-idx (find-idx #"^(?:kol\.?|qty|quantity|кол\.?|kol)$")
+        qty-idx (find-idx #"^(?:kol\.?|qty|quantity|кол\.?|kol|količina|kolicina)(?:$|\s)")
         unit-idx (find-idx #"^(?:cijena|price|цијена)$")
-        total-idx (find-idx #"^(?:ukupno|total|укупно)$")]
+        total-idx (find-idx #"^(?:ukupno|total|укупно|iznos|износ)$")]
     {:label-idx label-idx
      :qty-idx qty-idx
      :unit-idx unit-idx
@@ -247,6 +247,18 @@
                      :token token})))))
       last)))
 
+(defn- parse-merged-qty-price
+  "Parse a cell where qty and unit-price are merged, e.g. '3,000x 6,60'.
+  Returns {:qty .. :unit_price ..} or nil."
+  [cell]
+  (when-let [cell (text/safe-trim cell)]
+    (when-let [[_ qty-str price-str]
+               (re-matches #"(?i)([0-9][0-9,\.]*)x\s+([0-9][0-9,\.]*)" cell)]
+      (let [qty (common/parse-money qty-str)
+            unit-price (common/parse-money price-str)]
+        (when (and qty unit-price)
+          {:qty qty :unit_price unit-price})))))
+
 (defn- parse-item-row
   [cells mapping]
   (let [{:keys [label-idx qty-idx unit-idx total-idx]} mapping
@@ -258,9 +270,13 @@
                 embedded (str/replace #"(?iu)\s+\d[\d,\.]*x\s*$" "")
                 true text/safe-trim)
         label-norm (text/normalize-text label)
-        qty0 (when qty-idx (common/parse-money (nth cells qty-idx nil)))
-        qty (or qty0 (:qty embedded) 1M)
-        unit-price0 (when unit-idx (common/parse-money (nth cells unit-idx nil)))
+        qty-cell (when qty-idx (nth cells qty-idx nil))
+        qty0 (when qty-idx (common/parse-money qty-cell))
+        merged (when (and qty-idx (nil? qty0))
+                 (parse-merged-qty-price qty-cell))
+        qty (or qty0 (:qty merged) (:qty embedded) 1M)
+        unit-price0 (or (when unit-idx (common/parse-money (nth cells unit-idx nil)))
+                      (:unit_price merged))
         line-total (or (when total-idx (common/parse-money (nth cells total-idx nil)))
                      (common/parse-money (last cells)))
         unit-price (or unit-price0

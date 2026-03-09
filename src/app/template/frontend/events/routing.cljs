@@ -211,6 +211,13 @@
     ;; This avoids relying on a specific db path for session/user.
     {:db (assoc-in db (paths/current-page) :unmapped-items)}))
 
+(rf/reg-event-fx
+  :page/init-expense-search
+  common-interceptors
+  (fn [{:keys [db]} _]
+    {:db (assoc-in db (paths/current-page) :expense-search)
+     :dispatch [:user-expenses/init-search]}))
+
 (rf/reg-event-db
   :navigated
   common-interceptors

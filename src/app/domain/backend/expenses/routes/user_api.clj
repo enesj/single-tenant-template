@@ -5,6 +5,7 @@
    Path prefix for this router is /expenses."
   (:require
     [app.domain.backend.expenses.handlers.receipt-upload :as receipt-upload]
+    [app.domain.backend.expenses.handlers.search :as search]
     [app.domain.backend.expenses.handlers.user-articles :as user-articles]
     [app.domain.backend.expenses.handlers.user-categories :as user-categories]
     [app.domain.backend.expenses.handlers.user-cities :as user-cities]
@@ -34,6 +35,10 @@
   [db wrap-user-authentication & [app-config]]
   ["/expenses"
    {:middleware [wrap-user-authentication]}
+
+   ;; Cross-entity search + related records
+   ["/search" {:get {:handler (search/user-search-handler db)}}]
+   ["/search/related" {:get {:handler (search/user-related-handler db)}}]
 
    ;; Dashboard/summary endpoints
    ["/summary" {:get {:handler (user-expenses-summary/expense-summary-handler db)}}]

@@ -13,6 +13,7 @@
 
                                                     payers-icon
                                                     receipts-icon
+                                                    search-icon
                                                     suppliers-icon
                                                     unmapped-items-icon
                                                     users-icon]]
@@ -177,7 +178,13 @@
 
         expense-items (vec
                         (concat
-                          [(nav-item {:id "user-sidebar-dashboard"
+                          [(nav-item {:id "user-sidebar-search"
+                                      :label (t :nav/search)
+                                      :href (th "/search")
+                                      :route :expense-search
+                                      :icon ($ search-icon {:class "w-6 h-6"})
+                                      :active? (active? #{:expense-search})})
+                           (nav-item {:id "user-sidebar-dashboard"
                                       :label (t :nav/dashboard)
                                       :href (th "/dashboard")
                                       :route :user-dashboard
@@ -312,7 +319,7 @@
 
 (defui user-layout
   [{:keys [children]}]
-  (let [[sidebar-open? set-sidebar-open!] (use-state false)]
+  (let [[sidebar-open? set-sidebar-open!] (use-state true)]
     ($ :div {:class "h-screen flex overflow-hidden bg-base-100"}
       ($ user-sidebar {:open? sidebar-open?})
       ($ :div {:class "flex flex-col w-0 flex-1 overflow-hidden"}

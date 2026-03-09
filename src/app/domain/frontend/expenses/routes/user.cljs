@@ -131,6 +131,11 @@
     :view :expense-supplier-aliases
     :controllers (controllers/user-guarded-start :page/init-expense-supplier-aliases)}
 
+   :expense-search
+   {:name :expense-search
+    :view :expense-search
+    :controllers (controllers/user-guarded-start :page/init-expense-search)}
+
    :expense-detail
    {:name :expense-detail
     :view :expense-detail

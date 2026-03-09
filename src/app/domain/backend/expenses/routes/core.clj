@@ -1,7 +1,7 @@
 (ns app.domain.backend.expenses.routes.core
   "Expenses backend route assembly; add new expense endpoints here."
   (:require
-
+    [app.domain.backend.expenses.handlers.search :as search]
     [app.domain.backend.expenses.routes.articles :as articles]
     [app.domain.backend.expenses.routes.article-aliases :as article-aliases]
     [app.domain.backend.expenses.routes.categories :as categories]
@@ -27,6 +27,9 @@
   "Top-level router for the Home Expenses domain. Mounted under /admin/api/expenses."
   [db & [app-config]]
   ["/expenses"
+   ;; Cross-entity admin search (global, no tenant filter)
+   ["/search" {:get {:handler (search/admin-search-handler db)}}]
+
    (suppliers/routes db)
    (stores/routes db)
    (cities/routes db)

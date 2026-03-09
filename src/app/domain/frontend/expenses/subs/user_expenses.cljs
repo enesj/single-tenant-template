@@ -291,3 +291,34 @@
   (fn [db _]
     (reports-data db :daily-heatmap :error)))
 
+;; Search
+(rf/reg-sub
+  :user-expenses/search-query
+  (fn [db _]
+    (get-in db [:user-expenses :search :query])))
+
+(rf/reg-sub
+  :user-expenses/search-loading?
+  (fn [db _]
+    (get-in db [:user-expenses :search :loading?])))
+
+(rf/reg-sub
+  :user-expenses/search-results
+  (fn [db _]
+    (get-in db [:user-expenses :search :results])))
+
+(rf/reg-sub
+  :user-expenses/search-selected
+  (fn [db _]
+    (get-in db [:user-expenses :search :selected])))
+
+(rf/reg-sub
+  :user-expenses/search-related
+  (fn [db _]
+    (get-in db [:user-expenses :search :related])))
+
+(rf/reg-sub
+  :user-expenses/search-related-loading?
+  (fn [db _]
+    (get-in db [:user-expenses :search :related-loading?])))
+
