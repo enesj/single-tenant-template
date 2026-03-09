@@ -102,7 +102,7 @@
   :user-expenses/select-search-result
   common-interceptors
   (fn [{:keys [db]} [selected]]
-    (let [types-with-related #{:articles :suppliers :stores :payers :expense-cats}
+    (let [types-with-related #{:articles :suppliers :stores :payers :expense-cats :manufacturers :categories :subcategories}
           has-related? (contains? types-with-related (keyword (:type selected)))]
       (cond-> {:db (-> db
                      (assoc-in [:user-expenses :search :selected] selected)
