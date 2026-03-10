@@ -16,6 +16,22 @@
 
 (defn- pattern [term] (str "%" term "%"))
 
+(def ^:private ^:const fuzzy-threshold
+  "Minimum word_similarity score for fuzzy matching (0.0–1.0).
+   0.3 is permissive enough to catch common typos and inflection variants."
+  0.3)
+
+(defn- fuzzy-text-where
+  "Build a WHERE clause combining ILIKE substring match and pg_trgm fuzzy match.
+   Matches if any column contains the term as a substring (ILIKE)
+   OR has word_similarity above the threshold."
+  [columns term pattern]
+  (into [:or]
+    (mapcat (fn [col]
+              [[:ilike col pattern]
+               [:> [:word_similarity term col] fuzzy-threshold]])
+      columns)))
+
 (defn- search-entity
   "Run `entity-fn` safely, returning [] on any exception."
   [entity-fn]
@@ -28,10 +44,7 @@
 (defn- search-expenses
   [db term limit tenant-id]
   (let [p (pattern term)
-        text-where [:or
-                    [:ilike :s.display_name p]
-                    [:ilike :p.label p]
-                    [:ilike :e.notes p]]
+        text-where (fuzzy-text-where [:s.display_name :p.label :e.notes] term p)
         where (if tenant-id
                 [:and text-where [:= :e.tenant_id tenant-id]]
                 text-where)]
@@ -56,10 +69,7 @@
 (defn- search-receipts
   [db term limit tenant-id]
   (let [p (pattern term)
-        text-where [:or
-                    [:ilike :original_filename p]
-                    [:ilike :supplier_guess p]
-                    [:ilike :store_guess p]]
+        text-where (fuzzy-text-where [:original_filename :supplier_guess :store_guess] term p)
         where (if tenant-id
                 [:and text-where [:= :tenant_id tenant-id]]
                 text-where)]
@@ -75,7 +85,7 @@
 (defn- search-payers
   [db term limit tenant-id]
   (let [p (pattern term)
-        text-where [:ilike :label p]
+        text-where (fuzzy-text-where [:label] term p)
         where (if tenant-id
                 [:and text-where [:= :tenant_id tenant-id]]
                 text-where)]
@@ -91,7 +101,7 @@
 (defn- search-expense-cats
   [db term limit tenant-id]
   (let [p (pattern term)
-        text-where [:ilike :name p]
+        text-where (fuzzy-text-where [:name] term p)
         where (if tenant-id
                 [:and text-where [:= :tenant_id tenant-id]]
                 text-where)]
@@ -117,9 +127,7 @@
                     [:s.address :address]]
            :from [[:suppliers :s]]
            :where [:and
-                   [:or
-                    [:ilike :s.display_name p]
-                    [:ilike :s.address p]]
+                   (fuzzy-text-where [:s.display_name :s.address] term p)
                    [:or
                     [:exists {:select [1]
                               :from [[:expenses :e]]
@@ -143,9 +151,7 @@
            :limit limit}
           {:select [:id :display_name :normalized_key :address]
            :from [:suppliers]
-           :where [:or
-                   [:ilike :display_name p]
-                   [:ilike :address p]]
+           :where (fuzzy-text-where [:display_name :address] term p)
            :order-by [[:display_name :asc]]
            :limit limit}))
       {:builder-fn rs/as-unqualified-lower-maps})))
@@ -163,9 +169,7 @@
                     [:st.address :address]]
            :from [[:stores :st]]
            :where [:and
-                   [:or
-                    [:ilike :st.display_name p]
-                    [:ilike :st.address p]]
+                   (fuzzy-text-where [:st.display_name :st.address] term p)
                    [:or
                     [:exists {:select [1]
                               :from [[:expenses :e]]
@@ -182,9 +186,7 @@
            :limit limit}
           {:select [:id :display_name :normalized_key :address]
            :from [:stores]
-           :where [:or
-                   [:ilike :display_name p]
-                   [:ilike :address p]]
+           :where (fuzzy-text-where [:display_name :address] term p)
            :order-by [[:display_name :asc]]
            :limit limit}))
       {:builder-fn rs/as-unqualified-lower-maps})))
@@ -200,7 +202,7 @@
                     [:a.canonical_name :canonical_name]]
            :from [[:articles :a]]
            :where [:and
-                   [:ilike :a.canonical_name p]
+                   (fuzzy-text-where [:a.canonical_name] term p)
                    [:or
                     [:exists {:select [1]
                               :from [[:expense_items :ei]]
@@ -217,7 +219,7 @@
            :limit limit}
           {:select [:id :canonical_name]
            :from [:articles]
-           :where [:ilike :canonical_name p]
+           :where (fuzzy-text-where [:canonical_name] term p)
            :order-by [[:canonical_name :asc]]
            :limit limit}))
       {:builder-fn rs/as-unqualified-lower-maps})))
@@ -234,7 +236,7 @@
                     [:c.description :description]]
            :from [[:categories :c]]
            :where [:and
-                   [:ilike :c.name p]
+                   (fuzzy-text-where [:c.name] term p)
                    [:or
                     [:exists {:select [1]
                               :from [[:expense_items :ei]]
@@ -255,7 +257,7 @@
            :limit limit}
           {:select [:id :name :description]
            :from [:categories]
-           :where [:ilike :name p]
+           :where (fuzzy-text-where [:name] term p)
            :order-by [[:name :asc]]
            :limit limit}))
       {:builder-fn rs/as-unqualified-lower-maps})))
@@ -273,7 +275,7 @@
            :from [[:subcategories :sub]]
            :join [[:categories :c] [:= :c.id :sub.category_id]]
            :where [:and
-                   [:ilike :sub.name p]
+                   (fuzzy-text-where [:sub.name] term p)
                    [:or
                     [:exists {:select [1]
                               :from [[:expense_items :ei]]
@@ -293,7 +295,7 @@
           {:select [[:s.id :id] [:s.name :name] [:c.name :category_name]]
            :from [[:subcategories :s]]
            :join [[:categories :c] [:= :c.id :s.category_id]]
-           :where [:ilike :s.name p]
+           :where (fuzzy-text-where [:s.name] term p)
            :order-by [[:c.name :asc] [:s.name :asc]]
            :limit limit}))
       {:builder-fn rs/as-unqualified-lower-maps})))
@@ -310,9 +312,7 @@
                     [:m.normalized_key :normalized_key]]
            :from [[:manufacturers :m]]
            :where [:and
-                   [:or
-                    [:ilike :m.display_name p]
-                    [:ilike :m.normalized_key p]]
+                   (fuzzy-text-where [:m.display_name :m.normalized_key] term p)
                    [:or
                     [:exists {:select [1]
                               :from [[:expense_items :ei]]
@@ -331,9 +331,7 @@
            :limit limit}
           {:select [:id :display_name :normalized_key]
            :from [:manufacturers]
-           :where [:or
-                   [:ilike :display_name p]
-                   [:ilike :normalized_key p]]
+           :where (fuzzy-text-where [:display_name :normalized_key] term p)
            :order-by [[:display_name :asc]]
            :limit limit}))
       {:builder-fn rs/as-unqualified-lower-maps})))
@@ -351,9 +349,7 @@
                     [:city.country :country]]
            :from [[:cities :city]]
            :where [:and
-                   [:or
-                    [:ilike :city.name p]
-                    [:ilike :city.zip p]]
+                   (fuzzy-text-where [:city.name :city.zip] term p)
                    [:or
                     [:exists {:select [1]
                               :from [[:expenses :e]]
@@ -374,9 +370,7 @@
            :from [[:cities :c]]
            :join [[:stores :st] [:= :st.city_id :c.id]
                   [:expenses :e] [:= :e.store_id :st.id]]
-           :where [:or
-                   [:ilike :c.name p]
-                   [:ilike :c.zip p]]
+           :where (fuzzy-text-where [:c.name :c.zip] term p)
            :order-by [[:c.name :asc]]
            :limit limit}))
       {:builder-fn rs/as-unqualified-lower-maps})))
