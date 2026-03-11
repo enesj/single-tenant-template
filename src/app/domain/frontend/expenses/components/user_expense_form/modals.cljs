@@ -3,6 +3,7 @@
   (:require
     [app.domain.frontend.expenses.components.form-fields.helpers :refer [current-datetime-local
                                                                          new-line-item]]
+    [app.domain.frontend.expenses.components.manual-expense-form.core :as manual-form]
     [app.domain.frontend.expenses.components.user-expense-form.forms :as forms]
     [app.domain.frontend.expenses.components.user-expense-form.normalization :as norm]
     [app.domain.frontend.expenses.components.user-expense-form.specs :as specs]
@@ -29,11 +30,11 @@
 
 (defui user-expense-add-form-modal
   [{:keys [receipt-id receipt on-success on-review-saved on-cancel]}]
+  ;; All hooks must be called unconditionally (React Rules of Hooks).
   (let [payers (or (use-subscribe [:user-expenses/payers]) [])
         payers-loading? (boolean (use-subscribe [:user-expenses/payers-loading?]))
         [requested? set-requested!] (use-state false)
         [prepared-initial-data set-prepared-initial-data!] (use-state nil)
-        supplier-guess (some-> receipt :supplier-guess)
         receipt-initial-data (use-memo
                                #(when receipt (norm/normalize-receipt-data receipt))
                                [receipt])
@@ -43,20 +44,22 @@
                                  receipt-initial-data)
                               [receipt-initial-data])]
 
-    ;; Load dependencies (suppliers/payers) early so we can set defaults before the form mounts.
+    ;; Load dependencies for receipt approval path.
     (use-effect
       (fn []
-        (set-requested! true)
-        (rf/dispatch [:user-expenses/fetch-suppliers {:limit 100 :offset 0}])
-        (rf/dispatch [:user-expenses/fetch-payers {:limit 100 :offset 0}])
-        (rf/dispatch [:user-expenses/fetch-expense-categories {:limit 500 :offset 0}])
+        (when receipt-id
+          (set-requested! true)
+          (rf/dispatch [:user-expenses/fetch-suppliers {:limit 100 :offset 0}])
+          (rf/dispatch [:user-expenses/fetch-payers {:limit 100 :offset 0}])
+          (rf/dispatch [:user-expenses/fetch-expense-categories {:limit 500 :offset 0}]))
         js/undefined)
-      [])
+      [receipt-id])
 
-    ;; Lock in initial values once payers have loaded so Fork doesn't reset mid-edit.
+    ;; Lock in initial values once payers have loaded (receipt approval only).
     (use-effect
       (fn []
-        (when (and requested?
+        (when (and receipt-id
+                requested?
                 (nil? prepared-initial-data)
                 (or (seq payers) (not payers-loading?)))
           (let [existing-payer-id (some-> (:payer_id merged-initial-data) str str/trim not-empty)
@@ -66,29 +69,27 @@
                            (assoc :payer_id default-id))]
             (set-prepared-initial-data! prepared)))
         js/undefined)
-      [requested? prepared-initial-data payers payers-loading? merged-initial-data])
+      [receipt-id requested? prepared-initial-data payers payers-loading? merged-initial-data])
 
-    (if (nil? prepared-initial-data)
-      ($ :div {:class "flex justify-center p-6"}
-        ($ :span {:class "ds-loading ds-loading-spinner ds-loading-md text-primary"}))
+    (if-not receipt-id
+      ;; Manual expense entry — adaptive form (handles its own loading)
+      ($ manual-form/manual-expense-form
+        {:on-cancel on-cancel
+         :on-submit (fn [form-data]
+                      (rf/dispatch [:user-expenses/create-expense-modal form-data on-success]))})
 
-      (if receipt-id
+      ;; Receipt approval
+      (if (nil? prepared-initial-data)
+        ($ :div {:class "flex justify-center p-6"}
+          ($ :span {:class "ds-loading ds-loading-spinner ds-loading-md text-primary"}))
+
         ($ forms/receipt-approval-form
           {:receipt-id receipt-id
            :receipt receipt
            :initial-data prepared-initial-data
            :on-cancel on-cancel
            :on-review-saved on-review-saved
-           :on-expense-saved on-success})
-
-        ($ forms/user-expense-form-body
-          {:mode :create
-           :receipt-approval? false
-           :supplier-guess supplier-guess
-           :initial-data prepared-initial-data
-           :on-cancel on-cancel
-           :on-submit (fn [form-data]
-                        (rf/dispatch [:user-expenses/create-expense-modal form-data on-success]))})))))
+           :on-expense-saved on-success})))))
 
 (defui user-expense-edit-form-modal
   "Edit user expense modal using master-detail-form wrapper for detail orchestration."

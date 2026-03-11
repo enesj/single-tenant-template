@@ -40,11 +40,12 @@
   [db opts]
   (jdbc/execute!
     db
-    (sql/format {:select [:supplier_id
+    (sql/format {:select [[:supplier_id :supplier_id]
                           [[:sum :total_amount] :total_amount]
                           [[:count :*] :expense_count]]
                  :from [:expenses]
-                 :where (base-where opts)
+                 :where (conj (base-where opts)
+                          [:is-not :supplier_id nil])
                  :group-by [:supplier_id]
                  :order-by [[:total_amount :desc]]})
     {:builder-fn rs/as-unqualified-lower-maps}))
@@ -81,7 +82,8 @@
                           [[:sum :total_amount] :total_amount]
                           [[:count :*] :expense_count]]
                  :from [:expenses]
-                 :where (base-where opts)
+                 :where (conj (base-where opts)
+                          [:is-not :supplier_id nil])
                  :group-by [:supplier_id]
                  :order-by [[:total_amount :desc]]
                  :limit limit})

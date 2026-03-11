@@ -342,7 +342,7 @@
   {:table-name "expenses"
    :primary-key :id
    :tenant-scoped? true
-   :required-fields [:supplier_id :payer_id :purchased_at :total_amount]
+   :required-fields [:payer_id :purchased_at :total_amount]
    :allowed-order-by {:expense-date :purchased_at
                       :purchased-at :purchased_at
                       :created-at :created_at

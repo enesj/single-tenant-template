@@ -365,7 +365,8 @@
   (let [user-id (ensure-uuid user-id)
         tenant-id (ensure-uuid tenant-id)]
     (let [base-where (cond-> [:and
-                              [:= :e.is_posted true]]
+                              [:= :e.is_posted true]
+                              [:is-not :e.supplier_id nil]]
                        user-id (conj [:= :e.user_id user-id])
                        tenant-id (conj [:= :e.tenant_id tenant-id])
                        from (conj [:>= :e.purchased_at from])

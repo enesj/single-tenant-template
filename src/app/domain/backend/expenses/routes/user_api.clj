@@ -40,6 +40,9 @@
    ["/search" {:get {:handler (search/user-search-handler db)}}]
    ["/search/related" {:get {:handler (search/user-related-handler db)}}]
 
+   ;; Lightweight scored search for smart expense form (global catalog)
+   ["/quick-search" {:get {:handler (search/quick-search-handler db)}}]
+
    ;; Dashboard/summary endpoints
    ["/summary" {:get {:handler (user-expenses-summary/expense-summary-handler db)}}]
    ["/by-month" {:get {:handler (user-expenses-summary/spending-by-month-handler db)}}]

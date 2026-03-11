@@ -76,7 +76,7 @@
         (let [tenant-id (h/get-tenant-id request)]
           (try
             (let [body (or (:body-params request) (json/parse-string (slurp (:body request)) true))
-                  expense-data (select-keys body [:supplier_id :payer_id :expense_category_id :purchased_at :total_amount :currency :notes :is_posted :receipt_id])
+                  expense-data (select-keys body [:supplier_id :store_id :payer_id :expense_category_id :article_id :purchased_at :total_amount :currency :notes :is_posted :receipt_id])
                   items (or (:items body) [])]
               (log/debug "Creating user expense" {:user-id user-id :tenant-id tenant-id :expense-data expense-data})
               (let [expense (user-expenses/create-user-expense! db tenant-id user-id expense-data items)]
@@ -102,7 +102,7 @@
           (if expense-id
             (try
               (let [body (h/read-body-params request)
-                    updates (select-keys body [:supplier_id :payer_id :expense_category_id :purchased_at :total_amount :currency :notes :is_posted :items])]
+                    updates (select-keys body [:supplier_id :store_id :payer_id :expense_category_id :purchased_at :total_amount :currency :notes :is_posted :items])]
                 (if-let [expense (user-expenses/update-user-expense! db tenant-id user-id expense-id updates)]
                   (h/json-response {:data expense})
                   (h/not-found-response "Expense not found or access denied")))

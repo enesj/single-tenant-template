@@ -136,6 +136,11 @@
     (get-in db [:user-expenses :payers :items])))
 
 (rf/reg-sub
+  :user-expenses/payers-loading?
+  (fn [db _]
+    (get-in db [:user-expenses :payers :loading?])))
+
+(rf/reg-sub
   :user-expenses/payer-types
   (fn [db _]
     (get-in db [:user-expenses :payer-types :items])))
@@ -291,6 +296,17 @@
   (fn [db _]
     (reports-data db :daily-heatmap :error)))
 
+;; Stores and articles (synced to admin entity store by fetch events)
+(rf/reg-sub
+  :user-expenses/stores
+  (fn [db _]
+    (get-in db [:admin :expenses :stores :items])))
+
+(rf/reg-sub
+  :user-expenses/articles
+  (fn [db _]
+    (get-in db [:admin :expenses :articles :items])))
+
 ;; Search
 (rf/reg-sub
   :user-expenses/search-query
@@ -321,4 +337,15 @@
   :user-expenses/search-related-loading?
   (fn [db _]
     (get-in db [:user-expenses :search :related-loading?])))
+
+;; Quick search (smart expense form)
+(rf/reg-sub
+  :user-expenses/quick-search-results
+  (fn [db _]
+    (get-in db [:user-expenses :quick-search :results] [])))
+
+(rf/reg-sub
+  :user-expenses/quick-search-loading?
+  (fn [db _]
+    (boolean (get-in db [:user-expenses :quick-search :loading?]))))
 

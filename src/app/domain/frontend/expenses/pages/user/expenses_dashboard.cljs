@@ -217,7 +217,7 @@
                                      (:supplier_display_name expense)
                                      (:supplier-normalized-key expense)
                                      (:supplier_normalized_key expense)
-                                     "Unknown supplier")
+                                     "—")
                           amount (format-money (:total_amount expense)
                                    (or (:currency expense) primary-currency-str))
                           date (format-date (:purchased_at expense))

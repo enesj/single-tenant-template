@@ -43,3 +43,7 @@
 (def cities-endpoint (api/versioned-endpoint "/expenses/cities"))
 (def subcategories-endpoint (api/versioned-endpoint "/expenses/subcategories"))
 (def articles-unmapped-aliases-endpoint (api/versioned-endpoint "/expenses/articles/unmapped-aliases"))
+
+;; Quick search (global catalog, scored)
+(def quick-search-endpoint (api/versioned-endpoint "/expenses/quick-search"))
+
