@@ -100,6 +100,43 @@
         (is (re-find #"article_aliases" query-str))
         (is (re-find #":ei\.tenant_id" query-str))))))
 
+(deftest quick-add-search-handler-passes-supplier-filter-to-store-search
+  (let [db :mock-db
+        user-id (java.util.UUID/randomUUID)
+        tenant-id (java.util.UUID/randomUUID)
+        supplier-id (java.util.UUID/randomUUID)
+        handler (search/quick-add-search-handler db)]
+    (with-redefs-fn {#'h/get-user-id (constantly user-id)
+                     #'h/ensure-role (constantly nil)
+                     #'h/get-tenant-id (constantly tenant-id)
+                     #'h/json-response (fn [body & [status]]
+                                         {:status (or status 200)
+                                          :body body})
+                     #'search/quick-add-search-stores (fn [db* term limit supplier-id*]
+                                                        (is (= db db*))
+                                                        (is (= "kon" term))
+                                                        (is (= 8 limit))
+                                                        (is (= supplier-id supplier-id*))
+                                                        [{:id 1 :label "Konzum Centar" :supplier_id supplier-id*}])}
+      (fn []
+        (let [response (handler {:query-params {"type" "store"
+                                                "q" "kon"
+                                                "supplier_id" (str supplier-id)}})]
+          (is (= 200 (:status response)))
+          (is (= [{:id 1 :label "Konzum Centar" :supplier_id supplier-id}]
+                (get-in response [:body :results]))))))))
+
+(deftest quick-add-search-stores-excludes-supplierless-stores-and-honors-supplier-filter
+  (let [supplier-id (java.util.UUID/randomUUID)]
+    (with-redefs [sql/format identity
+                  jdbc/execute! (fn [_db query _opts] query)]
+      (let [query (#'search/quick-add-search-stores :mock-db "kon" 5 supplier-id)
+            query-str (pr-str query)]
+        (is (re-find #":is-not :st\.supplier_id nil" query-str))
+        (is (re-find #":= :st\.supplier_id" query-str))
+        (is (re-find #":supplier_id" query-str))
+        (is (re-find #":supplier_display_name" query-str))))))
+
 (deftest admin-related-handler-uses-global-scope
   (let [db :mock-db
         entity-id (java.util.UUID/randomUUID)

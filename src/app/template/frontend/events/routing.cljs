@@ -92,8 +92,7 @@
   common-interceptors
   (fn [{:keys [db]} _]
     {:db (assoc-in db (paths/current-page) :expense-new)
-     :dispatch-n [[:user-expenses/fetch-suppliers {:limit 100}]
-                  [:user-expenses/fetch-payers {:limit 100}]]}))
+     :dispatch [:user-expenses/fetch-payers {:limit 100}]}))
 
 (rf/reg-event-fx
   :page/init-expense-detail

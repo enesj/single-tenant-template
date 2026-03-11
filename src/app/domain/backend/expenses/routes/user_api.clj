@@ -40,6 +40,9 @@
    ["/search" {:get {:handler (search/user-search-handler db)}}]
    ["/search/related" {:get {:handler (search/user-related-handler db)}}]
 
+   ;; Dedicated search for Quick Add expense context inputs
+   ["/quick-add-search" {:get {:handler (search/quick-add-search-handler db)}}]
+
    ;; Lightweight scored search for smart expense form (global catalog)
    ["/quick-search" {:get {:handler (search/quick-search-handler db)}}]
 

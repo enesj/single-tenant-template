@@ -349,3 +349,14 @@
   (fn [db _]
     (boolean (get-in db [:user-expenses :quick-search :loading?]))))
 
+;; Quick Add search (context-first /expenses/new workflow)
+(rf/reg-sub
+  :user-expenses/quick-add-search-results
+  (fn [db [_ entity-type]]
+    (get-in db [:user-expenses :quick-add-search entity-type :results] [])))
+
+(rf/reg-sub
+  :user-expenses/quick-add-search-loading?
+  (fn [db [_ entity-type]]
+    (boolean (get-in db [:user-expenses :quick-add-search entity-type :loading?]))))
+

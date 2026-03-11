@@ -46,4 +46,5 @@
 
 ;; Quick search (global catalog, scored)
 (def quick-search-endpoint (api/versioned-endpoint "/expenses/quick-search"))
+(def quick-add-search-endpoint (api/versioned-endpoint "/expenses/quick-add-search"))
 

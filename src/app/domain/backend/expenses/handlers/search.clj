@@ -5,6 +5,7 @@
   Both fan out across all relevant tables in parallel via pmap."
   (:require
     [app.domain.backend.expenses.handlers.user-expenses.helpers :as h]
+    [clojure.string :as str]
     [honey.sql :as sql]
     [next.jdbc :as jdbc]
     [next.jdbc.result-set :as rs]
@@ -36,6 +37,30 @@
   "Run `entity-fn` safely, returning [] on any exception."
   [entity-fn]
   (try (entity-fn) (catch Exception e (log/warn "Search entity failed" {:error (.getMessage e)}) [])))
+
+(defn- parse-search-limit
+  [request default-limit]
+  (let [raw (h/get-param (:query-params request) :limit)
+        parsed (some-> raw str parse-long)]
+    (-> (or parsed default-limit)
+      long
+      (max 1)
+      (min 25))))
+
+(defn- parse-entity-type
+  [request]
+  (some-> (h/get-param (:query-params request) :type)
+    str
+    str/trim
+    str/lower-case
+    not-empty))
+
+(defn- parse-query
+  [request]
+  (some-> (h/get-param (:query-params request) :q)
+    str
+    str/trim
+    not-empty))
 
 ;; ---------------------------------------------------------------------------
 ;; Per-entity search queries
@@ -547,6 +572,121 @@
                 (log/error e "Error executing quick search" {:q q})
                 (h/json-response {:error "Search failed"} 500)))
             (h/json-response {:results []}))))
+      (h/unauthorized-response))))
+
+;; ---------------------------------------------------------------------------
+;; Quick Add search — dedicated filtered search for /expenses/new
+;; ---------------------------------------------------------------------------
+
+(defn- quick-add-search-suppliers
+  [db term limit]
+  (let [p (pattern term)]
+    (jdbc/execute!
+      db
+      (sql/format {:select [:id
+                            [:display_name :label]]
+                   :from [:suppliers]
+                   :where (fuzzy-text-where [:display_name :address] term p)
+                   :order-by [[:display_name :asc]]
+                   :limit limit})
+      {:builder-fn rs/as-unqualified-lower-maps})))
+
+(defn- quick-add-search-stores
+  [db term limit supplier-id]
+  (let [p (pattern term)
+        base-where [:and
+                    [:is-not :st.supplier_id nil]
+                    (fuzzy-text-where [:st.display_name :st.address :s.display_name] term p)]
+        where (cond-> base-where
+                supplier-id (conj [:= :st.supplier_id supplier-id]))]
+    (jdbc/execute!
+      db
+      (sql/format {:select [[:st.id :id]
+                            [:st.display_name :label]
+                            [:st.supplier_id :supplier_id]
+                            [:s.display_name :supplier_display_name]]
+                   :from [[:stores :st]]
+                   :join [[:suppliers :s] [:= :s.id :st.supplier_id]]
+                   :where where
+                   :order-by [[:st.display_name :asc]]
+                   :limit limit})
+      {:builder-fn rs/as-unqualified-lower-maps})))
+
+(defn- quick-add-search-expense-categories
+  [db term limit tenant-id]
+  (let [p (pattern term)
+        text-where (fuzzy-text-where [:name] term p)
+        where (if tenant-id
+                [:and text-where [:= :tenant_id tenant-id]]
+                text-where)]
+    (jdbc/execute!
+      db
+      (sql/format {:select [:id
+                            [:name :label]]
+                   :from [:expense_categories]
+                   :where where
+                   :order-by [[:name :asc]]
+                   :limit limit})
+      {:builder-fn rs/as-unqualified-lower-maps})))
+
+(defn- quick-add-search-articles
+  [db term limit]
+  (let [p (pattern term)]
+    (jdbc/execute!
+      db
+      (sql/format {:select [:id
+                            [:canonical_name :label]]
+                   :from [:articles]
+                   :where (fuzzy-text-where [:canonical_name] term p)
+                   :order-by [[:canonical_name :asc]]
+                   :limit limit})
+      {:builder-fn rs/as-unqualified-lower-maps})))
+
+(defn quick-add-search-handler
+  "Dedicated filtered search for Quick Add expense context and article inputs.
+
+  Query params:
+  - type: supplier | store | category | article
+  - q: search string
+  - limit: optional (default 8, max 25)
+  - supplier_id: optional store filter; when provided, stores are limited to that supplier
+
+  Quick Add never returns stores without a supplier_id."
+  [db]
+  (fn [request]
+    (if-let [_user-id (h/get-user-id request)]
+      (if-let [forbidden (h/ensure-role request h/expenses-read-roles "Role required")]
+        forbidden
+        (let [tenant-id (h/get-tenant-id request)
+              entity-type (parse-entity-type request)
+              q (parse-query request)
+              limit (parse-search-limit request 8)
+              supplier-id-raw (h/get-param (:query-params request) :supplier_id)
+              supplier-id (some-> supplier-id-raw h/try-parse-uuid)]
+          (cond
+            (not (contains? #{"supplier" "store" "category" "article"} entity-type))
+            (h/json-response {:error "Invalid quick add search type"} 400)
+
+            (and (some? supplier-id-raw) (not (str/blank? (str supplier-id-raw))) (nil? supplier-id))
+            (h/json-response {:error "Invalid supplier_id"} 400)
+
+            (or (nil? q) (< (count q) 2))
+            (h/json-response {:results []})
+
+            :else
+            (try
+              (let [results (case entity-type
+                              "supplier" (quick-add-search-suppliers db q limit)
+                              "store" (quick-add-search-stores db q limit supplier-id)
+                              "category" (quick-add-search-expense-categories db q limit tenant-id)
+                              "article" (quick-add-search-articles db q limit))]
+                (h/json-response {:results (vec results)}))
+              (catch Exception e
+                (log/error e "Error executing quick add search"
+                  {:q q
+                   :type entity-type
+                   :supplier-id supplier-id})
+                (h/json-response {:error "Quick add search failed"} 500))))))
       (h/unauthorized-response))))
 
 ;; ---------------------------------------------------------------------------
