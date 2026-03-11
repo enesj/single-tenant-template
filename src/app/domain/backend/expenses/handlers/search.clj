@@ -629,24 +629,76 @@
                    :limit limit})
       {:builder-fn rs/as-unqualified-lower-maps})))
 
-(defn- quick-add-search-articles
-  [db term limit]
-  (let [p (pattern term)]
+(defn- quick-add-article-last-prices
+  [db article-ids tenant-id supplier-id]
+  (if (and tenant-id (seq article-ids))
     (jdbc/execute!
       db
-      (sql/format {:select [:id
-                            [:canonical_name :label]]
-                   :from [:articles]
-                   :where (fuzzy-text-where [:canonical_name] term p)
-                   :order-by [[:canonical_name :asc]]
-                   :limit limit})
-      {:builder-fn rs/as-unqualified-lower-maps})))
+      (sql/format {:select [:article_id :unit_price :supplier_display_name]
+                   :from [[{:select [[:aa.article_id :article_id]
+                                     [:ei.unit_price :unit_price]
+                                     [:sup.display_name :supplier_display_name]
+                                     [[:over [[:row_number]
+                                              {:partition-by :aa.article_id
+                                               :order-by [[:e.purchased_at :desc]
+                                                          [:ei.created_at :desc]
+                                                          [:ei.id :desc]]}]]
+                                      :rn]]
+                            :from [[:expense_items :ei]]
+                            :join [[:expenses :e] [:= :e.id :ei.expense_id]
+                                   [:article_aliases :aa] [:= :aa.id :ei.alias_id]]
+                            :left-join [[:suppliers :sup] [:= :sup.id :e.supplier_id]]
+                            :where (cond-> [:and
+                                            [:= :e.tenant_id tenant-id]
+                                            [:in :aa.article_id article-ids]]
+                                     supplier-id (conj [:= :e.supplier_id supplier-id]))}
+                           :recent_article_prices]]
+                   :where [:= :rn 1]})
+      {:builder-fn rs/as-unqualified-lower-maps})
+    []))
+
+(defn- quick-add-search-articles
+  [db term limit tenant-id supplier-id]
+  (let [p (pattern term)
+        articles (jdbc/execute!
+                   db
+                   (sql/format {:select [:id
+                                         [:canonical_name :label]]
+                                :from [:articles]
+                                :where (fuzzy-text-where [:canonical_name] term p)
+                                :order-by [[:canonical_name :asc]]
+                                :limit limit})
+                   {:builder-fn rs/as-unqualified-lower-maps})
+        article-ids (mapv :id articles)
+        supplier-price-map (reduce (fn [acc {:keys [article_id] :as row}]
+                                     (assoc acc article_id row))
+                             {}
+                             (if supplier-id
+                               (quick-add-article-last-prices db article-ids tenant-id supplier-id)
+                               []))
+        global-price-map (reduce (fn [acc {:keys [article_id] :as row}]
+                                   (assoc acc article_id row))
+                           {}
+                           (quick-add-article-last-prices db article-ids tenant-id nil))]
+    (mapv (fn [article]
+            (let [supplier-price (get supplier-price-map (:id article))
+                  global-price (get global-price-map (:id article))
+                  chosen-price (or supplier-price global-price)
+                  price-source (cond
+                                 supplier-price "supplier"
+                                 global-price "global"
+                                 :else nil)]
+              (cond-> article
+                chosen-price (assoc :last_price (:unit_price chosen-price)
+                               :last_price_source price-source
+                               :last_price_supplier_display_name (:supplier_display_name chosen-price)))))
+      articles)))
 
 (defn quick-add-search-handler
   "Dedicated filtered search for Quick Add expense context and article inputs.
 
   Query params:
-  - type: supplier | store | category | article
+  - type: all | supplier | store | category | article
   - q: search string
   - limit: optional (default 8, max 25)
   - supplier_id: optional store filter; when provided, stores are limited to that supplier
@@ -658,13 +710,13 @@
       (if-let [forbidden (h/ensure-role request h/expenses-read-roles "Role required")]
         forbidden
         (let [tenant-id (h/get-tenant-id request)
-              entity-type (parse-entity-type request)
+              entity-type (or (parse-entity-type request) "all")
               q (parse-query request)
               limit (parse-search-limit request 8)
               supplier-id-raw (h/get-param (:query-params request) :supplier_id)
               supplier-id (some-> supplier-id-raw h/try-parse-uuid)]
           (cond
-            (not (contains? #{"supplier" "store" "category" "article"} entity-type))
+            (not (contains? #{"all" "supplier" "store" "category" "article"} entity-type))
             (h/json-response {:error "Invalid quick add search type"} 400)
 
             (and (some? supplier-id-raw) (not (str/blank? (str supplier-id-raw))) (nil? supplier-id))
@@ -675,12 +727,24 @@
 
             :else
             (try
-              (let [results (case entity-type
-                              "supplier" (quick-add-search-suppliers db q limit)
-                              "store" (quick-add-search-stores db q limit supplier-id)
-                              "category" (quick-add-search-expense-categories db q limit tenant-id)
-                              "article" (quick-add-search-articles db q limit))]
-                (h/json-response {:results (vec results)}))
+              (let [results (if (= entity-type "all")
+                              (->> [{:entity_type "supplier"
+                                     :results (quick-add-search-suppliers db q limit)}
+                                    {:entity_type "store"
+                                     :results (quick-add-search-stores db q limit supplier-id)}
+                                    {:entity_type "category"
+                                     :results (quick-add-search-expense-categories db q limit tenant-id)}
+                                    {:entity_type "article"
+                                     :results (quick-add-search-articles db q limit tenant-id supplier-id)}]
+                                (mapcat (fn [{:keys [entity_type results]}]
+                                          (map #(assoc % :entity_type entity_type) results)))
+                                vec)
+                              (vec (case entity-type
+                                     "supplier" (quick-add-search-suppliers db q limit)
+                                     "store" (quick-add-search-stores db q limit supplier-id)
+                                     "category" (quick-add-search-expense-categories db q limit tenant-id)
+                                     "article" (quick-add-search-articles db q limit tenant-id supplier-id))))]
+                (h/json-response {:results results}))
               (catch Exception e
                 (log/error e "Error executing quick add search"
                   {:q q
@@ -778,24 +842,33 @@
      :stores stores}))
 
 (defn- related-for-supplier
-  "Supplier detail: stores with total spendings + articles purchased from this supplier."
-  [db supplier-id _limit tenant-id]
-  (let [;; Common WHERE for supplier-scoped queries
-        sup-cond [:= :e.supplier_id supplier-id]
-        where    (if tenant-id [:and sup-cond [:= :e.tenant_id tenant-id]] sup-cond)
+  "Supplier detail: stores for this supplier + articles purchased from this supplier."
+  [db supplier-id limit tenant-id]
+  (let [sup-cond [:= :st.supplier_id supplier-id]
+        expense-join-cond (if tenant-id
+                            [:and [:= :e.store_id :st.id]
+                             [:= :e.tenant_id tenant-id]]
+                            [:= :e.store_id :st.id])
+        where (if tenant-id
+                [:and [:= :e.supplier_id supplier-id]
+                 [:= :e.tenant_id tenant-id]]
+                [:= :e.supplier_id supplier-id])
 
-        ;; 1. Stores belonging to this supplier with total spendings
+        ;; 1. All stores belonging to this supplier, with tenant-scoped total spendings when present.
         stores (jdbc/execute!
                  db
                  (sql/format {:select [[:st.id :id]
                                        [:st.display_name :display_name]
                                        [:st.address :address]
+                                       [:st.supplier_id :supplier_id]
                                        [[:coalesce [:sum :e.total_amount] [:inline 0]] :total_spendings]]
-                              :from [[:expenses :e]]
-                              :join [[:stores :st] [:= :st.id :e.store_id]]
-                              :where where
-                              :group-by [:st.id :st.display_name :st.address]
-                              :order-by [[[:sum :e.total_amount] :desc]]})
+                              :from [[:stores :st]]
+                              :left-join [[:expenses :e] expense-join-cond]
+                              :where sup-cond
+                              :group-by [:st.id :st.display_name :st.address :st.supplier_id]
+                              :order-by [[[:sum :e.total_amount] :desc]
+                                         [:st.display_name :asc]]
+                              :limit limit})
                  {:builder-fn rs/as-unqualified-lower-maps})
 
         ;; 2. Articles purchased from this supplier (aggregates)
@@ -811,7 +884,8 @@
                                            [:articles :a] [:= :a.id :aa.article_id]]
                                     :where where
                                     :group-by [:a.id :a.canonical_name]
-                                    :order-by [[[:sum :ei.line_total] :desc]]})
+                                    :order-by [[[:sum :ei.line_total] :desc]]
+                                    :limit limit})
                        {:builder-fn rs/as-unqualified-lower-maps})
 
         ;; 3. Last price per article (most recent expense from this supplier)
@@ -833,13 +907,12 @@
                                      :where [:= :rn 1]})
                         {:builder-fn rs/as-unqualified-lower-maps}))
 
-        ;; Merge last prices into article rows
         price-map (reduce (fn [acc {:keys [article_id unit_price]}]
                             (assoc acc (str article_id) unit_price))
                     {} last-prices)
-        articles  (mapv (fn [art]
-                          (assoc art :last_price (get price-map (str (:id art)))))
-                    article-aggs)]
+        articles (mapv (fn [art]
+                         (assoc art :last_price (get price-map (str (:id art)))))
+                   article-aggs)]
     {:stores stores
      :articles articles}))
 
@@ -1252,7 +1325,7 @@
   (let [params (:query-params request)
         entity-type (get params "type")
         entity-id (h/try-parse-uuid (get params "id"))
-        limit 8]
+        limit (parse-search-limit request 8)]
     (if-not entity-id
       (h/json-response {:error "Missing or invalid id"} 400)
       (try

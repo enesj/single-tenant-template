@@ -9,18 +9,57 @@
 ;; ─────────────────────────────────────────────
 
 (def entity-type-config
-  {:supplier {:icon "🏪" :label "Supplier"  :color "blue"
+  {:supplier {:icon "🏪" :label "Supplier" :color "blue"
               :name-fn #(or (:display-name %) (:display_name %) "")}
-   :store    {:icon "🏬" :label "Store"     :color "emerald"
-              :name-fn #(or (:display-name %) (:display_name %) "")}
-   :category {:icon "📂" :label "Category"  :color "purple"
+   :store {:icon "🏬" :label "Store" :color "emerald"
+           :name-fn #(or (:display-name %) (:display_name %) "")}
+   :category {:icon "📂" :label "Category" :color "purple"
               :name-fn #(or (:name %) "")}
-   :article  {:icon "📦" :label "Article"   :color "amber"
-              :name-fn #(or (:canonical-name %) (:canonical_name %) "")}})
+   :article {:icon "📦" :label "Article" :color "amber"
+             :name-fn #(or (:canonical-name %) (:canonical_name %) "")}})
+
+(def entity-type-order
+  [:supplier :store :category :article])
 
 (defn entity-type-info
   [entity-type]
   (get entity-type-config entity-type))
+
+(defn normalize-entity-type
+  [result]
+  (some-> (or (:entity-type result) (:entity_type result)) keyword))
+
+(defn result-last-price
+  [result]
+  (or (:last_price result) (:last-price result)))
+
+(defn result-last-price-source
+  [result]
+  (some-> (or (:last_price_source result) (:last-price-source result)) keyword))
+
+(defn result-last-price-supplier-name
+  [result]
+  (or (:last_price_supplier_display_name result)
+    (:last-price-supplier-display-name result)
+    (:supplier_display_name result)
+    (:supplier-display-name result)))
+
+(defn global-last-price?
+  [result]
+  (= :global (result-last-price-source result)))
+
+(defn last-price-tooltip
+  [result]
+  (when (global-last-price? result)
+    (when-let [supplier-name (result-last-price-supplier-name result)]
+      (str "Last price from " supplier-name))))
+
+(defn filter-results-by-entity-types
+  [results allowed-entity-types]
+  (let [allowed-set (set allowed-entity-types)]
+    (->> (or results [])
+      (filter #(contains? allowed-set (normalize-entity-type %)))
+      vec)))
 
 ;; ─────────────────────────────────────────────
 ;; Number detection and parsing
@@ -56,6 +95,65 @@
       ;; Substring match
       (str/includes? t q) 55
       :else nil)))
+
+(defn dedupe-results
+  [results]
+  (:results
+   (reduce (fn [{:keys [results seen] :as acc} result]
+             (let [entity-type (normalize-entity-type result)
+                   key [entity-type (str (:id result))]
+                   normalized-result (assoc result :entity-type entity-type)]
+               (cond
+                 (nil? entity-type)
+                 acc
+
+                 (contains? seen key)
+                 (let [idx (get seen key)]
+                   (update acc :results assoc idx (merge (nth results idx) normalized-result)))
+
+                 :else
+                 {:results (conj results normalized-result)
+                  :seen (assoc seen key (count results))})))
+     {:results [] :seen {}}
+     results)))
+
+(defn balance-results
+  [results limit]
+  (let [initial-buckets (reduce (fn [acc entity-type]
+                                  (assoc acc entity-type []))
+                          {}
+                          entity-type-order)
+        buckets (reduce (fn [acc result]
+                          (let [entity-type (normalize-entity-type result)]
+                            (if entity-type
+                              (update acc entity-type conj result)
+                              acc)))
+                  initial-buckets
+                  results)]
+    (loop [remaining buckets
+           balanced []]
+      (if (or (>= (count balanced) limit)
+            (every? empty? (vals remaining)))
+        (vec (take limit balanced))
+        (let [[remaining* balanced*]
+              (reduce (fn [[current-remaining current-balanced] entity-type]
+                        (let [items (get current-remaining entity-type)]
+                          (if (or (>= (count current-balanced) limit)
+                                (empty? items))
+                            [current-remaining current-balanced]
+                            [(assoc current-remaining entity-type (subvec items 1))
+                             (conj current-balanced (first items))])))
+                [remaining balanced]
+                entity-type-order)]
+          (recur remaining* balanced*))))))
+
+(defn merge-search-results
+  [local-results backend-results limit]
+  (balance-results
+    (dedupe-results
+      (concat (or local-results [])
+        (or backend-results [])))
+    limit))
 
 ;; ─────────────────────────────────────────────
 ;; Unified search

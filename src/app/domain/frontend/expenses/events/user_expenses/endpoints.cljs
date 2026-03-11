@@ -48,3 +48,5 @@
 (def quick-search-endpoint (api/versioned-endpoint "/expenses/quick-search"))
 (def quick-add-search-endpoint (api/versioned-endpoint "/expenses/quick-add-search"))
 
+(def related-search-endpoint (str list-endpoint "/search/related"))
+

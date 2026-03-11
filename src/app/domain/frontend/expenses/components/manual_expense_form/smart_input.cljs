@@ -10,7 +10,7 @@
     [app.domain.frontend.expenses.components.form-fields.helpers
      :refer [current-datetime-local format-decimal safe-parse-number]]
     [app.domain.frontend.expenses.components.manual-expense-form.search :as search]
-    app.domain.frontend.expenses.events.user-expenses.quick-search
+    app.domain.frontend.expenses.events.user-expenses.quick-add-search
     [clojure.string :as str]
     [re-frame.core :as rf]
     ["react-dom" :as react-dom]
@@ -116,6 +116,34 @@
 
       :else {:ok? true})))
 
+(def ^:private context-search-order
+  [:supplier :store :category])
+
+(defn focused-search-types
+  [context]
+  (vec (concat
+         (remove #(contains? context %) context-search-order)
+         [:article])))
+
+(defn search-placeholder
+  [context active-search?]
+  (let [labels (map name (focused-search-types context))
+        prefix (if active-search? "Search " "Start with ")]
+    (str prefix
+      (case (count labels)
+        0 "article"
+        1 (first labels)
+        2 (str (first labels) " or " (second labels))
+        (str (str/join ", " (butlast labels)) ", or " (last labels)))
+      "...")))
+
+(defn current-related-context
+  [context]
+  (cond
+    (:store context) {:entity-type :store :entity-id (get-in context [:store :id])}
+    (:supplier context) {:entity-type :supplier :entity-id (get-in context [:supplier :id])}
+    :else nil))
+
 ;; ─────────────────────────────────────────────
 ;; Sub-components
 ;; ─────────────────────────────────────────────
@@ -189,9 +217,16 @@
                                           (on-select (assoc result :entity-type etype)))}
                     ($ :span {:class "text-2xl flex-none w-8 text-center"} icon)
                     ($ :span {:class "flex-1 text-lg font-medium truncate"} (:label result))
-                    (when-let [price (:last_price result)]
-                      ($ :span {:class "text-sm text-base-content/50 font-mono"}
-                        (format-decimal price)))
+                    (when-let [price (search/result-last-price result)]
+                      (let [global-price? (search/global-last-price? result)
+                            tooltip (search/last-price-tooltip result)]
+                        ($ :span {:class (str "text-sm font-mono "
+                                           (if global-price?
+                                             "text-amber-600 font-semibold"
+                                             "text-base-content/50")
+                                           (when tooltip " cursor-help"))
+                                  :title tooltip}
+                          (format-decimal price))))
                     ($ :span {:class (str "text-xs px-2.5 py-1 rounded-full border font-medium "
                                        (get chip-styles etype ""))}
                       label)))))
@@ -247,19 +282,41 @@
 
 (defn- top-items-for-type
   "Return up to `n` items for the given entity type from local data."
-  [entity-type suppliers stores expense-categories n]
-  (let [name-fn (get-in search/entity-type-config [entity-type :name-fn])]
-    (->> (case entity-type
-           :supplier suppliers
-           :store stores
-           :category expense-categories
-           [])
+  [entity-type suppliers stores expense-categories articles n selected-supplier-id]
+  (let [name-fn (get-in search/entity-type-config [entity-type :name-fn])
+        base-items (case entity-type
+                     :supplier suppliers
+                     :store (if selected-supplier-id
+                              (filter #(= (str selected-supplier-id)
+                                         (str (or (:supplier-id %) (:supplier_id %))))
+                                stores)
+                              stores)
+                     :category expense-categories
+                     :article articles
+                     [])]
+    (->> base-items
       (take n)
       (mapv (fn [item]
               {:id (:id item)
                :label (or (when name-fn (name-fn item)) "")
                :entity-type entity-type
                :entity item})))))
+
+(defn build-quick-pick-groups
+  [missing-types suppliers stores expense-categories articles selected-supplier-id]
+  (let [limit (if (= 1 (count missing-types)) 10 5)]
+    (->> missing-types
+      (map (fn [entity-type]
+             {:entity-type entity-type
+              :items (top-items-for-type entity-type
+                       suppliers
+                       stores
+                       expense-categories
+                       articles
+                       limit
+                       selected-supplier-id)}))
+      (filter #(seq (:items %)))
+      vec)))
 
 (defui quick-picks
   "Shows top N options as clickable chips when only one entity type is missing."
@@ -353,12 +410,14 @@
         suppliers (or (use-subscribe [:user-expenses/suppliers]) [])
         stores (or (use-subscribe [:user-expenses/stores]) [])
         expense-categories (or (use-subscribe [:user-expenses/expense-categories]) [])
+        articles (or (use-subscribe [:user-expenses/articles]) [])
         payers (or (use-subscribe [:user-expenses/payers]) [])
         payers-loading? (boolean (use-subscribe [:user-expenses/payers-loading?]))
 
-        ;; Quick search (backend)
-        quick-search-results (use-subscribe [:user-expenses/quick-search-results])
-        quick-search-loading? (use-subscribe [:user-expenses/quick-search-loading?])
+        ;; Quick Add search (backend)
+        quick-search-results (use-subscribe [:user-expenses/quick-add-search-results :all])
+        quick-search-loading? (use-subscribe [:user-expenses/quick-add-search-loading? :all])
+        quick-add-related (use-subscribe [:user-expenses/quick-add-related])
 
         ;; Core state
         [phase set-phase!] (use-state :items)       ;; :items or :context
@@ -382,9 +441,41 @@
 
         input-ref (use-ref nil)
 
-        ;; Backend results (already sorted by score, capped at 10 for display)
-        search-results (when (and dropdown-open? (seq quick-search-results))
-                         (take 10 quick-search-results))
+        ;; Search results: show immediate local matches while dedicated backend search loads.
+        available-search-types (focused-search-types context)
+        local-search-results (when (and dropdown-open?
+                                     (>= (count (str/trim input-text)) 2))
+                               (-> (search/search-all-entities
+                                     input-text
+                                     {:suppliers suppliers
+                                      :stores stores
+                                      :categories expense-categories
+                                      :articles articles}
+                                     {:selected-supplier-id (some-> context :supplier :id)})
+                                 (search/filter-results-by-entity-types available-search-types)))
+        filtered-quick-search-results (search/filter-results-by-entity-types quick-search-results available-search-types)
+        search-results (when dropdown-open?
+                         (search/merge-search-results local-search-results filtered-quick-search-results 10))
+        selected-supplier-id (some-> context :supplier :id)
+        related-context (current-related-context context)
+        related-matches? (and related-context
+                           (= (:entity-type quick-add-related) (:entity-type related-context))
+                           (= (:entity-id quick-add-related) (some-> (:entity-id related-context) str)))
+        related-stores (if (and related-matches? (= :supplier (:entity-type related-context)))
+                         (get-in quick-add-related [:related :stores] stores)
+                         stores)
+        related-articles (if related-matches?
+                           (or (get-in quick-add-related [:related :articles]) articles)
+                           articles)
+        focused-quick-pick-groups (when (and (str/blank? input-text)
+                                          (< (count available-search-types) 4))
+                                    (build-quick-pick-groups
+                                      available-search-types
+                                      suppliers
+                                      related-stores
+                                      expense-categories
+                                      related-articles
+                                      selected-supplier-id))
 
         total-dropdown-count (+ (count (or search-results []))
                                (if (and (not (str/blank? input-text))
@@ -409,7 +500,7 @@
                       (set-dropdown-open! false)
                       (set-highlight-idx! -1)
                       (set-type-picker-text! nil)
-                      (rf/dispatch [:user-expenses/clear-quick-search])))
+                      (rf/dispatch [:user-expenses/clear-quick-add-search :all])))
 
         remove-item! (fn [item-id]
                        (set-items! (fn [prev] (vec (remove #(= item-id (:id %)) prev)))))
@@ -426,31 +517,38 @@
         add-context! (fn [entity-type id label-text entity]
                        (set-context!
                          (fn [c]
-                           (let [c* (assoc c entity-type {:id id :label label-text})
-                                 ;; Auto-fill supplier when store is picked
-                                 c* (if (and (= entity-type :store)
-                                          (not (:supplier c*))
-                                          entity)
-                                      (let [sid (str (or (:supplier-id entity) (:supplier_id entity)))
-                                            s-name (or (:supplier-display-name entity)
-                                                     (:supplier_display_name entity))
-                                            supplier-label (or s-name
-                                                             (when (not (str/blank? sid))
-                                                               (some #(when (= (str (:id %)) sid)
-                                                                        (or (:display-name %)
-                                                                          (:display_name %) ""))
-                                                                 suppliers)))]
-                                        (if (and (not (str/blank? sid)) supplier-label)
-                                          (assoc c* :supplier
-                                            {:id (js/parseInt sid 10) :label supplier-label})
-                                          c*))
-                                      c*)]
-                             c*)))
+                           (let [base-chip {:id id :label label-text}
+                                 supplier-chip (when-let [sid (or (:supplier-id entity) (:supplier_id entity))]
+                                                 {:id sid
+                                                  :label (or (:supplier-display-name entity)
+                                                           (:supplier_display_name entity)
+                                                           (some #(when (= (str (:id %)) (str sid))
+                                                                    (or (:display-name %)
+                                                                      (:display_name %) ""))
+                                                             suppliers))})]
+                             (case entity-type
+                               :supplier
+                               (let [c* (assoc c :supplier base-chip)]
+                                 (if (and (:store c*)
+                                       (not= (str (or (get-in c* [:store :supplier-id])
+                                                    (get-in c* [:store :supplier_id])))
+                                         (str id)))
+                                   (dissoc c* :store)
+                                   c*))
+
+                               :store
+                               (cond-> (assoc c :store (assoc base-chip
+                                                         :supplier-id (or (:supplier-id entity) (:supplier_id entity))
+                                                         :supplier-display-name (or (:supplier-display-name entity)
+                                                                                  (:supplier_display_name entity))))
+                                 supplier-chip (assoc :supplier supplier-chip))
+
+                               (assoc c entity-type base-chip)))))
                        (set-input-text! "")
                        (set-dropdown-open! false)
                        (set-highlight-idx! -1)
                        (set-type-picker-text! nil)
-                       (rf/dispatch [:user-expenses/clear-quick-search])
+                       (rf/dispatch [:user-expenses/clear-quick-add-search :all])
                        (focus-input!))
 
         remove-context! (fn [entity-type]
@@ -462,13 +560,9 @@
 
         handle-select-result (fn [result]
                                (let [etype (keyword (or (:entity-type result) (:entity_type result)))]
-                                 (if (= phase :items)
-                                   ;; In items phase — articles become items, others become context
-                                   (if (= etype :article)
-                                     (add-item! (:id result) (:label result)
-                                       (or (:last-price result) (:last_price result)))
-                                     (add-context! etype (:id result) (:label result) result))
-                                   ;; In context phase — all become context chips
+                                 (if (= etype :article)
+                                   (add-item! (:id result) (:label result)
+                                     (or (:last-price result) (:last_price result)))
                                    (add-context! etype (:id result) (:label result) result))))
 
         handle-create-inline (fn [text]
@@ -504,16 +598,18 @@
                                         (add-context! entity-type new-id new-label entity)))))])))
 
         handle-input-change (fn [e]
-                              (let [v (.. e -target -value)]
+                              (let [v (.. e -target -value)
+                                    supplier-id (some-> context :supplier :id)]
                                 (set-input-text! v)
                                 (set-highlight-idx! -1)
                                 (set-type-picker-text! nil)
                                 (if (and (>= (count (str/trim v)) 2)
                                       (not (search/number-input? v)))
                                   (do (set-dropdown-open! true)
-                                    (rf/dispatch [:user-expenses/quick-search (str/trim v)]))
+                                    (rf/dispatch [:user-expenses/quick-add-search :all (str/trim v)
+                                                  {:supplier_id supplier-id}]))
                                   (do (set-dropdown-open! false)
-                                    (rf/dispatch [:user-expenses/clear-quick-search])))))
+                                    (rf/dispatch [:user-expenses/clear-quick-add-search :all])))))
 
         handle-input-keydown (fn [e]
                                (let [key (.-key e)]
@@ -596,10 +692,13 @@
       (fn []
         (rf/dispatch [:user-expenses/fetch-suppliers {:limit 100 :offset 0}])
         (rf/dispatch [:user-expenses/fetch-stores {:limit 100 :offset 0}])
+        (rf/dispatch [:user-expenses/fetch-articles {:limit 200 :offset 0}])
         (rf/dispatch [:user-expenses/fetch-payers {:limit 100 :offset 0}])
         (rf/dispatch [:user-expenses/fetch-expense-categories {:limit 500 :offset 0}])
-        ;; Cleanup quick search on unmount
-        (fn [] (rf/dispatch [:user-expenses/clear-quick-search])))
+        ;; Cleanup quick add search on unmount
+        (fn []
+          (rf/dispatch [:user-expenses/clear-quick-add-search :all])
+          (rf/dispatch [:user-expenses/clear-quick-add-related])))
       [])
 
     ;; Set default payer once loaded
@@ -611,6 +710,19 @@
           (set-payer-id! (some-> (payer-default-id payers) str)))
         js/undefined)
       [payers payers-loading? ready?])
+
+    ;; Load related records for focused quick picks when context narrows the search.
+    (use-effect
+      (fn []
+        (let [limit (if (= 1 (count available-search-types)) 10 5)]
+          (if (and related-context (< (count available-search-types) 4))
+            (rf/dispatch [:user-expenses/fetch-quick-add-related
+                          (:entity-type related-context)
+                          (:entity-id related-context)
+                          limit])
+            (rf/dispatch [:user-expenses/clear-quick-add-related])))
+        js/undefined)
+      [available-search-types related-context (count available-search-types)])
 
     ;; Close dropdown on outside click
     (use-effect
@@ -649,12 +761,22 @@
           ($ :div {:class "space-y-4"}
 
             ;; Welcome prompt
-            (when (empty? items)
+            (when (and (empty? items) (empty? context))
               ($ :div {:class "text-center py-2"}
                 ($ :p {:class "text-2xl font-semibold text-base-content/80 mb-1"}
                   "New Expense")
                 ($ :p {:class "text-base text-base-content/50"}
-                  "Search for articles to add")))
+                  "Start with supplier, store, category, or article")))
+
+            ;; Selected context chips
+            (when (seq context)
+              ($ :div {:class "flex flex-wrap gap-2"}
+                (for [[entity-type chip] context]
+                  ($ entity-chip {:key (str "items-phase-" (name entity-type))
+                                  :entity-type entity-type
+                                  :label (:label chip)
+                                  :on-remove #(remove-context! entity-type)
+                                  :size :sm}))))
 
             ;; Items list
             (when (seq items)
@@ -674,15 +796,13 @@
                          :type "text"
                          :auto-focus true
                          :class (str "w-full "
-                                  (if (seq items)
+                                  (if (or (seq items) (seq context))
                                     "text-lg p-4 rounded-xl border-2 border-base-300 "
                                     "text-xl sm:text-2xl p-5 sm:p-6 rounded-2xl border-2 border-base-300 ")
                                   "focus:border-primary focus:outline-none focus:shadow-lg "
                                   "focus:shadow-primary/10 "
                                   "transition-all bg-white placeholder:text-base-content/30")
-                         :placeholder (if (seq items)
-                                        "Add another article... (Enter to finish)"
-                                        "Search for an article...")
+                         :placeholder (search-placeholder context (or (seq items) (seq context)))
                          :value input-text
                          :on-change handle-input-change
                          :on-key-down handle-input-keydown
@@ -692,12 +812,25 @@
               (when dropdown-open?
                 ($ autocomplete-dropdown
                   {:results (or search-results [])
-                   :loading? quick-search-loading?
+                   :loading? (and quick-search-loading? (empty? search-results))
                    :highlight-idx highlight-idx
                    :on-select handle-select-result
                    :on-create handle-create-inline
                    :input-text (str/trim input-text)
                    :anchor-ref input-ref})))
+
+            (when (seq focused-quick-pick-groups)
+              ($ :div {:class "space-y-4"}
+                (for [{:keys [entity-type items]} focused-quick-pick-groups]
+                  (let [{:keys [label]} (search/entity-type-info entity-type)]
+                    ($ :div {:key (str "items-phase-" (name entity-type))
+                             :class "space-y-2"}
+                      ($ :p {:class "text-sm text-base-content/50"}
+                        (str "Pick " label))
+                      ($ quick-picks
+                        {:entity-type entity-type
+                         :items items
+                         :on-select handle-select-result}))))))
 
             ;; Type picker
             (when type-picker-text
@@ -705,7 +838,8 @@
                 {:text type-picker-text
                  :on-pick handle-type-pick
                  :on-cancel #(set-type-picker-text! nil)
-                 :creating? creating?}))
+                 :creating? creating?
+                 :allowed-types available-search-types}))
 
             ;; Running total
             (when (seq items)
@@ -719,8 +853,8 @@
             (when (nil? type-picker-text)
               ($ :p {:class "text-center text-sm text-base-content/35 mt-2"}
                 (if (seq items)
-                  "Press Enter on empty to continue →"
-                  "Type an article name to start")))))
+                  "Press Enter on empty to continue or keep adding context/items"
+                  "You can start with supplier, store, category, or article")))))
 
         ;; ═══════════════════════════════════════
         ;; PHASE 2: Context + Review
@@ -772,6 +906,15 @@
                   single-missing? (= 1 (count missing))]
               (when (seq missing)
                 (let [missing-set (set missing)
+                      selected-supplier-id (some-> context :supplier :id)
+                      quick-pick-groups (when (str/blank? input-text)
+                                          (build-quick-pick-groups
+                                            missing
+                                            suppliers
+                                            stores
+                                            expense-categories
+                                            articles
+                                            selected-supplier-id))
                       ;; Filter results to only show entity types still needed
                       filtered-results (filterv
                                          (fn [r]
@@ -779,20 +922,18 @@
                                              (contains? missing-set et)))
                                          (or search-results []))]
                   ($ :<>
-                    ;; Quick picks — show top 5 when exactly one type remains
-                    (when (and single-missing? (str/blank? input-text))
-                      (let [solo-type (first missing)
-                            {:keys [label]} (search/entity-type-info solo-type)
-                            picks (top-items-for-type
-                                    solo-type suppliers stores expense-categories 10)]
-                        (when (seq picks)
-                          ($ :div {:class "space-y-2"}
-                            ($ :p {:class "text-sm text-base-content/50"}
-                              (str "Pick " label))
-                            ($ quick-picks
-                              {:entity-type solo-type
-                               :items picks
-                               :on-select handle-select-result})))))
+                    (when (seq quick-pick-groups)
+                      ($ :div {:class "space-y-4"}
+                        (for [{:keys [entity-type items]} quick-pick-groups]
+                          (let [{:keys [label]} (search/entity-type-info entity-type)]
+                            ($ :div {:key (name entity-type)
+                                     :class "space-y-2"}
+                              ($ :p {:class "text-sm text-base-content/50"}
+                                (str "Pick " label))
+                              ($ quick-picks
+                                {:entity-type entity-type
+                                 :items items
+                                 :on-select handle-select-result}))))))
 
                     ($ :div {:class "relative"
                              :on-click (fn [e] (.stopPropagation e))}
@@ -821,7 +962,7 @@
                       (when dropdown-open?
                         ($ autocomplete-dropdown
                           {:results filtered-results
-                           :loading? quick-search-loading?
+                           :loading? (and quick-search-loading? (empty? filtered-results))
                            :highlight-idx highlight-idx
                            :on-select handle-select-result
                            :on-create handle-create-inline

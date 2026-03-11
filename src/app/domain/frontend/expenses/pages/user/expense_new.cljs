@@ -1,6 +1,7 @@
 (ns app.domain.frontend.expenses.pages.user.expense-new
   "User-facing expense creation form."
   (:require
+    [app.domain.frontend.expenses.components.manual-expense-form.search :as quick-add-search]
     [app.domain.frontend.expenses.components.page-guard :as page-guard]
     [app.template.frontend.components.button :refer [button]]
     [app.template.frontend.i18n :refer [use-t]]
@@ -96,7 +97,8 @@
     :category {:id (:id result)
                :label (or (:label result) (:name result))}
     :article {:id (:id result)
-              :label (or (:label result) (:canonical_name result) (:canonical-name result))}
+              :label (or (:label result) (:canonical_name result) (:canonical-name result))
+              :last_price (or (:last_price result) (:last-price result))}
     result))
 
 (defn apply-supplier-selection [context supplier]
@@ -127,11 +129,14 @@
 (defn add-article-line-item [items article]
   (let [selected (normalize-selection :article article)
         label (:label selected)
+        unit-price (some-> (:last_price selected) safe-parse-number format-decimal)
         with-article (fn [item]
                        (cond-> item
                          true (assoc :raw_label label)
                          (str/blank? (str (:qty item))) (assoc :qty "1")
-                         true (assoc :article_id (:id selected))))
+                         true (assoc :article_id (:id selected))
+                         (and unit-price (str/blank? (str (:unit_price item))))
+                         (assoc :unit_price unit-price)))
         blank-index (first (keep-indexed (fn [idx item]
                                            (when (blank-line-item? item) idx))
                              items))]
@@ -238,7 +243,18 @@
                                         (set-query! "")
                                         (rf/dispatch [:user-expenses/clear-quick-add-search entity-type])
                                         (on-select result))}
-                  ($ :div {:class "font-medium"} (:label result))
+                  ($ :div {:class "flex items-center justify-between gap-3"}
+                    ($ :div {:class "font-medium min-w-0 truncate"} (:label result))
+                    (when-let [price (quick-add-search/result-last-price result)]
+                      (let [global-price? (quick-add-search/global-last-price? result)
+                            tooltip (quick-add-search/last-price-tooltip result)]
+                        ($ :span {:class (str "text-sm font-mono whitespace-nowrap "
+                                           (if global-price?
+                                             "text-amber-600 font-semibold"
+                                             "text-base-content/50")
+                                           (when tooltip " cursor-help"))
+                                  :title tooltip}
+                          (format-decimal price)))))
                   (when-let [supplier-name (:supplier_display_name result)]
                     ($ :div {:class "text-xs text-base-content/60"} supplier-name)))))
 
@@ -392,7 +408,7 @@
                    :placeholder (t :expense-new/article-search-ph)
                    :input-id (str form-id "-article-search")
                    :selected nil
-                   :filters {}
+                   :filters {:supplier_id (some-> context :supplier :id)}
                    :helper-text (t :expense-new/article-help)
                    :on-clear (fn [] nil)
                    :on-select #(set-line-items! (fn [items]

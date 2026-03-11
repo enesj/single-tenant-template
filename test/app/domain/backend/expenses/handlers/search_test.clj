@@ -2,6 +2,7 @@
   (:require
     [app.domain.backend.expenses.handlers.search :as search]
     [app.domain.backend.expenses.handlers.user-expenses.helpers :as h]
+    [clojure.string :as str]
     [clojure.test :refer [deftest is testing]]
     [honey.sql :as sql]
     [next.jdbc :as jdbc]))
@@ -136,6 +137,109 @@
         (is (re-find #":= :st\.supplier_id" query-str))
         (is (re-find #":supplier_id" query-str))
         (is (re-find #":supplier_display_name" query-str))))))
+
+(deftest quick-add-article-last-prices-honors-selected-supplier
+  (let [tenant-id (java.util.UUID/randomUUID)
+        supplier-id (java.util.UUID/randomUUID)
+        article-id (java.util.UUID/randomUUID)]
+    (with-redefs [sql/format identity
+                  jdbc/execute! (fn [_db query _opts] query)]
+      (let [query (#'search/quick-add-article-last-prices :mock-db [article-id] tenant-id supplier-id)
+            query-str (pr-str query)]
+        (is (str/includes? query-str ":e.tenant_id"))
+        (is (str/includes? query-str ":aa.article_id"))
+        (is (str/includes? query-str ":e.supplier_id"))
+        (is (str/includes? query-str ":supplier_display_name"))
+        (is (str/includes? query-str ":article_id"))
+        (is (str/includes? query-str ":unit_price"))))))
+
+(deftest quick-add-search-articles-prefers-supplier-price-and-falls-back-to-global
+  (let [tenant-id (java.util.UUID/randomUUID)
+        supplier-id (java.util.UUID/randomUUID)
+        article-id-1 (java.util.UUID/randomUUID)
+        article-id-2 (java.util.UUID/randomUUID)]
+    (with-redefs-fn {#'jdbc/execute! (fn [_db _query _opts]
+                                       [{:id article-id-1 :label "Milk"}
+                                        {:id article-id-2 :label "Bread"}])
+                     #'search/quick-add-article-last-prices (fn [_db article-ids tenant-id* supplier-id*]
+                                                              (is (= [article-id-1 article-id-2] article-ids))
+                                                              (is (= tenant-id tenant-id*))
+                                                              (if supplier-id*
+                                                                [{:article_id article-id-1
+                                                                  :unit_price 4.25M
+                                                                  :supplier_display_name "BINGO"}]
+                                                                [{:article_id article-id-1
+                                                                  :unit_price 4.10M
+                                                                  :supplier_display_name "BINGO"}
+                                                                 {:article_id article-id-2
+                                                                  :unit_price 3.60M
+                                                                  :supplier_display_name "KONZUM"}]))}
+      (fn []
+        (is (= [{:id article-id-1
+                 :label "Milk"
+                 :last_price 4.25M
+                 :last_price_source "supplier"
+                 :last_price_supplier_display_name "BINGO"}
+                {:id article-id-2
+                 :label "Bread"
+                 :last_price 3.60M
+                 :last_price_source "global"
+                 :last_price_supplier_display_name "KONZUM"}]
+              (#'search/quick-add-search-articles :mock-db "mi" 8 tenant-id supplier-id)))))))
+
+(deftest related-for-supplier-includes-all-supplier-stores-even-without-expenses
+  (let [supplier-id (java.util.UUID/randomUUID)
+        tenant-id (java.util.UUID/randomUUID)]
+    (with-redefs [sql/format identity
+                  jdbc/execute! (fn [_db query _opts] query)]
+      (let [result (#'search/related-for-supplier :mock-db supplier-id 5 tenant-id)
+            stores-query-str (pr-str (:stores result))]
+        (is (clojure.string/includes? stores-query-str ":st.supplier_id"))
+        (is (clojure.string/includes? stores-query-str "[:and [:= :e.store_id :st.id]"))
+        (is (clojure.string/includes? stores-query-str ":e.tenant_id"))
+        (is (clojure.string/includes? stores-query-str ":supplier_id"))
+        (is (clojure.string/includes? stores-query-str ":left-join"))
+        (is (clojure.string/includes? stores-query-str ":st.display_name"))
+        (is (clojure.string/includes? stores-query-str ":e.total_amount"))))))
+
+(deftest quick-add-search-handler-all-tags-results-and-filters-stores
+  (let [db :mock-db
+        user-id (java.util.UUID/randomUUID)
+        tenant-id (java.util.UUID/randomUUID)
+        supplier-id (java.util.UUID/randomUUID)
+        handler (search/quick-add-search-handler db)]
+    (with-redefs-fn {#'h/get-user-id (constantly user-id)
+                     #'h/ensure-role (constantly nil)
+                     #'h/get-tenant-id (constantly tenant-id)
+                     #'h/json-response (fn [body & [status]] {:status (or status 200) :body body})
+                     #'search/quick-add-search-suppliers (fn [_db _term _limit] [{:id 1 :label "Bingo"}])
+                     #'search/quick-add-search-stores (fn [_db _term _limit supplier-id*]
+                                                        (is (= supplier-id supplier-id*))
+                                                        [{:id 2 :label "Bingo Store" :supplier_id supplier-id*}])
+                     #'search/quick-add-search-expense-categories (fn [_db _term _limit _tenant-id] [])
+                     #'search/quick-add-search-articles (fn [_db _term _limit tenant-id* supplier-id*]
+                                                          (is (= tenant-id tenant-id*))
+                                                          (is (= supplier-id supplier-id*))
+                                                          [{:id 3
+                                                            :label "Milk"
+                                                            :last_price 4.25
+                                                            :last_price_source "supplier"
+                                                            :last_price_supplier_display_name "BINGO"}])}
+      (fn []
+        (let [response (handler {:query-params {"type" "all"
+                                                "q" "bi"
+                                                "supplier_id" (str supplier-id)}})
+              results (get-in response [:body :results])]
+          (is (= 200 (:status response)))
+          (is (= #{{:id 1 :label "Bingo" :entity_type "supplier"}
+                   {:id 2 :label "Bingo Store" :supplier_id supplier-id :entity_type "store"}
+                   {:id 3
+                    :label "Milk"
+                    :last_price 4.25
+                    :last_price_source "supplier"
+                    :last_price_supplier_display_name "BINGO"
+                    :entity_type "article"}}
+                (set results))))))))
 
 (deftest admin-related-handler-uses-global-scope
   (let [db :mock-db

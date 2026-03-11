@@ -360,3 +360,17 @@
   (fn [db [_ entity-type]]
     (boolean (get-in db [:user-expenses :quick-add-search entity-type :loading?]))))
 
+(rf/reg-sub
+  :user-expenses/quick-add-related
+  (fn [db _]
+    (get-in db [:user-expenses :quick-add-related]
+      {:entity-type nil
+       :entity-id nil
+       :loading? false
+       :related {}})))
+
+(rf/reg-sub
+  :user-expenses/quick-add-related-loading?
+  (fn [db _]
+    (boolean (get-in db [:user-expenses :quick-add-related :loading?]))))
+
