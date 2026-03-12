@@ -338,6 +338,34 @@
       (filter #(seq (:items %)))
       vec)))
 
+(defn phase-two-quick-pick-groups
+  [missing-types context-suggestions suppliers stores expense-categories articles selected-supplier-id]
+  (let [local-groups-by-type (->> (build-quick-pick-groups missing-types
+                                    suppliers
+                                    stores
+                                    expense-categories
+                                    articles
+                                    selected-supplier-id)
+                               (map (juxt :entity-type identity))
+                               (into {}))]
+    (->> missing-types
+      (keep (fn [entity-type]
+              (let [suggested (case entity-type
+                                :supplier (:suppliers context-suggestions)
+                                :store (:stores context-suggestions)
+                                :category (:categories context-suggestions)
+                                [])]
+                (or (when (seq suggested)
+                      {:entity-type entity-type
+                       :items (mapv (fn [suggestion]
+                                      {:id (:id suggestion)
+                                       :label (:label suggestion)
+                                       :entity-type entity-type
+                                       :entity suggestion})
+                                suggested)})
+                  (get local-groups-by-type entity-type)))))
+      vec)))
+
 (defui quick-picks
   "Shows top N options as clickable chips when only one entity type is missing."
   [{:keys [entity-type items on-select t]}]
@@ -991,36 +1019,14 @@
               (when (seq missing)
                 (let [missing-set (set missing)
                       selected-supplier-id (some-> context :supplier :id)
-                      ;; Use history-based suggestions when available, fall back to alphabetical
-                      has-suggestions? (or (seq (:suppliers context-suggestions))
-                                         (seq (:stores context-suggestions))
-                                         (seq (:categories context-suggestions)))
                       quick-pick-groups (when (str/blank? input-text)
-                                          (if has-suggestions?
-                                            (->> missing
-                                              (map (fn [entity-type]
-                                                     (let [suggested (case entity-type
-                                                                       :supplier (:suppliers context-suggestions)
-                                                                       :store (:stores context-suggestions)
-                                                                       :category (:categories context-suggestions)
-                                                                       [])]
-                                                       {:entity-type entity-type
-                                                        :items (mapv (fn [s]
-                                                                       {:id (:id s)
-                                                                        :label (:label s)
-                                                                        :entity-type entity-type
-                                                                        :entity s})
-                                                                 suggested)})))
-                                              (filter #(seq (:items %)))
-                                              vec)
-                                            (build-quick-pick-groups
-                                              missing
-                                              suppliers
-                                              stores
-                                              expense-categories
-                                              articles
-                                              selected-supplier-id)))
-                      ;; Filter results to only show entity types still needed
+                                          (phase-two-quick-pick-groups missing
+                                            context-suggestions
+                                            suppliers
+                                            stores
+                                            expense-categories
+                                            articles
+                                            selected-supplier-id))
                       filtered-results (filterv
                                          (fn [r]
                                            (let [et (keyword (or (:entity-type r) (:entity_type r)))]

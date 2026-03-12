@@ -6,30 +6,41 @@
 (deftest focused-search-types-drop-selected-context-types
   (testing "selected context types are removed from the search focus, while article remains"
     (is (= [:supplier :store :category :article]
-          (smart-input/focused-search-types {})))
+          (smart-input/focused-search-types {} false)))
     (is (= [:store :category :article]
-          (smart-input/focused-search-types {:supplier {:id "sup-1"}})))
+          (smart-input/focused-search-types {:supplier {:id "sup-1"}} false)))
     (is (= [:category :article]
           (smart-input/focused-search-types {:supplier {:id "sup-1"}
-                                             :store {:id "store-1"}})))
+                                             :store {:id "store-1"}} false)))
     (is (= [:article]
           (smart-input/focused-search-types {:supplier {:id "sup-1"}
                                              :store {:id "store-1"}
-                                             :category {:id "cat-1"}})))))
+                                             :category {:id "cat-1"}} false)))))
 
 (deftest search-placeholder-reflects-remaining-search-targets
-  (testing "placeholder text stops mentioning already selected context types"
-    (is (= "Start with supplier, store, category, or article..."
-          (smart-input/search-placeholder {} false)))
-    (is (= "Search store, category, or article..."
-          (smart-input/search-placeholder {:supplier {:id "sup-1"}} true)))
-    (is (= "Search category or article..."
-          (smart-input/search-placeholder {:supplier {:id "sup-1"}
-                                           :store {:id "store-1"}} true)))
-    (is (= "Search article..."
-          (smart-input/search-placeholder {:supplier {:id "sup-1"}
-                                           :store {:id "store-1"}
-                                           :category {:id "cat-1"}} true)))))
+  (let [t (fn [k & args]
+            (case k
+              :smart-expense/article-mode-ph "Search article..."
+              :smart-expense/search-prefix "Search "
+              :smart-expense/start-with-prefix "Start with "
+              :smart-expense/or-connector " or "
+              :smart-expense/entity-supplier "supplier"
+              :smart-expense/entity-store "store"
+              :smart-expense/entity-category "category"
+              :smart-expense/entity-article "article"
+              (first args)))]
+    (testing "placeholder text stops mentioning already selected context types"
+      (is (= "Start with supplier, store, category or article..."
+            (smart-input/search-placeholder t {} false false)))
+      (is (= "Search store, category or article..."
+            (smart-input/search-placeholder t {:supplier {:id "sup-1"}} true false)))
+      (is (= "Search category or article..."
+            (smart-input/search-placeholder t {:supplier {:id "sup-1"}
+                                               :store {:id "store-1"}} true false)))
+      (is (= "Search article..."
+            (smart-input/search-placeholder t {:supplier {:id "sup-1"}
+                                               :store {:id "store-1"}
+                                               :category {:id "cat-1"}} true false))))))
 
 (deftest current-related-context-prefers-store-over-supplier
   (testing "focused quick picks use store-related data when a store is already selected"
@@ -81,3 +92,27 @@
       (is (= ["store-1" "store-2"] (mapv :id (get-in groups [0 :items]))))
       (is (= 5 (count (get-in groups [1 :items]))))
       (is (= 5 (count (get-in groups [2 :items])))))))
+
+(deftest phase-two-quick-pick-groups-falls-back-per-missing-type
+  (testing "history suggestions apply per entity type so categories still fall back to local picks"
+    (let [context-suggestions {:suppliers [{:id "sup-9"
+                                            :label "Suggested Supplier"}]
+                               :stores []
+                               :categories []}
+          categories (mapv (fn [n]
+                             {:id (str "cat-" n)
+                              :name (str "Category " n)})
+                       (range 7))
+          groups (smart-input/phase-two-quick-pick-groups
+                   [:supplier :category]
+                   context-suggestions
+                   []
+                   []
+                   categories
+                   []
+                   nil)]
+      (is (= [:supplier :category] (mapv :entity-type groups)))
+      (is (= ["sup-9"] (mapv :id (get-in groups [0 :items]))))
+      (is (= 5 (count (get-in groups [1 :items]))))
+      (is (= ["cat-0" "cat-1" "cat-2" "cat-3" "cat-4"]
+            (mapv :id (get-in groups [1 :items])))))))
