@@ -591,11 +591,14 @@
                                 c*))))
 
         handle-select-result (fn [result]
-                               (let [etype (keyword (or (:entity-type result) (:entity_type result)))]
+                               (let [etype (keyword (or (:entity-type result) (:entity_type result)))
+                                     ;; Merge inner :entity fields to top level so add-context!
+                                     ;; can read supplier_id, supplier_display_name etc.
+                                     entity (merge (:entity result) result)]
                                  (if (= etype :article)
                                    (add-item! (:id result) (:label result)
                                      (or (:last-price result) (:last_price result)))
-                                   (add-context! etype (:id result) (:label result) result))))
+                                   (add-context! etype (:id result) (:label result) entity))))
 
         handle-create-inline (fn [text]
                                (set-type-picker-text! text)
@@ -650,17 +653,13 @@
                                    (do (.preventDefault e)
                                      (let [text (str/trim input-text)]
                                        (cond
-                                         ;; Empty input + article mode → exit article mode, return to full search
-                                         (and (str/blank? text) (= phase :items) article-mode?)
-                                         (do (set-article-mode! false)
-                                           (set-dropdown-open! false)
-                                           (rf/dispatch [:user-expenses/clear-cooccurring-articles]))
-
-                                         ;; Empty input + has items + not article mode → transition to context phase
+                                         ;; Empty input + has items → transition to context phase
                                          (and (str/blank? text) (= phase :items) (seq items))
                                          (let [article-ids (->> items (keep :article-id) vec)]
+                                           (set-article-mode! false)
                                            (set-dropdown-open! false)
                                            (set-phase! :context)
+                                           (rf/dispatch [:user-expenses/clear-cooccurring-articles])
                                            (when (seq article-ids)
                                              (rf/dispatch [:user-expenses/fetch-context-suggestions article-ids]))
                                            (js/setTimeout
@@ -1063,6 +1062,23 @@
                          :on-cancel #(set-type-picker-text! nil)
                          :creating? creating?
                          :allowed-types missing}))))))
+
+            ;; Pick Payer chips
+            (when (and (str/blank? (str payer-id)) (seq payers))
+              ($ :div {:class "space-y-2"}
+                ($ :p {:class "text-sm text-base-content/50"} "Pick Payer")
+                ($ :div {:class "flex flex-wrap gap-2"}
+                  (for [p (take 5 payers)]
+                    ($ :button {:key (str "payer-" (:id p))
+                                :type "button"
+                                :class (str "inline-flex items-center gap-2 px-4 py-2.5 rounded-full "
+                                         "text-base font-medium border cursor-pointer "
+                                         "transition-all hover:shadow-md hover:scale-[1.02] "
+                                         "bg-sky-50 hover:bg-sky-100 text-sky-800 border-sky-200")
+                                :on-click (fn [e] (.preventDefault e) (.stopPropagation e)
+                                            (set-payer-id! (str (:id p))))}
+                      ($ :span "💳")
+                      ($ :span {:class "truncate max-w-[200px]"} (:label p)))))))
 
             ;; Payer + Date + Currency row
             ($ :div {:class "grid grid-cols-1 sm:grid-cols-3 gap-4"}
