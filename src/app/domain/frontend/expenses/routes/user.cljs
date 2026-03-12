@@ -47,11 +47,6 @@
     :parameters {:path {:receipt-id string?}}
     :controllers (controllers/user-guarded-start :page/init-receipt-detail)}
 
-   :expense-new
-   {:name :expense-new
-    :view :expense-new
-    :controllers (controllers/user-guarded-start :page/init-expense-new)}
-
    :expense-reports
    {:name :expense-reports
     :view :expense-reports

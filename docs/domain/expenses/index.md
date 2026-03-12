@@ -51,7 +51,6 @@ The expenses domain contributes the following user-facing routes under `/` (see 
 - `/expenses/upload` - Receipt upload wizard
 - `/receipts` - Receipts inbox
 - `/receipts/:receipt-id` - Receipt detail
-- `/expenses/new` - New expense entry
 - `/expenses/reports` - Reports
 - `/expenses/settings` - User expense settings
 - `/suppliers` - Suppliers catalog
@@ -116,7 +115,6 @@ In addition to the admin panel, the expenses domain provides a user-facing inter
 
 - `/expenses` - Personal expense dashboard
 - `/expenses/list` - Expense list/history
-- `/expenses/new` - Quick expense entry
 - `/expenses/upload` - Receipt upload wizard (creates a `receipts` row)
 - `/receipts` - Receipts inbox (review + approve)
 - `/receipts/:receipt-id` - Receipt detail / approve flow

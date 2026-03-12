@@ -102,7 +102,7 @@
                                 (rf/dispatch [:user-expenses/upload-receipts files])))
 
         handle-manual (fn []
-                        (rf/dispatch [:navigate-to "/expenses/new"]))]
+                        (rf/dispatch [:navigate-to "/expenses/list"]))]
 
     (use-effect
       (fn []
@@ -231,6 +231,6 @@
                 ($ :p {:class "text-sm text-base-content/60"}
                   (t :expense-upload/no-receipt-text))
                 ($ :a {:id "link-expense-new-from-upload"
-                       :href "/expenses/new"
+                       :href "/expenses/list"
                        :class "text-sm text-primary hover:underline"}
                   (t :expense-upload/enter-manually)))))})})))

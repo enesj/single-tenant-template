@@ -117,35 +117,25 @@
      {:results [] :seen {}}
      results)))
 
+(def ^:private entity-type-priority
+  "When relevance scores tie, prefer more specific entity types."
+  {:article 0 :category 1 :store 2 :supplier 3})
+
 (defn balance-results
+  "Sort results by relevance score (descending), with entity-type priority as
+   tiebreaker. Handles both backend :relevance (0–1) and local :score (0–100)."
   [results limit]
-  (let [initial-buckets (reduce (fn [acc entity-type]
-                                  (assoc acc entity-type []))
-                          {}
-                          entity-type-order)
-        buckets (reduce (fn [acc result]
-                          (let [entity-type (normalize-entity-type result)]
-                            (if entity-type
-                              (update acc entity-type conj result)
-                              acc)))
-                  initial-buckets
-                  results)]
-    (loop [remaining buckets
-           balanced []]
-      (if (or (>= (count balanced) limit)
-            (every? empty? (vals remaining)))
-        (vec (take limit balanced))
-        (let [[remaining* balanced*]
-              (reduce (fn [[current-remaining current-balanced] entity-type]
-                        (let [items (get current-remaining entity-type)]
-                          (if (or (>= (count current-balanced) limit)
-                                (empty? items))
-                            [current-remaining current-balanced]
-                            [(assoc current-remaining entity-type (subvec items 1))
-                             (conj current-balanced (first items))])))
-                [remaining balanced]
-                entity-type-order)]
-          (recur remaining* balanced*))))))
+  (->> results
+    (sort-by (fn [result]
+               (let [score (or (:score result)
+                             (some-> (:relevance result) (* 100))
+                             0)
+                     type-pri (get entity-type-priority
+                                (normalize-entity-type result) 4)]
+                 [(- score) type-pri]))
+      compare)
+    (take limit)
+    vec))
 
 (defn merge-search-results
   [local-results backend-results limit]

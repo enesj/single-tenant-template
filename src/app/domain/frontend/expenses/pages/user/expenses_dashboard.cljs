@@ -2,13 +2,15 @@
   "User-facing expense dashboard page.
    Shows personal expense summary, recent expenses, and quick actions for expense management."
   (:require
+    [app.domain.frontend.expenses.components.user-expense-form :refer [user-expense-add-form-modal]]
     [app.template.frontend.components.button :refer [button]]
+    [app.template.frontend.components.modal-wrapper :refer [modal-wrapper]]
     [app.template.frontend.i18n :refer [use-t]]
     [app.template.frontend.utils.timestamp :as timestamp]
     app.domain.frontend.expenses.subs.user-expenses ;; side-effect load for subscriptions
     [re-frame.core :as rf]
-    [uix.core :refer [$ defui]]
-    [uix.re-frame :refer [use-subscribe]])) ;; side-effect load for subscriptions
+    [uix.core :refer [$ defui use-state]]
+    [uix.re-frame :refer [use-subscribe]]))
 
 ;; ========================================================================
 ;; Formatting helpers
@@ -125,6 +127,7 @@
         power-user? (boolean (use-subscribe [:expenses/power-user?]))
         can-upload? (boolean (use-subscribe [:expenses/can? :expenses/upload]))
         can-add-expense? (boolean (use-subscribe [:expenses/can? :expenses/expense.write]))
+        [show-quick-add? set-show-quick-add!] (use-state false)
         user-name (or (:full-name user) "there")
         summary (or (use-subscribe [:user-expenses/summary]) {})
         summary-loading? (boolean (use-subscribe [:user-expenses/summary-loading?]))
@@ -248,7 +251,7 @@
                                :title (t :dashboard/add-expense)
                                :description (t :dashboard/add-expense-desc)
                                :icon "✏️"
-                               :on-click #(rf/dispatch [:navigate-to "/expenses/new"])}))
+                               :on-click #(set-show-quick-add! true)}))
             ($ quick-action {:id "btn-quick-view-reports"
                              :title (t :dashboard/view-reports)
                              :description (t :dashboard/view-reports-desc)
@@ -259,4 +262,19 @@
                                :title (t :dashboard/unmapped-aliases)
                                :description (t :dashboard/unmapped-aliases-desc)
                                :icon "🧩"
-                               :on-click #(rf/dispatch [:navigate-to "/unmapped-items"])}))))))))
+                               :on-click #(rf/dispatch [:navigate-to "/unmapped-items"])})))))
+
+      ;; Quick-add expense modal
+      (when show-quick-add?
+        ($ modal-wrapper
+          {:id "quick-add-expense-modal"
+           :visible? true
+           :title (t :dashboard/add-expense)
+           :size :large
+           :on-close #(set-show-quick-add! false)
+           :close-button-id "btn-close-quick-add-expense"}
+          ($ user-expense-add-form-modal
+            {:on-success (fn []
+                           (set-show-quick-add! false)
+                           (rf/dispatch [:user-expenses/fetch-recent {:limit 25 :offset 0}]))
+             :on-cancel #(set-show-quick-add! false)}))))))

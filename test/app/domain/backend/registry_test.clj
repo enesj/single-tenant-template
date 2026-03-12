@@ -135,7 +135,6 @@
     (let [routes (set (domain-registry/all-spa-routes))]
       (is (contains? routes "/expenses"))
       (is (contains? routes "/expenses/list"))
-      (is (contains? routes "/expenses/new"))
       (is (contains? routes "/expenses/upload"))))
 
   (testing "all-spa-routes stays aligned with shared descriptor paths"

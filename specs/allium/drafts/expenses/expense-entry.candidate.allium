@@ -1,0 +1,820 @@
+-- allium: 2
+-- expense-entry.candidate.allium
+--
+-- Scope: Manual expense entry — Quick Add and Standard flows (both modal-based)
+-- Includes:
+--   - Expense + ExpenseItem creation (shared domain rules)
+--   - Quick Add form surface (modal from dashboard, line-item-first, search with price data)
+--   - Standard form surface (modal from list page, adaptive total→itemized, inline reference creation)
+--   - Store→supplier inference, article alias resolution on save
+--   - Last-price lookup for articles (Quick Add only)
+--   - Payer/currency/date defaults, validation rules
+-- Excludes:
+--   - Receipt upload / OCR / approval flows (separate spec)
+--   - Expense editing, deletion, posting after creation
+--   - Admin reference-data management
+--   - Smart suggestions / hybrid ranking (deferred)
+--   - Expense list / dashboard (except entry-point actions)
+-- Note: No dedicated /expenses/new page — both entry flows are modals.
+-- Supersedes:
+--   - quick-add-expense.candidate.allium
+--   - manual-expense-entry.candidate.allium (v2)
+
+use "./../../domain/expenses/implementation.allium" as impl
+
+
+-- ─────────────────────────────────────────────
+-- External entities
+-- ─────────────────────────────────────────────
+
+external entity User {
+    id: UUID
+    tenant_id: UUID
+    membership_role: viewer | member | admin | owner
+    can_write_expenses: membership_role in {member, admin, owner}
+}
+
+external entity Tenant { id: UUID }
+
+external entity Supplier {
+    id: UUID
+    display_name: String
+    normalized_key: String
+}
+
+external entity Store {
+    id: UUID
+    supplier: Supplier
+    display_name: String
+    normalized_key: String
+    city_id: UUID?
+}
+
+external entity Article {
+    id: UUID
+    canonical_name: String
+    normalized_key: String
+    subcategory_id: UUID?
+}
+
+external entity ArticleAlias {
+    id: UUID
+    supplier: Supplier?
+    article: Article?
+    raw_label: String
+    raw_label_normalized: String
+}
+
+external entity ExpenseCategory {
+    id: UUID
+    tenant_id: UUID
+    name: String
+}
+
+external entity Payer {
+    id: UUID
+    tenant_id: UUID
+    label: String
+    is_default: Boolean
+}
+
+external entity Expense {
+    id: UUID
+    tenant_id: UUID
+    user_id: UUID?
+    created_by: UUID?
+    receipt_id: UUID?
+    supplier_id: UUID?
+    store_id: UUID?
+    payer_id: UUID
+    expense_category_id: UUID?
+    purchased_at: Timestamp
+    total_amount: Decimal
+    currency: Currency
+    notes: String?
+    is_posted: Boolean
+}
+
+external entity ExpenseItem {
+    id: UUID
+    tenant_id: UUID
+    expense_id: UUID
+    alias_id: UUID?
+    article_id: UUID?
+    raw_label: String?
+    qty: Decimal?
+    unit_price: Decimal?
+    line_total: Decimal
+}
+
+
+-- ─────────────────────────────────────────────
+-- Value types
+-- ─────────────────────────────────────────────
+
+value Currency = BAM | EUR | USD
+
+value MoneyAmount {
+    value: Decimal
+    requires: value > 0
+}
+
+value LineItemDraft {
+    raw_label: String
+    qty: Decimal?
+    unit_price: Decimal?
+    line_total: MoneyAmount
+
+    requires: raw_label.trim().length >= 1
+    requires: qty = null or qty > 0
+    requires: unit_price = null or unit_price > 0
+
+    -- Auto-calculate line_total when both qty and unit_price are present
+    guarantee: qty != null and unit_price != null implies line_total.value = qty * unit_price
+}
+
+value InlineReference {
+    -- Resolves to an existing entity or requests creation of a new one.
+    -- Used by the Standard form; Quick Add uses direct entity references.
+    kind: supplier | store | article | expense_category
+    existing_id: UUID?
+    new_name: String?
+
+    requires: (existing_id != null) xor (new_name != null)
+    requires: new_name = null or new_name.trim().length >= 1
+}
+
+value LastPriceInfo {
+    article: Article
+    unit_price: Decimal
+    source: supplier_specific | global
+    supplier_display_name: String?
+}
+
+
+-- ─────────────────────────────────────────────
+-- Config
+-- ─────────────────────────────────────────────
+
+config {
+    default_currency: Currency = BAM
+    search_debounce_ms: Integer = 250
+    search_min_query_length: Integer = 2
+    search_default_limit: Integer = 8
+    search_max_limit: Integer = 25
+    alias_min_normalized_length: Integer = 2
+    fuzzy_similarity_threshold: Decimal = 0.5
+}
+
+
+-- ─────────────────────────────────────────────
+-- Actor
+-- ─────────────────────────────────────────────
+
+actor ExpenseWriter {
+    identified_by: User where can_write_expenses
+    within: Tenant
+}
+
+
+-- ═════════════════════════════════════════════
+-- QUICK ADD DRAFT
+-- ═════════════════════════════════════════════
+
+entity QuickAddDraft {
+    -- Context references (direct entities, no inline creation)
+    supplier: Supplier?
+    store: Store?
+    expense_category: ExpenseCategory?
+    article: Article?
+
+    -- Always required
+    payer: Payer?
+    purchased_at: Timestamp = now
+    currency: Currency = config.default_currency
+    notes: String?
+
+    -- Line items (always visible, at least one row)
+    line_items: List<LineItemDraft>
+    entered_total: Decimal?
+
+    -- Derived
+    has_any_context: supplier != null or store != null or expense_category != null
+    complete_line_items: line_items where raw_label != null
+        and raw_label.trim() != "" and line_total != null
+    computed_total: complete_line_items.sum(i => i.line_total.value)
+    effective_total: entered_total ?? computed_total
+
+    -- Submission readiness
+    is_submittable: payer != null
+        and purchased_at != null
+        and has_any_context
+        and complete_line_items.count > 0
+        and effective_total > 0
+}
+
+
+-- ═════════════════════════════════════════════
+-- STANDARD EXPENSE DRAFT
+-- ═════════════════════════════════════════════
+
+entity StandardExpenseDraft {
+    -- Context references (InlineReference — pick existing or create new)
+    supplier: InlineReference?
+    store: InlineReference?
+    expense_category: InlineReference?
+    article: InlineReference?
+
+    -- Always required
+    payer: Payer
+    purchased_at: Timestamp = now
+    currency: Currency = config.default_currency
+    total_amount: MoneyAmount?
+    notes: String?
+
+    -- Itemized mode (toggled by user)
+    items: List<LineItemDraft>
+    itemized_mode: Boolean = false
+
+    -- Derived
+    has_items: items.count > 0
+    computed_total: if has_items then items.sum(i => i.line_total.value) else null
+    effective_total: if has_items then computed_total else total_amount?.value
+    has_any_context: supplier != null or store != null
+                     or expense_category != null or article != null
+
+    -- Validation
+    requires: payer != null
+    requires: has_any_context
+    requires: effective_total != null and effective_total > 0
+    requires: not has_items implies total_amount != null
+    requires: article != null implies not has_items
+    requires: store != null implies supplier != null
+}
+
+
+-- ═════════════════════════════════════════════
+-- SHARED DOMAIN RULES
+-- ═════════════════════════════════════════════
+
+-- Structural invariant: every expense with a store must also have a supplier.
+-- Enforced client-side (both forms infer supplier from store) and server-side
+-- (create-expense! looks up store.supplier_id when supplier_id is nil).
+
+invariant StoreRequiresSupplier {
+    for expense in Expense:
+        expense.store_id != null implies expense.supplier_id != null
+}
+
+
+-- ─────────────────────────────────────────────
+-- Quick Add creation
+-- ─────────────────────────────────────────────
+
+rule CreateExpenseFromQuickAdd {
+    when: SubmitQuickAdd(writer: ExpenseWriter, draft: QuickAddDraft)
+
+    requires: draft.is_submittable
+    requires: draft.store = null
+        or draft.supplier = null
+        or draft.store.supplier = draft.supplier
+
+    -- Store→supplier inference (server-side safety net)
+    let final_supplier = if draft.store != null and draft.supplier = null
+        then draft.store.supplier
+        else draft.supplier
+
+    ensures: expense: Expense.created(
+        tenant_id: writer.tenant_id,
+        user_id: writer.id,
+        created_by: writer.id,
+        supplier_id: final_supplier?.id,
+        store_id: draft.store?.id,
+        payer_id: draft.payer.id,
+        expense_category_id: draft.expense_category?.id,
+        purchased_at: draft.purchased_at,
+        total_amount: draft.effective_total,
+        currency: draft.currency,
+        notes: draft.notes
+    )
+
+    ensures:
+        for item in draft.complete_line_items:
+            ExpenseItem.created(
+                tenant_id: writer.tenant_id,
+                expense_id: expense.id,
+                raw_label: item.raw_label,
+                qty: item.qty,
+                unit_price: item.unit_price,
+                line_total: item.line_total.value
+            )
+
+    ensures: ExpenseCreated(expense)
+}
+
+
+-- ─────────────────────────────────────────────
+-- Standard form creation
+-- ─────────────────────────────────────────────
+
+rule CreateExpenseFromStandard {
+    when: SubmitStandard(writer: ExpenseWriter, draft: StandardExpenseDraft)
+
+    -- Phase 1: Resolve or create inline references.
+    -- Tenant-scoped entities (ExpenseCategory) get the user's tenant.
+    -- Global catalog entities (Supplier, Store, Article) are unscoped.
+
+    if draft.supplier != null and draft.supplier.new_name != null:
+        ensures: new_supplier: Supplier.created(
+            display_name: draft.supplier.new_name
+        )
+
+    if draft.store != null and draft.store.new_name != null:
+        let store_supplier_id = if draft.supplier.existing_id != null
+            then draft.supplier.existing_id
+            else new_supplier.id
+        ensures: new_store: Store.created(
+            supplier_id: store_supplier_id,
+            display_name: draft.store.new_name
+        )
+
+    if draft.expense_category != null and draft.expense_category.new_name != null:
+        ensures: new_category: ExpenseCategory.created(
+            tenant_id: writer.tenant_id,
+            name: draft.expense_category.new_name
+        )
+
+    if draft.article != null and draft.article.new_name != null:
+        ensures: new_article: Article.created(
+            canonical_name: draft.article.new_name
+        )
+
+    -- Phase 2: Resolve final IDs
+    let final_supplier_id = if draft.supplier = null then null
+        else if draft.supplier.existing_id != null then draft.supplier.existing_id
+        else new_supplier.id
+
+    let final_store_id = if draft.store = null then null
+        else if draft.store.existing_id != null then draft.store.existing_id
+        else new_store.id
+
+    let final_category_id = if draft.expense_category = null then null
+        else if draft.expense_category.existing_id != null then draft.expense_category.existing_id
+        else new_category.id
+
+    let final_article_id = if draft.article = null then null
+        else if draft.article.existing_id != null then draft.article.existing_id
+        else new_article.id
+
+    -- Phase 3: Build final items.
+    -- Itemized mode: items used as-is.
+    -- Single article shortcut (no items): synthesize one line item.
+    -- Neither: no line items (total-only expense).
+    let final_items = if draft.has_items then draft.items
+        else if final_article_id != null then
+            [LineItemDraft(
+                raw_label: draft.article.new_name
+                    ?? Article(id: final_article_id).canonical_name,
+                qty: 1,
+                unit_price: draft.effective_total,
+                line_total: MoneyAmount(value: draft.effective_total)
+            )]
+        else []
+
+    -- Phase 4: Create expense + items
+    ensures: expense: Expense.created(
+        tenant_id: writer.tenant_id,
+        user_id: writer.id,
+        created_by: writer.id,
+        supplier_id: final_supplier_id,
+        store_id: final_store_id,
+        payer_id: draft.payer.id,
+        expense_category_id: final_category_id,
+        purchased_at: draft.purchased_at,
+        total_amount: draft.effective_total,
+        currency: draft.currency,
+        notes: draft.notes
+    )
+
+    ensures:
+        for item in final_items:
+            ExpenseItem.created(
+                tenant_id: writer.tenant_id,
+                expense_id: expense.id,
+                raw_label: item.raw_label,
+                qty: item.qty,
+                unit_price: item.unit_price,
+                line_total: item.line_total.value
+            )
+
+    ensures: ExpenseCreated(expense)
+}
+
+
+-- ─────────────────────────────────────────────
+-- Reference validation
+-- ─────────────────────────────────────────────
+
+rule ValidateQuickAddReferences {
+    when: SubmitQuickAdd(writer: ExpenseWriter, draft: QuickAddDraft)
+
+    -- Payer and category are tenant-scoped: must belong to the user's tenant
+    requires: Payer where id = draft.payer.id
+        and tenant_id = writer.tenant_id
+        exists
+
+    if draft.expense_category != null:
+        requires: ExpenseCategory where id = draft.expense_category.id
+            and tenant_id = writer.tenant_id
+            exists
+}
+
+rule ValidateStandardReferences {
+    when: SubmitStandard(writer: ExpenseWriter, draft: StandardExpenseDraft)
+
+    -- Tenant-scoped entities must belong to user's tenant
+    requires: Payer where id = draft.payer.id
+        and tenant_id = writer.tenant_id
+        exists
+
+    if draft.expense_category != null and draft.expense_category.existing_id != null:
+        requires: ExpenseCategory where id = draft.expense_category.existing_id
+            and tenant_id = writer.tenant_id
+            exists
+
+    -- Global catalog entities: verify existence
+    if draft.supplier != null and draft.supplier.existing_id != null:
+        requires: Supplier where id = draft.supplier.existing_id exists
+
+    if draft.store != null and draft.store.existing_id != null:
+        requires: Store where id = draft.store.existing_id exists
+        -- Store must belong to selected supplier
+        requires: Store where id = draft.store.existing_id
+            and supplier.id = draft.supplier.existing_id
+            exists
+
+    if draft.article != null and draft.article.existing_id != null:
+        requires: Article where id = draft.article.existing_id exists
+}
+
+
+-- ─────────────────────────────────────────────
+-- Alias resolution (shared — fires after any expense creation)
+-- ─────────────────────────────────────────────
+
+rule ResolveLineItemAliases {
+    when: ExpenseCreated(expense)
+    requires: expense.supplier_id != null
+
+    for item in ExpenseItem where expense_id = expense.id and raw_label != null:
+        let normalized = normalize(item.raw_label)
+        if normalized.length >= config.alias_min_normalized_length:
+            let existing = ArticleAlias where supplier.id = expense.supplier_id
+                and raw_label_normalized = normalized
+            if existing != null:
+                ensures: item.alias_id = existing.id
+                ensures: item.article_id = existing.article?.id
+            else:
+                ensures: alias: ArticleAlias.created(
+                    supplier: Supplier(id: expense.supplier_id),
+                    raw_label: item.raw_label,
+                    raw_label_normalized: normalized
+                )
+                ensures: item.alias_id = alias.id
+}
+
+deferred normalize    -- label normalization (trim, lowercase, collapse whitespace)
+
+
+-- ═════════════════════════════════════════════
+-- SURFACES
+-- ═════════════════════════════════════════════
+
+-- ─────────────────────────────────────────────
+-- Dashboard entry points
+-- ─────────────────────────────────────────────
+
+surface ExpensesDashboard {
+    facing viewer: User
+
+    provides:
+        OpenQuickAddExpense(viewer)
+            when viewer.can_write_expenses
+
+    @guarantee WriteRoleVisibility
+        -- The "Add expense" button is visible only to users with
+        -- expense-write capability (member, admin, owner).
+        -- Viewers see the dashboard but not the creation action.
+
+    @guarantee QuickAddOpensModal
+        -- OpenQuickAddExpense opens a modal overlay on the dashboard.
+        -- The dashboard remains visible behind the modal.
+        -- On successful submit, the modal closes and recent expenses refresh.
+}
+
+
+-- ─────────────────────────────────────────────
+-- List page entry point
+-- ─────────────────────────────────────────────
+
+surface ExpensesListPage {
+    facing viewer: User
+
+    provides:
+        OpenStandardExpenseForm(viewer)
+            when viewer.can_write_expenses
+
+    @guarantee WriteRoleVisibility
+        -- The "Add" button is visible only to users with
+        -- expense-write capability (member, admin, owner).
+
+    @guarantee StandardFormOpensModal
+        -- OpenStandardExpenseForm opens the standard expense form
+        -- as a modal overlay on the list page.
+        -- On successful submit, the modal closes and the list refreshes.
+}
+
+
+-- ─────────────────────────────────────────────
+-- Quick Add form
+-- ─────────────────────────────────────────────
+
+surface QuickAddExpenseForm {
+    facing writer: ExpenseWriter
+
+    context draft: QuickAddDraft
+
+    -- ── Exposed state ──
+
+    exposes:
+        draft.supplier
+        draft.store
+        draft.expense_category
+        draft.article
+        draft.payer
+        draft.purchased_at
+        draft.currency
+        draft.entered_total
+        draft.notes
+        draft.line_items
+        draft.computed_total
+            when draft.complete_line_items.count > 0
+
+    -- ── Search actions ──
+
+    provides:
+        SearchQuickAddSuppliers(writer, draft, query: String)
+        SearchQuickAddStores(writer, draft, query: String)
+        SearchQuickAddCategories(writer, draft, query: String)
+        SearchQuickAddArticles(writer, draft, query: String)
+
+    -- ── Line item management ──
+
+    provides:
+        AddQuickAddLineItem(draft)
+        RemoveQuickAddLineItem(draft, line_item: LineItemDraft)
+            when draft.line_items.count > 1
+
+    -- ── Form actions ──
+
+    provides:
+        CancelQuickAdd(writer)
+        SubmitQuickAdd(writer, draft)
+            when draft.is_submittable
+
+    -- ── Guarantees ──
+
+    @guarantee DefaultSelections
+        -- Opening the form pre-selects the user's default payer.
+        -- Purchased_at defaults to today. Currency defaults to BAM.
+
+    @guarantee ContextFirstEntry
+        -- Quick Add starts with context fields available immediately.
+        -- Users may begin by choosing supplier, store, category, article,
+        -- or a combination. The form does not force a specific starting field.
+
+    @guarantee StoreInfersSupplier
+        -- Selecting a store automatically fills supplier from that store's
+        -- supplier relationship. The draft cannot hold a store whose
+        -- supplier conflicts with the selected supplier.
+
+    @guarantee SupplierChangeClearsConflictingStore
+        -- Changing supplier clears the store selection when the current
+        -- store does not belong to the new supplier.
+
+    @guarantee CategorySelectionIsStable
+        -- Once the user chooses an expense category, supplier, store, or
+        -- article changes do not auto-change or clear that category.
+
+    @guarantee ArticleIsNotSupplierOrStoreScoped
+        -- Article choice is not constrained by supplier or store.
+        -- The same article may be used with different suppliers and stores.
+
+    @guarantee ContextConstrainedSearch
+        -- Search results are filtered by existing context where a real
+        -- domain relationship exists. Store search narrows by supplier.
+        -- Article search is not narrowed by supplier or store.
+
+    @guarantee AtLeastOneRowRemains
+        -- Removing line items never leaves the form without a row.
+        -- The user always sees at least one editable line-item row.
+
+    @guarantee LineTotalAutofill
+        -- When qty and unit_price are entered and line_total is blank,
+        -- line_total is auto-filled as qty × unit_price.
+
+    @guarantee UnitPriceDerived
+        -- When line_total and qty are entered but unit_price is blank,
+        -- unit_price is derived as line_total / qty (rounded half-up, 2dp).
+
+    @guarantee ArticlePriceAutofill
+        -- When an article is selected, unit_price auto-fills from the
+        -- article's last known price. Supplier-specific price (from the
+        -- draft's current supplier context) is preferred; falls back to
+        -- global price across all suppliers within the tenant.
+
+    @guarantee ArticlePriceInSearchResults
+        -- Article search results include last_price, last_price_source
+        -- (supplier_specific or global), and last_price_supplier_display_name
+        -- when prior price data exists. This allows the user to see price
+        -- context before selecting an article.
+
+    @guarantee SearchDebouncing
+        -- Search queries are debounced at config.search_debounce_ms
+        -- to avoid excessive API calls during typing.
+
+    @guarantee SearchMinQueryLength
+        -- Search queries shorter than config.search_min_query_length
+        -- return empty results immediately without hitting the server.
+
+    @guarantee FuzzyMatching
+        -- All search uses pg_trgm word_similarity with a threshold of
+        -- config.fuzzy_similarity_threshold combined with ILIKE substring
+        -- matching. This catches common typos and inflection variants.
+
+    @guarantee TotalConsistency
+        -- If the user enters an explicit total (entered_total), it must
+        -- match the sum of complete line items within 0.01 tolerance.
+
+    @guarantee SuccessfulSubmitOutcome
+        -- Successful submit closes the modal and refreshes the dashboard's
+        -- recent expenses so the new expense appears immediately.
+        -- The user returns to the dashboard view.
+
+    @guarantee FailedSubmitOutcome
+        -- Validation failures and API errors keep the modal open with an
+        -- error message displayed. No data is lost.
+}
+
+
+-- ─────────────────────────────────────────────
+-- Standard expense form
+-- ─────────────────────────────────────────────
+
+surface StandardExpenseForm {
+    facing writer: ExpenseWriter
+
+    context draft: StandardExpenseDraft
+
+    -- ── Always visible ──
+
+    exposes:
+        draft.currency
+        draft.purchased_at
+        draft.payer
+        draft.notes
+
+    -- ── Total: editable in minimal mode, computed in itemized mode ──
+
+    exposes:
+        draft.total_amount
+            when not draft.has_items
+        draft.computed_total
+            when draft.has_items
+
+    -- ── Context pickers (with inline creation) ──
+
+    exposes:
+        draft.supplier
+        draft.store
+            when draft.supplier != null
+        draft.expense_category
+        draft.article
+            when not draft.itemized_mode
+
+    -- ── Itemized section (toggled by user) ──
+
+    exposes:
+        draft.itemized_mode
+        draft.items
+            when draft.itemized_mode
+
+    -- ── Reference pickers with inline creation ──
+
+    provides:
+        PickOrCreateSupplier(draft, ref: InlineReference)
+            when ref.kind = supplier
+        PickOrCreateStore(draft, ref: InlineReference)
+            when ref.kind = store and draft.supplier != null
+        PickOrCreateCategory(draft, ref: InlineReference)
+            when ref.kind = expense_category
+        PickOrCreateArticle(draft, ref: InlineReference)
+            when ref.kind = article and not draft.itemized_mode
+
+    -- ── Mode toggle + line items ──
+
+    provides:
+        ToggleItemizedMode(draft)
+        AddLineItem(draft)
+            when draft.itemized_mode
+        RemoveLineItem(draft, item_index: Integer)
+            when draft.itemized_mode and draft.items.count > 0
+
+    -- ── Submit ──
+
+    provides:
+        SubmitStandard(writer, draft)
+            when draft.effective_total != null
+            and draft.effective_total > 0
+            and draft.payer != null
+            and draft.has_any_context
+
+    -- ── Guarantees ──
+
+    @guarantee DefaultPayer
+        -- Payer pre-filled with user's default payer on form open.
+        -- Purchased_at defaults to today. Currency defaults to BAM.
+
+    @guarantee StoreInfersSupplier
+        -- Selecting a store automatically fills supplier from that store.
+
+    @guarantee SupplierChangeClearsConflictingStore
+        -- Changing supplier clears conflicting store selection.
+
+    @guarantee CategorySelectionIsStable
+        -- Category is not auto-cleared by supplier/store/article changes.
+
+    @guarantee AdaptiveFormProgression
+        -- Form starts in minimal mode: total, payer (pre-filled),
+        -- purchased_at (today), currency (BAM), context pickers.
+        -- Toggling itemized mode ON: total becomes computed/read-only,
+        -- article field hidden and cleared.
+        -- Toggling OFF: items list cleared, total becomes editable again.
+
+    @guarantee ArticleMutuallyExclusiveWithItems
+        -- Article shortcut and itemized mode are mutually exclusive.
+        -- Selecting an article is only possible when no items exist.
+        -- Single article creates one synthetic line item on save.
+
+    @guarantee InlineCreationCapability
+        -- Each reference picker (supplier, store, category, article)
+        -- allows the user to create a new entity inline when no match
+        -- is found. Store creation requires supplier context — orphan
+        -- stores are disallowed.
+
+    @guarantee LineTotalAutofill
+        -- When qty and unit_price are entered and line_total is blank,
+        -- line_total = qty × unit_price.
+
+    @guarantee ArticleHintInMinimalMode
+        -- When user selects an article in minimal mode (no items), show
+        -- a hint: "This will create a single line item on save."
+
+    @guarantee SuccessfulSubmitOutcome
+        -- Successful submit closes the modal and refreshes the expense
+        -- list. The user returns to wherever they opened the modal from.
+
+    @guarantee FailedSubmitOutcome
+        -- Validation or API failures keep the modal open with an error
+        -- displayed. No data is lost.
+}
+
+
+-- ═════════════════════════════════════════════
+-- DEFERRED
+-- ═════════════════════════════════════════════
+
+deferred SmartSuggestions    -- see: manual-expense-entry-suggestions.candidate.allium
+
+guidance:
+    Smart suggestions use hybrid ranking: recency-weighted frequency.
+    Recent entries count more, but frequently used references always surface.
+
+guidance:
+    Suggestions should pre-fill payer + category combos based on supplier history.
+    e.g., "last time you bought from Bingo you used Cash and categorized as Groceries."
+
+guidance:
+    Store inline creation requires supplier context (store belongs to supplier).
+    Orphan stores are not allowed.
+
+
+-- ═════════════════════════════════════════════
+-- OPEN QUESTIONS
+-- ═════════════════════════════════════════════
+
+open question "Should the Standard form also support article price lookup, or is that Quick Add only?"
+
+open question "Should total-only expenses (no items, no article) be allowed long-term, or is that a transitional compromise?"
+
+open question "Quick Add currently does not do inline creation. Should it gain that capability, or should users who need to create new suppliers/stores use the Standard form?"

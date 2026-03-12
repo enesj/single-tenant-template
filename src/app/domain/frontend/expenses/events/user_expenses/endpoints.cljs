@@ -50,3 +50,7 @@
 
 (def related-search-endpoint (str list-endpoint "/search/related"))
 
+(def cooccurring-articles-endpoint (api/versioned-endpoint "/expenses/quick-add-cooccurring"))
+
+(def context-suggestions-endpoint (api/versioned-endpoint "/expenses/quick-add-context-suggestions"))
+

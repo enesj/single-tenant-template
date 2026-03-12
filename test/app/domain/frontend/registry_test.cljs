@@ -51,7 +51,6 @@
     (let [paths (set (map first (domain-registry/all-user-routes)))]
       (is (contains? paths "/expenses"))
       (is (contains? paths "/expenses/list"))
-      (is (contains? paths "/expenses/new"))
       (is (contains? paths "/expenses/upload")))))
 
 (deftest all-admin-entities-test

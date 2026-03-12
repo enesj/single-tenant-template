@@ -204,8 +204,7 @@
                                       :route :expenses-list
                                       :icon ($ expenses-icon {:class "w-6 h-6"})
                                       :active? (active? #{:expenses-list
-                                                          :expense-detail
-                                                          :expense-new})})]
+                                                          :expense-detail})})]
                           (when power-user?
                             [(nav-item {:id "user-sidebar-expense-items"
                                         :label (t :nav/expense-items)

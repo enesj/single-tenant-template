@@ -88,13 +88,6 @@
     {:db (assoc-in db (paths/current-page) :receipt-detail)}))
 
 (rf/reg-event-fx
-  :page/init-expense-new
-  common-interceptors
-  (fn [{:keys [db]} _]
-    {:db (assoc-in db (paths/current-page) :expense-new)
-     :dispatch [:user-expenses/fetch-payers {:limit 100}]}))
-
-(rf/reg-event-fx
   :page/init-expense-detail
   common-interceptors
   (fn [{:keys [db]} [_ expense-id]]

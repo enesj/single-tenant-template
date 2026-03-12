@@ -1,8 +1,10 @@
 (ns app.domain.frontend.expenses.pages.user.expense-new
-  "User-facing expense creation form."
+  "Standard expense entry form.
+
+   Renders as a modal body — accepts :on-cancel and :on-success callbacks.
+   Used by the expenses list page for adding new expenses."
   (:require
     [app.domain.frontend.expenses.components.manual-expense-form.search :as quick-add-search]
-    [app.domain.frontend.expenses.components.page-guard :as page-guard]
     [app.template.frontend.components.button :refer [button]]
     [app.template.frontend.i18n :refer [use-t]]
     [app.shared.type-conversion :as type-conv]
@@ -262,7 +264,7 @@
             ($ :div {:class "px-3 py-2 text-sm text-base-content/60"}
               (t :expense-new/no-results))))))))
 
-(defui expense-new-page-content []
+(defui standard-expense-form [{:keys [on-cancel on-success]}]
   (let [t (use-t)
         payers (or (use-subscribe [:user-expenses/payers]) [])
         loading? (boolean (use-subscribe [:user-expenses/form-loading?]))
@@ -277,6 +279,13 @@
         [notes set-notes!] (use-state "")
         [line-items set-line-items!] (use-state [(new-line-item)])
         [validation-error set-validation-error!] (use-state nil)]
+
+    ;; Fetch payers on mount (previously done by page init event)
+    (use-effect
+      (fn []
+        (rf/dispatch [:user-expenses/fetch-payers {:limit 100}])
+        js/undefined)
+      [])
 
     (use-effect
       (fn []
@@ -325,7 +334,7 @@
                               :else
                               (do
                                 (set-validation-error! nil)
-                                (rf/dispatch [:user-expenses/create-expense
+                                (rf/dispatch [:user-expenses/create-expense-modal
                                               (cond-> {:payer_id payer-id
                                                        :purchased_at purchased-at
                                                        :currency currency
@@ -334,175 +343,158 @@
                                                        :items prepared-items}
                                                 supplier-id (assoc :supplier_id supplier-id)
                                                 store-id (assoc :store_id store-id)
-                                                expense-category-id (assoc :expense_category_id expense-category-id))])))))]
-      ($ :div {:class "min-h-screen bg-base-100"}
-        ($ :header {:class "bg-white border-b border-base-200"}
-          ($ :div {:class "max-w-4xl mx-auto px-4 py-4 sm:py-6"}
-            ($ :div {:class "flex items-center justify-between"}
-              ($ :div
-                ($ :div {:class "text-sm ds-breadcrumbs"}
-                  ($ :ul
-                    ($ :li ($ :a {:id "link-expenses-breadcrumb-expense-new"
-                                  :href "/expenses"}
-                             (t :expense-new/breadcrumb-expenses)))
-                    ($ :li (t :expense-new/breadcrumb-new))))
-                ($ :h1 {:class "text-xl sm:text-2xl font-bold"} (t :expense-new/title)))
-              ($ :div {:class "flex gap-2"}
-                ($ button {:id "btn-cancel-expense-new"
-                           :btn-type :ghost
-                           :on-click #(rf/dispatch [:navigate-to "/expenses"])}
-                  (t :expense-new/cancel))
-                ($ button {:id "btn-save-expense-new"
-                           :btn-type :primary
-                           :loading? loading?
-                           :on-click handle-submit}
-                  (t :expense-new/save))))))
-
+                                                expense-category-id (assoc :expense_category_id expense-category-id))
+                                              on-success])))))]
+      ($ :div {:class "space-y-6"}
         (when (or validation-error form-error)
-          ($ :div {:class "max-w-4xl mx-auto px-4 mt-4"}
-            ($ :div {:id (str form-id "-error")
-                     :class "ds-alert ds-alert-error"}
-              ($ :span (or validation-error form-error)))))
+          ($ :div {:id (str form-id "-error")
+                   :class "ds-alert ds-alert-error"}
+            ($ :span (or validation-error form-error))))
 
-        ($ :main {:class "max-w-4xl mx-auto px-4 py-6"}
-          ($ :div {:class "bg-white rounded-xl shadow-sm border border-base-200 p-6 space-y-6"}
-            ($ :section {:class "space-y-4"}
-              ($ :div
-                ($ :h2 {:class "text-lg font-semibold"} (t :expense-new/context-title))
-                ($ :p {:class "text-sm text-base-content/70"} (t :expense-new/context-subtitle)))
-              ($ :div {:class "grid grid-cols-1 md:grid-cols-2 gap-4"}
-                ($ quick-add-search-field
-                  {:entity-type :supplier
-                   :label (t :expense-new/supplier-label)
-                   :placeholder (t :expense-new/supplier-search-ph)
-                   :input-id (str form-id "-supplier-search")
-                   :selected (:supplier context)
-                   :filters {}
-                   :on-clear #(set-context! clear-supplier-selection)
-                   :on-select #(set-context! (fn [current]
-                                               (apply-supplier-selection current %)))})
-                ($ quick-add-search-field
-                  {:entity-type :store
-                   :label (t :expense-new/store-label)
-                   :placeholder (t :expense-new/store-search-ph)
-                   :input-id (str form-id "-store-search")
-                   :selected (:store context)
-                   :filters {:supplier_id (some-> context :supplier :id)}
-                   :on-clear #(set-context! (fn [current] (assoc current :store nil)))
-                   :on-select #(set-context! (fn [current]
-                                               (apply-store-selection current %)))})
-                ($ quick-add-search-field
-                  {:entity-type :category
-                   :label (t :expense-new/category-label)
-                   :placeholder (t :expense-new/category-search-ph)
-                   :input-id (str form-id "-category-search")
-                   :selected (:expense-category context)
-                   :filters {}
-                   :on-clear #(set-context! (fn [current] (assoc current :expense-category nil)))
-                   :on-select #(set-context! (fn [current]
-                                               (assoc current :expense-category
-                                                 (normalize-selection :category %))))})
-                ($ quick-add-search-field
-                  {:entity-type :article
-                   :label (t :expense-new/article-label)
-                   :placeholder (t :expense-new/article-search-ph)
-                   :input-id (str form-id "-article-search")
-                   :selected nil
-                   :filters {:supplier_id (some-> context :supplier :id)}
-                   :helper-text (t :expense-new/article-help)
-                   :on-clear (fn [] nil)
-                   :on-select #(set-line-items! (fn [items]
-                                                  (add-article-line-item items %)))})))
+        ($ :section {:class "space-y-4"}
+          ($ :div
+            ($ :h2 {:class "text-lg font-semibold"} (t :expense-new/context-title))
+            ($ :p {:class "text-sm text-base-content/70"} (t :expense-new/context-subtitle)))
+          ($ :div {:class "grid grid-cols-1 md:grid-cols-2 gap-4"}
+            ($ quick-add-search-field
+              {:entity-type :supplier
+               :label (t :expense-new/supplier-label)
+               :placeholder (t :expense-new/supplier-search-ph)
+               :input-id (str form-id "-supplier-search")
+               :selected (:supplier context)
+               :filters {}
+               :on-clear #(set-context! clear-supplier-selection)
+               :on-select #(set-context! (fn [current]
+                                           (apply-supplier-selection current %)))})
+            ($ quick-add-search-field
+              {:entity-type :store
+               :label (t :expense-new/store-label)
+               :placeholder (t :expense-new/store-search-ph)
+               :input-id (str form-id "-store-search")
+               :selected (:store context)
+               :filters {:supplier_id (some-> context :supplier :id)}
+               :on-clear #(set-context! (fn [current] (assoc current :store nil)))
+               :on-select #(set-context! (fn [current]
+                                           (apply-store-selection current %)))})
+            ($ quick-add-search-field
+              {:entity-type :category
+               :label (t :expense-new/category-label)
+               :placeholder (t :expense-new/category-search-ph)
+               :input-id (str form-id "-category-search")
+               :selected (:expense-category context)
+               :filters {}
+               :on-clear #(set-context! (fn [current] (assoc current :expense-category nil)))
+               :on-select #(set-context! (fn [current]
+                                           (assoc current :expense-category
+                                             (normalize-selection :category %))))})
+            ($ quick-add-search-field
+              {:entity-type :article
+               :label (t :expense-new/article-label)
+               :placeholder (t :expense-new/article-search-ph)
+               :input-id (str form-id "-article-search")
+               :selected nil
+               :filters {:supplier_id (some-> context :supplier :id)}
+               :helper-text (t :expense-new/article-help)
+               :on-clear (fn [] nil)
+               :on-select #(set-line-items! (fn [items]
+                                              (add-article-line-item items %)))}))
 
-            ($ :div {:class "grid grid-cols-1 md:grid-cols-2 gap-4 border-t pt-6"}
-              ($ :div
-                ($ :label {:class "ds-label"}
-                  ($ :span {:class "ds-label-text font-medium"} (t :expense-new/payer-label)))
-                ($ :select {:id (str form-id "-payer-select")
-                            :class "ds-select ds-select-bordered w-full"
-                            :value (or payer-id "")
-                            :on-change #(set-payer-id! (.. % -target -value))}
-                  ($ :option {:value ""} (t :expense-new/payer-select))
-                  (for [p payers]
-                    ($ :option {:key (:id p) :value (:id p)}
-                      (:label p)))))
-
-              ($ :div
-                ($ :label {:class "ds-label"}
-                  ($ :span {:class "ds-label-text font-medium"} (t :expense-new/date-label)))
-                ($ :input {:id (str form-id "-purchased-at")
-                           :type "datetime-local"
-                           :class "ds-input ds-input-bordered w-full"
-                           :value purchased-at
-                           :on-change #(set-purchased-at! (.. % -target -value))}))
-
-              ($ :div
-                ($ :label {:class "ds-label"}
-                  ($ :span {:class "ds-label-text font-medium"} (t :expense-new/currency-label)))
-                ($ :select {:id (str form-id "-currency-select")
-                            :class "ds-select ds-select-bordered w-full"
-                            :value currency
-                            :on-change #(set-currency! (.. % -target -value))}
-                  (for [{:keys [label value]} currency-options]
-                    ($ :option {:key value :value value} label))))
-
-              ($ :div
-                ($ :label {:class "ds-label"}
-                  ($ :span {:class "ds-label-text font-medium"} (t :expense-new/total-amount-label)))
-                ($ :input {:id (str form-id "-total-amount")
-                           :type "number"
-                           :step "0.01"
-                           :class (str "ds-input ds-input-bordered w-full "
-                                    (when total-mismatch? "ds-input-warning"))
-                           :value total-amount
-                           :placeholder (when (pos? computed-total)
-                                          (str "Auto: " (format-decimal computed-total)))
-                           :on-change #(set-total-amount! (.. % -target -value))})))
-
-            ($ :div {:class "border-t pt-6"}
-              ($ :div {:class "flex items-center justify-between mb-4"}
-                ($ :h3 {:class "font-semibold"} (t :expense-new/line-items))
-                ($ :button {:type "button"
-                            :id "btn-add-expense-new-item"
-                            :class "ds-btn ds-btn-ghost ds-btn-sm"
-                            :on-click #(set-line-items! (conj line-items (new-line-item)))}
-                  (t :expense-new/add-item)))
-
-              ($ :div {:class "grid grid-cols-12 gap-2 text-xs text-base-content/70 font-medium mb-2"}
-                ($ :span {:class "col-span-5"} (t :expense-new/col-description))
-                ($ :span {:class "col-span-2"} (t :expense-new/col-qty))
-                ($ :span {:class "col-span-2"} (t :expense-new/col-unit-price))
-                ($ :span {:class "col-span-2"} (t :expense-new/col-total))
-                ($ :span {:class "col-span-1"}))
-
-              ($ :div {:class "space-y-2"}
-                (for [item line-items]
-                  ($ line-item-row {:key (:id item)
-                                    :item item
-                                    :on-change (fn [item-id key value]
-                                                 (set-line-items!
-                                                   (update-line-item line-items item-id key value)))
-                                    :on-remove (fn [item-id]
-                                                 (set-line-items!
-                                                   (remove-line-item line-items item-id)))})))
-
-              (when (pos? computed-total)
-                ($ :div {:class "flex justify-end mt-4 text-sm"}
-                  ($ :span {:class "text-base-content/70 mr-2"} (t :expense-new/line-items-total))
-                  ($ :span {:class (str "font-mono font-medium "
-                                     (when total-mismatch? "text-warning"))}
-                    (format-decimal computed-total) " " currency))))
-
-            ($ :div {:class "border-t pt-6"}
+          ($ :div {:class "grid grid-cols-1 md:grid-cols-2 gap-4 border-t pt-6"}
+            ($ :div
               ($ :label {:class "ds-label"}
-                ($ :span {:class "ds-label-text font-medium"} (t :expense-new/notes-label)))
-              ($ :textarea {:id (str form-id "-notes")
-                            :class "ds-textarea ds-textarea-bordered w-full"
-                            :rows 2
-                            :value notes
-                            :placeholder (t :expense-new/notes-placeholder)
-                            :on-change #(set-notes! (.. % -target -value))}))))))))
+                ($ :span {:class "ds-label-text font-medium"} (t :expense-new/payer-label)))
+              ($ :select {:id (str form-id "-payer-select")
+                          :class "ds-select ds-select-bordered w-full"
+                          :value (or payer-id "")
+                          :on-change #(set-payer-id! (.. % -target -value))}
+                ($ :option {:value ""} (t :expense-new/payer-select))
+                (for [p payers]
+                  ($ :option {:key (:id p) :value (:id p)}
+                    (:label p)))))
 
-(defui expense-new-page []
-  ($ page-guard/write-access-guard
-    {:children ($ expense-new-page-content)}))
+            ($ :div
+              ($ :label {:class "ds-label"}
+                ($ :span {:class "ds-label-text font-medium"} (t :expense-new/date-label)))
+              ($ :input {:id (str form-id "-purchased-at")
+                         :type "datetime-local"
+                         :class "ds-input ds-input-bordered w-full"
+                         :value purchased-at
+                         :on-change #(set-purchased-at! (.. % -target -value))}))
+
+            ($ :div
+              ($ :label {:class "ds-label"}
+                ($ :span {:class "ds-label-text font-medium"} (t :expense-new/currency-label)))
+              ($ :select {:id (str form-id "-currency-select")
+                          :class "ds-select ds-select-bordered w-full"
+                          :value currency
+                          :on-change #(set-currency! (.. % -target -value))}
+                (for [{:keys [label value]} currency-options]
+                  ($ :option {:key value :value value} label))))
+
+            ($ :div
+              ($ :label {:class "ds-label"}
+                ($ :span {:class "ds-label-text font-medium"} (t :expense-new/total-amount-label)))
+              ($ :input {:id (str form-id "-total-amount")
+                         :type "number"
+                         :step "0.01"
+                         :class (str "ds-input ds-input-bordered w-full "
+                                  (when total-mismatch? "ds-input-warning"))
+                         :value total-amount
+                         :placeholder (when (pos? computed-total)
+                                        (str "Auto: " (format-decimal computed-total)))
+                         :on-change #(set-total-amount! (.. % -target -value))})))
+
+          ($ :div {:class "border-t pt-6"}
+            ($ :div {:class "flex items-center justify-between mb-4"}
+              ($ :h3 {:class "font-semibold"} (t :expense-new/line-items))
+              ($ :button {:type "button"
+                          :id "btn-add-expense-new-item"
+                          :class "ds-btn ds-btn-ghost ds-btn-sm"
+                          :on-click #(set-line-items! (conj line-items (new-line-item)))}
+                (t :expense-new/add-item)))
+
+            ($ :div {:class "grid grid-cols-12 gap-2 text-xs text-base-content/70 font-medium mb-2"}
+              ($ :span {:class "col-span-5"} (t :expense-new/col-description))
+              ($ :span {:class "col-span-2"} (t :expense-new/col-qty))
+              ($ :span {:class "col-span-2"} (t :expense-new/col-unit-price))
+              ($ :span {:class "col-span-2"} (t :expense-new/col-total))
+              ($ :span {:class "col-span-1"}))
+
+            ($ :div {:class "space-y-2"}
+              (for [item line-items]
+                ($ line-item-row {:key (:id item)
+                                  :item item
+                                  :on-change (fn [item-id key value]
+                                               (set-line-items!
+                                                 (update-line-item line-items item-id key value)))
+                                  :on-remove (fn [item-id]
+                                               (set-line-items!
+                                                 (remove-line-item line-items item-id)))})))
+
+            (when (pos? computed-total)
+              ($ :div {:class "flex justify-end mt-4 text-sm"}
+                ($ :span {:class "text-base-content/70 mr-2"} (t :expense-new/line-items-total))
+                ($ :span {:class (str "font-mono font-medium "
+                                   (when total-mismatch? "text-warning"))}
+                  (format-decimal computed-total) " " currency))))
+
+          ($ :div {:class "border-t pt-6"}
+            ($ :label {:class "ds-label"}
+              ($ :span {:class "ds-label-text font-medium"} (t :expense-new/notes-label)))
+            ($ :textarea {:id (str form-id "-notes")
+                          :class "ds-textarea ds-textarea-bordered w-full"
+                          :rows 2
+                          :value notes
+                          :placeholder (t :expense-new/notes-placeholder)
+                          :on-change #(set-notes! (.. % -target -value))}))
+
+          ($ :div {:class "flex justify-end gap-2 pt-4 border-t border-base-200"}
+            ($ button {:id "btn-cancel-expense-new"
+                       :btn-type :ghost
+                       :on-click on-cancel}
+              (t :expense-new/cancel))
+            ($ button {:id "btn-save-expense-new"
+                       :btn-type :primary
+                       :loading? loading?
+                       :on-click handle-submit}
+              (t :expense-new/save))))))))

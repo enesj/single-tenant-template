@@ -7,8 +7,8 @@
    always server-side across the full dataset (not just the currently loaded
    page)."
   (:require
-    [app.domain.frontend.expenses.components.user-expense-form :refer [user-expense-add-form-modal
-                                                                       user-expense-edit-form-modal]]
+    [app.domain.frontend.expenses.components.user-expense-form :refer [user-expense-edit-form-modal]]
+    [app.domain.frontend.expenses.pages.user.expense-new :refer [standard-expense-form]]
     [app.domain.frontend.expenses.pages.user.expense-detail :refer [expense-detail-page]]
     [app.template.frontend.components.button :refer [button]]
     [app.template.frontend.components.confirm-dialog :as confirm-dialog]
@@ -32,7 +32,7 @@
 
 (defn- render-add-form
   [{:keys [on-success on-cancel]}]
-  ($ user-expense-add-form-modal
+  ($ standard-expense-form
     {:on-success on-success
      :on-cancel on-cancel}))
 

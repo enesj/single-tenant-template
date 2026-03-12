@@ -146,3 +146,100 @@
                :entity-id nil
                :loading? false
                :related {}})))
+
+;; ─────────────────────────────────────────────
+;; Co-occurring articles (article-mode suggestions)
+;; ─────────────────────────────────────────────
+
+(defn- cooccurring-path []
+  [:user-expenses :cooccurring-articles])
+
+(rf/reg-event-fx
+  :user-expenses/fetch-cooccurring-articles
+  common-interceptors
+  (fn [{:keys [db]} [article-ids supplier-id]]
+    (let [ids (vec (keep identity article-ids))]
+      (if (seq ids)
+        {:db (assoc-in db (cooccurring-path)
+                       {:loading? true :results []})
+         :http-xhrio (http/api-request
+                       {:method :get
+                        :uri endpoints/cooccurring-articles-endpoint
+                        :params (cond-> {:article_ids (str/join "," (map str ids))}
+                                  supplier-id (assoc :supplier_id (str supplier-id)))
+                        :on-success [:user-expenses/cooccurring-articles-success]
+                        :on-failure [:user-expenses/cooccurring-articles-failure]})}
+        {:db (assoc-in db (cooccurring-path)
+                       {:loading? false :results []})}))))
+
+(rf/reg-event-db
+  :user-expenses/cooccurring-articles-success
+  common-interceptors
+  (fn [db [response]]
+    (assoc-in db (cooccurring-path)
+              {:loading? false
+               :results (vec (or (:results response) []))})))
+
+(rf/reg-event-db
+  :user-expenses/cooccurring-articles-failure
+  common-interceptors
+  (fn [db [error]]
+    (log/warn "Co-occurring articles fetch failed" {:error error})
+    (assoc-in db (cooccurring-path)
+              {:loading? false :results []})))
+
+(rf/reg-event-db
+  :user-expenses/clear-cooccurring-articles
+  common-interceptors
+  (fn [db _]
+    (assoc-in db (cooccurring-path)
+              {:loading? false :results []})))
+
+;; ─────────────────────────────────────────────
+;; Context suggestions (Phase 2 smart picks based on selected articles)
+;; ─────────────────────────────────────────────
+
+(defn- context-suggestions-path []
+  [:user-expenses :context-suggestions])
+
+(rf/reg-event-fx
+  :user-expenses/fetch-context-suggestions
+  common-interceptors
+  (fn [{:keys [db]} [article-ids]]
+    (let [ids (vec (keep identity article-ids))]
+      (if (seq ids)
+        {:db (assoc-in db (context-suggestions-path)
+                       {:loading? true :suppliers [] :stores [] :categories []})
+         :http-xhrio (http/api-request
+                       {:method :get
+                        :uri endpoints/context-suggestions-endpoint
+                        :params {:article_ids (str/join "," (map str ids))}
+                        :on-success [:user-expenses/context-suggestions-success]
+                        :on-failure [:user-expenses/context-suggestions-failure]})}
+        {:db (assoc-in db (context-suggestions-path)
+                       {:loading? false :suppliers [] :stores [] :categories []})}))))
+
+(rf/reg-event-db
+  :user-expenses/context-suggestions-success
+  common-interceptors
+  (fn [db [response]]
+    (assoc-in db (context-suggestions-path)
+              {:loading? false
+               :suppliers (vec (or (:suppliers response) []))
+               :stores (vec (or (:stores response) []))
+               :categories (vec (or (:categories response) []))})))
+
+(rf/reg-event-db
+  :user-expenses/context-suggestions-failure
+  common-interceptors
+  (fn [db [error]]
+    (log/warn "Context suggestions fetch failed" {:error error})
+    (assoc-in db (context-suggestions-path)
+              {:loading? false :suppliers [] :stores [] :categories []})))
+
+(rf/reg-event-db
+  :user-expenses/clear-context-suggestions
+  common-interceptors
+  (fn [db _]
+    (assoc-in db (context-suggestions-path)
+              {:loading? false :suppliers [] :stores [] :categories []})))

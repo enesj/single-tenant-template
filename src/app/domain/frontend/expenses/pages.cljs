@@ -12,7 +12,6 @@
     [app.domain.frontend.expenses.pages.user.expense-detail :refer [expense-detail-page]]
     [app.domain.frontend.expenses.pages.user.expense-categories :refer [expense-categories-page]]
     [app.domain.frontend.expenses.pages.user.expense-items :refer [expense-items-page]]
-    [app.domain.frontend.expenses.pages.user.expense-new :refer [expense-new-page]]
     [app.domain.frontend.expenses.pages.user.expense-reports :refer [expense-reports-page]]
     [app.domain.frontend.expenses.pages.user.expense-settings :refer [expense-settings-page]]
     [app.domain.frontend.expenses.pages.user.expense-upload :refer [expense-upload-page]]
@@ -41,7 +40,6 @@
    :expenses-list expenses-list-page
    :expense-upload expense-upload-page
    :receipts-list receipts-list-page
-   :expense-new expense-new-page
    :expense-detail expense-detail-page
    :receipt-detail receipt-detail-page
    :expense-reports expense-reports-page

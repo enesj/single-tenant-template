@@ -374,3 +374,19 @@
   (fn [db _]
     (boolean (get-in db [:user-expenses :quick-add-related :loading?]))))
 
+(rf/reg-sub
+  :user-expenses/cooccurring-articles
+  (fn [db _]
+    (get-in db [:user-expenses :cooccurring-articles :results] [])))
+
+(rf/reg-sub
+  :user-expenses/cooccurring-articles-loading?
+  (fn [db _]
+    (boolean (get-in db [:user-expenses :cooccurring-articles :loading?]))))
+
+(rf/reg-sub
+  :user-expenses/context-suggestions
+  (fn [db _]
+    (get-in db [:user-expenses :context-suggestions]
+      {:loading? false :suppliers [] :stores [] :categories []})))
+

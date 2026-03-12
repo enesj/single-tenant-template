@@ -120,22 +120,26 @@
   [:supplier :store :category])
 
 (defn focused-search-types
-  [context]
-  (vec (concat
-         (remove #(contains? context %) context-search-order)
-         [:article])))
+  [context article-mode?]
+  (if article-mode?
+    [:article]
+    (vec (concat
+           (remove #(contains? context %) context-search-order)
+           [:article]))))
 
 (defn search-placeholder
-  [context active-search?]
-  (let [labels (map name (focused-search-types context))
-        prefix (if active-search? "Search " "Start with ")]
-    (str prefix
-      (case (count labels)
-        0 "article"
-        1 (first labels)
-        2 (str (first labels) " or " (second labels))
-        (str (str/join ", " (butlast labels)) ", or " (last labels)))
-      "...")))
+  [context active-search? article-mode?]
+  (if article-mode?
+    "Add another article or press Enter to continue..."
+    (let [labels (map name (focused-search-types context false))
+          prefix (if active-search? "Search " "Start with ")]
+      (str prefix
+        (case (count labels)
+          0 "article"
+          1 (first labels)
+          2 (str (first labels) " or " (second labels))
+          (str (str/join ", " (butlast labels)) ", or " (last labels)))
+        "..."))))
 
 (defn current-related-context
   [context]
@@ -418,12 +422,15 @@
         quick-search-results (use-subscribe [:user-expenses/quick-add-search-results :all])
         quick-search-loading? (use-subscribe [:user-expenses/quick-add-search-loading? :all])
         quick-add-related (use-subscribe [:user-expenses/quick-add-related])
+        cooccurring-articles (use-subscribe [:user-expenses/cooccurring-articles])
+        context-suggestions (use-subscribe [:user-expenses/context-suggestions])
 
         ;; Core state
         [phase set-phase!] (use-state :items)       ;; :items or :context
         [items set-items!] (use-state [])            ;; [{:id :article-id :label :qty :unit-price}]
         [context set-context!] (use-state {})        ;; {:supplier {:id :label} :store ... :category ...}
         [input-text set-input-text!] (use-state "")
+        [article-mode? set-article-mode!] (use-state false) ;; narrows search to articles after first pick
 
         ;; Autocomplete UI
         [dropdown-open? set-dropdown-open!] (use-state false)
@@ -442,7 +449,7 @@
         input-ref (use-ref nil)
 
         ;; Search results: show immediate local matches while dedicated backend search loads.
-        available-search-types (focused-search-types context)
+        available-search-types (focused-search-types context article-mode?)
         local-search-results (when (and dropdown-open?
                                      (>= (count (str/trim input-text)) 2))
                                (-> (search/search-all-entities
@@ -467,7 +474,9 @@
         related-articles (if related-matches?
                            (or (get-in quick-add-related [:related :articles]) articles)
                            articles)
+        ;; Co-occurring article suggestions (article-mode) or normal quick picks
         focused-quick-pick-groups (when (and (str/blank? input-text)
+                                          (not article-mode?)
                                           (< (count available-search-types) 4))
                                     (build-quick-pick-groups
                                       available-search-types
@@ -476,6 +485,17 @@
                                       expense-categories
                                       related-articles
                                       selected-supplier-id))
+        cooccurring-pick-items (when (and article-mode?
+                                       (str/blank? input-text)
+                                       (seq cooccurring-articles))
+                                 (->> cooccurring-articles
+                                   (mapv (fn [a]
+                                           {:id (or (:id a) "")
+                                            :label (or (:label a) "")
+                                            :entity-type :article
+                                            :last-price (:last_price a)
+                                            :last-price-source (:last_price_source a)
+                                            :entity a}))))
 
         total-dropdown-count (+ (count (or search-results []))
                                (if (and (not (str/blank? input-text))
@@ -494,16 +514,28 @@
                                     :article-id article-id
                                     :label label-text
                                     :qty "1"
-                                    :unit-price (if last-price (format-decimal last-price) "")}]
+                                    :unit-price (if last-price (format-decimal last-price) "")}
+                          next-items (conj (or items []) new-item)
+                          all-article-ids (->> next-items
+                                            (keep :article-id)
+                                            vec)]
                       (set-items! (fn [prev] (conj prev new-item)))
                       (set-input-text! "")
                       (set-dropdown-open! false)
                       (set-highlight-idx! -1)
                       (set-type-picker-text! nil)
-                      (rf/dispatch [:user-expenses/clear-quick-add-search :all])))
+                      (set-article-mode! true)
+                      (rf/dispatch [:user-expenses/clear-quick-add-search :all])
+                      (rf/dispatch [:user-expenses/fetch-cooccurring-articles
+                                    all-article-ids selected-supplier-id])))
 
         remove-item! (fn [item-id]
-                       (set-items! (fn [prev] (vec (remove #(= item-id (:id %)) prev)))))
+                       (set-items! (fn [prev]
+                                     (let [next-items (vec (remove #(= item-id (:id %)) prev))]
+                                       (when (empty? next-items)
+                                         (set-article-mode! false)
+                                         (rf/dispatch [:user-expenses/clear-cooccurring-articles]))
+                                       next-items))))
 
         update-item! (fn [item-id field value]
                        (set-items!
@@ -618,10 +650,19 @@
                                    (do (.preventDefault e)
                                      (let [text (str/trim input-text)]
                                        (cond
-                                         ;; Empty input + has items → transition to context phase
+                                         ;; Empty input + article mode → exit article mode, return to full search
+                                         (and (str/blank? text) (= phase :items) article-mode?)
+                                         (do (set-article-mode! false)
+                                           (set-dropdown-open! false)
+                                           (rf/dispatch [:user-expenses/clear-cooccurring-articles]))
+
+                                         ;; Empty input + has items + not article mode → transition to context phase
                                          (and (str/blank? text) (= phase :items) (seq items))
-                                         (do (set-dropdown-open! false)
+                                         (let [article-ids (->> items (keep :article-id) vec)]
+                                           (set-dropdown-open! false)
                                            (set-phase! :context)
+                                           (when (seq article-ids)
+                                             (rf/dispatch [:user-expenses/fetch-context-suggestions article-ids]))
                                            (js/setTimeout
                                              (fn [] (when-let [el @input-ref] (.focus el)))
                                              100))
@@ -663,7 +704,12 @@
                                    (and (= key "Backspace") (str/blank? input-text))
                                    (cond
                                      (and (= phase :items) (seq items))
-                                     (set-items! (fn [prev] (vec (butlast prev))))
+                                     (set-items! (fn [prev]
+                                                   (let [next-items (vec (butlast prev))]
+                                                     (when (empty? next-items)
+                                                       (set-article-mode! false)
+                                                       (rf/dispatch [:user-expenses/clear-cooccurring-articles]))
+                                                     next-items)))
 
                                      (and (= phase :context) (seq context))
                                      (let [last-type (last (keys context))]
@@ -698,7 +744,9 @@
         ;; Cleanup quick add search on unmount
         (fn []
           (rf/dispatch [:user-expenses/clear-quick-add-search :all])
-          (rf/dispatch [:user-expenses/clear-quick-add-related])))
+          (rf/dispatch [:user-expenses/clear-quick-add-related])
+          (rf/dispatch [:user-expenses/clear-cooccurring-articles])
+          (rf/dispatch [:user-expenses/clear-context-suggestions])))
       [])
 
     ;; Set default payer once loaded
@@ -802,7 +850,7 @@
                                   "focus:border-primary focus:outline-none focus:shadow-lg "
                                   "focus:shadow-primary/10 "
                                   "transition-all bg-white placeholder:text-base-content/30")
-                         :placeholder (search-placeholder context (or (seq items) (seq context)))
+                         :placeholder (search-placeholder context (or (seq items) (seq context)) article-mode?)
                          :value input-text
                          :on-change handle-input-change
                          :on-key-down handle-input-keydown
@@ -819,6 +867,17 @@
                    :input-text (str/trim input-text)
                    :anchor-ref input-ref})))
 
+            ;; Co-occurring article suggestions (article mode)
+            (when (seq cooccurring-pick-items)
+              ($ :div {:class "space-y-2"}
+                ($ :p {:class "text-sm text-base-content/50"}
+                  "Frequently added together")
+                ($ quick-picks
+                  {:entity-type :article
+                   :items cooccurring-pick-items
+                   :on-select handle-select-result})))
+
+            ;; Normal quick pick groups (when not in article mode)
             (when (seq focused-quick-pick-groups)
               ($ :div {:class "space-y-4"}
                 (for [{:keys [entity-type items]} focused-quick-pick-groups]
@@ -852,8 +911,14 @@
             ;; Hint text
             (when (nil? type-picker-text)
               ($ :p {:class "text-center text-sm text-base-content/35 mt-2"}
-                (if (seq items)
+                (cond
+                  article-mode?
+                  "Press Enter on empty to add supplier/store/category"
+
+                  (seq items)
                   "Press Enter on empty to continue or keep adding context/items"
+
+                  :else
                   "You can start with supplier, store, category, or article")))))
 
         ;; ═══════════════════════════════════════
@@ -907,14 +972,35 @@
               (when (seq missing)
                 (let [missing-set (set missing)
                       selected-supplier-id (some-> context :supplier :id)
+                      ;; Use history-based suggestions when available, fall back to alphabetical
+                      has-suggestions? (or (seq (:suppliers context-suggestions))
+                                         (seq (:stores context-suggestions))
+                                         (seq (:categories context-suggestions)))
                       quick-pick-groups (when (str/blank? input-text)
-                                          (build-quick-pick-groups
-                                            missing
-                                            suppliers
-                                            stores
-                                            expense-categories
-                                            articles
-                                            selected-supplier-id))
+                                          (if has-suggestions?
+                                            (->> missing
+                                              (map (fn [entity-type]
+                                                     (let [suggested (case entity-type
+                                                                       :supplier (:suppliers context-suggestions)
+                                                                       :store (:stores context-suggestions)
+                                                                       :category (:categories context-suggestions)
+                                                                       [])]
+                                                       {:entity-type entity-type
+                                                        :items (mapv (fn [s]
+                                                                       {:id (:id s)
+                                                                        :label (:label s)
+                                                                        :entity-type entity-type
+                                                                        :entity s})
+                                                                 suggested)})))
+                                              (filter #(seq (:items %)))
+                                              vec)
+                                            (build-quick-pick-groups
+                                              missing
+                                              suppliers
+                                              stores
+                                              expense-categories
+                                              articles
+                                              selected-supplier-id)))
                       ;; Filter results to only show entity types still needed
                       filtered-results (filterv
                                          (fn [r]
