@@ -1,18 +1,20 @@
 (ns app.template.backend.routes.admin.admins
   "Admin management API handlers - allows owners to manage other admins.
-   
+
    Routes:
-   - GET  /admin/api/admins       - List all admins
-   - POST /admin/api/admins       - Create a new admin
-   - GET  /admin/api/admins/:id   - Get admin details
-   - PUT  /admin/api/admins/:id   - Update admin info
-   - DELETE /admin/api/admins/:id - Delete admin
-   - PUT  /admin/api/admins/:id/role   - Update admin role
-   - PUT  /admin/api/admins/:id/status - Update admin status"
+   - GET  /admin/api/admins                      - List all admins
+   - POST /admin/api/admins                      - Create a new admin
+   - GET  /admin/api/admins/:id                  - Get admin details
+   - PUT  /admin/api/admins/:id                  - Update admin info
+   - DELETE /admin/api/admins/:id                - Delete admin
+   - PUT  /admin/api/admins/:id/role             - Update admin role
+   - PUT  /admin/api/admins/:id/status           - Update admin status
+   - POST /admin/api/admins/:id/transfer-ownership - Transfer global ownership"
   (:require
-    [app.template.backend.routes.admin.utils :as utils]
     [app.admin.backend.services.admin.admins :as admin-admins]
     [app.shared.adapters.database :as shared-db]
+    [app.template.backend.middleware.admin :as admin-mw]
+    [app.template.backend.routes.admin.utils :as utils]
     [taoensso.timbre :as log]))
 
 ;; ============================================================================
@@ -211,6 +213,25 @@
                 (utils/json-response {:admin converted-admin})))))))
     "Failed to update admin role"))
 
+(defn transfer-admin-ownership-handler
+  "Transfer global admin ownership to another active admin."
+  [db]
+  (utils/with-error-handling
+    (fn [request]
+      (utils/handle-uuid-request request :id
+        (fn [admin-id _request]
+          (let [{:keys [ip-address user-agent admin]} (utils/extract-request-context request)
+                updated-admin (admin-admins/transfer-admin-ownership! db admin-id
+                                (:id admin)
+                                ip-address
+                                user-agent)]
+            (utils/log-admin-action "transfer_admin_ownership" (:id admin)
+              "admin" admin-id {:previous-owner-id (:id admin)
+                                :new-owner-id admin-id})
+            (let [converted-admin (shared-db/to-app updated-admin)]
+              (utils/json-response {:admin converted-admin}))))))
+    "Failed to transfer admin ownership"))
+
 ;; ============================================================================
 ;; Update Admin Status
 ;; ============================================================================
@@ -259,4 +280,7 @@
    ["/:id/role"
     {:put (update-admin-role-handler db)}]
    ["/:id/status"
-    {:put (update-admin-status-handler db)}]])
+    {:put (update-admin-status-handler db)}]
+   ["/:id/transfer-ownership"
+    {:post {:middleware [#(admin-mw/wrap-admin-role % :owner)]
+            :handler (transfer-admin-ownership-handler db)}}]])

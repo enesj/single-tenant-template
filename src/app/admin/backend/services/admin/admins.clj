@@ -296,6 +296,75 @@
 
       (some-> result db-admin->app))))
 
+(defn transfer-admin-ownership!
+  "Transfer global ownership from the current owner to a target active admin.
+   Atomically swaps: actor -> admin, target -> owner."
+  [db target-admin-id current-admin-id ip-address user-agent]
+  (validate-not-self-modification! current-admin-id target-admin-id "transfer ownership to")
+  (jdbc/with-transaction [tx db]
+    (let [current-owner (get-admin-details tx current-admin-id)
+          target-admin  (get-admin-details tx target-admin-id)]
+      (when-not current-owner
+        (throw (ex-info "Current owner not found"
+                 {:status 404
+                  :reason :current-owner-not-found})))
+      (when-not target-admin
+        (throw (ex-info "Target admin not found"
+                 {:status 404
+                  :reason :not-found})))
+
+      (when-not (= (str (:role current-owner)) "owner")
+        (throw (ex-info "Only the current owner can transfer ownership"
+                 {:status 403
+                  :field :role
+                  :reason :insufficient-permissions})))
+
+      (when-not (= (str (:status current-owner)) "active")
+        (throw (ex-info "Current owner must be active"
+                 {:status 400
+                  :field :status
+                  :reason :current-owner-inactive})))
+
+      (when-not (= (str (:status target-admin)) "active")
+        (throw (ex-info "Target admin must be active"
+                 {:status 400
+                  :field :status
+                  :reason :target-inactive})))
+
+      (when-not (= (str (:role target-admin)) "admin")
+        (throw (ex-info "Ownership can only be transferred to an active admin"
+                 {:status 400
+                  :field :role
+                  :reason :target-must-be-admin})))
+
+      ;; Demote the current owner first so the unique owner index always remains valid.
+      (jdbc/execute-one! tx
+        (hsql/format {:update :admins
+                      :set {:role (tc/cast-for-database :admin-role "admin")}
+                      :where [:= :id current-admin-id]}))
+
+      (let [updated-target (jdbc/execute-one! tx
+                             (hsql/format {:update :admins
+                                           :set {:role (tc/cast-for-database :admin-role "owner")}
+                                           :where [:= :id target-admin-id]
+                                           :returning [:*]}))]
+        (audit/log-audit! tx
+          {:admin_id current-admin-id
+           :action "transfer_admin_ownership"
+           :entity-type "admin"
+           :entity-id target-admin-id
+           :changes {:previous-owner-id current-admin-id
+                     :previous-owner-email (:email current-owner)
+                     :new-owner-id target-admin-id
+                     :new-owner-email (:email target-admin)
+                     :previous-owner-new-role "admin"
+                     :new-owner-role "owner"}
+           :ip-address ip-address
+           :user-agent user-agent})
+
+        (log/info "Admin ownership transferred" {:from current-admin-id :to target-admin-id})
+        (db-admin->app updated-target)))))
+
 (defn update-admin-status!
   "Update an admin's status (active/suspended)."
   [db admin-id new-status current-admin-id ip-address user-agent]

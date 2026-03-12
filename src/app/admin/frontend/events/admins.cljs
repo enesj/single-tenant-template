@@ -127,6 +127,36 @@
       {:db (handle-admin-api-error db error :admin/updating-admin :admin/admin-update-error "update admin role")
        :dispatch [:admin/show-error-message message]})))
 
+(rf/reg-event-fx
+  :admin/transfer-admin-ownership
+  (fn [{:keys [db]} [_ admin-id]]
+    (log-admin-operation "Transferring admin ownership" {:admin-id admin-id})
+    {:db (create-loading-db-state db :admin/updating-admin)
+     :http-xhrio (admin-http/admin-request
+                   {:method :post
+                    :uri (str "/admin/api/admins/" admin-id "/transfer-ownership")
+                    :params {}
+                    :on-success [:admin/transfer-admin-ownership-success admin-id]
+                    :on-failure [:admin/transfer-admin-ownership-failure admin-id]})}))
+
+(rf/reg-event-fx
+  :admin/transfer-admin-ownership-success
+  (fn [{:keys [db]} [_ admin-id _response]]
+    (log-admin-operation "Admin ownership transferred successfully" admin-id)
+    {:db (clear-loading-db-state db :admin/updating-admin)
+     :dispatch-n [[:admin/show-success-message "Ownership transferred successfully"]
+                  [:admin/load-admins]
+                  [:admin/check-auth]
+                  [:admin/navigate-client "/admin/dashboard"]]}))
+
+(rf/reg-event-fx
+  :admin/transfer-admin-ownership-failure
+  (fn [{:keys [db]} [_ admin-id error]]
+    (log/error "Failed to transfer admin ownership" {:admin-id admin-id :error error})
+    (let [message (or (admin-http/extract-error-message error) "Failed to transfer ownership")]
+      {:db (handle-admin-api-error db error :admin/updating-admin :admin/admin-update-error "transfer admin ownership")
+       :dispatch [:admin/show-error-message message]})))
+
 ;; ============================================================================
 ;; Update Admin Status Events
 ;; ============================================================================

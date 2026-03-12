@@ -12,6 +12,7 @@
   (case entity-key
     :audit-logs :audit-log
     :users :user
+    :admins :admin
     :tenants :tenant
     (kw/ensure-keyword entity-key)))
 

@@ -37,7 +37,11 @@
 
    :update-role (fn [new-role]
                   (log/info "Updating admin role" admin-id admin-email new-role)
-                  (rf/dispatch [:admin/update-admin-role admin-id (name new-role)]))})
+                  (rf/dispatch [:admin/update-admin-role admin-id (name new-role)]))
+
+   :transfer-ownership (fn []
+                         (log/info "Transferring admin ownership" admin-id admin-email)
+                         (rf/dispatch [:admin/transfer-admin-ownership admin-id]))})
 
 (defn create-admin-confirmation-handlers
   "Factory function to create confirmation handlers that wrap action handlers"
@@ -67,34 +71,53 @@
                       :danger? true
                       :on-confirm (:delete-admin handlers)}))
 
-   :update-role (:update-role handlers)})
+   :update-role (:update-role handlers)
+
+   :transfer-ownership (fn [e]
+                         (.stopPropagation e)
+                         (confirm-dialog/show-confirm
+                           {:message (str "Transfer platform ownership to " admin-email "? You will be downgraded to admin.")
+                            :title "Confirm Ownership Transfer"
+                            :danger? true
+                            :on-confirm (:transfer-ownership handlers)}))})
 
 ;; =============================================================================
 ;; Main Admin Actions Dropdown Component
 ;; =============================================================================
 
+(defn- normalize-admin-value [value]
+  (cond
+    (keyword? value) (name value)
+    (string? value) value
+    :else (some-> value str)))
+
 (defui admin-admin-actions
   "Admin account management actions using the reusable template dropdown component"
-  [{:keys [admin]}]
-  (let [admin-id (id-utils/extract-entity-id admin)
+  [{:keys [admin admins]}]
+  (let [admin (or admin admins)
+        admin-id (id-utils/extract-entity-id admin)
         ;; Extract admin data
-        admin-status (or (:admins/status admin) (:status admin))
+        admin-status-raw (or (:admins/status admin) (:status admin))
+        admin-status (normalize-admin-value admin-status-raw)
         admin-email (or (:admins/email admin) (:email admin))
-        admin-role (or (:admins/role admin) (:role admin))
+        admin-role-raw (or (:admins/role admin) (:role admin))
+        admin-role (normalize-admin-value admin-role-raw)
 
         ;; Get current logged-in admin
         ;; NOTE: The admin auth subsystem stores identity under :admin/current-user.
         current-admin (use-subscribe [:admin/current-user])
         current-admin-id (or (:id current-admin) (:admins/id current-admin))
-        current-admin-role (or (:role current-admin) (:admins/role current-admin))
-        is-current-owner? (= (str current-admin-role) "owner")
+        current-admin-role (normalize-admin-value (or (:role current-admin) (:admins/role current-admin)))
+        is-current-owner? (= current-admin-role "owner")
 
         ;; Determine if this is self
         is-self? (= (str admin-id) (str current-admin-id))
 
         ;; Get owners count for protection checks
         owners-count (or (use-subscribe [:admin/owners-count]) 0)
-        is-last-owner? (and (= (str admin-role) "owner") (= owners-count 1))
+        is-last-owner? (and (= admin-role "owner") (= owners-count 1))
+        active-admin-target? (and (= admin-role "admin")
+                               (= admin-status "active"))
 
         ;; Enum options for role
         models-data (use-subscribe [:models-data])
@@ -104,8 +127,8 @@
                            (keep #(when % (keyword (str %))))
                            vec)
         role-key (cond
-                   (keyword? admin-role) admin-role
-                   (string? admin-role) (keyword admin-role)
+                   (keyword? admin-role-raw) admin-role-raw
+                   (string? admin-role-raw) (keyword admin-role-raw)
                    :else nil)
         role-options (->> raw-role-options
                        (filter #(or (not= % :owner)
@@ -124,6 +147,9 @@
         can-change-role? (and is-current-owner? (not is-self?) (not is-last-owner?))
         _can-change-status? (and is-current-owner? (not is-self?) (not is-last-owner?))
         can-delete? (and is-current-owner? (not is-self?) (not is-last-owner?))
+        can-transfer-ownership? (and is-current-owner?
+                                  (not is-self?)
+                                  active-admin-target?)
 
         ;; Define action groups for the dropdown
         action-groups (-> []
@@ -134,10 +160,26 @@
                                         :label "View Details"
                                         :on-click (:view-details confirmation-handlers)}]})
 
+                        ;; Ownership transfer group (only show if owner)
+                        (cond-> is-current-owner?
+                          (conj {:group-title "Ownership"
+                                 :items [{:id "transfer-ownership"
+                                          :icon "👑"
+                                          :label "Transfer Ownership"
+                                          :variant :warning
+                                          :loading-key :updating-admin?
+                                          :disabled? (not can-transfer-ownership?)
+                                          :tooltip (cond
+                                                     is-self? "Cannot transfer ownership to yourself"
+                                                     (not= admin-status "active") "Target admin must be active"
+                                                     (not= admin-role "admin") "Ownership can only be transferred to an active admin"
+                                                     :else "Transfer platform ownership to this admin")
+                                          :on-click (:transfer-ownership confirmation-handlers)}]}))
+
                         ;; Status actions group (only show if owner and not self)
                         (cond-> is-current-owner?
                           (conj {:group-title "Status"
-                                 :items (if (= (str admin-status) "active")
+                                 :items (if (= admin-status "active")
                                           [{:id "suspend"
                                             :icon "🚫"
                                             :label "Suspend Admin"

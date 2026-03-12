@@ -274,6 +274,55 @@
         (let [response (handler request)]
           (is (= 400 (:status response))))))))
 
+(deftest transfer-admin-ownership-handler-test
+  (testing "transfer-admin-ownership succeeds for a valid active admin target"
+    (let [db (h/mock-db)
+          handler (admins/transfer-admin-ownership-handler db)
+          updated-admin (assoc mock-admin :id another-admin-id :email "new-owner@example.com" :role "owner")
+          request (h/mock-admin-request :post (str "/admin/api/admins/" another-admin-id "/transfer-ownership") mock-admin
+                    {:path-params {:id (str another-admin-id)}})]
+      (with-redefs [admin-admins/transfer-admin-ownership! (constantly updated-admin)]
+        (let [response (handler request)
+              body (h/parse-response-body response)]
+          (is (= 200 (:status response)))
+          (is (= "owner" (get-in body [:admin :role])))))))
+
+  (testing "transfer-admin-ownership fails with invalid admin id"
+    (let [db (h/mock-db)
+          handler (admins/transfer-admin-ownership-handler db)
+          request (h/mock-admin-request :post "/admin/api/admins/not-a-uuid/transfer-ownership" mock-admin
+                    {:path-params {:id "not-a-uuid"}})
+          response (handler request)]
+      (is (= 400 (:status response)))))
+
+  (testing "transfer-admin-ownership surfaces target validation errors"
+    (let [db (h/mock-db)
+          handler (admins/transfer-admin-ownership-handler db)
+          request (h/mock-admin-request :post (str "/admin/api/admins/" another-admin-id "/transfer-ownership") mock-admin
+                    {:path-params {:id (str another-admin-id)}})]
+      (with-redefs [admin-admins/transfer-admin-ownership!
+                    (fn [& _]
+                      (throw (ex-info "Ownership can only be transferred to an active admin"
+                               {:status 400
+                                :field :role
+                                :reason :target-must-be-admin})))]
+        (let [response (handler request)]
+          (is (= 400 (:status response)))))))
+
+  (testing "transfer-admin-ownership surfaces permission errors"
+    (let [db (h/mock-db)
+          handler (admins/transfer-admin-ownership-handler db)
+          request (h/mock-admin-request :post (str "/admin/api/admins/" another-admin-id "/transfer-ownership") mock-admin
+                    {:path-params {:id (str another-admin-id)}})]
+      (with-redefs [admin-admins/transfer-admin-ownership!
+                    (fn [& _]
+                      (throw (ex-info "Only the current owner can transfer ownership"
+                               {:status 403
+                                :field :role
+                                :reason :insufficient-permissions})))]
+        (let [response (handler request)]
+          (is (= 403 (:status response))))))))
+
 ;; ============================================================================
 ;; Update Admin Status Tests
 ;; ============================================================================
