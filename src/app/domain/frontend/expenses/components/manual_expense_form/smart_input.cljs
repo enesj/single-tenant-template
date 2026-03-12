@@ -10,6 +10,7 @@
     [app.domain.frontend.expenses.components.form-fields.helpers
      :refer [current-datetime-local format-decimal safe-parse-number]]
     [app.domain.frontend.expenses.components.manual-expense-form.search :as search]
+    [app.template.frontend.i18n :refer [use-t]]
     app.domain.frontend.expenses.events.user-expenses.quick-add-search
     [clojure.string :as str]
     [re-frame.core :as rf]
@@ -97,22 +98,32 @@
       (:category context) (assoc :expense_category_id (get-in context [:category :id]))
       (not (str/blank? notes)) (assoc :notes notes))))
 
+(defn- entity-type-label
+  "Translated entity type label."
+  [t entity-type]
+  (case entity-type
+    :supplier (t :smart-expense/entity-supplier)
+    :store    (t :smart-expense/entity-store)
+    :category (t :smart-expense/entity-category)
+    :article  (t :smart-expense/entity-article)
+    ""))
+
 (defn- validate-form
-  [{:keys [items context payer-id]}]
+  [t {:keys [items context payer-id]}]
   (let [prepared (prepare-submit-items items)
         total (reduce + 0 (map :line_total prepared))]
     (cond
       (empty? prepared)
-      {:ok? false :error "Add at least one item with a price."}
+      {:ok? false :error (t :smart-expense/err-no-items)}
 
       (empty? context)
-      {:ok? false :error "Select at least one: supplier, store, or category."}
+      {:ok? false :error (t :smart-expense/err-no-context)}
 
       (str/blank? (str payer-id))
-      {:ok? false :error "Payer is required."}
+      {:ok? false :error (t :smart-expense/err-no-payer)}
 
       (<= total 0)
-      {:ok? false :error "Total must be greater than 0."}
+      {:ok? false :error (t :smart-expense/err-no-total)}
 
       :else {:ok? true})))
 
@@ -128,17 +139,21 @@
            [:article]))))
 
 (defn search-placeholder
-  [context active-search? article-mode?]
+  [t context active-search? article-mode?]
   (if article-mode?
-    "Add another article or press Enter to continue..."
-    (let [labels (map name (focused-search-types context false))
-          prefix (if active-search? "Search " "Start with ")]
+    (t :smart-expense/article-mode-ph)
+    (let [types (focused-search-types context false)
+          labels (map #(entity-type-label t %) types)
+          prefix (if active-search?
+                   (t :smart-expense/search-prefix)
+                   (t :smart-expense/start-with-prefix))
+          or-conn (t :smart-expense/or-connector)]
       (str prefix
         (case (count labels)
-          0 "article"
+          0 (entity-type-label t :article)
           1 (first labels)
-          2 (str (first labels) " or " (second labels))
-          (str (str/join ", " (butlast labels)) ", or " (last labels)))
+          2 (str (first labels) or-conn (second labels))
+          (str (str/join ", " (butlast labels)) or-conn (last labels)))
         "..."))))
 
 (defn current-related-context
@@ -170,7 +185,7 @@
           "\u00D7")))))
 
 (defui autocomplete-dropdown
-  [{:keys [results loading? highlight-idx on-select on-create input-text anchor-ref]}]
+  [{:keys [t results loading? highlight-idx on-select on-create input-text anchor-ref]}]
   (let [visible-results (take 10 results)
         [pos set-pos!] (use-state nil)]
 
@@ -201,13 +216,14 @@
             (when loading?
               ($ :div {:class "flex items-center gap-3 px-5 py-4 text-base-content/40"}
                 ($ :span {:class "ds-loading ds-loading-spinner ds-loading-sm"})
-                ($ :span {:class "text-base"} "Searching...")))
+                ($ :span {:class "text-base"} (t :smart-expense/searching))))
 
             ;; Search results (capped at 10)
             (when (seq visible-results)
               (for [[idx result] (map-indexed vector visible-results)]
                 (let [etype (keyword (or (:entity-type result) (:entity_type result)))
-                      {:keys [icon label]} (search/entity-type-info etype)
+                      {:keys [icon]} (search/entity-type-info etype)
+                      etype-label (entity-type-label t etype)
                       highlighted? (= idx highlight-idx)]
                   ($ :button {:key (str (name etype) "-" (:id result))
                               :type "button"
@@ -223,7 +239,9 @@
                     ($ :span {:class "flex-1 text-lg font-medium truncate"} (:label result))
                     (when-let [price (search/result-last-price result)]
                       (let [global-price? (search/global-last-price? result)
-                            tooltip (search/last-price-tooltip result)]
+                            tooltip (when (search/global-last-price? result)
+                                      (when-let [sname (search/result-last-price-supplier-name result)]
+                                        (t :smart-expense/price-from sname)))]
                         ($ :span {:class (str "text-sm font-mono "
                                            (if global-price?
                                              "text-amber-600 font-semibold"
@@ -233,7 +251,7 @@
                           (format-decimal price))))
                     ($ :span {:class (str "text-xs px-2.5 py-1 rounded-full border font-medium "
                                        (get chip-styles etype ""))}
-                      label)))))
+                      etype-label)))))
 
             ;; "Create new" option
             (when (and input-text (not (str/blank? input-text)))
@@ -247,24 +265,22 @@
                                       (on-create input-text))}
                 ($ :span {:class "text-2xl flex-none w-8 text-center text-primary"} "+")
                 ($ :span {:class "text-lg"}
-                  "Create "
+                  (t :smart-expense/create-prefix)
                   ($ :span {:class "font-bold"} (str "\u201C" input-text "\u201D"))))))
           portal-target)))))
 
 (defui type-picker
   "Picker shown when user types a name that doesn't match existing entities.
    `allowed-types` optionally restricts which entity types are shown."
-  [{:keys [text on-pick on-cancel creating? allowed-types]}]
+  [{:keys [t text on-pick on-cancel creating? allowed-types]}]
   ($ :div {:class "mt-4 p-6 bg-base-100 rounded-2xl border border-base-200"}
     ($ :p {:class "text-lg text-base-content/70 mb-4"}
-      "What is "
-      ($ :span {:class "font-bold text-base-content"} (str "\u201C" text "\u201D"))
-      "?")
+      (t :smart-expense/what-is (str "\u201C" text "\u201D")))
     ($ :div {:class "flex flex-wrap gap-3"}
       (for [entity-type (if (seq allowed-types)
                           allowed-types
                           [:article :supplier :store :category])]
-        (let [{:keys [icon label]} (search/entity-type-info entity-type)
+        (let [{:keys [icon]} (search/entity-type-info entity-type)
               btn-class (get type-button-styles entity-type)]
           ($ :button {:key (name entity-type)
                       :type "button"
@@ -278,11 +294,11 @@
             (if creating?
               ($ :span {:class "ds-loading ds-loading-spinner ds-loading-xs"})
               ($ :span icon))
-            ($ :span label)))))
+            ($ :span (entity-type-label t entity-type))))))
     ($ :button {:type "button"
                 :class "mt-3 text-sm text-base-content/50 hover:text-base-content/70 transition-colors"
                 :on-click (fn [e] (.preventDefault e) (on-cancel))}
-      "Cancel")))
+      (t :smart-expense/cancel))))
 
 (defn- top-items-for-type
   "Return up to `n` items for the given entity type from local data."
@@ -324,7 +340,7 @@
 
 (defui quick-picks
   "Shows top N options as clickable chips when only one entity type is missing."
-  [{:keys [entity-type items on-select]}]
+  [{:keys [entity-type items on-select t]}]
   (let [{:keys [icon]} (search/entity-type-info entity-type)
         style (get chip-styles entity-type "bg-base-200 text-base-content")]
     (when (seq items)
@@ -410,7 +426,8 @@
   - :on-cancel  fn called when cancel is clicked
   - :submitting? boolean"
   [{:keys [on-submit on-cancel submitting?]}]
-  (let [;; Subscriptions
+  (let [t (use-t)
+        ;; Subscriptions
         suppliers (or (use-subscribe [:user-expenses/suppliers]) [])
         stores (or (use-subscribe [:user-expenses/stores]) [])
         expense-categories (or (use-subscribe [:user-expenses/expense-categories]) [])
@@ -716,7 +733,7 @@
 
         handle-submit (fn [e]
                         (.preventDefault e)
-                        (let [validation (validate-form
+                        (let [validation (validate-form t
                                            {:items items
                                             :context context
                                             :payer-id payer-id})]
@@ -785,7 +802,7 @@
       ;; Loading state
       ($ :div {:class "flex flex-col items-center justify-center p-16 gap-4"}
         ($ :span {:class "ds-loading ds-loading-spinner ds-loading-lg text-primary"})
-        ($ :p {:class "text-base-content/50 text-lg"} "Loading..."))
+        ($ :p {:class "text-base-content/50 text-lg"} (t :smart-expense/loading)))
 
       ;; Form
       ($ :form {:id "smart-expense-form"
@@ -811,9 +828,9 @@
             (when (and (empty? items) (empty? context))
               ($ :div {:class "text-center py-2"}
                 ($ :p {:class "text-2xl font-semibold text-base-content/80 mb-1"}
-                  "New Expense")
+                  (t :smart-expense/title))
                 ($ :p {:class "text-base text-base-content/50"}
-                  "Start with supplier, store, category, or article")))
+                  (t :smart-expense/subtitle))))
 
             ;; Selected context chips
             (when (seq context)
@@ -849,7 +866,7 @@
                                   "focus:border-primary focus:outline-none focus:shadow-lg "
                                   "focus:shadow-primary/10 "
                                   "transition-all bg-white placeholder:text-base-content/30")
-                         :placeholder (search-placeholder context (or (seq items) (seq context)) article-mode?)
+                         :placeholder (search-placeholder t context (or (seq items) (seq context)) article-mode?)
                          :value input-text
                          :on-change handle-input-change
                          :on-key-down handle-input-keydown
@@ -858,7 +875,8 @@
               ;; Autocomplete dropdown (portal)
               (when dropdown-open?
                 ($ autocomplete-dropdown
-                  {:results (or search-results [])
+                  {:t t
+                   :results (or search-results [])
                    :loading? (and quick-search-loading? (empty? search-results))
                    :highlight-idx highlight-idx
                    :on-select handle-select-result
@@ -870,9 +888,10 @@
             (when (seq cooccurring-pick-items)
               ($ :div {:class "space-y-2"}
                 ($ :p {:class "text-sm text-base-content/50"}
-                  "Frequently added together")
+                  (t :smart-expense/frequently-together))
                 ($ quick-picks
-                  {:entity-type :article
+                  {:t t
+                   :entity-type :article
                    :items cooccurring-pick-items
                    :on-select handle-select-result})))
 
@@ -880,20 +899,21 @@
             (when (seq focused-quick-pick-groups)
               ($ :div {:class "space-y-4"}
                 (for [{:keys [entity-type items]} focused-quick-pick-groups]
-                  (let [{:keys [label]} (search/entity-type-info entity-type)]
-                    ($ :div {:key (str "items-phase-" (name entity-type))
-                             :class "space-y-2"}
-                      ($ :p {:class "text-sm text-base-content/50"}
-                        (str "Pick " label))
-                      ($ quick-picks
-                        {:entity-type entity-type
-                         :items items
-                         :on-select handle-select-result}))))))
+                  ($ :div {:key (str "items-phase-" (name entity-type))
+                           :class "space-y-2"}
+                    ($ :p {:class "text-sm text-base-content/50"}
+                      (str (t :smart-expense/pick-prefix) (entity-type-label t entity-type)))
+                    ($ quick-picks
+                      {:t t
+                       :entity-type entity-type
+                       :items items
+                       :on-select handle-select-result})))))
 
             ;; Type picker
             (when type-picker-text
               ($ type-picker
-                {:text type-picker-text
+                {:t t
+                 :text type-picker-text
                  :on-pick handle-type-pick
                  :on-cancel #(set-type-picker-text! nil)
                  :creating? creating?
@@ -903,7 +923,7 @@
             (when (seq items)
               ($ :div {:class "flex items-center justify-between pt-2"}
                 ($ :p {:class "text-base text-base-content/50"}
-                  (str (count items) " item" (when (> (count items) 1) "s")))
+                  (t :smart-expense/item-count (count items)))
                 ($ :p {:class "text-lg font-bold"}
                   (format-decimal items-total) " " currency)))
 
@@ -912,13 +932,13 @@
               ($ :p {:class "text-center text-sm text-base-content/35 mt-2"}
                 (cond
                   article-mode?
-                  "Press Enter on empty to add supplier/store/category"
+                  (t :smart-expense/hint-article-mode)
 
                   (seq items)
-                  "Press Enter on empty to continue or keep adding context/items"
+                  (t :smart-expense/hint-has-items)
 
                   :else
-                  "You can start with supplier, store, category, or article")))))
+                  (t :smart-expense/hint-empty))))))
 
         ;; ═══════════════════════════════════════
         ;; PHASE 2: Context + Review
@@ -932,13 +952,13 @@
                         :on-click (fn [e] (.preventDefault e)
                                     (set-phase! :items)
                                     (focus-input!))}
-              "\u2190 Back to items")
+              (t :smart-expense/back-to-items))
 
             ;; Items summary
             ($ :div {:class "bg-base-100 rounded-2xl border border-base-200 p-4"}
               ($ :div {:class "flex items-center justify-between mb-3"}
                 ($ :span {:class "font-semibold text-base"}
-                  (str "Items (" (count items) ")"))
+                  (t :smart-expense/items-summary (count items)))
                 ($ :span {:class "text-lg font-bold"}
                   (format-decimal items-total) " " currency))
               ($ :div {:class "space-y-1.5"}
@@ -964,8 +984,8 @@
             ;; Context search input — only show when something is still missing
             (let [missing (vec (remove #(contains? context %) [:supplier :store :category]))
                   placeholder (when (seq missing)
-                                (str "Search "
-                                  (str/join ", " (map #(name %) missing))
+                                (str (t :smart-expense/search-prefix)
+                                  (str/join ", " (map #(entity-type-label t %) missing))
                                   "..."))
                   single-missing? (= 1 (count missing))]
               (when (seq missing)
@@ -1010,15 +1030,15 @@
                     (when (seq quick-pick-groups)
                       ($ :div {:class "space-y-4"}
                         (for [{:keys [entity-type items]} quick-pick-groups]
-                          (let [{:keys [label]} (search/entity-type-info entity-type)]
-                            ($ :div {:key (name entity-type)
-                                     :class "space-y-2"}
-                              ($ :p {:class "text-sm text-base-content/50"}
-                                (str "Pick " label))
-                              ($ quick-picks
-                                {:entity-type entity-type
-                                 :items items
-                                 :on-select handle-select-result}))))))
+                          ($ :div {:key (name entity-type)
+                                   :class "space-y-2"}
+                            ($ :p {:class "text-sm text-base-content/50"}
+                              (str (t :smart-expense/pick-prefix) (entity-type-label t entity-type)))
+                            ($ quick-picks
+                              {:t t
+                               :entity-type entity-type
+                               :items items
+                               :on-select handle-select-result})))))
 
                     ($ :div {:class "relative"
                              :on-click (fn [e] (.stopPropagation e))}
@@ -1031,12 +1051,8 @@
                                           "focus:shadow-primary/10 "
                                           "transition-all bg-white placeholder:text-base-content/30")
                                  :placeholder (if single-missing?
-                                                (let [t (name (first missing))]
-                                                  (str "Or search "
-                                                    (if (str/ends-with? t "y")
-                                                      (str (subs t 0 (dec (count t))) "ies")
-                                                      (str t "s"))
-                                                    "..."))
+                                                (t :smart-expense/or-search-suffix
+                                                  (entity-type-label t (first missing)))
                                                 placeholder)
                                  :value input-text
                                  :on-change handle-input-change
@@ -1046,7 +1062,8 @@
                       ;; Autocomplete dropdown (portal) — filtered to missing types only
                       (when dropdown-open?
                         ($ autocomplete-dropdown
-                          {:results filtered-results
+                          {:t t
+                           :results filtered-results
                            :loading? (and quick-search-loading? (empty? filtered-results))
                            :highlight-idx highlight-idx
                            :on-select handle-select-result
@@ -1057,7 +1074,8 @@
                     ;; Type picker — only missing context types
                     (when type-picker-text
                       ($ type-picker
-                        {:text type-picker-text
+                        {:t t
+                         :text type-picker-text
                          :on-pick handle-type-pick
                          :on-cancel #(set-type-picker-text! nil)
                          :creating? creating?
@@ -1066,7 +1084,7 @@
             ;; Pick Payer chips
             (when (and (str/blank? (str payer-id)) (seq payers))
               ($ :div {:class "space-y-2"}
-                ($ :p {:class "text-sm text-base-content/50"} "Pick Payer")
+                ($ :p {:class "text-sm text-base-content/50"} (t :smart-expense/pick-payer))
                 ($ :div {:class "flex flex-wrap gap-2"}
                   (for [p (take 5 payers)]
                     ($ :button {:key (str "payer-" (:id p))
@@ -1084,21 +1102,21 @@
             ($ :div {:class "grid grid-cols-1 sm:grid-cols-3 gap-4"}
               ;; Payer
               ($ :div
-                ($ :label {:class "text-base text-base-content/50 mb-1.5 block"} "Payer")
+                ($ :label {:class "text-base text-base-content/50 mb-1.5 block"} (t :smart-expense/payer-label))
                 ($ :select {:id "smart-expense-payer"
                             :class (str "w-full text-lg p-4 h-14 rounded-xl border-2 "
                                      "border-base-300 bg-white focus:border-primary cursor-pointer")
                             :value (or payer-id "")
                             :on-change (fn [e] (set-payer-id! (.. e -target -value)))}
-                  ($ :option {:value ""} "Select payer...")
+                  ($ :option {:value ""} (t :smart-expense/payer-select-ph))
                   (for [p payers]
                     ($ :option {:key (:id p) :value (:id p)}
                       (str (:label p)
-                        (when-let [t (or (:type p) (:payer-type-label p))]
-                          (str " (" t ")")))))))
+                        (when-let [pt (or (:type p) (:payer-type-label p))]
+                          (str " (" pt ")")))))))
               ;; Date
               ($ :div
-                ($ :label {:class "text-base text-base-content/50 mb-1.5 block"} "Date")
+                ($ :label {:class "text-base text-base-content/50 mb-1.5 block"} (t :smart-expense/date-label))
                 ($ :input {:id "smart-expense-date"
                            :type "datetime-local"
                            :class (str "w-full text-lg p-4 h-14 rounded-xl border-2 "
@@ -1107,7 +1125,7 @@
                            :on-change (fn [e] (set-purchased-at! (.. e -target -value)))}))
               ;; Currency
               ($ :div
-                ($ :label {:class "text-base text-base-content/50 mb-1.5 block"} "Currency")
+                ($ :label {:class "text-base text-base-content/50 mb-1.5 block"} (t :smart-expense/currency-label))
                 ($ :select {:class (str "w-full text-lg p-4 h-14 rounded-xl border-2 border-base-300 "
                                      "bg-white focus:border-primary cursor-pointer")
                             :value currency
@@ -1117,12 +1135,12 @@
 
             ;; Notes
             ($ :div
-              ($ :label {:class "text-base text-base-content/50 mb-1.5 block"} "Notes")
+              ($ :label {:class "text-base text-base-content/50 mb-1.5 block"} (t :smart-expense/notes-label))
               ($ :textarea {:id "smart-expense-notes"
                             :class (str "w-full text-lg p-4 rounded-xl border-2 "
                                      "border-base-300 bg-white focus:border-primary resize-none")
                             :rows 2
-                            :placeholder "Optional notes..."
+                            :placeholder (t :smart-expense/notes-ph)
                             :value (or notes "")
                             :on-change (fn [e] (set-notes! (.. e -target -value)))}))
 
@@ -1134,13 +1152,13 @@
                             :class "ds-btn ds-btn-lg text-lg"
                             :disabled submitting?
                             :on-click (fn [e] (.preventDefault e) (on-cancel))}
-                  "Cancel"))
+                  (t :smart-expense/cancel)))
               ($ :button {:id "btn-save-smart-expense"
                           :type "submit"
                           :class "ds-btn ds-btn-primary ds-btn-lg text-lg px-10"
                           :disabled (or submitting?
-                                      (not (:ok? (validate-form
+                                      (not (:ok? (validate-form t
                                                    {:items items
                                                     :context context
                                                     :payer-id payer-id}))))}
-                (if submitting? "Saving..." "Save Expense")))))))))
+                (if submitting? (t :smart-expense/saving) (t :smart-expense/save))))))))))

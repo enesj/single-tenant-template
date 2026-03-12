@@ -473,6 +473,53 @@
     :expense-new/item-unit-price-ph   "Jedin. cijena"
     :expense-new/item-total-ph        "Ukupno"
 
+    ;; Smart expense form (Quick Add modal)
+    ;; Entity type labels (nominative)
+    :smart-expense/entity-supplier    "Dobavljač"
+    :smart-expense/entity-store       "Trgovina"
+    :smart-expense/entity-category    "Kategorija"
+    :smart-expense/entity-article     "Artikal"
+    ;; Phase 1
+    :smart-expense/title              "Novi trošak"
+    :smart-expense/subtitle           "Počnite s dobavljačem, trgovinom, kategorijom ili artiklom"
+    :smart-expense/searching          "Pretraživanje..."
+    :smart-expense/create-prefix      "Kreiraj "
+    :smart-expense/what-is            (fn [text] (str "Šta je " text "?"))
+    :smart-expense/article-mode-ph    "Dodajte još artikal ili pritisnite Enter za nastavak..."
+    :smart-expense/search-prefix      "Pretražite: "
+    :smart-expense/start-with-prefix  "Počnite: "
+    :smart-expense/or-connector       " ili "
+    :smart-expense/frequently-together "Često dodavano zajedno"
+    :smart-expense/pick-prefix        "Odaberi "
+    :smart-expense/pick-payer         "Odaberi platitelja"
+    :smart-expense/item-count         (fn [n] (str n (case n 1 " stavka" (2 3 4) " stavke" " stavki")))
+    :smart-expense/hint-article-mode  "Pritisnite Enter na prazno za dodavanje dobavljača/trgovine/kategorije"
+    :smart-expense/hint-has-items     "Pritisnite Enter na prazno za nastavak ili nastavite dodavati kontekst/stavke"
+    :smart-expense/hint-empty         "Možete početi s dobavljačem, trgovinom, kategorijom ili artiklom"
+    ;; Phase 2
+    :smart-expense/back-to-items      "\u2190 Nazad na stavke"
+    :smart-expense/items-summary      (fn [n] (str "Stavke (" n ")"))
+    :smart-expense/or-search-suffix   (fn [types] (str "Ili pretražite " types "..."))
+    ;; Form fields
+    :smart-expense/payer-label        "Platitelj"
+    :smart-expense/payer-select-ph    "Odaberite platitelja..."
+    :smart-expense/date-label         "Datum"
+    :smart-expense/currency-label     "Valuta"
+    :smart-expense/notes-label        "Napomene"
+    :smart-expense/notes-ph           "Opcionalne napomene..."
+    ;; Actions
+    :smart-expense/cancel             "Odustani"
+    :smart-expense/saving             "Spremanje..."
+    :smart-expense/save               "Spremi trošak"
+    :smart-expense/loading            "Učitavanje..."
+    ;; Validation errors
+    :smart-expense/err-no-items       "Dodajte najmanje jednu stavku s cijenom."
+    :smart-expense/err-no-context     "Odaberite barem jedno: dobavljača, trgovinu ili kategoriju."
+    :smart-expense/err-no-payer       "Platitelj je obavezan."
+    :smart-expense/err-no-total       "Ukupno mora biti veće od 0."
+    ;; Price tooltip
+    :smart-expense/price-from         (fn [supplier] (str "Zadnja cijena od " supplier))
+
     ;; Expense settings page
     :expense-settings/breadcrumb-expenses  "Troškovi"
     :expense-settings/breadcrumb-settings  "Postavke"
@@ -1223,6 +1270,46 @@
     :expense-new/item-qty-ph          "Qty"
     :expense-new/item-unit-price-ph   "Unit price"
     :expense-new/item-total-ph        "Total"
+
+    ;; Smart expense form (Quick Add modal)
+    :smart-expense/entity-supplier    "Supplier"
+    :smart-expense/entity-store       "Store"
+    :smart-expense/entity-category    "Category"
+    :smart-expense/entity-article     "Article"
+    :smart-expense/title              "New Expense"
+    :smart-expense/subtitle           "Start with supplier, store, category, or article"
+    :smart-expense/searching          "Searching..."
+    :smart-expense/create-prefix      "Create "
+    :smart-expense/what-is            (fn [text] (str "What is " text "?"))
+    :smart-expense/article-mode-ph    "Add another article or press Enter to continue..."
+    :smart-expense/search-prefix      "Search: "
+    :smart-expense/start-with-prefix  "Start with: "
+    :smart-expense/or-connector       " or "
+    :smart-expense/frequently-together "Frequently added together"
+    :smart-expense/pick-prefix        "Pick "
+    :smart-expense/pick-payer         "Pick Payer"
+    :smart-expense/item-count         (fn [n] (str n " item" (when (not= n 1) "s")))
+    :smart-expense/hint-article-mode  "Press Enter on empty to add supplier/store/category"
+    :smart-expense/hint-has-items     "Press Enter on empty to continue or keep adding context/items"
+    :smart-expense/hint-empty         "You can start with supplier, store, category, or article"
+    :smart-expense/back-to-items      "\u2190 Back to items"
+    :smart-expense/items-summary      (fn [n] (str "Items (" n ")"))
+    :smart-expense/or-search-suffix   (fn [types] (str "Or search " types "..."))
+    :smart-expense/payer-label        "Payer"
+    :smart-expense/payer-select-ph    "Select payer..."
+    :smart-expense/date-label         "Date"
+    :smart-expense/currency-label     "Currency"
+    :smart-expense/notes-label        "Notes"
+    :smart-expense/notes-ph           "Optional notes..."
+    :smart-expense/cancel             "Cancel"
+    :smart-expense/saving             "Saving..."
+    :smart-expense/save               "Save Expense"
+    :smart-expense/loading            "Loading..."
+    :smart-expense/err-no-items       "Add at least one item with a price."
+    :smart-expense/err-no-context     "Select at least one: supplier, store, or category."
+    :smart-expense/err-no-payer       "Payer is required."
+    :smart-expense/err-no-total       "Total must be greater than 0."
+    :smart-expense/price-from         (fn [supplier] (str "Last price from " supplier))
 
     ;; Expense settings page
     :expense-settings/breadcrumb-expenses  "Expenses"

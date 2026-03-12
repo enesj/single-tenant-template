@@ -1,13 +1,19 @@
 -- allium: 2
 -- expense-entry.candidate.allium
 --
--- Scope: Manual expense entry — Quick Add and Standard flows (both modal-based)
+-- Scope: Manual expense entry — Smart Input flow (modal-based, two-phase)
 -- Includes:
 --   - Expense + ExpenseItem creation (shared domain rules)
---   - Quick Add form surface (modal from dashboard, line-item-first, search with price data)
---   - Standard form surface (modal from list page, adaptive total→itemized, inline reference creation)
+--   - Smart Input form surface (modal from dashboard or list page)
+--     Phase 1: unified search across entity types, progressive item entry with price data
+--     Phase 2: context (supplier/store/category), payer chips, date, currency, notes
+--   - Unified search endpoint (all | supplier | store | category | article)
+--   - Co-occurring article suggestions during item entry
+--   - Context suggestions (history-based) during context phase
+--   - Quick picks (top entities as clickable chips when input is empty)
+--   - Inline entity creation via type picker
 --   - Store→supplier inference, article alias resolution on save
---   - Last-price lookup for articles (Quick Add only)
+--   - Last-price lookup for articles (supplier-specific preferred, global fallback)
 --   - Payer/currency/date defaults, validation rules
 -- Excludes:
 --   - Receipt upload / OCR / approval flows (separate spec)
@@ -15,10 +21,12 @@
 --   - Admin reference-data management
 --   - Smart suggestions / hybrid ranking (deferred)
 --   - Expense list / dashboard (except entry-point actions)
--- Note: No dedicated /expenses/new page — both entry flows are modals.
+-- Note: No dedicated /expenses/new page — entry flow is a modal.
+--       A single Smart Input form serves both dashboard and list page.
 -- Supersedes:
 --   - quick-add-expense.candidate.allium
 --   - manual-expense-entry.candidate.allium (v2)
+--   - Previous two-form design (Quick Add + Standard) in this file
 
 use "./../../domain/expenses/implementation.allium" as impl
 
@@ -119,29 +127,64 @@ value MoneyAmount {
     requires: value > 0
 }
 
-value LineItemDraft {
-    raw_label: String
-    qty: Decimal?
+value ItemDraft {
+    -- In-form representation. article_id captured when item originates from search.
+    article_id: UUID?
+    label: String
+    qty: Decimal = 1
     unit_price: Decimal?
-    line_total: MoneyAmount
 
-    requires: raw_label.trim().length >= 1
-    requires: qty = null or qty > 0
-    requires: unit_price = null or unit_price > 0
+    requires: label.trim().length >= 1
+    requires: qty > 0
+    requires: unit_price = null or unit_price >= 0
 
-    -- Auto-calculate line_total when both qty and unit_price are present
-    guarantee: qty != null and unit_price != null implies line_total.value = qty * unit_price
+    -- Derived
+    line_total: qty * (unit_price ?? 0)
 }
 
-value InlineReference {
-    -- Resolves to an existing entity or requests creation of a new one.
-    -- Used by the Standard form; Quick Add uses direct entity references.
-    kind: supplier | store | article | expense_category
-    existing_id: UUID?
-    new_name: String?
+value SubmitItem {
+    -- Backend-ready format produced from ItemDraft on submit.
+    raw_label: String
+    qty: Decimal
+    unit_price: Decimal
+    line_total: Decimal
 
-    requires: (existing_id != null) xor (new_name != null)
-    requires: new_name = null or new_name.trim().length >= 1
+    requires: raw_label.trim().length >= 1
+    requires: line_total > 0
+}
+
+value SearchResult {
+    -- Unified result from the quick-add-search endpoint.
+    id: UUID
+    label: String
+    entity_type: supplier | store | category | article
+    relevance: Decimal?
+
+    -- Store-specific (for supplier inference)
+    supplier_id: UUID?
+    supplier_display_name: String?
+
+    -- Article-specific price enrichment
+    last_price: Decimal?
+    last_price_source: supplier_specific | global | null
+    last_price_supplier_display_name: String?
+}
+
+value ContextChip {
+    -- Selected context reference displayed as a removable chip.
+    id: UUID
+    label: String
+
+    -- Store chips carry supplier info for inference
+    supplier_id: UUID?
+    supplier_display_name: String?
+}
+
+value ContextSuggestions {
+    -- History-based suggestions for Phase 2 context, ranked by co-occurrence frequency.
+    suppliers: List<SearchResult>
+    stores: List<SearchResult>
+    categories: List<SearchResult>
 }
 
 value LastPriceInfo {
@@ -162,8 +205,16 @@ config {
     search_min_query_length: Integer = 2
     search_default_limit: Integer = 8
     search_max_limit: Integer = 25
+    search_visible_cap: Integer = 10
+    cooccurring_default_limit: Integer = 5
+    cooccurring_max_limit: Integer = 10
+    context_suggestions_default_limit: Integer = 5
+    context_suggestions_max_limit: Integer = 10
+    payer_chip_limit: Integer = 5
     alias_min_normalized_length: Integer = 2
     fuzzy_similarity_threshold: Decimal = 0.5
+    -- When type = all, results sorted by relevance DESC then entity priority:
+    search_sort_priority: article > category > store > supplier
 }
 
 
@@ -178,78 +229,52 @@ actor ExpenseWriter {
 
 
 -- ═════════════════════════════════════════════
--- QUICK ADD DRAFT
+-- SMART EXPENSE DRAFT
 -- ═════════════════════════════════════════════
 
-entity QuickAddDraft {
-    -- Context references (direct entities, no inline creation)
-    supplier: Supplier?
-    store: Store?
-    expense_category: ExpenseCategory?
-    article: Article?
+entity SmartExpenseDraft {
+    -- Two-phase progressive form: items first, then context + metadata.
 
-    -- Always required
+    -- ── Phase (state machine) ──
+    phase: items | context
+
+    -- ── Phase 1: Items ──
+    items: List<ItemDraft>
+    article_mode: Boolean = false
+        -- After first article selected from search, narrows search to articles only.
+        -- Reset when all items removed or when transitioning to context phase.
+
+    -- ── Context (collected in both phases — Phase 1 via search, Phase 2 as primary focus) ──
+    supplier: ContextChip?
+    store: ContextChip?
+    expense_category: ContextChip?
+
+    -- ── Metadata (Phase 2) ──
     payer: Payer?
     purchased_at: Timestamp = now
     currency: Currency = config.default_currency
     notes: String?
 
-    -- Line items (always visible, at least one row)
-    line_items: List<LineItemDraft>
-    entered_total: Decimal?
-
-    -- Derived
-    has_any_context: supplier != null or store != null or expense_category != null
-    complete_line_items: line_items where raw_label != null
-        and raw_label.trim() != "" and line_total != null
-    computed_total: complete_line_items.sum(i => i.line_total.value)
-    effective_total: entered_total ?? computed_total
-
-    -- Submission readiness
-    is_submittable: payer != null
-        and purchased_at != null
-        and has_any_context
-        and complete_line_items.count > 0
-        and effective_total > 0
-}
-
-
--- ═════════════════════════════════════════════
--- STANDARD EXPENSE DRAFT
--- ═════════════════════════════════════════════
-
-entity StandardExpenseDraft {
-    -- Context references (InlineReference — pick existing or create new)
-    supplier: InlineReference?
-    store: InlineReference?
-    expense_category: InlineReference?
-    article: InlineReference?
-
-    -- Always required
-    payer: Payer
-    purchased_at: Timestamp = now
-    currency: Currency = config.default_currency
-    total_amount: MoneyAmount?
-    notes: String?
-
-    -- Itemized mode (toggled by user)
-    items: List<LineItemDraft>
-    itemized_mode: Boolean = false
-
-    -- Derived
+    -- ── Derived ──
     has_items: items.count > 0
-    computed_total: if has_items then items.sum(i => i.line_total.value) else null
-    effective_total: if has_items then computed_total else total_amount?.value
-    has_any_context: supplier != null or store != null
-                     or expense_category != null or article != null
+    computed_total: items.sum(i => i.line_total)
+    has_any_context: supplier != null or store != null or expense_category != null
+    article_ids: items where article_id != null |> map(i => i.article_id)
 
-    -- Validation
-    requires: payer != null
-    requires: has_any_context
-    requires: effective_total != null and effective_total > 0
-    requires: not has_items implies total_amount != null
-    requires: article != null implies not has_items
-    requires: store != null implies supplier != null
+    -- ── Search type narrowing ──
+    -- Phase 1 before article_mode: search all types (missing context + article)
+    -- Phase 1 in article_mode: search articles only
+    -- Phase 2: search only missing context types (no articles)
+    missing_context_types: [supplier, store, expense_category]
+        where not has(this)
+
+    -- ── Submission readiness ──
+    is_submittable: phase = context
+        and has_items
+        and computed_total > 0
+        and has_any_context
+        and payer != null
+        and purchased_at != null
 }
 
 
@@ -258,7 +283,7 @@ entity StandardExpenseDraft {
 -- ═════════════════════════════════════════════
 
 -- Structural invariant: every expense with a store must also have a supplier.
--- Enforced client-side (both forms infer supplier from store) and server-side
+-- Enforced client-side (store selection infers supplier) and server-side
 -- (create-expense! looks up store.supplier_id when supplier_id is nil).
 
 invariant StoreRequiresSupplier {
@@ -268,146 +293,61 @@ invariant StoreRequiresSupplier {
 
 
 -- ─────────────────────────────────────────────
--- Quick Add creation
+-- Expense creation
 -- ─────────────────────────────────────────────
 
-rule CreateExpenseFromQuickAdd {
-    when: SubmitQuickAdd(writer: ExpenseWriter, draft: QuickAddDraft)
+rule CreateExpenseFromSmartInput {
+    when: SubmitSmartExpense(writer: ExpenseWriter, draft: SmartExpenseDraft)
 
     requires: draft.is_submittable
-    requires: draft.store = null
-        or draft.supplier = null
-        or draft.store.supplier = draft.supplier
 
     -- Store→supplier inference (server-side safety net)
-    let final_supplier = if draft.store != null and draft.supplier = null
-        then draft.store.supplier
-        else draft.supplier
+    let final_supplier_id = if draft.store != null and draft.supplier = null
+        then Store(id: draft.store.id).supplier.id
+        else draft.supplier?.id
 
-    ensures: expense: Expense.created(
-        tenant_id: writer.tenant_id,
-        user_id: writer.id,
-        created_by: writer.id,
-        supplier_id: final_supplier?.id,
-        store_id: draft.store?.id,
-        payer_id: draft.payer.id,
-        expense_category_id: draft.expense_category?.id,
-        purchased_at: draft.purchased_at,
-        total_amount: draft.effective_total,
-        currency: draft.currency,
-        notes: draft.notes
-    )
-
-    ensures:
-        for item in draft.complete_line_items:
-            ExpenseItem.created(
-                tenant_id: writer.tenant_id,
-                expense_id: expense.id,
-                raw_label: item.raw_label,
-                qty: item.qty,
-                unit_price: item.unit_price,
-                line_total: item.line_total.value
-            )
-
-    ensures: ExpenseCreated(expense)
-}
-
-
--- ─────────────────────────────────────────────
--- Standard form creation
--- ─────────────────────────────────────────────
-
-rule CreateExpenseFromStandard {
-    when: SubmitStandard(writer: ExpenseWriter, draft: StandardExpenseDraft)
-
-    -- Phase 1: Resolve or create inline references.
-    -- Tenant-scoped entities (ExpenseCategory) get the user's tenant.
-    -- Global catalog entities (Supplier, Store, Article) are unscoped.
-
-    if draft.supplier != null and draft.supplier.new_name != null:
-        ensures: new_supplier: Supplier.created(
-            display_name: draft.supplier.new_name
+    -- Prepare submit items from drafts
+    let submit_items = for item in draft.items where item.line_total > 0:
+        SubmitItem(
+            raw_label: item.label,
+            qty: item.qty,
+            unit_price: item.unit_price ?? 0,
+            line_total: item.line_total
         )
 
-    if draft.store != null and draft.store.new_name != null:
-        let store_supplier_id = if draft.supplier.existing_id != null
-            then draft.supplier.existing_id
-            else new_supplier.id
-        ensures: new_store: Store.created(
-            supplier_id: store_supplier_id,
-            display_name: draft.store.new_name
-        )
-
-    if draft.expense_category != null and draft.expense_category.new_name != null:
-        ensures: new_category: ExpenseCategory.created(
-            tenant_id: writer.tenant_id,
-            name: draft.expense_category.new_name
-        )
-
-    if draft.article != null and draft.article.new_name != null:
-        ensures: new_article: Article.created(
-            canonical_name: draft.article.new_name
-        )
-
-    -- Phase 2: Resolve final IDs
-    let final_supplier_id = if draft.supplier = null then null
-        else if draft.supplier.existing_id != null then draft.supplier.existing_id
-        else new_supplier.id
-
-    let final_store_id = if draft.store = null then null
-        else if draft.store.existing_id != null then draft.store.existing_id
-        else new_store.id
-
-    let final_category_id = if draft.expense_category = null then null
-        else if draft.expense_category.existing_id != null then draft.expense_category.existing_id
-        else new_category.id
-
-    let final_article_id = if draft.article = null then null
-        else if draft.article.existing_id != null then draft.article.existing_id
-        else new_article.id
-
-    -- Phase 3: Build final items.
-    -- Itemized mode: items used as-is.
-    -- Single article shortcut (no items): synthesize one line item.
-    -- Neither: no line items (total-only expense).
-    let final_items = if draft.has_items then draft.items
-        else if final_article_id != null then
-            [LineItemDraft(
-                raw_label: draft.article.new_name
-                    ?? Article(id: final_article_id).canonical_name,
-                qty: 1,
-                unit_price: draft.effective_total,
-                line_total: MoneyAmount(value: draft.effective_total)
-            )]
-        else []
-
-    -- Phase 4: Create expense + items
     ensures: expense: Expense.created(
         tenant_id: writer.tenant_id,
         user_id: writer.id,
         created_by: writer.id,
         supplier_id: final_supplier_id,
-        store_id: final_store_id,
+        store_id: draft.store?.id,
         payer_id: draft.payer.id,
-        expense_category_id: final_category_id,
+        expense_category_id: draft.expense_category?.id,
         purchased_at: draft.purchased_at,
-        total_amount: draft.effective_total,
+        total_amount: draft.computed_total,
         currency: draft.currency,
         notes: draft.notes
     )
 
     ensures:
-        for item in final_items:
+        for item in submit_items:
             ExpenseItem.created(
                 tenant_id: writer.tenant_id,
                 expense_id: expense.id,
                 raw_label: item.raw_label,
                 qty: item.qty,
                 unit_price: item.unit_price,
-                line_total: item.line_total.value
+                line_total: item.line_total
             )
 
     ensures: ExpenseCreated(expense)
+
+    @guidance
+        -- Server validates: payer_id, purchased_at, total_amount required.
+        -- Context validation: at least one of supplier, store, category required.
+        -- Total is always computed from items; no user-entered override.
+        -- Backend also supports article_id → synthetic single line item path
+        -- (qty=1, unit_price=total_amount) but the Smart Input form does not use it.
 }
 
 
@@ -415,46 +355,31 @@ rule CreateExpenseFromStandard {
 -- Reference validation
 -- ─────────────────────────────────────────────
 
-rule ValidateQuickAddReferences {
-    when: SubmitQuickAdd(writer: ExpenseWriter, draft: QuickAddDraft)
+rule ValidateSmartExpenseReferences {
+    when: SubmitSmartExpense(writer: ExpenseWriter, draft: SmartExpenseDraft)
 
-    -- Payer and category are tenant-scoped: must belong to the user's tenant
+    -- Payer is tenant-scoped: must belong to the user's tenant
     requires: Payer where id = draft.payer.id
         and tenant_id = writer.tenant_id
         exists
 
+    -- Category is tenant-scoped
     if draft.expense_category != null:
         requires: ExpenseCategory where id = draft.expense_category.id
             and tenant_id = writer.tenant_id
             exists
-}
-
-rule ValidateStandardReferences {
-    when: SubmitStandard(writer: ExpenseWriter, draft: StandardExpenseDraft)
-
-    -- Tenant-scoped entities must belong to user's tenant
-    requires: Payer where id = draft.payer.id
-        and tenant_id = writer.tenant_id
-        exists
-
-    if draft.expense_category != null and draft.expense_category.existing_id != null:
-        requires: ExpenseCategory where id = draft.expense_category.existing_id
-            and tenant_id = writer.tenant_id
-            exists
 
     -- Global catalog entities: verify existence
-    if draft.supplier != null and draft.supplier.existing_id != null:
-        requires: Supplier where id = draft.supplier.existing_id exists
+    if draft.supplier != null:
+        requires: Supplier where id = draft.supplier.id exists
 
-    if draft.store != null and draft.store.existing_id != null:
-        requires: Store where id = draft.store.existing_id exists
-        -- Store must belong to selected supplier
-        requires: Store where id = draft.store.existing_id
-            and supplier.id = draft.supplier.existing_id
+    if draft.store != null:
+        requires: Store where id = draft.store.id exists
+        -- Store must belong to selected supplier (enforced by UI but verified)
+        requires: draft.supplier != null
+        requires: Store where id = draft.store.id
+            and supplier.id = draft.supplier.id
             exists
-
-    if draft.article != null and draft.article.existing_id != null:
-        requires: Article where id = draft.article.existing_id exists
 }
 
 
@@ -487,18 +412,106 @@ deferred normalize    -- label normalization (trim, lowercase, collapse whitespa
 
 
 -- ═════════════════════════════════════════════
+-- SEARCH & SUGGESTIONS
+-- ═════════════════════════════════════════════
+
+-- ─────────────────────────────────────────────
+-- Unified search
+-- ─────────────────────────────────────────────
+
+rule UnifiedSearch {
+    when: SearchSmartExpense(writer: ExpenseWriter, query: String,
+                             type: String, supplier_id: UUID?)
+
+    requires: query.trim().length >= config.search_min_query_length
+    requires: type in {"all", "supplier", "store", "category", "article"}
+
+    -- When type = "all", search all four entity types and merge.
+    -- When type = specific entity, search only that type.
+    -- Store search narrows by supplier_id when provided.
+    -- Category search scoped to writer's tenant.
+    -- Article search is not narrowed by supplier or store.
+    -- Results sorted by: relevance DESC, then config.search_sort_priority.
+    -- Article results enriched with last_price data.
+    -- Capped at config.search_max_limit backend results.
+
+    ensures: SearchResults(results: List<SearchResult>)
+
+    @guidance
+        -- Implementation uses two search layers merged on the client:
+        -- 1. Local: immediate in-memory matches from pre-loaded entity lists
+        -- 2. Backend: pg_trgm word_similarity + ILIKE for fuzzy matching
+        -- Results are merged, deduped by id+entity_type, capped at
+        -- config.search_visible_cap visible entries in the dropdown.
+        -- A "Create [text]" option always appears at the bottom when input
+        -- is non-empty, allowing inline entity creation.
+}
+
+
+-- ─────────────────────────────────────────────
+-- Co-occurring articles
+-- ─────────────────────────────────────────────
+
+rule FetchCoOccurringArticles {
+    when: ArticleAddedToItems(writer: ExpenseWriter,
+                              article_ids: List<UUID>, supplier_id: UUID?)
+
+    requires: article_ids.count > 0
+
+    -- Find articles that frequently appear on the same expenses as the given article IDs.
+    -- Excludes already-selected article_ids.
+    -- Enriched with last_price data (supplier-specific preferred, global fallback).
+    -- Limited to config.cooccurring_max_limit results.
+
+    ensures: CoOccurringResults(results: List<SearchResult>)
+
+    @guidance
+        -- Backend: joins expense_items → expenses to find articles that co-occur.
+        -- Results displayed as quick-pick chips labeled "Frequently added together".
+        -- Triggered every time an article is added; re-fetched with updated article_ids.
+        -- Cleared when all items are removed.
+}
+
+
+-- ─────────────────────────────────────────────
+-- Context suggestions (history-based)
+-- ─────────────────────────────────────────────
+
+rule FetchContextSuggestions {
+    when: ItemsPhaseComplete(writer: ExpenseWriter, article_ids: List<UUID>)
+
+    requires: article_ids.count > 0
+
+    -- Find suppliers, stores, and categories historically associated
+    -- with the selected articles, ranked by co-occurrence frequency.
+    -- Called when transitioning from items phase to context phase.
+    -- Limited to config.context_suggestions_max_limit per entity type.
+
+    ensures: ContextSuggestionsReady(suggestions: ContextSuggestions)
+
+    @guidance
+        -- Three parallel queries: one each for suppliers, stores, categories.
+        -- Each joins through expense_items → article_aliases → expenses → target entity.
+        -- Store results include supplier_id and supplier_display_name for automatic
+        -- store→supplier inference when the user picks a store suggestion.
+        -- Suggestions shown as quick-pick chips in Phase 2, prioritized over
+        -- alphabetical fallback from pre-loaded entity lists.
+}
+
+
+-- ═════════════════════════════════════════════
 -- SURFACES
 -- ═════════════════════════════════════════════
 
 -- ─────────────────────────────────────────────
--- Dashboard entry points
+-- Dashboard entry point
 -- ─────────────────────────────────────────────
 
 surface ExpensesDashboard {
     facing viewer: User
 
     provides:
-        OpenQuickAddExpense(viewer)
+        OpenSmartExpenseForm(viewer)
             when viewer.can_write_expenses
 
     @guarantee WriteRoleVisibility
@@ -506,8 +519,8 @@ surface ExpensesDashboard {
         -- expense-write capability (member, admin, owner).
         -- Viewers see the dashboard but not the creation action.
 
-    @guarantee QuickAddOpensModal
-        -- OpenQuickAddExpense opens a modal overlay on the dashboard.
+    @guarantee FormOpensModal
+        -- OpenSmartExpenseForm opens a modal overlay on the dashboard.
         -- The dashboard remains visible behind the modal.
         -- On successful submit, the modal closes and recent expenses refresh.
 }
@@ -521,124 +534,153 @@ surface ExpensesListPage {
     facing viewer: User
 
     provides:
-        OpenStandardExpenseForm(viewer)
+        OpenSmartExpenseForm(viewer)
             when viewer.can_write_expenses
 
     @guarantee WriteRoleVisibility
         -- The "Add" button is visible only to users with
         -- expense-write capability (member, admin, owner).
 
-    @guarantee StandardFormOpensModal
-        -- OpenStandardExpenseForm opens the standard expense form
-        -- as a modal overlay on the list page.
+    @guarantee FormOpensModal
+        -- Opens the same Smart Input form as the dashboard, as a modal.
         -- On successful submit, the modal closes and the list refreshes.
 }
 
 
 -- ─────────────────────────────────────────────
--- Quick Add form
+-- Smart Expense Form (two-phase)
 -- ─────────────────────────────────────────────
 
-surface QuickAddExpenseForm {
+surface SmartExpenseForm {
     facing writer: ExpenseWriter
 
-    context draft: QuickAddDraft
+    context draft: SmartExpenseDraft
 
-    -- ── Exposed state ──
+    -- ═══ Phase 1: Items ═══
 
     exposes:
-        draft.supplier
-        draft.store
-        draft.expense_category
-        draft.article
-        draft.payer
-        draft.purchased_at
-        draft.currency
-        draft.entered_total
-        draft.notes
-        draft.line_items
+        draft.phase
+        draft.items
+            when draft.phase = items
+        draft.article_mode
+            when draft.phase = items
         draft.computed_total
-            when draft.complete_line_items.count > 0
+            when draft.phase = items and draft.has_items
 
-    -- ── Search actions ──
+    -- Context chips visible in Phase 1 (if user selected context via search)
+    exposes:
+        draft.supplier
+            when draft.phase = items and draft.supplier != null
+        draft.store
+            when draft.phase = items and draft.store != null
+        draft.expense_category
+            when draft.phase = items and draft.expense_category != null
 
+    -- Search (active in both phases)
     provides:
-        SearchQuickAddSuppliers(writer, draft, query: String)
-        SearchQuickAddStores(writer, draft, query: String)
-        SearchQuickAddCategories(writer, draft, query: String)
-        SearchQuickAddArticles(writer, draft, query: String)
+        SearchSmartExpense(writer, query: String, type: String, supplier_id: UUID?)
 
-    -- ── Line item management ──
-
+    -- Item management (Phase 1)
     provides:
-        AddQuickAddLineItem(draft)
-        RemoveQuickAddLineItem(draft, line_item: LineItemDraft)
-            when draft.line_items.count > 1
+        SelectArticleItem(draft, result: SearchResult)
+            when result.entity_type = article
+        RemoveItem(draft, item: ItemDraft)
+            when draft.phase = items
+        UpdateItemQty(draft, item: ItemDraft, qty: Decimal)
+            when draft.phase = items
+        UpdateItemPrice(draft, item: ItemDraft, unit_price: Decimal)
+            when draft.phase = items
+        BackspaceRemoveLastItem(draft)
+            when draft.phase = items and draft.has_items
 
-    -- ── Form actions ──
-
+    -- Context via search (available in Phase 1 before article_mode)
     provides:
-        CancelQuickAdd(writer)
-        SubmitQuickAdd(writer, draft)
+        SelectContextFromSearch(draft, result: SearchResult)
+            when result.entity_type != article
+        RemoveContext(draft, entity_type: String)
+
+    -- Transition to Phase 2
+    provides:
+        FinishItemsPhase(draft)
+            when draft.phase = items and draft.has_items
+
+    -- ═══ Phase 2: Context & Metadata ═══
+
+    exposes:
+        draft.items
+            when draft.phase = context     -- read-only summary
+        draft.computed_total
+            when draft.phase = context
+        draft.supplier
+            when draft.phase = context
+        draft.store
+            when draft.phase = context and draft.supplier != null
+        draft.expense_category
+            when draft.phase = context
+        draft.payer
+            when draft.phase = context
+        draft.purchased_at
+            when draft.phase = context
+        draft.currency
+            when draft.phase = context
+        draft.notes
+            when draft.phase = context
+
+    -- Context management (Phase 2)
+    provides:
+        BackspaceRemoveLastContext(draft)
+            when draft.phase = context and draft.has_any_context
+        SelectPayer(draft, payer: Payer)
+            when draft.phase = context
+
+    -- Navigation
+    provides:
+        BackToItemsPhase(draft)
+            when draft.phase = context
+
+    -- Inline creation (both phases — via type picker)
+    provides:
+        CreateInlineEntity(draft, entity_type: String, name: String)
+
+    -- Submit / Cancel
+    provides:
+        CancelSmartExpense(writer)
+        SubmitSmartExpense(writer, draft)
             when draft.is_submittable
 
-    -- ── Guarantees ──
+    -- ═══ Guarantees ═══
 
+    -- Phase structure
+    @guarantee TwoPhaseFlow
+        -- The form progresses through two phases:
+        -- Phase 1 (Items): user searches and selects articles, building a line-item list.
+        --   Each item gets inline qty (default 1) and unit_price (auto-filled from last price).
+        --   Non-article search results (supplier, store, category) add to context chips.
+        --   Pressing Enter on empty input transitions to Phase 2.
+        -- Phase 2 (Context & Metadata): user provides supplier, store, category,
+        --   payer, date, currency, notes.
+        --   Items are shown as a read-only summary with computed total.
+        --   "Back to items" link allows returning to Phase 1.
+
+    @guarantee AdaptiveSearchNarrowing
+        -- Phase 1 initial: search returns all entity types (supplier, store,
+        --   category, article). User is free to start with any type.
+        -- Phase 1 article_mode: after first article selected, search narrows
+        --   to articles only — focusing rapid item entry.
+        -- Phase 2: search shows only missing context types (those not yet selected).
+        --   Articles are excluded from Phase 2 search results.
+
+    @guarantee ArticleMode
+        -- After the first article is selected in Phase 1, search narrows to
+        -- articles only (article_mode = true). This focuses the entry experience.
+        -- Article mode resets when all items are removed or on phase transition.
+
+    -- Defaults
     @guarantee DefaultSelections
         -- Opening the form pre-selects the user's default payer.
         -- Purchased_at defaults to today. Currency defaults to BAM.
 
-    @guarantee ContextFirstEntry
-        -- Quick Add starts with context fields available immediately.
-        -- Users may begin by choosing supplier, store, category, article,
-        -- or a combination. The form does not force a specific starting field.
-
-    @guarantee StoreInfersSupplier
-        -- Selecting a store automatically fills supplier from that store's
-        -- supplier relationship. The draft cannot hold a store whose
-        -- supplier conflicts with the selected supplier.
-
-    @guarantee SupplierChangeClearsConflictingStore
-        -- Changing supplier clears the store selection when the current
-        -- store does not belong to the new supplier.
-
-    @guarantee CategorySelectionIsStable
-        -- Once the user chooses an expense category, supplier, store, or
-        -- article changes do not auto-change or clear that category.
-
-    @guarantee ArticleIsNotSupplierOrStoreScoped
-        -- Article choice is not constrained by supplier or store.
-        -- The same article may be used with different suppliers and stores.
-
-    @guarantee ContextConstrainedSearch
-        -- Search results are filtered by existing context where a real
-        -- domain relationship exists. Store search narrows by supplier.
-        -- Article search is not narrowed by supplier or store.
-
-    @guarantee AtLeastOneRowRemains
-        -- Removing line items never leaves the form without a row.
-        -- The user always sees at least one editable line-item row.
-
-    @guarantee LineTotalAutofill
-        -- When qty and unit_price are entered and line_total is blank,
-        -- line_total is auto-filled as qty × unit_price.
-
-    @guarantee UnitPriceDerived
-        -- When line_total and qty are entered but unit_price is blank,
-        -- unit_price is derived as line_total / qty (rounded half-up, 2dp).
-
-    @guarantee ArticlePriceAutofill
-        -- When an article is selected, unit_price auto-fills from the
-        -- article's last known price. Supplier-specific price (from the
-        -- draft's current supplier context) is preferred; falls back to
-        -- global price across all suppliers within the tenant.
-
-    @guarantee ArticlePriceInSearchResults
-        -- Article search results include last_price, last_price_source
-        -- (supplier_specific or global), and last_price_supplier_display_name
-        -- when prior price data exists. This allows the user to see price
-        -- context before selecting an article.
-
+    -- Search
     @guarantee SearchDebouncing
         -- Search queries are debounced at config.search_debounce_ms
         -- to avoid excessive API calls during typing.
@@ -652,141 +694,120 @@ surface QuickAddExpenseForm {
         -- config.fuzzy_similarity_threshold combined with ILIKE substring
         -- matching. This catches common typos and inflection variants.
 
-    @guarantee TotalConsistency
-        -- If the user enters an explicit total (entered_total), it must
-        -- match the sum of complete line items within 0.01 tolerance.
+    @guarantee DualSearchLayer
+        -- Search results combine two sources:
+        -- 1. Immediate local matches from pre-loaded entity lists (fast, no latency)
+        -- 2. Backend fuzzy matches via pg_trgm (comprehensive, slight latency)
+        -- Results are merged, deduped, and capped at config.search_visible_cap.
 
+    @guarantee SearchSortPriority
+        -- When searching all entity types, results are sorted by relevance DESC,
+        -- then by entity type priority: config.search_sort_priority.
+
+    @guarantee ContextConstrainedSearch
+        -- Store search narrows by selected supplier (supplier_id param).
+        -- Category search scoped to the user's tenant.
+        -- Article search is not narrowed by supplier or store.
+
+    -- Price data
+    @guarantee ArticlePriceInSearchResults
+        -- Article search results include last_price, last_price_source
+        -- (supplier_specific or global), and last_price_supplier_display_name
+        -- when prior price data exists. This allows the user to see price
+        -- context before selecting an article.
+
+    @guarantee ArticlePriceAutofill
+        -- When an article is selected, unit_price auto-fills from the
+        -- article's last known price. Supplier-specific price (from the
+        -- draft's current supplier context) is preferred; falls back to
+        -- global price across all suppliers within the tenant.
+
+    -- Co-occurring articles
+    @guarantee CoOccurringSuggestions
+        -- After each article is added, the system fetches articles that
+        -- frequently appear on the same expenses. These are shown as
+        -- quick-pick chips labeled "Frequently added together", enabling
+        -- rapid entry of commonly co-purchased items.
+        -- Cleared when all items are removed.
+
+    -- Context suggestions
+    @guarantee HistoryBasedContextSuggestions
+        -- When transitioning to Phase 2, the system fetches suppliers,
+        -- stores, and categories historically associated with the selected
+        -- articles. These appear as quick-pick chips grouped by entity type,
+        -- prioritized over alphabetical fallback from pre-loaded entity lists.
+        -- Store suggestions include supplier data for automatic inference.
+
+    -- Quick picks
+    @guarantee QuickPicks
+        -- When the search input is empty and some context types are still
+        -- missing, top entities are shown as clickable chips grouped by type.
+        -- If a supplier is selected, store picks are filtered to that supplier.
+        -- Related records (stores for a supplier, articles for a store) are
+        -- fetched to populate picks when context narrows the scope.
+        -- Limit: 10 when one type missing, 5 per type when multiple missing.
+
+    -- Payer
+    @guarantee PayerChips
+        -- In Phase 2, when no payer is selected, available payers are shown
+        -- as clickable chips (up to config.payer_chip_limit) for instant selection.
+
+    -- Store→supplier inference
+    @guarantee StoreInfersSupplier
+        -- Selecting a store automatically fills supplier from that store's
+        -- supplier relationship (via supplier_id on the SearchResult/ContextChip).
+        -- The draft cannot hold a store whose supplier conflicts with
+        -- the selected supplier.
+
+    @guarantee SupplierChangeClearsConflictingStore
+        -- Changing supplier clears the store selection when the current
+        -- store does not belong to the new supplier.
+        -- Removing supplier also removes store.
+
+    @guarantee CategorySelectionIsStable
+        -- Once the user chooses an expense category, supplier, store, or
+        -- article changes do not auto-change or clear that category.
+
+    -- Line items
+    @guarantee LineTotalComputed
+        -- Each item's line_total = qty × unit_price. Displayed inline
+        -- in the item row. Total is always computed, never user-entered.
+
+    -- Inline creation
+    @guarantee InlineCreationViaTypePicker
+        -- When search text doesn't match existing entities, a "Create [text]"
+        -- option appears at the bottom of the dropdown. Selecting it opens
+        -- a type picker: "What is [text]?" with buttons for each available
+        -- entity type (filtered to the types the current search is showing).
+        -- The entity is created immediately via a dispatch, and on success:
+        -- articles are added as items, others are added as context chips.
+        -- Store creation requires supplier context.
+
+    -- Keyboard navigation
+    @guarantee KeyboardNavigation
+        -- ArrowDown/ArrowUp navigate the autocomplete dropdown.
+        -- Enter selects the highlighted result, or opens create flow for text.
+        -- Enter on empty input in Phase 1 transitions to Phase 2.
+        -- Backspace on empty input removes the last item (Phase 1) or
+        -- last context chip (Phase 2).
+        -- Escape closes the dropdown without selecting.
+
+    -- Validation
+    @guarantee AtLeastOneItemRequired
+        -- The form requires at least one item with a positive line total.
+
+    @guarantee AtLeastOneContextRequired
+        -- At least one of supplier, store, or category must be selected.
+
+    -- Submit outcomes
     @guarantee SuccessfulSubmitOutcome
-        -- Successful submit closes the modal and refreshes the dashboard's
-        -- recent expenses so the new expense appears immediately.
-        -- The user returns to the dashboard view.
+        -- Successful submit closes the modal and refreshes the parent view
+        -- (dashboard recent expenses or list page) so the new expense
+        -- appears immediately. The user returns to the parent view.
 
     @guarantee FailedSubmitOutcome
         -- Validation failures and API errors keep the modal open with an
         -- error message displayed. No data is lost.
-}
-
-
--- ─────────────────────────────────────────────
--- Standard expense form
--- ─────────────────────────────────────────────
-
-surface StandardExpenseForm {
-    facing writer: ExpenseWriter
-
-    context draft: StandardExpenseDraft
-
-    -- ── Always visible ──
-
-    exposes:
-        draft.currency
-        draft.purchased_at
-        draft.payer
-        draft.notes
-
-    -- ── Total: editable in minimal mode, computed in itemized mode ──
-
-    exposes:
-        draft.total_amount
-            when not draft.has_items
-        draft.computed_total
-            when draft.has_items
-
-    -- ── Context pickers (with inline creation) ──
-
-    exposes:
-        draft.supplier
-        draft.store
-            when draft.supplier != null
-        draft.expense_category
-        draft.article
-            when not draft.itemized_mode
-
-    -- ── Itemized section (toggled by user) ──
-
-    exposes:
-        draft.itemized_mode
-        draft.items
-            when draft.itemized_mode
-
-    -- ── Reference pickers with inline creation ──
-
-    provides:
-        PickOrCreateSupplier(draft, ref: InlineReference)
-            when ref.kind = supplier
-        PickOrCreateStore(draft, ref: InlineReference)
-            when ref.kind = store and draft.supplier != null
-        PickOrCreateCategory(draft, ref: InlineReference)
-            when ref.kind = expense_category
-        PickOrCreateArticle(draft, ref: InlineReference)
-            when ref.kind = article and not draft.itemized_mode
-
-    -- ── Mode toggle + line items ──
-
-    provides:
-        ToggleItemizedMode(draft)
-        AddLineItem(draft)
-            when draft.itemized_mode
-        RemoveLineItem(draft, item_index: Integer)
-            when draft.itemized_mode and draft.items.count > 0
-
-    -- ── Submit ──
-
-    provides:
-        SubmitStandard(writer, draft)
-            when draft.effective_total != null
-            and draft.effective_total > 0
-            and draft.payer != null
-            and draft.has_any_context
-
-    -- ── Guarantees ──
-
-    @guarantee DefaultPayer
-        -- Payer pre-filled with user's default payer on form open.
-        -- Purchased_at defaults to today. Currency defaults to BAM.
-
-    @guarantee StoreInfersSupplier
-        -- Selecting a store automatically fills supplier from that store.
-
-    @guarantee SupplierChangeClearsConflictingStore
-        -- Changing supplier clears conflicting store selection.
-
-    @guarantee CategorySelectionIsStable
-        -- Category is not auto-cleared by supplier/store/article changes.
-
-    @guarantee AdaptiveFormProgression
-        -- Form starts in minimal mode: total, payer (pre-filled),
-        -- purchased_at (today), currency (BAM), context pickers.
-        -- Toggling itemized mode ON: total becomes computed/read-only,
-        -- article field hidden and cleared.
-        -- Toggling OFF: items list cleared, total becomes editable again.
-
-    @guarantee ArticleMutuallyExclusiveWithItems
-        -- Article shortcut and itemized mode are mutually exclusive.
-        -- Selecting an article is only possible when no items exist.
-        -- Single article creates one synthetic line item on save.
-
-    @guarantee InlineCreationCapability
-        -- Each reference picker (supplier, store, category, article)
-        -- allows the user to create a new entity inline when no match
-        -- is found. Store creation requires supplier context — orphan
-        -- stores are disallowed.
-
-    @guarantee LineTotalAutofill
-        -- When qty and unit_price are entered and line_total is blank,
-        -- line_total = qty × unit_price.
-
-    @guarantee ArticleHintInMinimalMode
-        -- When user selects an article in minimal mode (no items), show
-        -- a hint: "This will create a single line item on save."
-
-    @guarantee SuccessfulSubmitOutcome
-        -- Successful submit closes the modal and refreshes the expense
-        -- list. The user returns to wherever they opened the modal from.
-
-    @guarantee FailedSubmitOutcome
-        -- Validation or API failures keep the modal open with an error
-        -- displayed. No data is lost.
 }
 
 
@@ -813,8 +834,8 @@ guidance:
 -- OPEN QUESTIONS
 -- ═════════════════════════════════════════════
 
-open question "Should the Standard form also support article price lookup, or is that Quick Add only?"
+open question "Should the form support a total-override mode where the user can enter a total that differs from the computed sum of items?"
 
-open question "Should total-only expenses (no items, no article) be allowed long-term, or is that a transitional compromise?"
+open question "Should total-only expenses (no items, no article) be supported, or should every expense require at least one line item?"
 
-open question "Quick Add currently does not do inline creation. Should it gain that capability, or should users who need to create new suppliers/stores use the Standard form?"
+open question "Should Phase 1 allow selecting a supplier early to constrain article search by supplier-specific pricing, even before article_mode kicks in?"
