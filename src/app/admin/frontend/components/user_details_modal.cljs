@@ -96,11 +96,39 @@
                   :button-class "ds-btn-outline"
                   :on-click #(dispatch [:admin/view-user-activity id])}]})))
 
+(defui user-memberships-card
+  [{:keys [memberships tenant-name tenant-slug]}]
+  (let [memberships* (vec (or memberships []))
+        fallback-tenant (when (or tenant-name tenant-slug)
+                          [{:tenant-name tenant-name
+                            :tenant-slug tenant-slug
+                            :role nil
+                            :status nil}])
+        items (if (seq memberships*) memberships* fallback-tenant)]
+    ($ ui/detail-card
+      {:title "Tenant Memberships"
+       :fields (if (seq items)
+                 (mapv (fn [membership]
+                         {:label (fmt/tenant-label (or (:tenant-name membership)
+                                                     (:tenant_name membership))
+                                   (or (:tenant-slug membership)
+                                     (:tenant_slug membership)))
+                          :value ($ :div {:class "flex flex-wrap gap-2"}
+                                   (when-let [role (or (:role membership)
+                                                     (:tenant-memberships/role membership))]
+                                     (ui/role-badge role))
+                                   (when-let [status (or (:status membership)
+                                                       (:tenant-memberships/status membership))]
+                                     (ui/status-badge status {:capitalize? true})))})
+                   items)
+                 [{:label "Memberships"
+                   :value "No tenant memberships found."}])})))
+
 (defui user-details-body
   [{:keys [user error]}]
   (let [{:keys [email full-name id role status created-at updated-at
-                last-login _auth-provider email-verified email-verification-status
-                tenant-name tenant-slug]} user]
+                last-login auth-provider email-verified email-verification-status
+                tenant-name tenant-slug memberships]} user]
     ($ :div {:class "space-y-4"}
       (when error
         ($ :div {:class "ds-alert ds-alert-error"}
@@ -118,11 +146,12 @@
         ($ ui/detail-card
           {:title "Verification"
            :fields [{:label "Email Status" :value (ui/verification-badge email-verified email-verification-status)}
+                    {:label "Auth Provider" :value (when auth-provider (some-> auth-provider str str/capitalize))}
                     {:label "Account Created" :value (date/format-display-date created-at)}
                     {:label "Last Updated" :value (date/format-display-date updated-at)}]}))
-      ($ ui/detail-card
-        {:title "Tenant"
-         :fields [{:label "Organization" :value (fmt/tenant-label tenant-name tenant-slug)}]})
+      ($ user-memberships-card {:memberships memberships
+                                :tenant-name tenant-name
+                                :tenant-slug tenant-slug})
       ($ user-actions-card {:user user}))))
 
 (defui user-details-modal

@@ -62,6 +62,23 @@
  ;; Admin sessions for admin authentication
  :admin_sessions {:fields [[:id :uuid {:primary-key true}] [:admin_id :uuid {:foreign-key :admins/id :null false :on-delete :cascade}] [:token [:varchar 255] {:null false :unique true}] [:created_at :timestamptz {:null false :default [:now]}] [:updated_at :timestamptz {:null false :default [:now]}] [:last_activity :timestamptz {:null false}] [:expires_at :timestamptz {:null false}] [:ip_address :text] [:user_agent :text] [:impersonation_context :jsonb]] :indexes [[:idx_admin_sessions_token :btree {:fields [:token] :unique true}] [:idx_admin_sessions_admin_id :btree {:fields [:admin_id]}] [:idx_admin_sessions_expires :btree {:fields [:expires_at]}]]}
 
+ ;; Admin invitations (email-based admin onboarding)
+ :admin_invitations
+ {:fields [[:id :uuid {:primary-key true}]
+           [:email :text {:null false}]
+           [:role [:enum :admin-invitation-role] {:null false}]
+           [:invited_by :uuid {:foreign-key :admins/id :null false :on-delete :cascade}]
+           [:status [:enum :admin-invitation-status] {:null false :default "pending"}]
+           [:token [:varchar 255] {:null false}]
+           [:expires_at :timestamptz {:null false}]
+           [:created_at :timestamptz {:default [:now]}]
+           [:updated_at :timestamptz {:default [:now]}]]
+  :types [[:admin-invitation-status :enum {:choices ["pending" "accepted" "expired" "revoked"]}]
+          [:admin-invitation-role :enum {:choices ["support" "admin"]}]]
+  :indexes [[:idx_admin_invitations_token :btree {:fields [:token] :unique true}]
+            [:idx_admin_invitations_email :btree {:fields [:email]}]
+            [:idx_admin_invitations_status :btree {:fields [:status]}]]}
+
  ;; Persisted runtime frontend config overrides for admin and user settings.
  ;; EDN files remain the source-controlled defaults; this table stores runtime saves.
  :frontend_runtime_configs {:fields [[:id :uuid {:primary-key true}]

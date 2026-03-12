@@ -253,7 +253,7 @@
   (let [total (or (use-subscribe [:admin/tenants-total]) 0)
         search (or (use-subscribe [:admin/tenants-search]) "")
         status (use-subscribe [:admin/tenants-status-filter])]
-    ($ :div {:class "p-6 max-w-6xl mx-auto"}
+    ($ :div {:class "p-6"}
       ($ :div {:class "mb-6"}
         ($ :h1 {:class "text-2xl font-bold"} "Tenants")
         ($ :p {:class "text-base-content/60 mt-1"}

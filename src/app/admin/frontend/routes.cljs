@@ -2,6 +2,7 @@
   "Admin routes; update when adding admin pages."
   (:require
     [app.admin.frontend.pages.admins :as admins]
+    [app.admin.frontend.pages.invitation-accept :as invitation-accept]
     [app.admin.frontend.pages.backlog :as backlog]
     [app.admin.frontend.pages.domain.expenses.article-aliases :as article-aliases]
     [app.admin.frontend.pages.domain.expenses.duplicates :as duplicates]
@@ -66,6 +67,14 @@
            :controllers [{:start (fn [params]
                                    (when-let [token (get-in params [:query :token])]
                                      (rf/dispatch [:admin/verify-reset-token token])))}]}]
+
+         ;; Accept Invitation (public, no auth — invitee has no account yet)
+         ["/invitation/accept"
+          {:name :admin-invitation-accept
+           :view invitation-accept/admin-invitation-accept-page
+           :controllers [{:start (fn [params]
+                                   (when-let [token (get-in params [:query :token])]
+                                     (rf/dispatch [:admin/validate-invitation-token token])))}]}]
 
          ;; Dashboard (default)
          [""

@@ -40,12 +40,12 @@
                                      :icon ($ suppliers-icon {:class "w-6 h-6"})
                                      :active? (= route-name :admin-backlog)}
                                     {:id "admin-sidebar-tenants"
-                                     :label "Tenants"
+                                     :label "Tenants & Memberships"
                                      :href "/admin/tenants"
                                      :icon ($ admins-icon {:class "w-6 h-6"})
                                      :active? (= route-name :admin-tenants)}
                                     {:id "admin-sidebar-users"
-                                     :label "Users"
+                                     :label "User Accounts"
                                      :href "/admin/users"
                                      :icon ($ users-icon {:class "w-6 h-6"})
                                      :active? (= route-name :admin-users)}]

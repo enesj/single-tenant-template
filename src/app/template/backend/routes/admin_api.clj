@@ -1,7 +1,9 @@
 (ns app.template.backend.routes.admin-api
   "Compose /admin/api routes and middleware; add admin endpoints via focused route namespaces."
   (:require
+    [app.template.backend.email.service :as email-svc]
     [app.template.backend.middleware.admin :as admin-middleware]
+    [app.template.backend.routes.admin.admin-invitations :as admin-invitations]
     [app.template.backend.routes.admin.admins :as admin-admins]
     [app.template.backend.routes.admin.tenants :as admin-tenants]
     [app.template.backend.routes.admin.audit :as admin-audit]
@@ -22,7 +24,7 @@
   "Admin API routes"
   [db service-container]
   (let [email-service (get service-container :email-service)
-        base-url (get-in service-container [:config :base-url] "http://localhost:8085")
+        base-url (email-svc/create-base-url (:config service-container))
         ;; Collect domain routes from registry
         domain-routes (domain-registry/all-admin-api-routes db service-container)]
     ["/admin/api"
@@ -34,6 +36,9 @@
 
      ;; 🔓 Public password routes (no authentication required)
      ["/auth" (admin-password/public-routes db email-service base-url)]
+
+     ;; 🔓 Public invitation routes (accept/validate — invitee has no account yet)
+     (admin-invitations/public-routes db)
 
      ;; 🔒 Protected routes (require authentication)
      ["" {:middleware [#(admin-middleware/wrap-admin-authentication % db)]}
@@ -68,6 +73,9 @@
 
       ;; Admin management (owner operations)
       (admin-admins/routes db)
+
+      ;; Admin invitations (owner operations)
+      (admin-invitations/protected-routes db email-service base-url)
 
       ;; User operations
       ["/users"

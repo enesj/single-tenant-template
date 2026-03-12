@@ -30,19 +30,20 @@
    - :adapter-init-fn - function to initialize adapter
    - :additional-effects - function for additional side effects (optional)
    - :custom-header-content - custom header content (optional)
+   - :custom-body-top - content rendered above the main page content (optional)
    - :render-main-content - function that renders the main content
    - :batch-actions-config - configuration for batch actions (optional)
    - :show-selection-counter? - boolean to show selection counter (default: true)
    - :class - optional additional CSS classes"
   [{:keys [entity-name page-title page-description adapter-init-fn
-           additional-effects custom-header-content render-main-content
+           additional-effects custom-header-content custom-body-top render-main-content
            show-selection-counter? class]
     :or {show-selection-counter? true
          class ""}}]
 
-    (let [{:keys [error success-message selected-ids]} (template-utils/use-entity-state entity-name :admin)
-      global-error (use-subscribe [:admin/error-message])
-      displayed-error (or global-error error)
+  (let [{:keys [error success-message selected-ids]} (template-utils/use-entity-state entity-name :admin)
+        global-error (use-subscribe [:admin/error-message])
+        displayed-error (or global-error error)
         {:keys [entity-spec display-settings]} (template-utils/use-entity-spec entity-name :admin)
         registry-init-fn (get-in entity-registry/entity-registry [entity-name :init-fn])]
 
@@ -118,6 +119,10 @@
                   {:entity-type entity-name
                    :selected-ids selected-ids
                    :variant :admin}))
+
+              ;; Optional page-specific content rendered above the main list/table.
+              (when (fn? custom-body-top)
+                (custom-body-top))
 
               ;; Main content area
               (when (fn? render-main-content)

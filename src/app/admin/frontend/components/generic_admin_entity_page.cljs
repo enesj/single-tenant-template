@@ -16,6 +16,12 @@
     (fn []
       ($ header-component))))
 
+(defn- build-body-top-renderer
+  [body-top-component]
+  (when (fn? body-top-component)
+    (fn []
+      ($ body-top-component))))
+
 (defn- extract-entity-key
   "Extract the actual entity key from various possible formats"
   [entity-key]
@@ -49,7 +55,7 @@
         ;; Call all hooks at the top level to satisfy Rules of Hooks
         entity-data (use-subscribe [::entity-subs/paginated-entities actual-entity-key])
         {:keys [page-title page-description adapter-init-fn features components] :as config} (or merged-config {})
-        {:keys [modals custom-header]} components
+        {:keys [modals custom-header custom-body-top]} components
         entity-ids (->> entity-data (map id-utils/extract-entity-id) (filter some?) vec)
         selection-change-handler (use-memo #(generic-handlers/create-generic-selection-handler actual-entity-key)
                                    [actual-entity-key])
@@ -58,6 +64,7 @@
                              [merged-config config])
         render-main-content (when merged-config (content-renderer/create-main-content-renderer config))
         header-render (use-memo #(build-header-renderer custom-header) [custom-header])
+        body-top-render (use-memo #(build-body-top-renderer custom-body-top) [custom-body-top])
         ;; Always call the hook, but pass conditional parameters to handle logic inside
         _ (generic-handlers/use-deletion-constraints
             actual-entity-key
@@ -84,6 +91,7 @@
            :additional-effects additional-effects
            :selection-change-handler selection-change-handler
            :custom-header-content header-render
+           :custom-body-top body-top-render
            :render-main-content render-main-content
            :show-batch-operations? (true? (:batch-operations? features))
            :show-selection-counter? (true? (:batch-operations? features))})

@@ -118,7 +118,10 @@
     (utils/log-user-operation "User details loaded successfully" (:user response))
     (-> (utils/clear-loading-db-state db :admin/loading-user-details)
       (assoc :admin/user-details-modal-open? true)
-      (assoc :admin/current-user-details (:user response)))))
+      (assoc :admin/current-user-details
+        (cond-> (:user response)
+          (contains? response :memberships)
+          (assoc :memberships (:memberships response)))))))
 
 (rf/reg-event-db
   :admin/view-user-details-failure

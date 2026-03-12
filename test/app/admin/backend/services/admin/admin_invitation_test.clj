@@ -1,0 +1,201 @@
+(ns app.admin.backend.services.admin.admin-invitation-test
+  "Tests for admin invitation create/accept/revoke/resend guards."
+  (:require
+    [app.admin.backend.services.admin.admin-invitation :as inv-svc]
+    [app.admin.backend.services.admin.auth :as auth]
+    [app.backend.fixtures :as fixtures]
+    [clojure.test :refer [deftest is testing use-fixtures]]
+    [honey.sql :as sql]
+    [next.jdbc :as jdbc]
+    [next.jdbc.result-set :as rs]))
+
+(use-fixtures :each fixtures/with-transaction-rollback)
+
+;; ============================================================================
+;; Helpers
+;; ============================================================================
+
+(defn- create-admin! [db suffix & [{:keys [role] :or {role "owner"}}]]
+  (let [id (java.util.UUID/randomUUID)
+        now (java.time.Instant/now)]
+    (jdbc/execute-one! db
+      (sql/format {:insert-into [:admins]
+                   :values [{:id            id
+                             :email         (str "inv-test-" suffix "-" id "@example.com")
+                             :full_name     (str "Admin " suffix)
+                             :password_hash (auth/hash-password "testpassword123")
+                             :role          [:cast role :admin_role]
+                             :status        [:cast "active" :admin_status]
+                             :created_at    now
+                             :updated_at    now}]
+                   :returning [:*]})
+      {:builder-fn rs/as-unqualified-maps})))
+
+;; ============================================================================
+;; create-invitation!
+;; ============================================================================
+
+(deftest create-invitation-happy-path
+  (let [db    fixtures/*test-db*
+        owner (create-admin! db "owner")
+        inv   (inv-svc/create-invitation! db
+                {:email      "newadmin@example.com"
+                 :role       "admin"
+                 :invited-by (:id owner)})]
+    (testing "creates a pending invitation with token"
+      (is (some? inv))
+      (is (= "pending" (str (:status inv))))
+      (is (some? (:token inv)))
+      (is (= "newadmin@example.com" (:email inv))))))
+
+(deftest create-invitation-invalid-role
+  (let [db    fixtures/*test-db*
+        owner (create-admin! db "owner2")]
+    (testing "rejects owner role"
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo #"Invalid invitation role"
+            (inv-svc/create-invitation! db
+              {:email "x@x.com" :role "owner" :invited-by (:id owner)}))))
+    (testing "rejects unknown role"
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo #"Invalid invitation role"
+            (inv-svc/create-invitation! db
+              {:email "x@x.com" :role "superuser" :invited-by (:id owner)}))))))
+
+(deftest create-invitation-duplicate-pending
+  (let [db    fixtures/*test-db*
+        owner (create-admin! db "owner3")]
+    (inv-svc/create-invitation! db
+      {:email "dup@example.com" :role "admin" :invited-by (:id owner)})
+    (testing "rejects duplicate pending invitation for same email"
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo #"pending invitation already exists"
+            (inv-svc/create-invitation! db
+              {:email "dup@example.com" :role "support" :invited-by (:id owner)}))))))
+
+(deftest create-invitation-email-already-admin
+  (let [db    fixtures/*test-db*
+        owner (create-admin! db "owner4")
+        existing (create-admin! db "existing" {:role "admin"})]
+    (testing "rejects invitation if admin already exists with that email"
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo #"already exists"
+            (inv-svc/create-invitation! db
+              {:email (:email existing) :role "admin" :invited-by (:id owner)}))))))
+
+;; ============================================================================
+;; accept-invitation!
+;; ============================================================================
+
+(deftest accept-invitation-happy-path
+  (let [db    fixtures/*test-db*
+        owner (create-admin! db "accept-owner")
+        inv   (inv-svc/create-invitation! db
+                {:email      "acceptme@example.com"
+                 :role       "support"
+                 :invited-by (:id owner)})
+        token (:token inv)
+        result (inv-svc/accept-invitation! db
+                 {:token     token
+                  :full-name "New Support Admin"
+                  :password  "securepassword123"})]
+    (testing "creates admin and session"
+      (is (some? (:admin result)))
+      (is (some? (:session result)))
+      (is (= "acceptme@example.com" (:email (:admin result))))
+      (is (some? (:token (:session result)))))
+
+    (testing "invitation is marked accepted"
+      (let [fetched (inv-svc/find-invitation-by-token db token)]
+        (is (= "accepted" (str (:status fetched))))))))
+
+(deftest accept-invitation-expired
+  (let [db    fixtures/*test-db*
+        owner (create-admin! db "exp-owner")
+        inv   (inv-svc/create-invitation! db
+                {:email      "expired@example.com"
+                 :role       "admin"
+                 :invited-by (:id owner)})]
+    ;; Manually expire the invitation
+    (jdbc/execute-one! db
+      (sql/format {:update [:admin_invitations]
+                   :set    {:expires_at (.minus (java.time.Instant/now) (java.time.Duration/ofDays 1))}
+                   :where  [:= :id (:id inv)]}))
+    (testing "rejects expired invitation"
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo #"expired"
+            (inv-svc/accept-invitation! db
+              {:token     (:token inv)
+               :full-name "Late Admin"
+               :password  "securepassword123"}))))))
+
+(deftest accept-invitation-revoked
+  (let [db    fixtures/*test-db*
+        owner (create-admin! db "rev-owner")
+        inv   (inv-svc/create-invitation! db
+                {:email      "revoked@example.com"
+                 :role       "admin"
+                 :invited-by (:id owner)})]
+    (inv-svc/revoke-invitation! db (:id inv) (:id owner))
+    (testing "rejects revoked invitation"
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo #"not pending"
+            (inv-svc/accept-invitation! db
+              {:token     (:token inv)
+               :full-name "Revoked Admin"
+               :password  "securepassword123"}))))))
+
+(deftest accept-invitation-short-password
+  (let [db    fixtures/*test-db*
+        owner (create-admin! db "pwd-owner")
+        inv   (inv-svc/create-invitation! db
+                {:email      "shortpwd@example.com"
+                 :role       "admin"
+                 :invited-by (:id owner)})]
+    (testing "rejects password shorter than 10 chars"
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo #"at least 10"
+            (inv-svc/accept-invitation! db
+              {:token     (:token inv)
+               :full-name "Short Pwd"
+               :password  "short"}))))))
+
+;; ============================================================================
+;; revoke-invitation!
+;; ============================================================================
+
+(deftest revoke-invitation-test
+  (let [db    fixtures/*test-db*
+        owner (create-admin! db "revoke-owner")
+        inv   (inv-svc/create-invitation! db
+                {:email "revokee@example.com" :role "admin" :invited-by (:id owner)})]
+    (inv-svc/revoke-invitation! db (:id inv) (:id owner))
+    (testing "invitation status is revoked"
+      (let [fetched (inv-svc/find-invitation-by-token db (:token inv))]
+        (is (= "revoked" (str (:status fetched))))))))
+
+;; ============================================================================
+;; resend-invitation!
+;; ============================================================================
+
+(deftest resend-invitation-test
+  (let [db    fixtures/*test-db*
+        owner (create-admin! db "resend-owner")
+        inv   (inv-svc/create-invitation! db
+                {:email "resendee@example.com" :role "support" :invited-by (:id owner)})
+        original-expires (:expires_at inv)
+        ;; Wait briefly to ensure different timestamp
+        _ (Thread/sleep 50)
+        updated (inv-svc/resend-invitation! db (:id inv) (:id owner))]
+    (testing "extends expiry"
+      (is (some? (:expires_at updated)))
+      (is (not= (str original-expires) (str (:expires_at updated)))))))
+
+;; ============================================================================
+;; list-pending-invitations
+;; ============================================================================
+
+(deftest list-pending-invitations-test
+  (let [db    fixtures/*test-db*
+        owner (create-admin! db "list-owner")]
+    (inv-svc/create-invitation! db
+      {:email "a@example.com" :role "admin" :invited-by (:id owner)})
+    (inv-svc/create-invitation! db
+      {:email "b@example.com" :role "support" :invited-by (:id owner)})
+    (testing "returns all pending invitations with inviter info"
+      (let [pending (inv-svc/list-pending-invitations db)]
+        (is (= 2 (count pending)))
+        (is (every? #(some? (:inviter_name %)) pending))))))

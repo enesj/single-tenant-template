@@ -51,7 +51,7 @@
  :users
  {:entity-key :users
   :page-title "Advanced User Management"
-  :page-description "Manage users for this single-tenant app"
+  :page-description "Manage global user accounts across all tenants"
   :adapter-init-fn app.admin.frontend.adapters.users/init-users-adapter!
   :display-settings {:show-select? true
                      :show-edit? true

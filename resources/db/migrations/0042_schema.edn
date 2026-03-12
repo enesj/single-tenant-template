@@ -1,0 +1,48 @@
+({:action :create-type,
+  :type-name :admin-invitation-role,
+  :model-name :admin_invitations,
+  :options {:choices ["support" "admin"], :type :enum}}
+ {:action :create-type,
+  :type-name :admin-invitation-status,
+  :model-name :admin_invitations,
+  :options
+  {:choices ["pending" "accepted" "expired" "revoked"], :type :enum}}
+ {:action :create-table,
+  :model-name :admin_invitations,
+  :fields
+  {:role {:null false, :type [:enum :admin-invitation-role]},
+   :updated-at {:default [:now], :type :timestamptz},
+   :email {:null false, :type :text},
+   :expires-at {:null false, :type :timestamptz},
+   :invited-by
+   {:foreign-key :admins/id,
+    :null false,
+    :on-delete :cascade,
+    :type :uuid},
+   :token {:null false, :type [:varchar 255]},
+   :status
+   {:null false,
+    :default "pending",
+    :type [:enum :admin-invitation-status]},
+   :id {:primary-key true, :type :uuid},
+   :created-at {:default [:now], :type :timestamptz}}}
+ {:action :create-index,
+  :index-name :idx-admin-invitations-email,
+  :model-name :admin_invitations,
+  :options {:fields [:email], :type :btree}}
+ {:action :alter-column,
+  :field-name :supplier-id,
+  :model-name :expenses,
+  :options
+  {:foreign-key :suppliers/id, :on-delete :set-null, :type :uuid},
+  :changes
+  {:on-delete {:from :restrict, :to :set-null},
+   :null {:from false, :to :EMPTY}}}
+ {:action :create-index,
+  :index-name :idx-admin-invitations-status,
+  :model-name :admin_invitations,
+  :options {:fields [:status], :type :btree}}
+ {:action :create-index,
+  :index-name :idx-admin-invitations-token,
+  :model-name :admin_invitations,
+  :options {:fields [:token], :unique true, :type :btree}})

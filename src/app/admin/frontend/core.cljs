@@ -5,6 +5,7 @@
     [app.admin.frontend.auth.persistence :as auth-persist]
     [app.admin.frontend.config.preload]
     [app.admin.frontend.events.config]
+    [app.admin.frontend.events.admin-invitations]
     [app.admin.frontend.events.auth]
     [app.admin.frontend.events.dashboard]
     [app.admin.frontend.events.audit]

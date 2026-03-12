@@ -1,0 +1,240 @@
+-- Admin Invitation: Email-based onboarding for platform administrators
+-- Status: candidate (initial elicitation)
+--
+-- Unlike tenant invitations (where the user already has or creates a users account
+-- before accepting), admin invitations combine account creation with acceptance.
+-- The invitation IS the authorization to create an admin account — there is no
+-- admin self-registration flow.
+--
+-- Two paths to become a global admin:
+--   1. Direct creation via POST /admin/api/admins (owner sets password on behalf)
+--   2. Email invitation (this spec) — invitee sets their own password on acceptance
+
+use "./authentication.allium" as auth
+
+-- ============================================================
+-- ENTITIES
+-- ============================================================
+
+entity AdminInvitation {
+    email: String
+    role: support | admin                              -- owner and super_admin not assignable via invitation
+    invited_by: auth/Admin
+    status: pending | accepted | expired | revoked
+    token: String
+    expires_at: Timestamp
+
+    -- Derived
+    is_valid: status = pending and expires_at > now
+}
+
+-- ============================================================
+-- RULES
+-- ============================================================
+
+config {
+    admin_invitation_expiry: Duration = 7.days
+    admin_password_min_length: Integer = 10
+}
+
+rule InviteAdmin {
+    when: AdminInvitationCreated(inviter, email, role)
+
+    requires: inviter.status = active
+    requires: inviter.role = owner                     -- only owners can invite new admins
+    requires: valid_email(email)
+    requires: role in {support, admin}
+    requires: not exists AdminInvitation{email: email, status: pending}
+    requires: not exists auth/Admin{email: email}      -- not already an admin
+
+    ensures:
+        AdminInvitation.created(
+            email: email,
+            role: role,
+            invited_by: inviter,
+            status: pending,
+            token: generate_invitation_token(),
+            expires_at: now + config.admin_invitation_expiry
+        )
+        AdminInvitationEmailDispatched(email: email, role: role, inviter: inviter)
+
+    @guidance
+        Email sending is non-blocking (fire-and-forget via future).
+        Failure to send email does not fail the HTTP response.
+        All invitation actions are audit-logged.
+}
+
+rule AcceptAdminInvitation {
+    when: AdminAcceptsInvitation(token_value, full_name, password)
+
+    let invitation = AdminInvitation{token: token_value}
+
+    requires: exists invitation
+    requires: invitation.is_valid
+    requires: length(full_name) > 0
+    requires: length(password) >= config.admin_password_min_length
+    requires: not exists auth/Admin{email: invitation.email}   -- guard against race condition
+
+    ensures:
+        let admin = auth/Admin.created(
+            email: invitation.email,
+            full_name: full_name,
+            role: invitation.role,
+            status: active,
+            password_hash: hash_password(password)
+        )
+        invitation.status = accepted
+        let admin_session = auth/AdminSession.created(
+            admin: admin,
+            token: generate_admin_session_token(),
+            created_at: now,
+            last_activity: now,
+            expires_at: now + 8.hours
+        )
+        AdminAccountCreatedViaInvitation(admin: admin, invitation: invitation)
+
+    @guidance
+        Admin creation and invitation status update happen atomically
+        in a single transaction. The admin is auto-logged in (session
+        created) so they land on the admin dashboard immediately.
+        Audit-logged as: "admin created via invitation by {invited_by}".
+}
+
+rule RejectExpiredAdminInvitation {
+    when: AdminAcceptsInvitation(token_value, _, _)
+
+    let invitation = AdminInvitation{token: token_value}
+
+    requires: exists invitation
+    requires: not invitation.is_valid
+
+    ensures: AdminInvitationRejected(
+        token: token_value,
+        reason: invitation_expired_or_revoked
+    )
+}
+
+rule RejectInvalidAdminInvitationToken {
+    when: AdminAcceptsInvitation(token_value, _, _)
+
+    let invitation = AdminInvitation{token: token_value}
+
+    requires: not exists invitation
+
+    ensures: AdminInvitationRejected(
+        token: token_value,
+        reason: invalid_token
+    )
+}
+
+rule RevokeAdminInvitation {
+    when: AdminInvitationRevoked(actor, invitation)
+
+    requires: actor.status = active
+    requires: actor.role = owner
+    requires: invitation.status = pending
+
+    ensures: invitation.status = revoked
+
+    @guidance
+        Audit-logged. Revoked tokens cannot be accepted.
+}
+
+rule ResendAdminInvitation {
+    when: AdminInvitationResent(actor, invitation)
+
+    requires: actor.status = active
+    requires: actor.role = owner
+    requires: invitation.status = pending
+
+    ensures:
+        invitation.expires_at = now + config.admin_invitation_expiry
+        AdminInvitationEmailDispatched(
+            email: invitation.email,
+            role: invitation.role,
+            inviter: actor
+        )
+
+    @guidance
+        Extends the expiry window by a fresh 7 days.
+        Re-sends the invitation email with the same token.
+        Audit-logged.
+}
+
+-- ============================================================
+-- SURFACES
+-- ============================================================
+
+surface AdminInvitationManagement {
+    facing actor: auth/Admin
+
+    exposes:
+        for inv in AdminInvitation where status = pending:
+            inv.email
+            inv.role
+            inv.status
+            inv.expires_at
+            inv.invited_by.full_name
+            inv.invited_by.email
+
+    provides:
+        AdminInvitationCreated(actor, email, role)
+            when actor.role = owner
+
+        AdminInvitationRevoked(actor, invitation)
+            when actor.role = owner
+
+        AdminInvitationResent(actor, invitation)
+            when actor.role = owner
+
+    related:
+        AdminInvitationAcceptPage(token)
+
+    @guidance
+        Rendered within the existing admin management page
+        (/admin/admins). Pending invitations shown alongside
+        the existing admin list. Only visible to owners.
+}
+
+surface AdminInvitationAcceptPage {
+    facing visitor: auth/Admin?                        -- unauthenticated visitor (no admin account yet)
+
+    context token: String                              -- from URL query parameter
+
+    exposes:
+        invitation_email                               -- pre-filled, read-only (from token lookup)
+        invitation_role                                -- displayed so invitee knows their assigned role
+        inviter_name                                   -- who invited them
+        token_valid                                    -- whether the token is still valid
+
+    provides:
+        AdminAcceptsInvitation(token, full_name, password)
+            when token_valid
+
+    @guidance
+        Route: /admin/invitation/accept?token=...
+        This is a public page (no admin auth required — the invitee
+        doesn't have an account yet). The page:
+        1. Validates the token server-side on load (shows error if invalid/expired)
+        2. Displays the invitation details (email, role, inviter)
+        3. Collects full_name and password (with confirmation field)
+        4. On success: creates admin account, auto-logs in, redirects to /admin/dashboard
+        The email field is shown but not editable — it comes from the invitation.
+}
+
+-- ============================================================
+-- RESOLVED DECISIONS
+-- ============================================================
+
+-- resolved: Only owners can invite new admins (high-privilege action).
+-- resolved: Assignable roles via invitation: support, admin. Owner and super_admin excluded.
+-- resolved: Accept page is a combined registration form (full_name + password).
+--           No admin self-registration exists — invitation is the authorization to create the account.
+-- resolved: Token expiry is 7 days (same as tenant invitations).
+-- resolved: Email already belonging to an existing admin blocks invitation creation.
+-- resolved: Duplicate pending invitation for same email blocks creation (resend available).
+-- resolved: Resend and revoke supported (owner only).
+-- resolved: All actions audit-logged to audit_logs table.
+-- resolved: Accept page at /admin/invitation/accept?token=... (public, no auth required).
+-- resolved: Same email can be both a User and an Admin (separate tables, no cross-constraint).
+-- resolved: On successful acceptance, admin is auto-logged in (session created).
