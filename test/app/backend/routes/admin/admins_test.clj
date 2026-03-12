@@ -9,10 +9,10 @@
    - Deleting admins
    - Role and status management"
   (:require
-   [app.template.backend.routes.admin.admins :as admins]
+    [app.template.backend.routes.admin.admins :as admins]
     [app.admin.backend.services.admin.admins :as admin-admins]
-   [app.backend.test-helpers :as h]
-   [clojure.test :refer [deftest is testing use-fixtures]]))
+    [app.backend.test-helpers :as h]
+    [clojure.test :refer [deftest is testing use-fixtures]]))
 
 ;; ============================================================================
 ;; Test Fixtures
@@ -56,13 +56,13 @@
           handler (admins/list-admins-handler db)
           request (h/mock-admin-request :get "/admin/api/admins" mock-admin {})]
       (with-redefs [admin-admins/list-all-admins (constantly mock-admin-list)
-              admin-admins/get-admin-count (constantly 2)]
+                    admin-admins/get-admin-count (constantly 2)]
         (let [response (handler request)
               body (h/parse-response-body response)]
           (is (= 200 (:status response)))
           (is (= 2 (:total body)))
           (is (= 2 (count (:admins body))))))))
-  
+
   (testing "list-admins respects pagination"
     (let [db (h/mock-db)
           handler (admins/list-admins-handler db)
@@ -76,7 +76,7 @@
                     admin-admins/get-admin-count (constantly 2)]
         (let [response (handler request)]
           (is (= 200 (:status response)))))))
-  
+
   (testing "list-admins handles search filter"
     (let [db (h/mock-db)
           handler (admins/list-admins-handler db)
@@ -107,7 +107,7 @@
               body (h/parse-response-body response)]
           (is (= 200 (:status response)))
           (is (= (str test-admin-id) (str (get-in body [:admin :id]))))))))
-  
+
   (testing "get-admin-details returns 404 when not found"
     (let [db (h/mock-db)
           handler (admins/get-admin-details-handler db)
@@ -137,7 +137,7 @@
               body (h/parse-response-body response)]
           (is (= 201 (:status response)))
           (is (some? (get-in body [:admin :id])))))))
-  
+
   (testing "create-admin fails without email"
     (let [db (h/mock-db)
           handler (admins/create-admin-handler db)
@@ -145,14 +145,40 @@
                     {:body {:password "secure123"}})
           response (handler request)]
       (is (= 400 (:status response)))))
-  
+
   (testing "create-admin fails without password"
     (let [db (h/mock-db)
           handler (admins/create-admin-handler db)
           request (h/mock-admin-request :post "/admin/api/admins" mock-admin
                     {:body {:email "new@example.com"}})
           response (handler request)]
-      (is (= 400 (:status response))))))
+      (is (= 400 (:status response)))))
+
+  (testing "create-admin fails with invalid role"
+    (let [db (h/mock-db)
+          handler (admins/create-admin-handler db)
+          request (h/mock-admin-request :post "/admin/api/admins" mock-admin
+                    {:body {:email "new@example.com"
+                            :password "secure123"
+                            :role "superuser"}})
+          response (handler request)]
+      (is (= 400 (:status response)))))
+
+  (testing "create-admin surfaces duplicate-owner protection"
+    (let [db (h/mock-db)
+          handler (admins/create-admin-handler db)
+          request (h/mock-admin-request :post "/admin/api/admins" mock-admin
+                    {:body {:email "owner2@example.com"
+                            :password "secure123"
+                            :role "owner"}})]
+      (with-redefs [admin-admins/create-admin!
+                    (fn [& _]
+                      (throw (ex-info "Cannot assign the owner role because an active global owner already exists"
+                               {:status 400
+                                :field :role
+                                :reason :owner-already-exists})))]
+        (let [response (handler request)]
+          (is (= 400 (:status response))))))))
 
 ;; ============================================================================
 ;; Update Admin Tests
@@ -187,7 +213,7 @@
               body (h/parse-response-body response)]
           (is (= 200 (:status response)))
           (is (:success body))))))
-  
+
   (testing "delete-admin fails when admin not found or protected"
     (let [db (h/mock-db)
           handler (admins/delete-admin-handler db)
@@ -214,7 +240,7 @@
               body (h/parse-response-body response)]
           (is (= 200 (:status response)))
           (is (some? (:admin body)))))))
-  
+
   (testing "update-admin-role fails with invalid role"
     (let [db (h/mock-db)
           handler (admins/update-admin-role-handler db)
@@ -223,7 +249,7 @@
                      :body {:role "invalid"}})
           response (handler request)]
       (is (= 400 (:status response)))))
-  
+
   (testing "update-admin-role fails without role"
     (let [db (h/mock-db)
           handler (admins/update-admin-role-handler db)
@@ -231,7 +257,22 @@
                     {:path-params {:id (str test-admin-id)}
                      :body {}})
           response (handler request)]
-      (is (= 400 (:status response))))))
+      (is (= 400 (:status response)))))
+
+  (testing "update-admin-role surfaces duplicate-owner protection"
+    (let [db (h/mock-db)
+          handler (admins/update-admin-role-handler db)
+          request (h/mock-admin-request :put (str "/admin/api/admins/" test-admin-id "/role") mock-admin
+                    {:path-params {:id (str test-admin-id)}
+                     :body {:role "owner"}})]
+      (with-redefs [admin-admins/update-admin-role!
+                    (fn [& _]
+                      (throw (ex-info "Cannot assign the owner role because an active global owner already exists"
+                               {:status 400
+                                :field :role
+                                :reason :owner-already-exists})))]
+        (let [response (handler request)]
+          (is (= 400 (:status response))))))))
 
 ;; ============================================================================
 ;; Update Admin Status Tests
@@ -250,7 +291,7 @@
               body (h/parse-response-body response)]
           (is (= 200 (:status response)))
           (is (some? (:admin body)))))))
-  
+
   (testing "update-admin-status fails with invalid status"
     (let [db (h/mock-db)
           handler (admins/update-admin-status-handler db)

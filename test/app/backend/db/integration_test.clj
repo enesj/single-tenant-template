@@ -246,6 +246,18 @@
                                             :full_name "Duplicate Admin"
                                             :role "admin"})))))))
 
+(deftest unique-active-owner-constraint-test
+  (testing "the seeded owner prevents creating a second active global owner"
+    (when-let [db fixtures/*test-db*]
+      (let [second-owner-email (str "owner-b-" (UUID/randomUUID) "@example.com")]
+        (is (some? (admin-auth/find-admin-by-email db "admin@example.com"))
+          "Expected the seeded global owner to exist in the test DB")
+        (is (thrown? Exception
+              (admin-auth/create-admin! db {:email second-owner-email
+                                            :password "owner-password-456"
+                                            :full_name "Secondary Owner"
+                                            :role "owner"})))))))
+
 (deftest password-hash-stored-test
   (testing "password is hashed, not stored in plain text"
     (when-let [db fixtures/*test-db*]

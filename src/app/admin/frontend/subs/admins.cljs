@@ -10,4 +10,4 @@
   :admin/owners-count
   :<- [:admin/admins]
   (fn [admins _]
-    (count (filter #(= (or (:role %) (:admins/role %)) "owner") admins))))
+    (count (filter #(= "owner" (some-> (or (:role %) (:admins/role %)) str)) admins))))

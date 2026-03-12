@@ -29,6 +29,19 @@
     (norm/normalize-admin-result admin-config)
     (dissoc :password_hash :password-hash)))
 
+(def ^:private valid-admin-roles
+  #{"admin" "support" "owner"})
+
+(defn- validate-admin-role!
+  "Ensure admin role is one of the supported enum values."
+  [role]
+  (when-not (contains? valid-admin-roles role)
+    (throw (ex-info "Invalid role. Must be one of: admin, support, owner"
+             {:status 400
+              :field :role
+              :allowed ["admin" "support" "owner"]
+              :reason :invalid-role}))))
+
 ;; ============================================================================
 ;; Validation Helpers
 ;; ============================================================================
@@ -43,6 +56,15 @@
                               [:= :role (tc/cast-for-database :admin-role "owner")]
                               [:= :status (tc/cast-for-database :admin-status "active")]]}))
     :count))
+
+(defn- validate-owner-assignment!
+  "Ensure there can be at most one active global owner."
+  [db role]
+  (when (and (= role "owner") (pos? (count-owners db)))
+    (throw (ex-info "Cannot assign the owner role because an active global owner already exists"
+             {:status 400
+              :field :role
+              :reason :owner-already-exists}))))
 
 (defn- is-last-owner?
   "Check if the given admin is the last active owner"
@@ -141,41 +163,45 @@
    Wraps auth/create-admin! with additional validation and audit."
   [db {:keys [email password full_name role] :as _admin-data}
    current-admin-id ip-address user-agent]
-  (log/info "Creating new admin" {:email email :role role :by-admin current-admin-id})
+  (let [requested-role (or (some-> role str) "admin")]
+    (log/info "Creating new admin" {:email email :role requested-role :by-admin current-admin-id})
 
-  ;; Check if email already exists
-  (when (auth/find-admin-by-email db email)
-    (throw (ex-info "An admin with this email already exists"
-             {:status 400
-              :field :email
-              :reason :duplicate-email})))
+    (validate-admin-role! requested-role)
+    (validate-owner-assignment! db requested-role)
 
-  (let [admin-id (UUID/randomUUID)
-        now (time/instant)
-        result (jdbc/execute-one! db
-                 (hsql/format
-                   {:insert-into :admins
-                    :values [{:id admin-id
-                              :email email
-                              :password_hash (auth/hash-password password)
-                              :full_name full_name
-                              :role (tc/cast-for-database :admin-role (or role "admin"))
-                              :status (tc/cast-for-database :admin-status "active")
-                              :created_at now}]
-                    :returning [:*]}))]
+    ;; Check if email already exists
+    (when (auth/find-admin-by-email db email)
+      (throw (ex-info "An admin with this email already exists"
+               {:status 400
+                :field :email
+                :reason :duplicate-email})))
 
-    ;; Log the creation
-    (audit/log-audit! db
-      {:admin_id current-admin-id
-       :action "create_admin"
-       :entity-type "admin"
-       :entity-id admin-id
-       :changes {:email email :role (or role "admin")}
-       :ip-address ip-address
-       :user-agent user-agent})
+    (let [admin-id (UUID/randomUUID)
+          now (time/instant)
+          result (jdbc/execute-one! db
+                   (hsql/format
+                     {:insert-into :admins
+                      :values [{:id admin-id
+                                :email email
+                                :password_hash (auth/hash-password password)
+                                :full_name full_name
+                                :role (tc/cast-for-database :admin-role requested-role)
+                                :status (tc/cast-for-database :admin-status "active")
+                                :created_at now}]
+                      :returning [:*]}))]
 
-    (log/info "Admin created successfully" {:admin-id admin-id :email email})
-    (db-admin->app result)))
+      ;; Log the creation
+      (audit/log-audit! db
+        {:admin_id current-admin-id
+         :action "create_admin"
+         :entity-type "admin"
+         :entity-id admin-id
+         :changes {:email email :role requested-role}
+         :ip-address ip-address
+         :user-agent user-agent})
+
+      (log/info "Admin created successfully" {:admin-id admin-id :email email :role requested-role})
+      (db-admin->app result))))
 
 ;; ============================================================================
 ;; Admin Updates
@@ -231,32 +257,44 @@
   "Update an admin's role. Only owners can do this."
   [db admin-id new-role current-admin-id ip-address user-agent]
   (validate-not-self-modification! current-admin-id admin-id "change role of")
+  (let [normalized-new-role (some-> new-role str)
+        current-admin (get-admin-details db admin-id)]
+    (when-not current-admin
+      (throw (ex-info "Admin not found"
+               {:status 404
+                :reason :not-found})))
 
-  ;; If changing FROM owner role, validate not last owner
-  (let [current-admin (get-admin-details db admin-id)
-        current-role (:role current-admin)]
-    (when (and (= (str current-role) "owner") (not= (str new-role) "owner"))
-      (validate-not-last-owner! db admin-id "change role of")))
+    (validate-admin-role! normalized-new-role)
 
-  (let [result (jdbc/execute-one! db
-                 (hsql/format {:update :admins
-                               :set {:role (tc/cast-for-database :admin-role new-role)}
-                               :where [:= :id admin-id]
-                               :returning [:*]}))]
+    ;; Guard: only one active global owner can exist at a time.
+    (when (and (= normalized-new-role "owner")
+            (not= (str (:role current-admin)) "owner"))
+      (validate-owner-assignment! db normalized-new-role))
 
-    (when result
-      (audit/log-audit! db
-        {:admin_id current-admin-id
-         :action "update_admin_role"
-         :entity-type "admin"
-         :entity-id admin-id
-         :changes {:new-role new-role}
-         :ip-address ip-address
-         :user-agent user-agent})
+    ;; If changing FROM owner role, validate not last owner
+    (when (and (= (str (:role current-admin)) "owner")
+            (not= normalized-new-role "owner"))
+      (validate-not-last-owner! db admin-id "change role of"))
 
-      (log/info "Admin role updated" {:admin-id admin-id :new-role new-role}))
+    (let [result (jdbc/execute-one! db
+                   (hsql/format {:update :admins
+                                 :set {:role (tc/cast-for-database :admin-role normalized-new-role)}
+                                 :where [:= :id admin-id]
+                                 :returning [:*]}))]
 
-    (some-> result db-admin->app)))
+      (when result
+        (audit/log-audit! db
+          {:admin_id current-admin-id
+           :action "update_admin_role"
+           :entity-type "admin"
+           :entity-id admin-id
+           :changes {:new-role normalized-new-role}
+           :ip-address ip-address
+           :user-agent user-agent})
+
+        (log/info "Admin role updated" {:admin-id admin-id :new-role normalized-new-role}))
+
+      (some-> result db-admin->app))))
 
 (defn update-admin-status!
   "Update an admin's status (active/suspended)."

@@ -45,7 +45,10 @@
           :types [[:admin-role :enum {:choices ["admin" "support" "owner"]}]
                   [:admin-status :enum {:choices ["active" "suspended"]}]]
           :indexes [[:idx_admins_email :btree {:fields [:email] :unique true}]
-                    [:idx_admins_status :btree {:fields [:status]}]]}
+                    [:idx_admins_status :btree {:fields [:status]}]
+                    [:uniq_admins_active_owner :btree {:fields [:role]
+                                                       :unique true
+                                                       :where [:raw "((role = 'owner'::admin_role) AND (status = 'active'::admin_status))"]}]]}
 
  ;; Email verification tokens (single-tenant)
  :email_verification_tokens {:fields [[:id :uuid {:primary-key true}] [:user_id :uuid {:foreign-key :users/id :null false :on-delete :cascade}] [:token [:varchar 255] {:null false :unique true}] [:expires_at :timestamptz {:null false}] [:attempts :integer {:default 0}] [:last_attempted_at :timestamptz] [:used_at :timestamptz] [:created_at :timestamptz {:default [:now]}] [:updated_at :timestamptz {:default [:now]}]] :indexes [[:idx_email_tokens_user :btree {:fields [:user_id]}] [:idx_email_tokens_token :btree {:fields [:token] :unique true}] [:idx_email_tokens_expires :btree {:fields [:expires_at]}]]}

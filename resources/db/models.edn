@@ -103,7 +103,14 @@
    [:admin-status :enum {:choices ["active" "suspended"]}]],
   :indexes
   [[:idx_admins_email :btree {:fields [:email], :unique true}]
-   [:idx_admins_status :btree {:fields [:status]}]]},
+   [:idx_admins_status :btree {:fields [:status]}]
+   [:uniq_admins_active_owner
+    :btree
+    {:fields [:role],
+     :unique true,
+     :where
+     [:raw
+      "((role = 'owner'::admin_role) AND (status = 'active'::admin_status))"]}]]},
  :articles
  {:fields
   [[:id :uuid {:primary-key true}]

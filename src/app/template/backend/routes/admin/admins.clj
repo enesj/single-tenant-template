@@ -65,15 +65,20 @@
   (utils/with-validation-error-handling
     (fn [request]
       (let [{:keys [ip-address user-agent admin]} (utils/extract-request-context request)
-            admin-data (:body request)]
+            admin-data (:body request)
+            requested-role (some-> (:role admin-data) str)]
 
-        (log/info "Admin create request:" {:email (:email admin-data) :role (:role admin-data)})
+        (log/info "Admin create request:" {:email (:email admin-data) :role requested-role})
 
         ;; Basic validation
         (when-not (:email admin-data)
           (throw (ex-info "Email is required" {:status 400 :field :email})))
         (when-not (:password admin-data)
           (throw (ex-info "Password is required" {:status 400 :field :password})))
+        (when (and requested-role
+                (not (#{"admin" "support" "owner"} requested-role)))
+          (throw (ex-info "Invalid role. Must be one of: admin, support, owner"
+                   {:status 400 :field :role :allowed ["admin" "support" "owner"]})))
 
         (let [created-admin (admin-admins/create-admin! db admin-data
                               (:id admin)

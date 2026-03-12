@@ -1,0 +1,10 @@
+({:action :create-index,
+  :index-name :uniq-admins-active-owner,
+  :model-name :admins,
+  :options
+  {:fields [:role],
+   :unique true,
+   :where
+   [:raw
+    "((role = 'owner'::admin_role) AND (status = 'active'::admin_status))"],
+   :type :btree}})

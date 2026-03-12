@@ -93,20 +93,25 @@
         is-self? (= (str admin-id) (str current-admin-id))
 
         ;; Get owners count for protection checks
-        owners-count (use-subscribe [:admin/owners-count])
+        owners-count (or (use-subscribe [:admin/owners-count]) 0)
         is-last-owner? (and (= (str admin-role) "owner") (= owners-count 1))
 
         ;; Enum options for role
         models-data (use-subscribe [:models-data])
-        role-options (->> (or (when models-data
-                                (field-meta/get-enum-choices models-data :admins :role))
-                            ["admin" "support" "owner"])
-                        (keep #(when % (keyword (str %))))
-                        vec)
+        raw-role-options (->> (or (when models-data
+                                    (field-meta/get-enum-choices models-data :admins :role))
+                                ["admin" "support" "owner"])
+                           (keep #(when % (keyword (str %))))
+                           vec)
         role-key (cond
                    (keyword? admin-role) admin-role
                    (string? admin-role) (keyword admin-role)
                    :else nil)
+        role-options (->> raw-role-options
+                       (filter #(or (not= % :owner)
+                                  (= role-key :owner)
+                                  (zero? owners-count)))
+                       vec)
 
         ;; Loading states
         updating-admin? (use-subscribe [:admin/updating-admin?])
