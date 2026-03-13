@@ -2,7 +2,7 @@
 name: Debugg
 description: Performs evidence-first troubleshooting triage for reported app issues before implementation handoff.
 model: GPT-5.3-Codex (copilot)
-tools: ['vscode', 'execute', 'read', 'agent', 'edit', 'search', 'web', 'vscode/memory', 'todo', 'clojure-mcp/*', 'postgres/*', 'chrome-mcp/*', 'Railway/*']
+tools: ['vscode', 'execute', 'read', 'agent', 'edit', 'search', 'web', 'vscode/memory', 'todo', 'clojure-mcp/*', 'postgres/*', 'chrome-devtools/*', 'Railway/*']
 ---
 
 # Debugg Agent
@@ -129,7 +129,7 @@ clj-nrepl-eval -p <PORT> "(require 'my.ns :reload) (my.ns/some-fn {:example true
 (rt/stats)
 ```
 
-### Browser flow checks (`chrome-mcp`)
+### Browser flow checks (`chrome-devtools`)
 
 - Use stable element `:id` selectors whenever possible.
 - Capture: page URL, clicked IDs, resulting network calls, and visible error text.

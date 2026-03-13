@@ -9,7 +9,7 @@
         "copilot/gpt-5.2"
       ]
     },
-    "single-tenant-template/.vscode/mcp.json: chrome-mcp": {
+    "single-tenant-template/.vscode/mcp.json: chrome-devtools": {
       "allowedModels": [
         "copilot/gpt-5.1-codex-max",
         "copilot/gpt-5.2"

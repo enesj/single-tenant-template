@@ -2,7 +2,7 @@
 name: Coder
 description: Implements changes in this repository using its Clojure-first workflow and constraints.
 model: GPT-5.3-Codex (copilot)
-tools: ['vscode', 'execute', 'read', 'agent', 'edit', 'search', 'web', 'vscode/memory', 'todo', 'clojure-mcp/*', 'postgres/*', 'chrome-mcp/*']
+tools: ['vscode', 'execute', 'read', 'agent', 'edit', 'search', 'web', 'vscode/memory', 'todo', 'clojure-mcp/*', 'postgres/*', 'chrome-devtools/*']
 ---
 
 # Coder Agent

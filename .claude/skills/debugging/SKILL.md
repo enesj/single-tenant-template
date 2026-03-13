@@ -58,8 +58,8 @@ npm run test:cljs -- --testNamePattern="..."
 bb be-test --focus <namespace>
 ```
 
-## Interactive browser checks (chrome-mcp)
-Use `chrome-mcp` tools to validate UI flows in a real browser against the running app:
+## Interactive browser checks (chrome-devtools)
+Use `chrome-devtools` tools to validate UI flows in a real browser against the running app:
 - Admin UI defaults to `http://localhost:8085`
 - Prefer selecting elements by `:id` for stability (see `INTERACTIVE-COMPONENTS-ID-AUDIT.md`)
 

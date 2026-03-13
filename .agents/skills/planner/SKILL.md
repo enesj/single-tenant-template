@@ -2,7 +2,7 @@
 name: Planner
 description: Creates implementation plans aligned with this repository's workflow and constraints.
 model: GPT-5.2 (copilot)
-tools: ['vscode', 'execute', 'read', 'agent', 'edit', 'search', 'web', 'vscode/memory', 'todo', 'clojure-mcp/*', 'postgres/*', 'chrome-mcp/*']
+tools: ['vscode', 'execute', 'read', 'agent', 'edit', 'search', 'web', 'vscode/memory', 'todo', 'clojure-mcp/*', 'postgres/*', 'chrome-devtools/*']
 ---
 
 # Planning Agent

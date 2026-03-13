@@ -34,7 +34,7 @@ The admin frontend powers users, audit logs, login events, and settings. It is t
 - Provide `:entity-spec` matching rendered columns (especially for audit/login lists).
 - Keep tokens out of app-db; helpers inject headers.
 - Server pagination/filtering preferred; avoid large client-side lists.
-- **All interactive components MUST have `:id` attributes** for browser testing via chrome-mcp (see shared component library).
+- **All interactive components MUST have `:id` attributes** for browser testing via chrome-devtools (see shared component library).
 
 ## Links
 

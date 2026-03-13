@@ -314,11 +314,11 @@ Ensure `aria-label`, keyboard handlers, and focus management on modals/dialogs. 
 
 ## Component ID Requirements (Browser Testing)
 
-🚨 **CRITICAL**: All interactive UI components MUST have unique `:id` attributes for automated browser testing via **chrome-mcp**.
+🚨 **CRITICAL**: All interactive UI components MUST have unique `:id` attributes for automated browser testing via **chrome-devtools**.
 
 ### Why This Matters
 
-Browser testing tools like chrome-mcp locate elements by ID. Without proper IDs:
+Browser testing tools like chrome-devtools locate elements by ID. Without proper IDs:
 - ❌ Automated tests cannot reliably find interactive elements
 - ❌ Accessibility tools may not properly associate labels with inputs
 - ❌ Debugging becomes harder without unique element identifiers
