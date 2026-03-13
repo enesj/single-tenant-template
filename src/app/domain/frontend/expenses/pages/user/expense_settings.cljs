@@ -44,6 +44,9 @@
         ;; Keep payer-id normalized as (string-or-nil). Avoid "" so we don't mark
         ;; the form dirty when the user re-selects "None".
         [default-payer set-default-payer!] (use-state (some-> (:default-payer-id settings) str))
+        [default-category set-default-category!] (use-state (some-> (:default-expense-category-id settings) str))
+        [default-note set-default-note!] (use-state (or (:default-note settings) ""))
+        expense-categories (or (use-subscribe [:user-expenses/expense-categories]) [])
         [notifications set-notifications!] (use-state (if (contains? settings :notifications-enabled)
                                                         (:notifications-enabled settings)
                                                         true))
@@ -54,6 +57,8 @@
         ;; Compute "dirty" state to enable Save only when values differ.
         current-currency (or (:default-currency settings) "BAM")
         current-payer (some-> (:default-payer-id settings) str)
+        current-category (some-> (:default-expense-category-id settings) str)
+        current-note (or (:default-note settings) "")
         current-notifications (if (contains? settings :notifications-enabled)
                                 (boolean (:notifications-enabled settings))
                                 true)
@@ -61,6 +66,8 @@
         current-receipt-refine-enabled (boolean (:receipt-refine-enabled settings))
         dirty? (or (not= default-currency current-currency)
                  (not= (some-> default-payer str) current-payer)
+                 (not= (some-> default-category str) current-category)
+                 (not= default-note current-note)
                  (not= (boolean notifications) current-notifications)
                  (not= (boolean auto-post-after-upload-enabled) current-auto-post-after-upload-enabled)
                  (not= (boolean receipt-refine-enabled) current-receipt-refine-enabled))
@@ -68,6 +75,8 @@
         handle-save (fn []
                       (let [settings {:default-currency default-currency
                                       :default-payer-id default-payer
+                                      :default-expense-category-id default-category
+                                      :default-note default-note
                                       :notifications-enabled notifications
                                       :auto-post-after-upload-enabled auto-post-after-upload-enabled
                                       :receipt-refine-enabled receipt-refine-enabled}]
@@ -78,6 +87,7 @@
       (fn []
         (rf/dispatch [:user-expenses/fetch-settings])
         (rf/dispatch [:user-expenses/fetch-payers {:limit 100}])
+        (rf/dispatch [:user-expenses/fetch-expense-categories {:limit 500 :offset 0}])
         js/undefined)
       [])
 
@@ -88,6 +98,8 @@
           ;; Always set from settings (including nil payer-id / false notifications).
           (set-default-currency! (or (:default-currency settings) "BAM"))
           (set-default-payer! (some-> (:default-payer-id settings) str))
+          (set-default-category! (some-> (:default-expense-category-id settings) str))
+          (set-default-note! (or (:default-note settings) ""))
           (set-notifications!
             (if (contains? settings :notifications-enabled)
               (boolean (:notifications-enabled settings))
@@ -161,7 +173,30 @@
                     ($ :option {:value ""} (t :expense-settings/payer-none))
                     (for [p payers]
                       ($ :option {:key (:id p) :value (:id p)}
-                        (:label p)))))))
+                        (:label p)))))
+
+                ($ setting-row {:label (t :expense-settings/category-label)
+                                :description (t :expense-settings/category-desc)}
+                  ($ :select {:id "settings-category-select"
+                              :class "ds-select ds-select-sm ds-select-bordered"
+                              :value (or default-category "")
+                              :disabled (not can-write?)
+                              :on-change #(let [v (.. % -target -value)]
+                                            (set-default-category! (when (seq v) v)))}
+                    ($ :option {:value ""} (t :expense-settings/category-none))
+                    (for [c expense-categories]
+                      ($ :option {:key (:id c) :value (:id c)}
+                        (:name c)))))
+
+                ($ setting-row {:label (t :expense-settings/note-label)
+                                :description (t :expense-settings/note-desc)}
+                  ($ :textarea {:id "settings-default-note"
+                                :class "ds-textarea ds-textarea-bordered ds-textarea-sm w-full max-w-xs"
+                                :rows 2
+                                :value default-note
+                                :disabled (not can-write?)
+                                :placeholder (t :expense-settings/note-placeholder)
+                                :on-change #(set-default-note! (.. % -target -value))}))))
 
             ;; Notifications
             ($ setting-section {:title (t :expense-settings/section-notif)

@@ -1,0 +1,564 @@
+-- allium: 2
+-- payer-and-defaults.candidate.allium
+--
+-- Scope: Payer types, per-user provisioned Payer, per-user expense defaults,
+--        sticky default update on manual expense submit, and receipt upload
+--        defaults (Option A: defaults pre-attached at upload time).
+-- Includes:
+--   - PayerType entity + admin management (create, rename, delete)
+--   - System "user" PayerType — provisioned per-tenant, immutable
+--   - Auto-provisioned Payer on user join (email prefix label, "user" type)
+--   - UserExpenseDefaults entity (default_payer, default_expense_category, default_note)
+--   - Sticky default: default_payer updates on any expense submit when payer changed
+--   - UserExpenseDefaults settings surface (category + note editable; payer read-only)
+--   - Receipt upload defaults: user confirms Payer/category/note at upload time;
+--     values stored on Receipt and pre-filled at approval
+-- Excludes:
+--   - Receipt OCR extraction logic (receipt-ocr.candidate.allium)
+--   - Manual expense entry form (expense-entry.candidate.allium)
+--   - Tenant provisioning lifecycle (multi-tenancy.candidate.allium)
+-- Changes required in companion specs:
+--   - receipt-ocr.candidate.allium:
+--       Receipt entity: add expense_category_id: UUID? and notes: String?
+--       UploadReceipt trigger: add expense_category? and notes? params
+--       UploadReceiptNew rule: store expense_category_id and notes on Receipt
+--       ApproveReceipt rule: accept expense_category? and notes?; pass to Expense.created()
+--   - expense-entry.candidate.allium:
+--       Payer external entity: remove is_default: Boolean (replaced by UserExpenseDefaults)
+--       SmartExpenseDraft: default payer comes from UserExpenseDefaults.default_payer
+
+
+-- ─────────────────────────────────────────────
+-- External entities
+-- ─────────────────────────────────────────────
+
+external entity Tenant { id: UUID }
+
+external entity User {
+    id: UUID
+    tenant_id: UUID
+    email: String
+    membership_role: viewer | member | admin | owner
+    is_admin_or_owner: membership_role in {admin, owner}
+}
+
+external entity Expense {
+    id: UUID
+    tenant_id: UUID
+    user_id: UUID?
+    payer_id: UUID
+    expense_category_id: UUID?
+    receipt_id: UUID?
+        -- null when expense originated from manual Smart Input entry
+        -- non-null when expense was created from receipt approval
+}
+
+external entity ExpenseCategory {
+    id: UUID
+    tenant_id: UUID
+    name: String
+}
+
+external entity Receipt {
+    id: UUID
+    owner: User?
+}
+
+
+-- ─────────────────────────────────────────────
+-- Entities
+-- ─────────────────────────────────────────────
+
+entity PayerType {
+    id: UUID
+    tenant_id: UUID
+    name: String
+    is_system: Boolean = false
+        -- true only for the "user" type created during tenant provisioning.
+        -- System types cannot be renamed, deleted, or manually created by admins.
+}
+
+entity Payer {
+    id: UUID
+    tenant_id: UUID
+    label: String
+    payer_type: PayerType
+    is_active: Boolean = true
+        -- false when the owning user has been removed from the tenant.
+        -- Inactive payers are retained for historical expense integrity
+        -- but excluded from active selection lists.
+
+    -- Constraint: payer_type must belong to the same tenant
+}
+
+entity UserExpenseDefaults {
+    -- Per-user persistent defaults for expense creation.
+    -- Created alongside the user's provisioned Payer when they join a tenant.
+    user: User
+    default_payer: Payer
+    default_expense_category: ExpenseCategory?
+    default_note: String?
+}
+
+
+-- ─────────────────────────────────────────────
+-- Invariants
+-- ─────────────────────────────────────────────
+
+invariant PayerTypeBelongsToTenant {
+    for payer in Payer:
+        payer.payer_type.tenant_id = payer.tenant_id
+}
+
+invariant UserDefaultsBelongToSameTenant {
+    for d in UserExpenseDefaults:
+        d.default_payer.tenant_id = d.user.tenant_id
+        and (d.default_expense_category = null
+             or d.default_expense_category.tenant_id = d.user.tenant_id)
+}
+
+invariant SystemPayerTypePerTenantIsUnique {
+    -- Each tenant has exactly one system PayerType.
+    for tenant in Tenant:
+        (PayerType where tenant_id = tenant.id and is_system = true)
+            |> count = 1
+}
+
+invariant OneDefaultsRecordPerUser {
+    -- Each user has exactly one UserExpenseDefaults record per tenant membership.
+    for user in User:
+        (UserExpenseDefaults where user = user) |> count <= 1
+}
+
+
+-- ─────────────────────────────────────────────
+-- Config
+-- ─────────────────────────────────────────────
+
+config {
+    system_payer_type_name: String = "user"
+}
+
+
+-- ─────────────────────────────────────────────
+-- Actors
+-- ─────────────────────────────────────────────
+
+actor TenantAdmin {
+    identified_by: User where is_admin_or_owner
+    within: Tenant
+}
+
+actor TenantMember {
+    identified_by: User
+    within: Tenant
+}
+
+
+-- ═════════════════════════════════════════════
+-- TENANT PROVISIONING
+-- ═════════════════════════════════════════════
+
+rule ProvisionSystemPayerType {
+    -- Creates the immutable "user" PayerType when a new tenant is provisioned.
+    when: TenantProvisioned(tenant: Tenant)
+
+    ensures: PayerType.created(
+        tenant_id: tenant.id,
+        name: config.system_payer_type_name,
+        is_system: true
+    )
+}
+
+
+-- ═════════════════════════════════════════════
+-- USER PROVISIONING
+-- ═════════════════════════════════════════════
+
+rule ProvisionUserPayer {
+    -- When a user joins a tenant, auto-create a Payer of the system "user"
+    -- type using the first segment of their email address as the label,
+    -- then set it as their default payer via a UserExpenseDefaults record.
+    when: UserJoinedTenant(user: User, tenant: Tenant)
+
+    let system_type = PayerType where tenant_id = tenant.id and is_system = true
+    let email_prefix = user.email |> split_at("@") |> first
+
+    ensures: payer: Payer.created(
+        tenant_id: tenant.id,
+        label: email_prefix,
+        payer_type: system_type
+    )
+
+    ensures: UserExpenseDefaults.created(
+        user: user,
+        default_payer: payer,
+        default_expense_category: null,
+        default_note: null
+    )
+
+    @guidance
+        -- email_prefix = everything before the first '@' in the email address.
+        -- e.g. "ana.kovac@company.com" → "ana.kovac".
+        -- Two users with identical email prefixes within the same tenant each
+        -- get their own separate Payer (uniqueness is not enforced on label).
+        -- The label is LOCKED after creation — users cannot rename their
+        -- auto-provisioned Payer.
+}
+
+
+-- ═════════════════════════════════════════════
+-- STICKY DEFAULT ON EXPENSE SUBMIT
+-- ═════════════════════════════════════════════
+
+rule UpdateDefaultPayerOnExpenseSubmit {
+    -- After a user creates any expense (manual or receipt-approved),
+    -- if they used a different payer than their current default, the
+    -- new payer becomes their default going forward.
+    -- Fires at submit time so a cancelled form never mutates the default.
+    when: ExpenseCreated(expense: Expense)
+
+    requires: expense.user_id != null
+
+    let defaults = UserExpenseDefaults where user.id = expense.user_id
+    requires: defaults != null
+
+    if expense.payer_id != defaults.default_payer.id:
+        ensures: defaults.default_payer = Payer(id: expense.payer_id)
+
+    @guidance
+        -- Applies to both entry paths:
+        -- 1. Manual Smart Input → user selects different payer → submits → default updates
+        -- 2. Receipt approval → user changes payer at approval → approves → default updates
+        -- In both cases, only a completed submit/approve mutates the default.
+        -- Cancelled or abandoned forms have no effect.
+}
+
+
+-- ═════════════════════════════════════════════
+-- PER-USER DEFAULTS MANAGEMENT
+-- ═════════════════════════════════════════════
+
+rule UpdateDefaultExpenseCategory {
+    -- User changes their standing expense category default via settings.
+    when: UserSetsDefaultExpenseCategory(user: User, category: ExpenseCategory?)
+
+    let defaults = UserExpenseDefaults where user = user
+    requires: defaults != null
+
+    if category != null:
+        requires: category.tenant_id = user.tenant_id
+
+    ensures: defaults.default_expense_category = category
+}
+
+rule UpdateDefaultNote {
+    -- User changes their standing note default via settings.
+    -- Setting note to null clears the default (no pre-fill).
+    when: UserSetsDefaultNote(user: User, note: String?)
+
+    let defaults = UserExpenseDefaults where user = user
+    requires: defaults != null
+
+    ensures: defaults.default_note = note
+}
+
+
+-- ═════════════════════════════════════════════
+-- PAYER TYPE MANAGEMENT (admin / owner only)
+-- ═════════════════════════════════════════════
+
+rule CreatePayerType {
+    -- Admins and owners can introduce new PayerType classifications
+    -- beyond the immutable system "user" type (e.g. "Company card", "Cash").
+    when: CreatePayerType(admin: TenantAdmin, name: String)
+
+    requires: name.trim().length >= 1
+    requires: not exists PayerType where tenant_id = admin.tenant_id
+        and name = name.trim()
+
+    ensures: PayerType.created(
+        tenant_id: admin.tenant_id,
+        name: name.trim(),
+        is_system: false
+    )
+}
+
+rule RenamePayerType {
+    when: RenamePayerType(admin: TenantAdmin, payer_type: PayerType, name: String)
+
+    requires: payer_type.tenant_id = admin.tenant_id
+    requires: not payer_type.is_system
+    requires: name.trim().length >= 1
+    requires: not exists PayerType where tenant_id = admin.tenant_id
+        and name = name.trim()
+        and id != payer_type.id
+
+    ensures: payer_type.name = name.trim()
+}
+
+rule DeletePayerType {
+    when: DeletePayerType(admin: TenantAdmin, payer_type: PayerType)
+
+    requires: payer_type.tenant_id = admin.tenant_id
+    requires: not payer_type.is_system
+    requires: not exists Payer where payer_type = payer_type
+        -- Cannot delete a type that still has Payers assigned to it.
+
+    ensures: not exists payer_type
+}
+
+
+-- ═════════════════════════════════════════════
+-- PAYER MANAGEMENT (admin / owner only)
+-- ═════════════════════════════════════════════
+
+rule CreatePayer {
+    -- Admins and owners can create named Payers of any non-system type.
+    -- System "user" type Payers are created only by ProvisionUserPayer.
+    when: CreatePayer(admin: TenantAdmin, label: String, payer_type: PayerType)
+
+    requires: payer_type.tenant_id = admin.tenant_id
+    requires: not payer_type.is_system
+    requires: label.trim().length >= 1
+
+    ensures: Payer.created(
+        tenant_id: admin.tenant_id,
+        label: label.trim(),
+        payer_type: payer_type
+    )
+}
+
+rule DeletePayer {
+    when: DeletePayer(admin: TenantAdmin, payer: Payer)
+
+    requires: payer.tenant_id = admin.tenant_id
+    requires: not payer.payer_type.is_system
+    requires: not exists UserExpenseDefaults where default_payer = payer
+        -- Cannot delete a Payer that is currently anyone's default.
+    requires: not exists Expense where payer_id = payer.id
+        -- Cannot delete a Payer referenced by existing expenses.
+
+    ensures: not exists payer
+}
+
+
+-- ═════════════════════════════════════════════
+-- USER REMOVAL — PAYER RETENTION
+-- ═════════════════════════════════════════════
+
+rule DeactivatePayerOnUserRemoval {
+    -- When a user is removed from a tenant, their auto-provisioned Payer
+    -- is retained for historical expense integrity but marked inactive.
+    -- The UserExpenseDefaults record is deleted since the user is gone.
+    when: UserRemovedFromTenant(user: User, tenant: Tenant)
+
+    let user_payer = Payer where tenant_id = tenant.id
+        and payer_type.is_system
+        and label = user.email |> split_at("@") |> first
+    let defaults = UserExpenseDefaults where user = user
+
+    if user_payer != null:
+        ensures: user_payer.is_active = false
+
+    if defaults != null:
+        ensures: not exists defaults
+
+    @guidance
+        -- The deactivated Payer remains in the database so that historical
+        -- expenses still reference a valid payer_id. It is excluded from
+        -- all active payer selection lists (upload dialog, Smart Input,
+        -- approval form) by filtering on is_active = true.
+        -- The Payer label (email prefix) is preserved for auditability.
+}
+
+invariant UserPayerLabelIsLocked {
+    -- Auto-provisioned Payer labels (system "user" type) cannot be
+    -- renamed after creation. The label is derived from the email prefix
+    -- at provisioning time and is immutable.
+    for payer in Payer where payer.payer_type.is_system:
+        payer.label = payer.label
+            -- This is a documentation invariant; enforcement is via the
+            -- absence of any rename rule for system-type Payers.
+}
+
+
+-- ═════════════════════════════════════════════
+-- RECEIPT UPLOAD DEFAULTS (Option A)
+-- ═════════════════════════════════════════════
+--
+-- At upload time the user is shown their current defaults (payer,
+-- expense_category, note) pre-filled in the upload dialog.
+-- They may confirm or change each value before submitting.
+-- The confirmed values are stored on the Receipt and travel through
+-- the OCR pipeline unchanged. At the approval/review step all three
+-- fields appear pre-filled and remain editable before the user approves.
+--
+-- Implementation delta (receipt-ocr.candidate.allium):
+--   Receipt entity additions:
+--       expense_category_id: UUID?
+--       notes: String?
+--   UploadReceipt trigger gains:
+--       expense_category?: ExpenseCategory
+--       notes?: String
+--   UploadReceiptNew ensures block gains:
+--       expense_category_id: expense_category?.id
+--       notes: notes
+--   ApproveReceipt trigger gains:
+--       expense_category?: ExpenseCategory
+--       notes?: String
+--   ApproveReceipt Expense.created() gains:
+--       expense_category_id: expense_category?.id
+--       notes: notes
+-- ─────────────────────────────────────────────
+
+surface ReceiptUploadDialog {
+    -- Upload surface that pre-fills user defaults before submission.
+    facing actor: TenantMember
+
+    exposes:
+        UserExpenseDefaults where user = actor
+            |> default_payer
+            |> default_expense_category
+            |> default_note
+
+    provides:
+        UploadReceipt(
+            actor,
+            file_hash: String,
+            storage_key: String,
+            original_filename: String?,
+            content_type: String?,
+            file_size_bytes: Integer,
+            payer: Payer,
+            expense_category: ExpenseCategory?,
+            notes: String?
+        )
+
+    @guarantee DefaultsPrefilled
+        -- When the dialog opens, payer is pre-filled from
+        -- UserExpenseDefaults.default_payer, expense_category from
+        -- UserExpenseDefaults.default_expense_category (may be null),
+        -- and notes from UserExpenseDefaults.default_note (may be null).
+        -- The user may change any of these before uploading.
+        -- Payer is required: if no default exists the user must select one.
+
+    @guarantee BatchUploadShareDefaults
+        -- When multiple files are uploaded in a single session, all receipts
+        -- receive the same payer, expense_category, and notes values as
+        -- confirmed in the dialog for that batch.
+}
+
+surface ReceiptApprovalDefaults {
+    -- Pre-filled default fields visible and editable at the approval step.
+    -- Defined here to make the contract explicit; the full approval surface
+    -- lives in receipt-ocr.candidate.allium.
+    facing actor: TenantMember
+
+    context receipt: Receipt where receipt.owner = actor
+
+    exposes:
+        receipt.expense_category_id
+        receipt.notes
+
+    @guarantee DefaultsPreservedThroughOCR
+        -- expense_category_id and notes set at upload time are not touched
+        -- by the OCR extraction pipeline. They remain on the receipt until
+        -- the user changes them at approval.
+
+    @guarantee FieldsEditableAtApproval
+        -- At the approval/review step the user can change payer,
+        -- expense_category, and notes before confirming. The updated
+        -- values (not the upload-time defaults) are what flow into the
+        -- created Expense.
+}
+
+
+-- ═════════════════════════════════════════════
+-- SETTINGS SURFACES
+-- ═════════════════════════════════════════════
+
+surface UserExpenseDefaultsSettings {
+    -- User settings page for expense defaults.
+    facing user: TenantMember
+
+    exposes:
+        UserExpenseDefaults where user = user
+            |> default_payer
+            |> default_expense_category
+            |> default_note
+
+    provides:
+        UserSetsDefaultExpenseCategory(user, category: ExpenseCategory?)
+        UserSetsDefaultNote(user, note: String?)
+
+    @guarantee DefaultPayerReadOnly
+        -- default_payer is shown read-only in settings.
+        -- It updates automatically via the sticky-default mechanism
+        -- (UpdateDefaultPayerOnExpenseSubmit) and cannot be
+        -- directly edited by the user here.
+}
+
+surface PayerTypeManagement {
+    facing admin: TenantAdmin
+
+    exposes:
+        for pt in PayerType where tenant_id = admin.tenant_id:
+            pt.id
+            pt.name
+            pt.is_system
+
+    provides:
+        CreatePayerType(admin, name: String)
+        RenamePayerType(admin, payer_type: PayerType, name: String)
+            when not payer_type.is_system
+        DeletePayerType(admin, payer_type: PayerType)
+            when not payer_type.is_system
+                and not exists Payer where payer_type = payer_type
+
+    @guarantee SystemTypeListedButImmutable
+        -- The "user" PayerType appears in the list with is_system = true.
+        -- Rename and delete actions are not available for it.
+}
+
+surface PayerManagement {
+    facing admin: TenantAdmin
+
+    exposes:
+        for p in Payer where tenant_id = admin.tenant_id:
+            p.id
+            p.label
+            p.payer_type.name
+            p.payer_type.is_system
+            p.is_active
+
+    provides:
+        CreatePayer(admin, label: String, payer_type: PayerType)
+            when not payer_type.is_system
+        DeletePayer(admin, payer: Payer)
+            when not payer.payer_type.is_system
+                and not exists UserExpenseDefaults where default_payer = payer
+                and not exists Expense where payer_id = payer.id
+
+    @guarantee UserTypePayersReadOnly
+        -- Payers of the "user" PayerType (auto-provisioned per user) are
+        -- listed but cannot be deleted or created manually via this surface.
+
+    @guarantee InactivePayersVisibleToAdmin
+        -- Inactive payers (from removed users) are visible in the admin
+        -- list with is_active = false, for audit purposes.
+        -- They are excluded from user-facing selection lists.
+}
+
+
+-- ═════════════════════════════════════════════
+-- RESOLVED DECISIONS
+-- ═════════════════════════════════════════════
+--
+-- Q1: Payer label (email prefix) is LOCKED after creation — not user-editable.
+-- Q2: Sticky default fires on ALL expense creation (manual + receipt-approved).
+-- Q3: On user removal, provisioned Payer is RETAINED with is_active = false.
+-- Q4: Admins CANNOT override per-user defaults — only the user's own actions
+--     (submitting expenses) control their sticky default.
+-- Q5: Admin IS a tenant user with their own provisioned Payer. Admin uploads
+--     use the admin's own UserExpenseDefaults (payer, category, note).

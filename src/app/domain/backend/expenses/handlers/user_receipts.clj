@@ -17,6 +17,7 @@
     [app.domain.backend.expenses.services.receipts.storage :as receipt-storage]
     [app.domain.backend.expenses.services.supplier-aliases :as supplier-aliases]
     [app.domain.backend.expenses.services.suppliers :as suppliers]
+    [app.domain.backend.expenses.services.user-expense-settings :as user-settings]
     [app.domain.backend.expenses.workers.receipt-ocr.core :as receipt-ocr]
     [app.shared.adapters.database :as shared-db]
     [clojure.string :as str]
@@ -371,6 +372,12 @@
                     receipt (if (h/tenant-elevated? request)
                               (receipt-queries/get-receipt db id)
                               (receipt-queries/get-user-receipt db user-id id tenant-id))]
+                ;; Sticky default: update default payer if it changed
+                (try
+                  (user-settings/update-sticky-default-payer! db tenant-id user-id
+                    (or (:payer_id body) (:payer-id body)))
+                  (catch Exception e
+                    (log/warn e "Failed to update sticky default payer after receipt approval")))
                 (h/json-response {:data {:expense (to-app expense)
                                          :receipt (to-app receipt)}}
                   200))

@@ -6,7 +6,8 @@
     [app.domain.backend.expenses.services.services-factory :as factory]
     [honey.sql :as sql]
     [next.jdbc :as jdbc]
-    [next.jdbc.result-set :as rs]))
+    [next.jdbc.result-set :as rs]
+    [taoensso.timbre :as log]))
 
 ;; ============================================================================
 ;; Service Registration
@@ -53,6 +54,38 @@
            (when-let [_payer (update-payer!* tx payer-id (assoc (dissoc updates :is_default) :is_default false) opts)]
              (set-default-payer-in-tx! tx payer-id tenant-id)))
          (update-payer!* db payer-id updates opts))))))
+
+;; ============================================================================
+;; System Type Guards
+;; ============================================================================
+
+(defn- payer-has-system-type?
+  "Check if a payer's payer_type has is_system = true."
+  [db payer-id]
+  (let [row (jdbc/execute-one! db
+              (sql/format {:select [:pt.is_system]
+                           :from   [[:payers :p]]
+                           :join   [[:payer_types :pt] [:= :pt.id :p.payer_type_id]]
+                           :where  [:= :p.id payer-id]
+                           :limit  1})
+              {:builder-fn rs/as-unqualified-lower-maps})]
+    (boolean (:is_system row))))
+
+(defn- assert-payer-not-system!
+  "Guard: throw if the payer belongs to a system payer type."
+  [db payer-id]
+  (when (payer-has-system-type? db payer-id)
+    (throw (ex-info "Cannot modify a system-provisioned payer"
+             {:type :validation-error :status 403
+              :errors {:payer ["System-provisioned payers cannot be deleted"]}}))))
+
+(def delete-payer!* (:delete! service))
+
+(defn delete-payer!
+  "Delete a payer. Guards against deleting system-type payers."
+  [db id & [opts]]
+  (assert-payer-not-system! db id)
+  (delete-payer!* db id opts))
 
 ;; ============================================================================
 ;; Custom Operations

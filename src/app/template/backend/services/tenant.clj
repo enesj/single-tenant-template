@@ -124,8 +124,20 @@
                                                   :updated_at now}]
                                         :returning [:*]})))]
 
-        ;; 3) Seed payer_types — capture default type id for owner payer
-        (let [pt-rows (mapv
+        ;; 3a) Create system "user" payer type (auto-provisioned, not admin-managed)
+        (let [system-pt-id (java.util.UUID/randomUUID)
+              _ (jdbc/execute-one! tx
+                  (sql/format {:insert-into [:payer_types]
+                               :values [{:id         system-pt-id
+                                         :tenant_id  tenant-id
+                                         :label      "user"
+                                         :is_default false
+                                         :is_system  true
+                                         :created_at now
+                                         :updated_at now}]}))
+
+              ;; 3b) Seed config payer_types (admin-managed types)
+              pt-rows (mapv
                         (fn [pt]
                           (jdbc/execute-one! tx
                             (sql/format {:insert-into [:payer_types]
@@ -133,6 +145,7 @@
                                                    :tenant_id  tenant-id
                                                    :label      (resolve-label (:label pt) locale)
                                                    :is_default (boolean (:is-default pt))
+                                                   :is_system  false
                                                    :created_at now
                                                    :updated_at now}]
                                          :returning [:id :is_default]})
@@ -140,19 +153,31 @@
                         (:payer-types defaults))
               default-pt-id (->> pt-rows (filter :is_default) first :id)]
 
-          ;; 4) Seed owner payer (linked to the default payer type)
-          (when default-pt-id
-            (let [owner-label (or (some-> (user-full-name user) str/trim not-empty)
-                                (first (str/split (user-email user) #"@")))]
-              (jdbc/execute-one! tx
-                (sql/format {:insert-into [:payers]
-                             :values [{:id            (java.util.UUID/randomUUID)
-                                       :tenant_id     tenant-id
-                                       :payer_type_id default-pt-id
-                                       :label         owner-label
-                                       :is_default    true
-                                       :created_at    now
-                                       :updated_at    now}]}))))
+          ;; 4) Create owner payer (linked to system "user" payer type)
+          (let [owner-label (or (some-> (user-full-name user) str/trim not-empty)
+                              (first (str/split (user-email user) #"@")))
+                owner-payer-id (java.util.UUID/randomUUID)]
+            (jdbc/execute-one! tx
+              (sql/format {:insert-into [:payers]
+                           :values [{:id            owner-payer-id
+                                     :tenant_id     tenant-id
+                                     :payer_type_id system-pt-id
+                                     :label         owner-label
+                                     :is_default    true
+                                     :is_active     true
+                                     :created_at    now
+                                     :updated_at    now}]}))
+
+            ;; 4b) Create user_expense_settings for the owner
+            (jdbc/execute-one! tx
+              (sql/format {:insert-into [:user_expense_settings]
+                           :values [{:id                (java.util.UUID/randomUUID)
+                                     :tenant_id         tenant-id
+                                     :user_id           (user-id user)
+                                     :default_currency  [:cast "BAM" :currency]
+                                     :default_payer_id  owner-payer-id
+                                     :created_at        now
+                                     :updated_at        now}]})))
 
           ;; 5) Seed expense_categories
           (doseq [cat (:expense-categories defaults)]
@@ -169,6 +194,65 @@
             (count (:expense-categories defaults)) "expense categories, and owner payer")
 
           {:tenant tenant :membership membership})))))
+
+;; ============================================================================
+;; User Payer Provisioning
+;; ============================================================================
+
+(defn provision-user-payer!
+  "Create a Payer of system 'user' type for a new tenant member.
+   Label = full name or email prefix (before @).
+   Also upserts user_expense_settings with the new payer as default.
+
+   `db-or-tx` can be a raw JDBC connectable or a transaction connection.
+   Returns the created payer row."
+  [db-or-tx tenant-id user-id user-email & {:keys [full-name]}]
+  (let [t-id (if (string? tenant-id) (java.util.UUID/fromString tenant-id) tenant-id)
+        u-id (if (string? user-id) (java.util.UUID/fromString user-id) user-id)
+        now  (java.time.LocalDateTime/now)
+        ;; Find the system payer_type for this tenant
+        system-pt (jdbc/execute-one! db-or-tx
+                    (sql/format {:select [:id]
+                                 :from   [:payer_types]
+                                 :where  [:and
+                                          [:= :tenant_id t-id]
+                                          [:= :is_system true]]
+                                 :limit  1})
+                    {:builder-fn rs/as-unqualified-lower-maps})]
+    (when-not system-pt
+      (log/warn "No system payer_type found for tenant" t-id "— skipping user payer provisioning")
+      (throw (ex-info "No system payer type for tenant"
+               {:type :provisioning-error :tenant-id t-id})))
+    (let [label    (or (some-> full-name str/trim not-empty)
+                     (first (str/split (str user-email) #"@")))
+          payer-id (java.util.UUID/randomUUID)
+          payer    (jdbc/execute-one! db-or-tx
+                     (sql/format {:insert-into [:payers]
+                                  :values [{:id            payer-id
+                                            :tenant_id     t-id
+                                            :payer_type_id (:id system-pt)
+                                            :label         label
+                                            :is_default    false
+                                            :is_active     true
+                                            :created_at    now
+                                            :updated_at    now}]
+                                  :returning [:*]})
+                     {:builder-fn rs/as-unqualified-lower-maps})]
+      ;; Upsert user_expense_settings with this payer as default
+      (jdbc/execute-one! db-or-tx
+        (sql/format {:insert-into [:user_expense_settings]
+                     :values [{:id               (java.util.UUID/randomUUID)
+                               :tenant_id        t-id
+                               :user_id          u-id
+                               :default_currency [:cast "BAM" :currency]
+                               :default_payer_id payer-id
+                               :created_at       now
+                               :updated_at       now}]
+                     :on-conflict [:tenant_id :user_id]
+                     :do-update-set {:default_payer_id payer-id
+                                     :updated_at       now}}))
+      (log/info "Provisioned user payer" label "for user" user-email "in tenant" t-id)
+      payer)))
 
 ;; ============================================================================
 ;; Lookup

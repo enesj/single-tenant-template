@@ -4,6 +4,7 @@
     [app.shared.adapters.database :refer [convert-pg-objects]]
     [honey.sql :as sql]
     [next.jdbc :as jdbc]
+    [next.jdbc.result-set :as rs]
     [taoensso.timbre :as log]))
 
 (def ^:private valid-assignable-roles #{"admin" "member" "viewer"})
@@ -220,14 +221,57 @@
               :errors {:membership ["Only owners and admins can remove members"]}})))
 
   (let [target-id (membership-id target-membership)
+        target-tenant-id (or (:tenant_id target-membership)
+                           (:tenant_memberships/tenant_id target-membership))
+        target-user-id (or (:user_id target-membership)
+                         (:tenant_memberships/user_id target-membership))
         now       (java.time.LocalDateTime/now)]
-    (convert-pg-objects
-      (jdbc/execute-one! db
-        (sql/format {:update [:tenant_memberships]
-                     :set    {:status     [:cast "suspended" :membership_status]
-                              :updated_at now}
-                     :where  [:= :id target-id]
-                     :returning [:*]})))))
+    (jdbc/with-transaction [tx db]
+      (let [result (convert-pg-objects
+                     (jdbc/execute-one! tx
+                       (sql/format {:update [:tenant_memberships]
+                                    :set    {:status     [:cast "suspended" :membership_status]
+                                             :updated_at now}
+                                    :where  [:= :id target-id]
+                                    :returning [:*]})))]
+        ;; Deactivate the user's system-type payer for this tenant
+        (when (and target-tenant-id target-user-id)
+          (try
+            (let [system-payers (jdbc/execute! tx
+                                  (sql/format {:select [:p.id]
+                                               :from   [[:payers :p]]
+                                               :join   [[:payer_types :pt] [:= :pt.id :p.payer_type_id]]
+                                               :where  [:and
+                                                        [:= :p.tenant_id target-tenant-id]
+                                                        [:= :pt.is_system true]
+                                                        [:= :p.is_active true]]})
+                                  {:builder-fn rs/as-unqualified-lower-maps})
+                  ;; Find payers that belong to this user (by matching label or via user_expense_settings)
+                  user-settings (jdbc/execute-one! tx
+                                  (sql/format {:select [:default_payer_id]
+                                               :from   [:user_expense_settings]
+                                               :where  [:and
+                                                        [:= :tenant_id target-tenant-id]
+                                                        [:= :user_id target-user-id]]})
+                                  {:builder-fn rs/as-unqualified-lower-maps})
+                  user-payer-id (:default_payer_id user-settings)
+                  system-payer-ids (set (map :id system-payers))]
+              ;; Deactivate the user's payer if it's a system-type payer
+              (when (and user-payer-id (contains? system-payer-ids user-payer-id))
+                (jdbc/execute-one! tx
+                  (sql/format {:update [:payers]
+                               :set    {:is_active false :updated_at now}
+                               :where  [:= :id user-payer-id]})))
+              ;; Delete user_expense_settings for this tenant
+              (jdbc/execute-one! tx
+                (sql/format {:delete-from [:user_expense_settings]
+                             :where [:and
+                                     [:= :tenant_id target-tenant-id]
+                                     [:= :user_id target-user-id]]})))
+            (catch Exception e
+              (log/warn e "Failed to cleanup payer/settings on member removal"
+                {:tenant-id target-tenant-id :user-id target-user-id}))))
+        result))))
 
 (defn reinstate-member!
   "Reinstate a suspended membership (set status to active)."

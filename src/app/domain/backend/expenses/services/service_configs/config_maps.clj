@@ -278,19 +278,22 @@
    :allowed-order-by {:label :p/label
                       :payer-type :pt/label
                       :payer-type-label :pt/label
+                      :is-active :p/is_active
                       :created-at :p/created_at
                       :updated-at :p/updated_at}
    :default-order-by :p/label
    :search-fields [:p/label]
    :joins [[:payer_types :pt] [:= :pt/id :p/payer_type_id]]
    :select-fields [[:p/*]
-                   [:pt/label :payer_type_label]]
+                   [:pt/label :payer_type_label]
+                   [:pt/is_system :payer_type_is_system]]
    :before-insert (fn [data]
                     (when-not (get data :payer_type_id)
                       (throw (ex-info "payer_type_id is required" {:data data})))
                     (-> data
                       (assoc :id (UUID/randomUUID))
-                      (update :is_default #(boolean %))))
+                      (update :is_default #(boolean %))
+                      (update :is_active #(if (nil? %) true (boolean %)))))
    :before-update (fn [_id updates]
                     updates)
    :has-search? true
@@ -302,6 +305,7 @@
    :tenant-scoped? true
    :required-fields [:label]
    :allowed-order-by {:label :label
+                      :is-system :is_system
                       :created-at :created_at
                       :updated-at :updated_at}
    :default-order-by :label
@@ -309,9 +313,10 @@
    :before-insert (fn [data]
                     (-> data
                       (assoc :id (UUID/randomUUID))
-                      (update :is_default #(boolean %))))
+                      (update :is_default #(boolean %))
+                      (update :is_system #(boolean %))))
    :before-update (fn [_id updates]
-                    updates)
+                    (dissoc updates :is_system))
    :has-search? true
    :has-count? true})
 

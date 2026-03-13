@@ -1,8 +1,9 @@
 (ns app.domain.backend.expenses.handlers.user-expenses.crud
   "CRUD handlers for user expenses."
   (:require
-    [app.domain.backend.expenses.services.user-expenses :as user-expenses]
     [app.domain.backend.expenses.handlers.user-expenses.helpers :as h]
+    [app.domain.backend.expenses.services.user-expense-settings :as user-settings]
+    [app.domain.backend.expenses.services.user-expenses :as user-expenses]
     [cheshire.core :as json]
     [taoensso.timbre :as log]))
 
@@ -80,6 +81,11 @@
                   items (or (:items body) [])]
               (log/debug "Creating user expense" {:user-id user-id :tenant-id tenant-id :expense-data expense-data})
               (let [expense (user-expenses/create-user-expense! db tenant-id user-id expense-data items)]
+                ;; Sticky default: update default payer if it changed
+                (try
+                  (user-settings/update-sticky-default-payer! db tenant-id user-id (:payer_id expense-data))
+                  (catch Exception e
+                    (log/warn e "Failed to update sticky default payer")))
                 (h/json-response {:data expense} 201)))
             (catch clojure.lang.ExceptionInfo e
               (log/warn "Validation error creating expense" {:error (ex-message e) :data (ex-data e)})

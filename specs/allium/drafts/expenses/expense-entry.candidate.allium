@@ -83,7 +83,17 @@ external entity Payer {
     id: UUID
     tenant_id: UUID
     label: String
-    is_default: Boolean
+    payer_type: PayerType
+    is_active: Boolean
+    -- Default payer is now per-user via UserExpenseDefaults (see payer-and-defaults.candidate.allium).
+    -- is_default: Boolean has been removed.
+}
+
+external entity PayerType {
+    id: UUID
+    tenant_id: UUID
+    name: String
+    is_system: Boolean
 }
 
 external entity Expense {
@@ -677,8 +687,12 @@ surface SmartExpenseForm {
 
     -- Defaults
     @guarantee DefaultSelections
-        -- Opening the form pre-selects the user's default payer.
+        -- Opening the form pre-selects the user's default payer from
+        -- UserExpenseDefaults.default_payer (see payer-and-defaults.candidate.allium).
+        -- expense_category pre-fills from UserExpenseDefaults.default_expense_category.
+        -- notes pre-fills from UserExpenseDefaults.default_note.
         -- Purchased_at defaults to today. Currency defaults to BAM.
+        -- Payer selection list shows only active payers (is_active = true).
 
     -- Search
     @guarantee SearchDebouncing

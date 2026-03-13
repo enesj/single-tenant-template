@@ -34,6 +34,10 @@ value Extraction {
 entity Receipt {
     owner: User?
     payer: Payer?
+    expense_category_id: UUID?
+        -- Set at upload time from user's default; preserved through OCR; editable at approval.
+    notes: String?
+        -- Set at upload time from user's default; preserved through OCR; editable at approval.
 
     storage_key: String
     file_hash: String
@@ -87,9 +91,11 @@ external entity Expense {
     supplier: Supplier
     store: Store?
     payer: Payer
+    expense_category_id: UUID?
     purchased_at: Timestamp
     total_amount: Decimal
     currency: Currency
+    notes: String?
     items: List<LineItem>
 }
 
@@ -101,7 +107,7 @@ config {
 }
 
 rule UploadReceiptNew {
-    when: UploadReceipt(actor, file_hash, storage_key, original_filename, content_type, file_size_bytes, payer?)
+    when: UploadReceipt(actor, file_hash, storage_key, original_filename, content_type, file_size_bytes, payer?, expense_category_id?, notes?)
 
     requires: file_size_bytes <= config.max_upload_size_bytes
     requires: not exists Receipt{file_hash: file_hash}
@@ -109,6 +115,8 @@ rule UploadReceiptNew {
     ensures: Receipt.created(
         owner: actor,
         payer: payer,
+        expense_category_id: expense_category_id,
+        notes: notes,
         storage_key: storage_key,
         file_hash: file_hash,
         original_filename: original_filename,
@@ -121,7 +129,7 @@ rule UploadReceiptNew {
 }
 
 rule UploadReceiptDuplicate {
-    when: UploadReceipt(actor, file_hash, storage_key, original_filename, content_type, file_size_bytes, payer?)
+    when: UploadReceipt(actor, file_hash, storage_key, original_filename, content_type, file_size_bytes, payer?, expense_category_id?, notes?)
 
     requires: exists Receipt{file_hash: file_hash}
 
@@ -267,9 +275,11 @@ rule AutoPostExtractedReceipt {
         supplier: resolved.supplier,
         store: resolved.store,
         payer: receipt.payer,
+        expense_category_id: receipt.expense_category_id,
         purchased_at: receipt.purchased_at_guess,
         total_amount: receipt.total_amount_guess,
         currency: receipt.currency_guess ?? config.default_currency,
+        notes: receipt.notes,
         items: receipt.extraction.items
     )
     ensures: receipt.status = posted
@@ -293,7 +303,7 @@ rule AutoPostBlockedMovesToReviewRequired {
 }
 
 rule SaveReceiptReview {
-    when: SaveReceiptReview(actor, receipt, supplier, payer, purchased_at, total_amount, currency, items)
+    when: SaveReceiptReview(actor, receipt, supplier, payer, purchased_at, total_amount, currency, items, expense_category_id?, notes?)
 
     requires: receipt.visible_to(actor) or actor.role = admin
     requires: receipt.status in {extracted, review_required}
@@ -306,6 +316,8 @@ rule SaveReceiptReview {
 
     ensures: receipt.owner = if receipt.owner = null: actor else: receipt.owner
     ensures: receipt.payer = payer
+    ensures: receipt.expense_category_id = expense_category_id
+    ensures: receipt.notes = notes
 
     ensures: receipt.supplier_guess = supplier.name
     ensures: receipt.total_amount_guess = total_amount
@@ -319,7 +331,7 @@ rule SaveReceiptReview {
 }
 
 rule ApproveReceipt {
-    when: ApproveReceipt(actor, receipt, supplier, payer, purchased_at, total_amount, currency, items)
+    when: ApproveReceipt(actor, receipt, supplier, payer, purchased_at, total_amount, currency, items, expense_category_id?, notes?)
 
     requires: receipt.visible_to(actor) or actor.role = admin
     requires: receipt.status in {extracted, review_required}
@@ -335,9 +347,11 @@ rule ApproveReceipt {
         user: if receipt.owner = null: actor else: receipt.owner,
         supplier: supplier,
         payer: payer,
+        expense_category_id: expense_category_id,
         purchased_at: purchased_at,
         total_amount: total_amount,
         currency: currency,
+        notes: notes,
         items: items
     )
 
@@ -379,7 +393,12 @@ surface ReceiptUploadBoundary {
     facing actor: User
 
     provides:
-        UploadReceipt(actor, file_hash, storage_key, original_filename, content_type, file_size_bytes, payer?)
+        UploadReceipt(actor, file_hash, storage_key, original_filename, content_type, file_size_bytes, payer?, expense_category_id?, notes?)
+
+    @guarantee DefaultsFromUserExpenseDefaults
+        -- payer, expense_category_id, and notes are pre-filled from the
+        -- uploading user's UserExpenseDefaults record. The user may change
+        -- them before submitting. See payer-and-defaults.candidate.allium.
 }
 
 surface UserReceiptOperations {
@@ -396,13 +415,15 @@ surface UserReceiptOperations {
         receipt.total_amount_guess
         receipt.currency_guess
         receipt.purchased_at_guess
+        receipt.expense_category_id
+        receipt.notes
         receipt.refine_pending
 
     provides:
         RequestReceiptOCR(actor, receipt)
-        SaveReceiptReview(actor, receipt, supplier, payer, purchased_at, total_amount, currency, items)
+        SaveReceiptReview(actor, receipt, supplier, payer, purchased_at, total_amount, currency, items, expense_category_id?, notes?)
             when receipt.status in {extracted, review_required}
-        ApproveReceipt(actor, receipt, supplier, payer, purchased_at, total_amount, currency, items)
+        ApproveReceipt(actor, receipt, supplier, payer, purchased_at, total_amount, currency, items, expense_category_id?, notes?)
             when receipt.status in {extracted, review_required}
         DeleteReceipt(actor, receipt)
             when receipt.status != posted
@@ -427,9 +448,9 @@ surface AdminReceiptOperations {
         RequestReceiptOCR(admin, receipt)
         RetryReceiptProcessing(receipt)
         MarkReceiptFailed(receipt, message, details?)
-        SaveReceiptReview(admin, receipt, supplier, payer, purchased_at, total_amount, currency, items)
+        SaveReceiptReview(admin, receipt, supplier, payer, purchased_at, total_amount, currency, items, expense_category_id?, notes?)
             when receipt.status in {extracted, review_required}
-        ApproveReceipt(admin, receipt, supplier, payer, purchased_at, total_amount, currency, items)
+        ApproveReceipt(admin, receipt, supplier, payer, purchased_at, total_amount, currency, items, expense_category_id?, notes?)
             when receipt.status in {extracted, review_required}
         DeleteReceipt(admin, receipt)
             when receipt.status != posted

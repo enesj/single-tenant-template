@@ -5,7 +5,8 @@
      [app.domain.backend.expenses.services.services-factory :as factory]
      [honey.sql :as sql]
      [next.jdbc :as jdbc]
-     [next.jdbc.result-set :as rs]))
+     [next.jdbc.result-set :as rs]
+     [taoensso.timbre :as log]))
 
  ;; ============================================================================
  ;; Service Registration
@@ -25,29 +26,60 @@
 (def ^:private create-payer-type!* (:create! service))
 (def ^:private update-payer-type!* (:update! service))
 
+(defn- assert-not-system-type!
+  "Guard: throw if the payer type with given id has is_system = true."
+  [db id]
+  (let [row (jdbc/execute-one! db
+              (sql/format {:select [:is_system]
+                           :from   [:payer_types]
+                           :where  [:= :id id]
+                           :limit  1})
+              {:builder-fn rs/as-unqualified-lower-maps})]
+    (when (:is_system row)
+      (throw (ex-info "Cannot modify a system payer type"
+               {:type :validation-error :status 403
+                :errors {:payer-type ["System payer types cannot be modified"]}})))))
+
 (def create-payer-type!
   (fn
     ([db data] (create-payer-type! db data nil))
     ([db data opts]
+     ;; Guard: cannot create with is_system = true via API
+     (when (true? (:is_system data))
+       (throw (ex-info "Cannot create a system payer type"
+                {:type :validation-error :status 403
+                 :errors {:payer-type ["System payer types are auto-provisioned"]}})))
      (let [want-default? (true? (:is_default data))
            tenant-id (or (:tenant-id opts) (:tenant_id data))]
        (if want-default?
          (jdbc/with-transaction [tx db]
-           (let [row (create-payer-type!* tx (assoc data :is_default false))]
+           (let [row (create-payer-type!* tx (assoc data :is_default false :is_system false))]
              (set-default-payer-type-in-tx! tx (:id row) tenant-id)))
-         (create-payer-type!* db data))))))
+         (create-payer-type!* db (assoc data :is_system false)))))))
 
 (def update-payer-type!
   (fn
     ([db id updates] (update-payer-type! db id updates nil))
     ([db id updates opts]
+     ;; Guard: cannot update a system payer type
+     (assert-not-system-type! db id)
      (let [want-default? (true? (:is_default updates))
-           tenant-id (:tenant-id opts)]
+           tenant-id (:tenant-id opts)
+           ;; Strip is_system from updates — it's immutable
+           updates (dissoc updates :is_system)]
        (if want-default?
          (jdbc/with-transaction [tx db]
            (when-let [_row (update-payer-type!* tx id (assoc (dissoc updates :is_default) :is_default false) opts)]
              (set-default-payer-type-in-tx! tx id tenant-id)))
          (update-payer-type!* db id updates opts))))))
+
+(def delete-payer-type!*  (:delete! service))
+
+(defn delete-payer-type!
+  "Delete a payer type. Guards against deleting system types."
+  [db id & [opts]]
+  (assert-not-system-type! db id)
+  (delete-payer-type!* db id opts))
 
 (defn get-default-payer-type
   "Get the default payer type. Optional `tenant-id` scopes to a specific tenant."

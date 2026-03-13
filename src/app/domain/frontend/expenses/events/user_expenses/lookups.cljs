@@ -225,13 +225,21 @@
 
 (defn- ^:private form-data-with-file
   ([file]
-   (form-data-with-file file nil))
+   (form-data-with-file file nil nil nil))
   ([file payer-id]
+   (form-data-with-file file payer-id nil nil))
+  ([file payer-id expense-category-id notes]
    (let [form-data (js/FormData.)
-         payer-id* (some-> payer-id str str/trim not-empty)]
+         payer-id* (some-> payer-id str str/trim not-empty)
+         category-id* (some-> expense-category-id str str/trim not-empty)
+         notes* (some-> notes str str/trim not-empty)]
      (.append form-data "file" file)
      (when payer-id*
        (.append form-data "payer_id" payer-id*))
+     (when category-id*
+       (.append form-data "expense_category_id" category-id*))
+     (when notes*
+       (.append form-data "notes" notes*))
      form-data)))
 
 (rf/reg-event-db
@@ -263,7 +271,12 @@
   common-interceptors
   (fn [{:keys [db]} [file]]
     (let [payer-id (get-in db [:user-expenses :upload :payer-id])
-          form-data (form-data-with-file file payer-id)]
+          settings (get-in db [:user-expenses :settings :data])
+          category-id (or (get-in db [:user-expenses :upload :expense-category-id])
+                        (:default-expense-category-id settings))
+          notes (or (get-in db [:user-expenses :upload :notes])
+                  (:default-note settings))
+          form-data (form-data-with-file file payer-id category-id notes)]
       {:db (-> db
              (assoc-in [:user-expenses :upload :batch] nil)
              (assoc-in [:user-expenses :upload :loading?] true)
@@ -330,7 +343,9 @@
         filename (or (.-name file) "receipt")
         payer-id (or (get-in db [:user-expenses :upload :batch :payer-id])
                    (get-in db [:user-expenses :upload :payer-id]))
-        form-data (form-data-with-file file payer-id)]
+        category-id (get-in db [:user-expenses :upload :batch :expense-category-id])
+        notes (get-in db [:user-expenses :upload :batch :notes])
+        form-data (form-data-with-file file payer-id category-id notes)]
     {:db (-> db
            (assoc-in [:user-expenses :upload :loading?] true)
            (assoc-in [:user-expenses :upload :batch :current] filename))
@@ -349,7 +364,12 @@
   (fn [{:keys [db]} [files]]
     (let [files (->> files (remove nil?) vec)
           total (count files)
-          payer-id (get-in db [:user-expenses :upload :payer-id])]
+          payer-id (get-in db [:user-expenses :upload :payer-id])
+          settings (get-in db [:user-expenses :settings :data])
+          category-id (or (get-in db [:user-expenses :upload :expense-category-id])
+                        (:default-expense-category-id settings))
+          notes (or (get-in db [:user-expenses :upload :notes])
+                  (:default-note settings))]
       (if (pos? total)
         (upload-receipts-next-fx
           (-> db
@@ -361,6 +381,8 @@
                                                        :failed 0
                                                        :current nil
                                                        :payer-id payer-id
+                                                       :expense-category-id category-id
+                                                       :notes notes
                                                        ;; Track created receipt IDs so we can queue OCR after the last upload.
                                                        :receipt-ids []}))
           files)

@@ -3,6 +3,7 @@
   (:require
     [app.shared.adapters.database :refer [convert-pg-objects]]
     [app.template.backend.auth.service :as auth-service]
+    [app.template.backend.services.tenant :as tenant-svc]
     [honey.sql :as sql]
     [java-time.api :as time]
     [next.jdbc :as jdbc]
@@ -176,6 +177,16 @@
                        :set    {:status     [:cast "accepted" :invitation_status]
                                 :updated_at now}
                        :where  [:= :id inv-id]}))
+
+        ;; Auto-provision a payer + user_expense_settings for the new member
+        (try
+          (tenant-svc/provision-user-payer! tx tenant-id user-id
+            (or (:email user) (:users/email user))
+            :full-name (or (:full_name user) (:users/full_name user)))
+          (catch Exception e
+            (log/warn e "Failed to provision user payer on invitation accept"
+              {:tenant-id tenant-id :user-id user-id})))
+
         (log/info "Invitation accepted — user" (or (:email user) (:users/email user)) "joined tenant" tenant-id "as" role)
         membership))))
 

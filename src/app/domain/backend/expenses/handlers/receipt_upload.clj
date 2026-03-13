@@ -161,8 +161,12 @@
           user-id (h/get-user-id request)
           tenant-id (h/get-tenant-id request)
           payer-id (parse-uuid-param :payer-id (:payer-id params))
+          expense-category-id (parse-uuid-param :expense-category-id (:expense-category-id params))
+          notes (some-> (:notes params) str str/trim not-empty)
           result (receipt-storage/upload-receipt! db (cond-> {:user_id user-id
                                                               :payer_id payer-id
+                                                              :expense_category_id expense-category-id
+                                                              :notes notes
                                                               :storage_key storage_key
                                                               :bytes bytes
                                                               :original_filename original_filename
