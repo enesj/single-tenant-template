@@ -7,21 +7,34 @@
 -- - Filter apply/clear semantics
 -- - Per-entity filter state and field-level filterability toggles
 -- - Client-mode (local) filtering behavior
--- - Server-mode page reset + refresh dispatch behavior
--- - Canonical page mode split (admin pages client-mode, user pages server-mode)
+-- - Mode-agnostic page reset on filter change (see list-filter-pagination-reset.allium)
+-- - Server-mode refresh dispatch behavior
+-- - Canonical page mode split (reference-data = client, transactional = server)
 --
 -- Does NOT cover:
 -- - Sorting semantics (see list-view-sort.candidate.allium)
 -- - Column visibility and table width controls
 -- - Domain-specific backend query implementation details
 
+-- Reference-data entities use client-side pagination (small, static datasets).
+-- Transactional entities (receipts, expenses) use server-side pagination.
+value EntityDataProfile {
+    kind: reference_data | transactional
+
+    -- reference_data: categories, cities, countries, manufacturers, subcategories,
+    --                 payers, payer_types, expense_categories
+    -- transactional:  receipts, expenses, suppliers, stores, articles, aliases
+}
+
 entity CanonicalListPage {
     entity_type: EntityType
     route_scope: admin | user
+    data_profile: EntityDataProfile
     list: ListViewFilterState with entity_type = this.entity_type
 
     is_admin: route_scope = admin
     is_user: route_scope = user
+    is_reference_data: data_profile.kind = reference_data
 }
 
 entity FieldFilterability {
@@ -73,16 +86,23 @@ variant SelectFilter : ColumnFilter {
 }
 
 rule CanonicalPageFilterModeConfigured {
+    -- Pagination mode is determined by data profile, not route scope.
+    -- Reference-data entities (categories, cities, etc.) always use client mode
+    -- in both admin and user pages — datasets are small and static.
+    -- Transactional entities (receipts, expenses) use server mode in user pages.
     when: page: CanonicalListPage.created
 
     ensures:
-        if page.is_admin:
+        if page.is_reference_data:
             page.list.pagination_mode = client
     ensures:
-        if page.is_user:
+        if not page.is_reference_data and page.is_admin:
+            page.list.pagination_mode = client
+    ensures:
+        if not page.is_reference_data and page.is_user:
             page.list.pagination_mode = server
     ensures:
-        if page.is_user:
+        if page.list.pagination_mode = server:
             page.list.refresh_event_registered = true
 }
 
@@ -108,9 +128,10 @@ rule FilterApplied {
 
     ensures: NormalizeAndStoreFilter(list, field_id, raw_value)
 
-    ensures:
-        if list.pagination_mode = server:
-            list.current_page = 1
+    -- Page reset is mode-agnostic: applies to both client and server pagination.
+    -- Only fires when the filter value actually changed (one-shot guard).
+    -- See list-filter-pagination-reset.allium for the full specification.
+    ensures: list.current_page = 1
     ensures:
         if list.pagination_mode = server and list.refresh_event_registered:
             ServerFilterRefetch(list)
@@ -130,9 +151,8 @@ rule FilterCleared {
         if field_id = null:
             ClearAllFilters(list)
 
-    ensures:
-        if list.pagination_mode = server:
-            list.current_page = 1
+    -- Mode-agnostic page reset, same as FilterApplied.
+    ensures: list.current_page = 1
     ensures:
         if list.pagination_mode = server and list.refresh_event_registered:
             ServerFilterRefetch(list)
@@ -160,11 +180,32 @@ rule ServerFilteringDelegatesToEntityRefresh {
     ensures: ServerFilterRefetch(list)
 }
 
+rule ReferenceDataRefreshIgnoresPagination {
+    -- When a reference-data list refresh is triggered (e.g. after CRUD),
+    -- the handler fetches the full dataset with a fixed high limit (200–500)
+    -- and offset 0, ignoring the page-based params used in server mode.
+    -- The handler reads pagination_mode from db to decide which path to take.
+    when: RefreshListTriggered(list)
+    requires: list.pagination_mode = client
+
+    ensures: FetchWithFixedLimit(list)
+
+    @guidance
+        -- Each refresh-*-list handler (categories, cities, etc.) branches:
+        --   if (= :server (get-in db (paths/list-pagination-mode entity-key)))
+        --     → use current-list-page-params (server paging)
+        --   else
+        --     → {:limit N :offset 0} (client bulk fetch)
+        -- This preserves backward compatibility: if a page is ever switched
+        -- back to server mode, the handler works without changes.
+}
+
 deferred NormalizeAndStoreFilter
 deferred RemoveFilter
 deferred ClearAllFilters
 deferred ClientRowsFiltered
 deferred ServerFilterRefetch
+deferred FetchWithFixedLimit
 
 surface CanonicalListFilterControls {
     facing viewer: User
@@ -188,7 +229,7 @@ surface CanonicalListFilterControls {
         When `list.has_filters` and `list.active_inline_field = null`, compact active-filter chips are shown.
 
     guarantee:
-        `list.pagination_mode = server` resets `list.current_page` to `1` on filter apply/clear before refresh dispatch.
+        Filter apply/clear resets `list.current_page` to `1` regardless of pagination mode (one-shot, only on actual value change). Server mode additionally dispatches a refresh.
 
     guarantee:
         Client mode evaluates filters locally with AND semantics across active filters.
@@ -197,5 +238,5 @@ surface CanonicalListFilterControls {
         Text filtering matches case-insensitive substrings; number/date ranges are inclusive; select filters match selected values.
 }
 
-open question "Should canonical admin pages move from fetch-many + client filtering to server filtering for very large datasets?"
+open question "Should transactional admin pages move from fetch-many + client filtering to server filtering for very large datasets? (Reference-data pages are intentionally client-mode.)"
 open question "Text filters currently auto-apply at 3+ chars in the inline UI, but direct state writes can still apply shorter strings. Should this be enforced uniformly?"

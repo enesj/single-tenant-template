@@ -1,8 +1,8 @@
 -- Sorting on canonical list pages (list-view control)
 --
 -- Distilled from shared list-view behavior across canonical expenses pages:
--- - Admin pages commonly run in client mode (fetch-many + local sorting)
--- - User pages configure server mode (refresh event + backend sorting)
+-- - Reference-data pages (admin + user) run in client mode (fetch-many + local sorting)
+-- - Transactional user pages (receipts, expenses) run in server mode (refresh + backend sorting)
 --
 -- Covers: sort-state toggle, page reset, client/server mode split,
 -- config-driven sortable-column restriction, and allowlist-driven backend ORDER BY.
