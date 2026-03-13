@@ -51,7 +51,10 @@
   :user-expenses/refresh-expense-categories-list
   common-interceptors
   (fn [{:keys [db]} _]
-    {:dispatch [:user-expenses/fetch-expense-categories (current-expense-categories-page-params db)]}))
+    (let [params (if (= :server (get-in db (paths/list-pagination-mode :expense-categories)))
+                   (current-expense-categories-page-params db)
+                   {:limit 500 :offset 0})]
+      {:dispatch [:user-expenses/fetch-expense-categories params]})))
 
 (rf/reg-event-fx
   :user-expenses/fetch-expense-categories

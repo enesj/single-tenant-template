@@ -274,8 +274,9 @@
             pagination)))))
 
 (deftest cities-refresh-list-uses-template-pagination-state
-  (testing "cities refresh wrapper derives limit/offset from template list state"
+  (testing "server mode: cities refresh wrapper derives limit/offset from template list state"
     (sup/reset-db!)
+    (rf/dispatch-sync [::list-ui-state-events/set-pagination-mode :cities :server])
     (swap! rf-db/app-db assoc-in (paths/list-per-page :cities) 30)
     (swap! rf-db/app-db assoc-in (paths/list-current-page :cities) 4)
     (let [dispatches (atom [])]
@@ -287,6 +288,24 @@
           (is (= :user-expenses/fetch-cities event-id))
           (is (= {:limit 30 :offset 90}
                 (select-keys params [:limit :offset]))))
+        (finally
+          (rf/reg-fx :dispatch rf/dispatch)))))
+
+  (testing "client mode: cities refresh fetches all records"
+    (sup/reset-db!)
+    (rf/dispatch-sync [::list-ui-state-events/set-pagination-mode :cities :client])
+    (swap! rf-db/app-db assoc-in (paths/list-per-page :cities) 30)
+    (swap! rf-db/app-db assoc-in (paths/list-current-page :cities) 4)
+    (let [dispatches (atom [])]
+      (rf/reg-fx :dispatch (fn [event]
+                             (swap! dispatches conj event)))
+      (try
+        (rf/dispatch-sync [:user-expenses/refresh-cities-list])
+        (let [[event-id params] (first @dispatches)]
+          (is (= :user-expenses/fetch-cities event-id))
+          (is (= {:limit 500 :offset 0}
+                (select-keys params [:limit :offset]))
+            "Client mode should fetch all records regardless of per-page/current-page"))
         (finally
           (rf/reg-fx :dispatch rf/dispatch))))))
 
@@ -308,8 +327,9 @@
     (is (= 3 (get-in @rf-db/app-db (paths/list-total-items :cities))))))
 
 (deftest expense-categories-refresh-list-uses-template-pagination-state
-  (testing "expense categories refresh wrapper derives limit/offset from template list state"
+  (testing "server mode: expense categories refresh derives limit/offset from template list state"
     (sup/reset-db!)
+    (rf/dispatch-sync [::list-ui-state-events/set-pagination-mode :expense-categories :server])
     (swap! rf-db/app-db assoc-in (paths/list-per-page :expense-categories) 12)
     (swap! rf-db/app-db assoc-in (paths/list-current-page :expense-categories) 5)
     (let [dispatches (atom [])]
@@ -321,6 +341,24 @@
           (is (= :user-expenses/fetch-expense-categories event-id))
           (is (= {:limit 12 :offset 48}
                 (select-keys params [:limit :offset]))))
+        (finally
+          (rf/reg-fx :dispatch rf/dispatch)))))
+
+  (testing "client mode: expense categories refresh fetches all records"
+    (sup/reset-db!)
+    (rf/dispatch-sync [::list-ui-state-events/set-pagination-mode :expense-categories :client])
+    (swap! rf-db/app-db assoc-in (paths/list-per-page :expense-categories) 12)
+    (swap! rf-db/app-db assoc-in (paths/list-current-page :expense-categories) 5)
+    (let [dispatches (atom [])]
+      (rf/reg-fx :dispatch (fn [event]
+                             (swap! dispatches conj event)))
+      (try
+        (rf/dispatch-sync [:user-expenses/refresh-expense-categories-list])
+        (let [[event-id params] (first @dispatches)]
+          (is (= :user-expenses/fetch-expense-categories event-id))
+          (is (= {:limit 500 :offset 0}
+                (select-keys params [:limit :offset]))
+            "Client mode should fetch all records regardless of per-page/current-page"))
         (finally
           (rf/reg-fx :dispatch rf/dispatch))))))
 

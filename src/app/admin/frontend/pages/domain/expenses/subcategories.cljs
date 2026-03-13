@@ -8,6 +8,7 @@
     [app.template.frontend.components.dropdown.action :as dropdown]
     [app.template.frontend.components.list :refer [list-view]]
     [app.template.frontend.components.list.cells :as list-cells]
+    [app.template.frontend.events.list.ui-state :as ui-state]
     [app.template.frontend.utils.id :as id-utils]
     [re-frame.core :as rf]
     [uix.core :refer [$ defui use-callback use-effect]]
@@ -60,11 +61,12 @@
         entity-spec (use-subscribe [(keyword "entity-specs" (name entity-name))])
         refresh-list (use-callback
                        (fn []
+                         (rf/dispatch-sync [::ui-state/set-pagination-mode entity-name :client])
                          ;; Categories: reference data for category_id FK select (fetch-mode, no pagination state)
                          (rf/dispatch [:app.domain.frontend.expenses.events.categories/load-list
                                        {:fetch-limit 200 :fetch-offset 0}])
                          (rf/dispatch [:app.domain.frontend.expenses.events.subcategories/load-list
-                                       {}]))
+                                       {:fetch-limit 500 :fetch-offset 0}]))
                        [])]
     (use-effect
       (fn []

@@ -88,7 +88,10 @@
   :user-expenses/refresh-categories-list
   common-interceptors
   (fn [{:keys [db]} _]
-    {:dispatch [:user-expenses/fetch-categories (current-list-page-params db :categories 500)]}))
+    (let [params (if (= :server (get-in db (paths/list-pagination-mode :categories)))
+                   (current-list-page-params db :categories 500)
+                   {:limit 500 :offset 0})]
+      {:dispatch [:user-expenses/fetch-categories params]})))
 
 ;; ---------------------------------------------------------------------------
 ;; Categories

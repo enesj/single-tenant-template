@@ -51,7 +51,10 @@
   :user-expenses/refresh-cities-list
   common-interceptors
   (fn [{:keys [db]} _]
-    {:dispatch [:user-expenses/fetch-cities (current-cities-page-params db)]}))
+    (let [params (if (= :server (get-in db (paths/list-pagination-mode :cities)))
+                   (current-cities-page-params db)
+                   {:limit 500 :offset 0})]
+      {:dispatch [:user-expenses/fetch-cities params]})))
 
 (rf/reg-event-fx
   :user-expenses/fetch-cities

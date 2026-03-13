@@ -78,13 +78,19 @@
   :user-expenses/refresh-payers-list
   common-interceptors
   (fn [{:keys [db]} _]
-    {:dispatch [:user-expenses/fetch-payers (current-list-page-params db :payers 200)]}))
+    (let [params (if (= :server (get-in db (paths/list-pagination-mode :payers)))
+                   (current-list-page-params db :payers 200)
+                   {:limit 200 :offset 0})]
+      {:dispatch [:user-expenses/fetch-payers params]})))
 
 (rf/reg-event-fx
   :user-expenses/refresh-payer-types-list
   common-interceptors
   (fn [{:keys [db]} _]
-    {:dispatch [:user-expenses/fetch-payer-types (current-list-page-params db :payer-types 200)]}))
+    (let [params (if (= :server (get-in db (paths/list-pagination-mode :payer-types)))
+                   (current-list-page-params db :payer-types 200)
+                   {:limit 200 :offset 0})]
+      {:dispatch [:user-expenses/fetch-payer-types params]})))
 
 ;; ---------------------------------------------------------------------------
 ;; Suppliers

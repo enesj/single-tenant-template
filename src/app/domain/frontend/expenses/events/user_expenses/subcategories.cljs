@@ -88,7 +88,10 @@
   :user-expenses/refresh-subcategories-list
   common-interceptors
   (fn [{:keys [db]} _]
-    {:dispatch [:user-expenses/fetch-subcategories (current-list-page-params db :subcategories 500)]}))
+    (let [params (if (= :server (get-in db (paths/list-pagination-mode :subcategories)))
+                   (current-list-page-params db :subcategories 500)
+                   {:limit 500 :offset 0})]
+      {:dispatch [:user-expenses/fetch-subcategories params]})))
 
 ;; ---------------------------------------------------------------------------
 ;; Subcategories

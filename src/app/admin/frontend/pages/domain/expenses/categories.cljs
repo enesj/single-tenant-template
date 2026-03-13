@@ -23,10 +23,8 @@
         entity-spec (use-subscribe [(keyword "entity-specs" (name entity-name))])
         refresh-list (use-callback
                        (fn []
-                         (rf/dispatch-sync [::ui-state/set-pagination-mode entity-name :server])
-                         (rf/dispatch-sync [::ui-state/set-refresh-event entity-name
-                                            [::categories-events/load-list]])
-                         (rf/dispatch [::categories-events/load-list {:page 1}]))
+                         (rf/dispatch-sync [::ui-state/set-pagination-mode entity-name :client])
+                         (rf/dispatch [::categories-events/load-list {:fetch-limit 500 :fetch-offset 0}]))
                        [])]
     (use-effect
       (fn []
@@ -45,5 +43,4 @@
         ($ list-view
           {:entity-name entity-name
            :entity-spec entity-spec
-           :title "Categories"
-           })))))
+           :title "Categories"})))))

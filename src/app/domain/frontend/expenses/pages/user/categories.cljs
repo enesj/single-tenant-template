@@ -80,8 +80,7 @@
                        [])]
     (use-effect
       (fn []
-        (rf/dispatch [::list-ui-state-events/set-pagination-mode entity-name :server])
-        (rf/dispatch [::list-ui-state-events/set-refresh-event entity-name [:user-expenses/refresh-categories-list]])
+        (rf/dispatch [::list-ui-state-events/set-pagination-mode entity-name :client])
         (refresh-list)
         js/undefined)
       [refresh-list])

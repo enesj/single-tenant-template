@@ -89,7 +89,10 @@
   :user-expenses/refresh-manufacturers-list
   common-interceptors
   (fn [{:keys [db]} _]
-    {:dispatch [:user-expenses/fetch-manufacturers (current-list-page-params db :manufacturers 200)]}))
+    (let [params (if (= :server (get-in db (paths/list-pagination-mode :manufacturers)))
+                   (current-list-page-params db :manufacturers 200)
+                   {:limit 500 :offset 0})]
+      {:dispatch [:user-expenses/fetch-manufacturers params]})))
 
 ;; ---------------------------------------------------------------------------
 ;; Manufacturers
