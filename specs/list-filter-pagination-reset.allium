@@ -1,0 +1,150 @@
+-- List Filter Pagination Reset
+--
+-- When filters change in a paginated list view, the current page must reset
+-- to page 1 so users see filtered results immediately without hunting across pages.
+-- This applies to all entity list views (admin and user) regardless of pagination mode.
+
+-- =============================================================================
+-- Entities
+-- =============================================================================
+
+entity ListViewState {
+    -- Fields
+    entity_type: EntityType
+    current_page: Integer
+    per_page: Integer
+    pagination_mode: server | client
+    total_items: Integer?
+
+    -- Filter state
+    active_filters: Map<FieldKey, FilterValue>
+    filter_modal_open: Boolean
+
+    -- Derived
+    has_active_filters: active_filters.count > 0
+    is_on_first_page: current_page = 1
+}
+
+value FilterValue {
+    -- A filter value can be text, number range, date range, or select options.
+    -- The concrete shape varies; what matters for pagination is whether it changed.
+}
+
+external entity EntityType { name: String }
+external entity FieldKey { name: String }
+
+-- =============================================================================
+-- Rules
+-- =============================================================================
+
+rule ResetPageOnFilterApply {
+    -- When a filter is applied or updated, reset to page 1.
+    -- This is a one-shot reset at the moment of change, NOT a continuous effect.
+    when: ApplyFilter(state, field, value)
+    requires: state.active_filters != state.active_filters.with(field, value)
+    ensures: state.current_page = 1
+
+    @guidance
+        -- The page reset must happen in the same transaction (re-frame event handler)
+        -- as the filter update — not in a separate effect or subscription.
+        -- This prevents the prior bug where an open filter form continuously
+        -- pushed the page back to 1 on every re-render.
+}
+
+rule ResetPageOnFilterClear {
+    -- When a single filter or all filters are cleared, reset to page 1.
+    when: ClearFilter(state, field)
+    requires: state.has_active_filters
+    ensures: state.current_page = 1
+
+    @guidance
+        -- Same one-shot semantics as ResetPageOnFilterApply.
+        -- field may be nil to indicate clearing all filters.
+}
+
+rule NoResetWhenFilterUnchanged {
+    -- If the filter value is identical to the existing one, do nothing.
+    -- This prevents re-render loops from the auto-filter debounce.
+    when: ApplyFilter(state, field, value)
+    requires: state.active_filters = state.active_filters.with(field, value)
+    ensures: state.current_page = state.current_page
+
+    @guidance
+        -- The same-value guard (normalize + compare) is critical for preventing
+        -- the historical bug where an open filter form kept resetting to page 1.
+        -- Auto-filter fires on every keystroke via debounce; only actual changes
+        -- should trigger a reset.
+}
+
+rule RefreshServerDataAfterFilterReset {
+    -- After filter change + page reset, dispatch a server refresh
+    -- so the server returns data for page 1 with the filter applied.
+    when: ApplyFilter(state, field, value)
+    requires: state.pagination_mode = server
+    requires: state.active_filters != state.active_filters.with(field, value)
+    ensures: ServerRefreshDispatched(state)
+
+    @guidance
+        -- The server refresh event (e.g. ::load-list) reads current_page from db
+        -- (now 1) and should forward applicable filters as query params.
+        -- IMPORTANT: filter field keys in the db use snake_case (from field IDs)
+        -- but server-search-keys use kebab-case (app convention). These must be
+        -- normalised before the contains? check, or filters won't reach the server.
+}
+
+rule RefreshServerDataAfterFilterClear {
+    when: ClearFilter(state, field)
+    requires: state.pagination_mode = server
+    requires: state.has_active_filters
+    ensures: ServerRefreshDispatched(state)
+}
+
+-- =============================================================================
+-- Constraints
+-- =============================================================================
+
+invariant FilterResetIsOneShot {
+    -- The page reset is triggered by filter VALUE change only.
+    -- While the filter modal is open with no value change,
+    -- the user must be able to navigate pages freely.
+    for state in ListViewState:
+        state.filter_modal_open implies state.current_page = state.current_page
+}
+
+-- =============================================================================
+-- Surfaces
+-- =============================================================================
+
+surface ListFilterPanel {
+    facing viewer: User
+
+    context list: ListViewState
+
+    exposes:
+        list.active_filters
+        list.current_page
+        list.filter_modal_open
+
+    provides:
+        ApplyFilter(list, field, value)
+        ClearFilter(list, field)
+
+    @guarantee PageResetOnChange
+        -- After a filter apply/clear that changes the active filter set,
+        -- the list view shows page 1. The user never needs to manually
+        -- navigate to find filtered results.
+
+    @guarantee FreeNavigationWhileFiltering
+        -- While the filter modal is open but no filter value has changed,
+        -- the user can navigate to any page without being forced back to page 1.
+        -- This prevents the prior regression where an open filter form locked
+        -- the user on page 1.
+}
+
+-- =============================================================================
+-- Open Questions
+-- =============================================================================
+
+open question "Server-search-key normalisation: filter keys are stored in snake_case (:canonical_name) but server-search-keys use kebab-case (:canonical-name). Should normalisation happen at filter storage time, at search-key lookup time, or both?"
+
+open question "Client-side 'Found N matching items' count: in server mode, this counts matches from locally-cached page data only, which may be misleading. Should this count be hidden in server mode, or should the server return a filtered total?"

@@ -7,6 +7,7 @@
   (:require
     [ajax.core :as ajax]
     [app.admin.frontend.utils.http :as admin-http]
+    [app.shared.model-naming :as model-naming]
     [app.shared.pagination :as pagination]
     [app.template.frontend.db.paths :as paths]
     [day8.re-frame.http-fx]
@@ -141,11 +142,17 @@
               ;; :server-search-keys are forwarded; other column filters remain
               ;; client-side only (applied on the current page by subscriptions).
               server-mode? (= :server (get-in db (paths/list-pagination-mode entity-key)))
+              ;; Forward server-searchable filters as the :search query param.
+              ;; Filter keys in the db may be snake_case (:canonical_name) while
+              ;; server-search-keys use kebab-case (:canonical-name), so normalise
+              ;; with ensure-app-keyword before the lookup.
               db-filters (when (and server-mode? (not fetch-mode?) (seq search-keys))
                            (let [raw-filters (get-in db (paths/list-filters entity-key) {})]
                              (when (seq raw-filters)
                                (let [search-val (some (fn [[k v]]
-                                                        (when (and (contains? search-keys k)
+                                                        (when (and (or (contains? search-keys k)
+                                                                     (contains? search-keys
+                                                                       (model-naming/ensure-app-keyword k)))
                                                                 (string? v)
                                                                 (seq v))
                                                           v))

@@ -135,11 +135,12 @@
         (finally
           (rf/reg-fx :dispatch rf/dispatch)))))
 
-  (testing "In client mode apply filter does not dispatch refresh"
+  (testing "In client mode apply filter does not dispatch refresh but still resets page"
     (reset! rf-db/app-db {})
     (rf/dispatch-sync [::test-initialize-db])
     (rf/dispatch-sync [::ui-state-events/set-pagination-mode :items :client])
     (rf/dispatch-sync [::ui-state-events/set-refresh-event :items [::test-refresh :client-filters]])
+    (rf/dispatch-sync [::ui-state-events/set-current-page :items 5])
 
     (let [refresh-dispatches (atom [])]
       (rf/reg-fx :dispatch (fn [event]
@@ -148,8 +149,31 @@
         (rf/dispatch-sync [::filters-events/apply-filter :items :description "client-side"])
         (is (empty? @refresh-dispatches)
           "Client mode should not dispatch refresh on filter apply")
+        (is (= 1 (get-in @rf-db/app-db (paths/list-current-page :items)))
+          "Client mode should still reset page to 1 on filter apply")
         (finally
-          (rf/reg-fx :dispatch rf/dispatch))))))
+          (rf/reg-fx :dispatch rf/dispatch)))))
+
+  (testing "In client mode clear filter resets page to 1"
+    (reset! rf-db/app-db {})
+    (rf/dispatch-sync [::test-initialize-db])
+    (rf/dispatch-sync [::ui-state-events/set-pagination-mode :items :client])
+    (rf/dispatch-sync [::filters-events/apply-filter :items :description "seed"])
+    (rf/dispatch-sync [::ui-state-events/set-current-page :items 3])
+
+    (rf/dispatch-sync [::filters-events/clear-filter :items :description])
+    (is (= 1 (get-in @rf-db/app-db (paths/list-current-page :items)))
+      "Client mode should reset page to 1 on filter clear"))
+
+  (testing "Reapplying identical filter does not reset page (one-shot guard)"
+    (reset! rf-db/app-db {})
+    (rf/dispatch-sync [::test-initialize-db])
+    (rf/dispatch-sync [::filters-events/apply-filter :items :description "stable"])
+    (rf/dispatch-sync [::ui-state-events/set-current-page :items 4])
+
+    (rf/dispatch-sync [::filters-events/apply-filter :items :description "stable"])
+    (is (= 4 (get-in @rf-db/app-db (paths/list-current-page :items)))
+      "Identical filter value should not reset page — prevents lock-to-page-1 bug")))
 
 (deftest error-handling-test
   (testing "Missing entity or field should leave db unchanged"

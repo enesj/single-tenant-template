@@ -143,9 +143,11 @@
                          (assoc-in db (paths/list-filters entity-type) updated-filters)
                          db)
             server-mode? (server-pagination? updated-db entity-type)
-            page-reset-needed? (and server-mode?
-                                    filters-changed?
-                                    (not= 1 (current-page updated-db entity-type)))
+            ;; Reset to page 1 whenever filters actually change, regardless of
+            ;; pagination mode.  The same-value? guard above ensures this is a
+            ;; one-shot reset (no continuous re-render while the modal is open).
+            page-reset-needed? (and filters-changed?
+                                 (not= 1 (current-page updated-db entity-type)))
             paged-db (if page-reset-needed?
                        (sync-current-page updated-db entity-type 1)
                        updated-db)
@@ -182,8 +184,10 @@
                    db)
                  changed?]))
             server-mode? (server-pagination? updated-db entity-type)
-            page-reset-needed? (and server-mode?
-                                    (not= 1 (current-page updated-db entity-type)))
+            ;; Reset to page 1 whenever filters actually change, regardless of
+            ;; pagination mode — mirrors ::apply-filter behaviour.
+            page-reset-needed? (and filters-changed?
+                                 (not= 1 (current-page updated-db entity-type)))
             paged-db (if page-reset-needed?
                        (sync-current-page updated-db entity-type 1)
                        updated-db)
