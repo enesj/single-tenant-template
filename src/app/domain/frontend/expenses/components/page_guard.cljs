@@ -54,12 +54,3 @@
     {:capability :expenses/unmapped.access
      :children children}))
 
-(defui write-access-guard
-  "Guards a page for users who can write (member+).
-   
-   Props:
-   - :children - content to render if authorized"
-  [{:keys [children]}]
-  ($ expenses-page-guard
-    {:capability :expenses/expense.write
-     :children children}))

@@ -60,11 +60,6 @@
   [role]
   (>= (role-level role) 3))
 
-(defn assigned?
-  "Returns true if user has any known role."
-  [role]
-  (>= (role-level role) 1))
-
 (defn can-write?
   "Returns true if user can create/update (member+)."
   [role]

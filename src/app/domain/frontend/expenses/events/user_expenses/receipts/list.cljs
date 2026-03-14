@@ -43,15 +43,6 @@
               (receipt-refine-pending? receipt)))
       rows)))
 
-(defn- parse-pos-int
-  [value]
-  (cond
-    (number? value) (when (pos? value) (long value))
-    (string? value) (let [n (js/parseInt value 10)]
-                      (when (and (number? n) (not (js/isNaN n)) (pos? n))
-                        (long n)))
-    :else nil))
-
 (defn- normalize-status-filter
   [status-filter]
   (letfn [(->status [value]

@@ -47,30 +47,6 @@
   (let [v (some-> value str str/trim)]
     (when (seq v) v)))
 
-(defn- pad2
-  [n]
-  (if (< n 10)
-    (str "0" n)
-    (str n)))
-
-(defn- month-key-from-date
-  [d]
-  (str (.getUTCFullYear d) "-" (pad2 (inc (.getUTCMonth d)))))
-
-(defn- shift-months
-  [d months]
-  (let [copy (js/Date. (.getTime d))]
-    (.setUTCMonth copy (+ (.getUTCMonth copy) months))
-    copy))
-
-(defn default-month-range
-  []
-  (let [now (js/Date.)
-        month-b (month-key-from-date now)
-        month-a (month-key-from-date (shift-months now -1))]
-    {:month-a month-a
-     :month-b month-b}))
-
 (defn default-report-filters
   []
   {:months-back 6

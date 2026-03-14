@@ -5,8 +5,7 @@
      [app.domain.backend.expenses.services.services-factory :as factory]
      [honey.sql :as sql]
      [next.jdbc :as jdbc]
-     [next.jdbc.result-set :as rs]
-     [taoensso.timbre :as log]))
+     [next.jdbc.result-set :as rs]))
 
  ;; ============================================================================
  ;; Service Registration

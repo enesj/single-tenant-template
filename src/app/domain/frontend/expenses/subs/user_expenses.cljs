@@ -85,24 +85,9 @@
     (get-in db [:user-expenses :suppliers :items])))
 
 (rf/reg-sub
-  :user-expenses/categories
-  (fn [db _]
-    (get-in db [:user-expenses :categories :items])))
-
-(rf/reg-sub
-  :user-expenses/subcategories
-  (fn [db _]
-    (get-in db [:user-expenses :subcategories :items])))
-
-(rf/reg-sub
   :user-expenses/expense-categories
   (fn [db _]
     (get-in db [:user-expenses :expense-categories :items])))
-
-(rf/reg-sub
-  :user-expenses/manufacturers
-  (fn [db _]
-    (get-in db [:user-expenses :manufacturers :items])))
 
 ;; Supplier detail (used by the user suppliers modal)
 (rf/reg-sub
@@ -338,17 +323,6 @@
   (fn [db _]
     (get-in db [:user-expenses :search :related-loading?])))
 
-;; Quick search (smart expense form)
-(rf/reg-sub
-  :user-expenses/quick-search-results
-  (fn [db _]
-    (get-in db [:user-expenses :quick-search :results] [])))
-
-(rf/reg-sub
-  :user-expenses/quick-search-loading?
-  (fn [db _]
-    (boolean (get-in db [:user-expenses :quick-search :loading?]))))
-
 ;; Quick Add search (context-first /expenses/new workflow)
 (rf/reg-sub
   :user-expenses/quick-add-search-results
@@ -370,19 +344,9 @@
        :related {}})))
 
 (rf/reg-sub
-  :user-expenses/quick-add-related-loading?
-  (fn [db _]
-    (boolean (get-in db [:user-expenses :quick-add-related :loading?]))))
-
-(rf/reg-sub
   :user-expenses/cooccurring-articles
   (fn [db _]
     (get-in db [:user-expenses :cooccurring-articles :results] [])))
-
-(rf/reg-sub
-  :user-expenses/cooccurring-articles-loading?
-  (fn [db _]
-    (boolean (get-in db [:user-expenses :cooccurring-articles :loading?]))))
 
 (rf/reg-sub
   :user-expenses/context-suggestions

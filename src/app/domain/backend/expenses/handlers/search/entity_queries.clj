@@ -6,47 +6,6 @@
     [next.jdbc :as jdbc]
     [next.jdbc.result-set :as rs]))
 
-(defn search-expenses
-  [db term limit tenant-id]
-  (let [p (sh/pattern term)
-        text-where (sh/fuzzy-text-where [:s.display_name :p.label :e.notes] term p)
-        where (if tenant-id
-                [:and text-where [:= :e.tenant_id tenant-id]]
-                text-where)]
-    (jdbc/execute!
-      db
-      (sql/format {:select [[:e.id :id]
-                            [:e.total_amount :total_amount]
-                            [:e.currency :currency]
-                            [:e.purchased_at :purchased_at]
-                            [:e.is_posted :is_posted]
-                            [:e.notes :notes]
-                            [:s.display_name :supplier_display_name]
-                            [:p.label :payer_label]]
-                   :from [[:expenses :e]]
-                   :left-join [[:suppliers :s] [:= :s.id :e.supplier_id]
-                               [:payers :p] [:= :p.id :e.payer_id]]
-                   :where where
-                   :order-by [[:e.purchased_at :desc]]
-                   :limit limit})
-      {:builder-fn rs/as-unqualified-lower-maps})))
-
-(defn search-receipts
-  [db term limit tenant-id]
-  (let [p (sh/pattern term)
-        text-where (sh/fuzzy-text-where [:original_filename :supplier_guess :store_guess] term p)
-        where (if tenant-id
-                [:and text-where [:= :tenant_id tenant-id]]
-                text-where)]
-    (jdbc/execute!
-      db
-      (sql/format {:select [:id :original_filename :supplier_guess :store_guess :status :created_at]
-                   :from [:receipts]
-                   :where where
-                   :order-by [[:created_at :desc]]
-                   :limit limit})
-      {:builder-fn rs/as-unqualified-lower-maps})))
-
 (defn search-payers
   [db term limit tenant-id]
   (let [p (sh/pattern term)

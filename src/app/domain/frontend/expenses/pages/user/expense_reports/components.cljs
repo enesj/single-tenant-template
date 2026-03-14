@@ -1,6 +1,5 @@
 (ns app.domain.frontend.expenses.pages.user.expense-reports.components
   (:require
-    [app.template.frontend.components.button :refer [button]]
     [clojure.string :as str]
     [uix.core :refer [$ defui use-effect use-ref use-state]]))
 
@@ -118,27 +117,3 @@
               ($ :div {:class "px-3 py-2 text-xs text-base-content/50"}
                 "No options available."))))))))
 
-(def ^:private report-tab-options
-  [{:id :expenses :label "Expenses"}
-   {:id :articles :label "Articles"}
-   {:id :providers-stores :label "Providers & Stores"}
-   {:id :categories :label "Categories"}])
-
-(defui report-tabs [{:keys [active-report-tab set-active-report-tab!]}]
-  ($ :div {:id "expense-reports-tab-list"
-           :class "w-full rounded-2xl border border-primary/20 bg-white/70 backdrop-blur-sm p-2 shadow-sm flex flex-wrap gap-2"}
-    (mapv
-      (fn [{:keys [id label]}]
-        (let [active? (= active-report-tab id)]
-          ($ button {:id (str "tab-expense-reports-" (name id))
-                     :key (name id)
-                     :btn-type (if active? :primary :ghost)
-                     :size :sm
-                     :class (str "min-w-[120px] font-semibold "
-                              (if active?
-                                "shadow-sm"
-                                "text-base-content/70 hover:text-base-content"))
-                     :aria-pressed active?
-                     :on-click #(set-active-report-tab! id)}
-            label)))
-      report-tab-options)))

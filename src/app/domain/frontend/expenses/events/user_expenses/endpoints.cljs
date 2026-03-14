@@ -44,8 +44,7 @@
 (def subcategories-endpoint (api/versioned-endpoint "/expenses/subcategories"))
 (def articles-unmapped-aliases-endpoint (api/versioned-endpoint "/expenses/articles/unmapped-aliases"))
 
-;; Quick search (global catalog, scored)
-(def quick-search-endpoint (api/versioned-endpoint "/expenses/quick-search"))
+;; Quick add search (context-first /expenses/new workflow)
 (def quick-add-search-endpoint (api/versioned-endpoint "/expenses/quick-add-search"))
 
 (def related-search-endpoint (str list-endpoint "/search/related"))

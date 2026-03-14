@@ -11,7 +11,6 @@
     [app.domain.backend.expenses.handlers.user-expenses.helpers :as h]
     [app.domain.backend.expenses.services.receipts.storage :as receipt-storage]
     [app.shared.adapters.database :as shared-db]
-    [app.template.backend.routes.admin.utils :as admin-utils]
     [cheshire.core :as json]
     [clojure.java.io :as io]
     [clojure.string :as str]
@@ -217,14 +216,3 @@
             (response/content-type "application/json")
             (response/status 500)))))))
 
-(defn admin-upload-handler
-  "POST /admin/api/expenses/upload
-
-  Returns {:success true :receipt <receipt> :duplicate? <bool>} (200) on success."
-  [db]
-  (admin-utils/with-error-handling
-    (fn [request]
-      (let [{:keys [receipt duplicate?]} (create-receipt-from-upload! db request)]
-        (admin-utils/success-response {:receipt (to-app receipt)
-                                       :duplicate? (boolean duplicate?)})))
-    "Failed to upload receipt"))

@@ -25,15 +25,6 @@
 (defn- selected-item-ids [db]
   (or (get-in db (conj base-path :selection :item-ids)) #{}))
 
-(defn- parse-pos-int
-  [value]
-  (cond
-    (number? value) (when (pos? value) (long value))
-    (string? value) (let [n (js/parseInt value 10)]
-                      (when (and (number? n) (not (js/isNaN n)) (pos? n))
-                        (long n)))
-    :else nil))
-
 (defn- current-unmapped-page-params
   [db]
   (let [entity-key :unmapped-items

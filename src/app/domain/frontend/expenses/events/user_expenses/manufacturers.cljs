@@ -28,15 +28,6 @@
     (assoc-in (paths/entity-loading? entity-type) false)
     (assoc-in (paths/entity-error entity-type) (when error (http/extract-error-message error)))))
 
-(defn- parse-pos-int
-  [value]
-  (cond
-    (number? value) (when (pos? value) (long value))
-    (string? value) (let [n (js/parseInt value 10)]
-                      (when (and (number? n) (not (js/isNaN n)) (pos? n))
-                        (long n)))
-    :else nil))
-
 (defn- normalize-filter-value
   [value]
   (cond

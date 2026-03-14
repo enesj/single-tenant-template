@@ -2,15 +2,12 @@
   "Admin API routes for receipt ingestion and approval."
   (:require
     [app.domain.backend.expenses.routes.middleware :as impersonation-mw]
-    [app.domain.backend.expenses.integrations.ocr-provider :as ocr-provider]
     [app.domain.backend.expenses.services.receipts.approval :as receipt-approval]
     [app.domain.backend.expenses.services.receipts.image-preprocess :as image-preprocess]
     [app.domain.backend.expenses.services.receipts.queries :as receipt-queries]
-    [app.domain.backend.expenses.services.receipts.status :as receipt-status]
     [app.domain.backend.expenses.services.receipts.storage :as receipt-storage]
     [app.domain.backend.expenses.services.supplier-aliases :as supplier-aliases]
     [app.domain.backend.expenses.services.suppliers :as suppliers]
-    [app.domain.backend.expenses.workers.receipt-ocr.core :as receipt-ocr]
     [app.template.backend.routes.admin.utils :as utils]
     [app.shared.adapters.database :as shared-db]
     [clojure.string :as str]
@@ -120,28 +117,6 @@
         (utils/success-response {:receipts (to-app results)})))
     "Failed to list receipts"))
 
-(defn list-pending-handler [db]
-  (utils/with-error-handling
-    (fn [_]
-      (utils/success-response
-        {:receipts (to-app (receipt-queries/list-pending-for-processing db))}))
-    "Failed to list pending receipts"))
-
-(defn upload-receipt-handler [db]
-  (utils/with-error-handling
-    (fn [request]
-      (let [body (:body request)
-            {:keys [storage_key file_hash bytes]} body]
-        (cond
-          (nil? storage_key) (utils/error-response "storage_key is required" :status 400)
-          (and (nil? file_hash) (nil? bytes)) (utils/error-response "file_hash or bytes is required" :status 400)
-          :else
-          (let [result (receipt-storage/upload-receipt! db body)]
-            (utils/success-response
-              (-> result
-                (update :receipt to-app)))))))
-    "Failed to upload receipt"))
-
 (defn get-receipt-handler [db]
   (utils/with-error-handling
     (fn [request]
@@ -238,52 +213,6 @@
         (utils/error-response "Invalid id" :status 400)))
     "Failed to delete receipt"))
 
-(defn update-status-handler [db]
-  (utils/with-error-handling
-    (fn [request]
-      (let [new-status (or (get-in request [:body :status])
-                         (get-in request [:body :new_status]))]
-        (if-let [id (utils/parse-uuid-custom (get-in request [:path-params :id]))]
-          (if-not new-status
-            (utils/error-response "status is required" :status 400)
-            (utils/success-response
-              {:receipt (to-app (receipt-status/update-status! db id new-status))}))
-          (utils/error-response "Invalid id" :status 400))))
-    "Failed to update receipt status"))
-
-(defn retry-receipt-handler [db]
-  (utils/with-error-handling
-    (fn [request]
-      (if-let [id (utils/parse-uuid-custom (get-in request [:path-params :id]))]
-        (utils/success-response
-          {:receipt (to-app (receipt-status/retry-extraction! db id))})
-        (utils/error-response "Invalid id" :status 400)))
-    "Failed to retry receipt"))
-
-(defn fail-receipt-handler [db]
-  (utils/with-error-handling
-    (fn [request]
-      (let [body (:body request)
-            message (:message body)
-            details (:details body)]
-        (if-let [id (utils/parse-uuid-custom (get-in request [:path-params :id]))]
-          (if-not message
-            (utils/error-response "message is required" :status 400)
-            (utils/success-response
-              {:receipt (to-app (receipt-status/mark-failed! db id message details))}))
-          (utils/error-response "Invalid id" :status 400))))
-    "Failed to mark receipt failed"))
-
-(defn save-extraction-handler [db]
-  (utils/with-error-handling
-    (fn [request]
-      (let [body (:body request)]
-        (if-let [id (utils/parse-uuid-custom (get-in request [:path-params :id]))]
-          (utils/success-response
-            {:receipt (to-app (receipt-status/store-extraction-results! db id body))})
-          (utils/error-response "Invalid id" :status 400))))
-    "Failed to store extraction results"))
-
 (defn approve-and-post-handler [db]
   (utils/with-error-handling
     (fn [request]
@@ -305,38 +234,6 @@
             (utils/success-response {:receipt (to-app receipt)}))
           (utils/error-response "Invalid id" :status 400))))
     "Failed to save receipt review"))
-
-;; ---------------------------------------------------------------------------
-;; OCR Handlers (UI-triggered)
-;; ---------------------------------------------------------------------------
-
-(defn ocr-single-receipt-handler
-  "Trigger OCR for a single receipt (POST /:id/ocr).
-  Resets the receipt and processes it asynchronously."
-  [db app-config]
-  (utils/with-error-handling
-    (fn [request]
-      (if-let [id (utils/parse-uuid-custom (get-in request [:path-params :id]))]
-        (if-let [_receipt (receipt-queries/get-receipt db id)]
-          (let [{:keys [enabled? api-key] :as ocr-cfg}
-                (ocr-provider/build-provider app-config)]
-            (cond
-              (not enabled?)
-              (utils/error-response (ocr-provider/disabled-message ocr-cfg) :status 409)
-
-              (not (seq api-key))
-              (utils/error-response (ocr-provider/missing-api-key-message ocr-cfg) :status 409)
-
-              :else
-              (do
-                (receipt-ocr/queue-ui-ocr! db app-config [id] {:source :admin-ui})
-                (utils/json-response {:success true
-                                      :data {:queued true
-                                             :receipt_ids [(str id)]}}
-                  :status 202))))
-          (utils/error-response "Receipt not found" :status 404))
-        (utils/error-response "Invalid id" :status 400)))
-    "Failed to trigger OCR"))
 
 (defn routes
   "Admin receipts routes. Mounted under /admin/api/expenses/receipts."

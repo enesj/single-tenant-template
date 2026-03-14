@@ -11,45 +11,6 @@
     [taoensso.timbre :as log]))
 
 ;; ---------------------------------------------------------------------------
-;; Create expense
-;; ---------------------------------------------------------------------------
-
-(rf/reg-event-fx
-  :user-expenses/create-expense
-  common-interceptors
-  (fn [{:keys [db]} [expense-data]]
-    {:db (-> db
-           (assoc-in [:user-expenses :form :loading?] true)
-           (assoc-in [:user-expenses :form :error] nil))
-     :http-xhrio (x/xhrio db
-                   {:method :post
-                    :uri endpoints/list-endpoint
-                    :params expense-data
-                    :on-success [:user-expenses/create-expense-success]
-                    :on-failure [:user-expenses/create-expense-failure]})}))
-
-(rf/reg-event-fx
-  :user-expenses/create-expense-success
-  common-interceptors
-  (fn [{:keys [db]} [response]]
-    (let [expense-id (or (get-in response [:data :id])
-                       (get-in response [:expense :id]))]
-      {:db (-> db
-             (assoc-in [:user-expenses :form :loading?] false)
-             (assoc-in [:user-expenses :form :error] nil))
-       :dispatch-n [[:user-expenses/fetch-recent {:limit 25 :offset 0}]
-                    [:navigate-to (str "/expenses/" expense-id)]]})))
-
-(rf/reg-event-db
-  :user-expenses/create-expense-failure
-  common-interceptors
-  (fn [db [error]]
-    (log/warn "Failed to create expense" {:error error})
-    (-> db
-      (assoc-in [:user-expenses :form :loading?] false)
-      (assoc-in [:user-expenses :form :error] (http/extract-error-message error)))))
-
-;; ---------------------------------------------------------------------------
 ;; Create expense (modal)
 ;; ---------------------------------------------------------------------------
 

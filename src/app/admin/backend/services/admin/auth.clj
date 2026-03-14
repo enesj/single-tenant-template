@@ -122,20 +122,6 @@
      :token token
      :expires_at expires-at}))
 
-(defn get-admin-by-session
-  "Get admin by session token; returns nil when missing or expired."
-  [db token]
-  (let [now (time/instant)
-        session (jdbc/execute-one! db
-                  (hsql/format {:select [:admin_id :expires_at]
-                                :from [:admin_sessions]
-                                :where [:and
-                                        [:= :token token]
-                                        [:> :expires_at now]]})
-                  {:builder-fn rs/as-unqualified-lower-maps})]
-    (when session
-      (find-admin-by-id db (:admin_id session)))))
-
 (defn get-admin-by-session-with-context
   "Get admin + impersonation context by session token.
    Returns {:admin <map>, :impersonation-context <map-or-nil>} or nil."

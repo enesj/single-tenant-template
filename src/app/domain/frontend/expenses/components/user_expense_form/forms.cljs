@@ -5,7 +5,7 @@
                                                                          new-line-item]]
     [app.domain.frontend.expenses.components.user-expense-form.normalization :as norm]
     [app.domain.frontend.expenses.components.user-expense-form.specs :as specs]
-    [app.template.frontend.components.form :refer [form form-fields]]
+    [app.template.frontend.components.form :refer [form-fields]]
     [app.template.frontend.components.form.base :as base]
     [re-frame.core :as rf]
     [uix.core :refer [$ defui use-effect use-memo use-state]]
@@ -19,69 +19,6 @@
     (set? dirty) (seq dirty)
     (sequential? dirty) (seq dirty)
     :else true))
-
-(defui user-expense-form-body
-  [{:keys [mode initial-data on-submit on-cancel receipt-approval? supplier-guess]}]
-  (let [suppliers (or (use-subscribe [:user-expenses/suppliers]) [])
-        payers (or (use-subscribe [:user-expenses/payers]) [])
-        expense-categories (or (use-subscribe [:user-expenses/expense-categories]) [])
-        form-error (use-subscribe [:user-expenses/form-error])
-        [validation-error set-validation-error!] (use-state nil)
-
-        ;; Memoize entity-spec to avoid recreating on every render.
-        ;; Only rebuild when suppliers or payers content actually changes.
-        entity-spec (use-memo
-                      #(specs/get-expense-form-spec suppliers payers
-                         {:receipt-approval? receipt-approval?
-                          :supplier-guess supplier-guess
-                          :receipt nil
-                          :receipt-id nil
-                          :expense-categories expense-categories})
-                      [suppliers payers expense-categories receipt-approval? supplier-guess])
-
-        ;; Memoize initial values so fork/form doesn't reset on every render.
-        ;; Use initial-data identity as the dependency (it's passed from parent).
-        form-initial-values (use-memo
-                              (fn []
-                                (let [default-values {:currency "BAM"
-                                                      :purchased_at (current-datetime-local)
-                                                      :items [(new-line-item)]}]
-                                  (merge default-values initial-data)))
-                              [initial-data])
-
-        clear-errors! (fn [e]
-                        (.preventDefault e)
-                        (set-validation-error! nil)
-                        (rf/dispatch [:user-expenses/clear-form-error]))
-
-        handle-submit (fn [{:keys [values]}]
-                        (let [validation-result (norm/validate-expense-values values)]
-                          (if (:ok? validation-result)
-                            (do
-                              (set-validation-error! nil)
-                              (on-submit (norm/prepare-expense-submit-values values)))
-                            (set-validation-error! (:error validation-result)))))]
-
-    ($ :div {:class "space-y-4"}
-      (when (or validation-error form-error)
-        ($ :div {:class "ds-alert ds-alert-error flex items-center justify-between"}
-          ($ :span (or validation-error form-error))
-          ($ :button {:id "btn-clear-expense-form-error"
-                      :type "button"
-                      :class "ds-btn ds-btn-ghost ds-btn-xs"
-                      :on-click clear-errors!}
-            "✕")))
-
-      ($ form
-        {:entity-name "user-expense"
-         :entity-spec entity-spec
-         :editing (= mode :edit)
-         :initial-values form-initial-values
-         :on-cancel on-cancel
-         :on-submit handle-submit
-         :save-disabled? (fn [values]
-                           (empty? (norm/prepare-line-items (:items values))))
-         :button-text (if (= mode :edit) "Update Expense" "Save Expense")}))))
 
 (defui receipt-approval-form
   "Receipt approval form for user-scoped expenses with optional split layout.

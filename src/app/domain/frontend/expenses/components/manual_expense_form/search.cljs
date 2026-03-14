@@ -18,9 +18,6 @@
    :article {:icon "📦" :label "Article" :color "amber"
              :name-fn #(or (:canonical-name %) (:canonical_name %) "")}})
 
-(def entity-type-order
-  [:supplier :store :category :article])
-
 (defn entity-type-info
   [entity-type]
   (get entity-type-config entity-type))
@@ -69,13 +66,6 @@
   "Returns true if the trimmed input looks like a monetary amount."
   [s]
   (some? (re-matches #"^\d+([.,]\d{0,2})?$" (str/trim (str s)))))
-
-(defn parse-amount
-  "Parse a monetary amount string, handling comma as decimal separator."
-  [s]
-  (let [normalized (-> (str s) str/trim (str/replace "," "."))]
-    (let [n (js/parseFloat normalized)]
-      (when-not (js/isNaN n) n))))
 
 ;; ─────────────────────────────────────────────
 ;; Fuzzy matching
