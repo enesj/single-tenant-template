@@ -52,12 +52,15 @@
             (let [payer-type-id (id-utils/extract-entity-id item)
                   payer-type-id-str (some-> payer-type-id str)
                   on-edit-click (:on-edit-click item)
-                  show-edit? (not (false? (:show-edit? item)))
-                  show-delete? (not (false? (:show-delete? item)))
-                  edit-disabled? (true? (:edit-disabled? item))
-                  delete-disabled? (true? (:delete-disabled? item))
+                  is-system? (boolean (or (:is-system item) (:is_system item)))
+                  show-edit? (and (not (false? (:show-edit? item))) (not is-system?))
+                  show-delete? (and (not (false? (:show-delete? item))) (not is-system?))
+                  edit-disabled? (or (true? (:edit-disabled? item)) is-system?)
+                  delete-disabled? (or (true? (:delete-disabled? item)) is-system?)
                   item-data (dissoc item :show-edit? :show-delete? :edit-disabled? :delete-disabled? :on-edit-click)]
               ($ :div {:class "flex items-center justify-center gap-2"}
+                (when is-system?
+                  ($ :span {:class "ds-badge ds-badge-sm ds-badge-neutral"} "System"))
                 (when show-edit?
                   ($ button
                     {:id (str "btn-edit-payer-types-" payer-type-id-str)

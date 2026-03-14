@@ -45,11 +45,20 @@
 (defn- normalize-approve-values
   [db receipt]
   (let [default-payer (some-> (default-payer-id db) str str/trim not-empty)
+        settings (get-in db [:user-expenses :settings :data])
+        default-category (some-> (:default-expense-category-id settings) str str/trim not-empty)
+        default-note (some-> (:default-note settings) str str/trim not-empty)
         normalized (norm/normalize-receipt-data receipt)
-        payer-id (some-> (:payer_id normalized) str str/trim not-empty)]
+        payer-id (some-> (:payer_id normalized) str str/trim not-empty)
+        category-id (some-> (:expense_category_id normalized) str str/trim not-empty)
+        notes (some-> (:notes normalized) str str/trim not-empty)]
     (cond-> normalized
       (and (nil? payer-id) default-payer)
-      (assoc :payer_id default-payer))))
+      (assoc :payer_id default-payer)
+      (and (nil? category-id) default-category)
+      (assoc :expense_category_id default-category)
+      (and (nil? notes) default-note)
+      (assoc :notes default-note))))
 
 (defn- batch-post-summary-message
   [succeeded failed]

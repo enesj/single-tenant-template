@@ -131,14 +131,21 @@
 
         filename (or (:original-filename receipt)
                    (:storage-key receipt)
-                   "(unknown)")]
+                   "(unknown)")
+
+        receipt-category-id (or (:expense-category-id receipt)
+                              (:expense_category_id receipt)
+                              (:receipts/expense-category-id receipt))
+        receipt-notes (or (:notes receipt)
+                        (:receipts/notes receipt))]
     {:supplier_id supplier-id
      :payer_id payer-id
-     :expense_category_id nil
+     :expense_category_id receipt-category-id
      :purchased_at (datetime-local purchased-at true)
      :total_amount (if (number? total-amount) (format-decimal total-amount) "")
      :currency currency
-     :notes (str "Extracted from receipt: " filename)
+     :notes (or (some-> receipt-notes str not-empty)
+              (str "Extracted from receipt: " filename))
      :items (if (seq items)
               (mapv normalize-item items)
               [(new-line-item)])}))
