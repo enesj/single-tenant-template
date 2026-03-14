@@ -2,6 +2,7 @@
   "Data adapter layer bridging admin accounts to template entity system"
   (:require
     [app.admin.frontend.adapters.core :as adapters.core]
+    [app.admin.frontend.events.users.template.form-interceptors :as form-interceptors]
     [app.admin.frontend.utils.http :as admin-http]
     [app.template.frontend.db.paths :as paths]
     [app.template.frontend.shared.utils.db :as db-utils]
@@ -14,6 +15,8 @@
   [admin]
   (entity-utils/normalize-entity admin {:entity-ns :admins
                                         :id-keys [:admins/id :id]}))
+
+(form-interceptors/register-bridge-entity! :admins)
 
 (entity-utils/register-entity-spec-sub!
   {:entity-key :admins})
@@ -29,8 +32,11 @@
   "Create HTTP request config for admin accounts API."
   [{:keys [method id params on-success on-failure]}]
   (let [base-uri "/admin/api/admins"
+        param-keys (set (keys (or params {})))
         uri (cond
               (and (= :delete method) (nil? id) (seq (:ids params))) (str base-uri "/batch")
+              (and (= :put method) id (= #{:status} param-keys)) (str base-uri "/" id "/status")
+              (and (= :put method) id (= #{:role} param-keys)) (str base-uri "/" id "/role")
               id (str base-uri "/" id)
               :else base-uri)]
     (admin-http/admin-request {:method method

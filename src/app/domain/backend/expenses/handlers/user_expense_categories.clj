@@ -55,6 +55,7 @@
         forbidden
         (try
           (let [qp (:query-params request)
+                tenant-id (h/get-tenant-id request)
                 limit (parse-page-limit qp 200)
                 offset (parse-page-offset qp)
                 search (h/get-param qp :search)
@@ -63,11 +64,13 @@
                 opts (cond-> {:limit limit
                               :offset offset
                               :search search}
+                       tenant-id (assoc :tenant-id tenant-id)
                        order-by (assoc :order-by order-by)
                        order-dir (assoc :order-dir order-dir))
                 rows (to-app ((:list expense-categories/service) db opts))
                 rows (cond-> rows (sequential? rows) vec)
-                total (long (or ((:count expense-categories/service) db {:search search}) 0))]
+                total (long (or ((:count expense-categories/service) db (cond-> {:search search}
+                                                                          tenant-id (assoc :tenant-id tenant-id))) 0))]
             (h/json-response {:data rows
                               :total total
                               :limit limit
@@ -85,7 +88,9 @@
         forbidden
         (try
           (let [body (h/read-body-params request)
-                payload {:name (:name body)}
+                tenant-id (h/get-tenant-id request)
+                payload (cond-> {:name (:name body)}
+                          tenant-id (assoc :tenant_id tenant-id))
                 expense-category (to-app ((:create! expense-categories/service) db payload))]
             (h/json-response {:data expense-category} 201))
           (catch clojure.lang.ExceptionInfo e
@@ -108,8 +113,11 @@
             (h/json-response {:error "Invalid expense category id"} 400)
             (try
               (let [body (h/read-body-params request)
+                    tenant-id (h/get-tenant-id request)
                     updates (select-keys body [:name])
-                    updated (some-> ((:update! expense-categories/service) db expense-category-id updates)
+                    updated (some-> ((:update! expense-categories/service) db expense-category-id updates
+                                                                           (cond-> {}
+                                                                             tenant-id (assoc :tenant-id tenant-id)))
                               to-app)]
                 (if updated
                   (h/json-response {:data updated})
@@ -140,6 +148,7 @@
         forbidden
         (try
           (let [body (h/read-body-params request)
+                tenant-id (h/get-tenant-id request)
                 raw-ids (or (:ids body)
                           (:expense_category_ids body)
                           (:expense-category-ids body)
@@ -155,11 +164,13 @@
 
               :else
               (let [delete! (:delete! expense-categories/service)
+                    delete-opts (cond-> {}
+                                  tenant-id (assoc :tenant-id tenant-id))
                     deleted-ids (atom [])
                     errors (atom [])]
                 (doseq [expense-category-id ids]
                   (try
-                    (if (boolean (delete! db expense-category-id))
+                    (if (boolean (delete! db expense-category-id delete-opts))
                       (swap! deleted-ids conj (str expense-category-id))
                       (swap! errors conj {:id (str expense-category-id)
                                           :error "not found"}))
