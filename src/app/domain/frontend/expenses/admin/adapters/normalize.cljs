@@ -75,7 +75,9 @@
                   :payer_id [:payer-id]
                   :expense_category_id [:expense-category-id]
                   :user_id [:user-id]
-                  :receipt_id [:receipt-id]}
+                  :receipt_id [:receipt-id]
+                  ;; Expand feature: number of line items for this expense
+                  :item_count [:item-count]}
      :post-transform (fn [m]
                        (let [posted? (get m :is-posted)]
                          (assoc m :status (if (true? posted?) "posted" "draft"))))}))
@@ -136,7 +138,9 @@
      :alias-keys {:display_name [:display-name]
                   :normalized_key [:normalized-key]
                   :address [:address]
-                  :created_at [:created-at]}}))
+                  :created_at [:created-at]
+                  ;; Expand feature: number of stores for this supplier
+                  :store_count [:store-count]}}))
 
 (defn manufacturer->template-entity
   [manufacturer]

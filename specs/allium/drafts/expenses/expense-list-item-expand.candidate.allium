@@ -1,0 +1,199 @@
+-- allium: 2
+-- expense-list-item-expand.candidate.allium
+--
+-- Scope: Inline readonly expansion of expense line items on the expense list page
+-- Includes:
+--   - Expand/collapse chevron per expense row (admin/owner only, when item_count > 0)
+--   - Lazy fetch of ExpenseItems on first expand — cached for the page session
+--   - Readonly line-item table: article name, qty, unit price, line total
+--   - Skeleton rows shown while items are loading
+--   - item_count added to the expense list API response (to drive chevron visibility)
+-- Excludes:
+--   - Editing or deleting expense items (see /expenses/items power-user page)
+--   - Admin expense list (separate surface)
+--   - Receipt, OCR, and approval flows (separate spec)
+
+
+-- ─────────────────────────────────────────────
+-- External entities
+-- ─────────────────────────────────────────────
+
+external entity User {
+    id: UUID
+    tenant_id: UUID
+    membership_role: viewer | member | admin | owner
+    can_expand_items: membership_role in {admin, owner}
+}
+
+external entity Tenant { id: UUID }
+
+external entity Expense {
+    id: UUID
+    tenant_id: UUID
+    -- item_count is a new aggregate field returned by the expense list query.
+    -- It is derived server-side via COUNT(expense_items.id) grouped by expense.id.
+    -- Its presence in the list response is what allows the chevron to be
+    -- shown or hidden without a separate fetch.
+    item_count: Integer
+}
+
+external entity ExpenseItem {
+    id: UUID
+    expense_id: UUID
+    qty: Decimal?
+    unit_price: Decimal?
+    line_total: Decimal
+    -- article_canonical_name is joined from the articles table.
+    -- Null when the item has no linked article.
+    article_canonical_name: String?
+}
+
+
+-- ─────────────────────────────────────────────
+-- Actor
+-- ─────────────────────────────────────────────
+
+actor PowerUser {
+    identified_by: User where can_expand_items
+    within: Tenant
+}
+
+
+-- ═════════════════════════════════════════════
+-- EXPENSE ROW VIEW STATE
+-- ═════════════════════════════════════════════
+
+entity ExpenseRowView {
+    -- Tracks the expand/collapse lifecycle for a single expense row.
+    expense: Expense
+    expand_state: collapsed | loading | expanded
+
+    -- Items populated after the first successful fetch; empty until then.
+    loaded_items: List<ExpenseItem>
+
+    -- Derived
+    can_expand: expense.item_count > 0
+    is_loading: expand_state = loading
+    is_expanded: expand_state = expanded
+}
+
+
+-- ═════════════════════════════════════════════
+-- RULES
+-- ═════════════════════════════════════════════
+
+-- ─────────────────────────────────────────────
+-- Expand
+-- ─────────────────────────────────────────────
+
+rule UserExpandsExpenseRow {
+    when: ToggleExpenseRow(viewer: PowerUser, row: ExpenseRowView, to: expanded)
+
+    requires: row.expand_state = collapsed
+    requires: row.can_expand
+
+    ensures:
+        if row.loaded_items.count > 0:
+            -- Items already cached from a prior expand this session.
+            -- Expand instantly with no network request.
+            row.expand_state = expanded
+        else:
+            row.expand_state = loading
+
+    ensures:
+        if row.loaded_items.count = 0:
+            FetchExpenseItems(viewer, row)
+}
+
+rule ExpenseItemsLoaded {
+    when: ExpenseItemsLoaded(row: ExpenseRowView, items: List<ExpenseItem>)
+
+    ensures: row.loaded_items = items
+    ensures: row.expand_state = expanded
+}
+
+
+-- ─────────────────────────────────────────────
+-- Collapse
+-- ─────────────────────────────────────────────
+
+rule UserCollapsesExpenseRow {
+    when: ToggleExpenseRow(viewer: PowerUser, row: ExpenseRowView, to: collapsed)
+
+    requires: row.expand_state = expanded
+
+    ensures: row.expand_state = collapsed
+    -- loaded_items remain cached; a subsequent expand is instant.
+}
+
+
+-- ═════════════════════════════════════════════
+-- SURFACES
+-- ═════════════════════════════════════════════
+
+surface ExpensesListPage {
+    facing viewer: User
+    context row: ExpenseRowView
+
+    -- Chevron is only rendered when the viewer has the power-user role
+    -- and the expense actually has items.
+    exposes:
+        row.can_expand
+            when viewer.can_expand_items and row.can_expand
+
+    -- Collapsed: offer expand action
+    provides:
+        ToggleExpenseRow(viewer, row, to: expanded)
+            when viewer.can_expand_items
+            and row.can_expand
+            and row.expand_state = collapsed
+
+    -- Loading: skeleton rows visible in expanded area
+    exposes:
+        row.is_loading
+
+    -- Expanded: readonly line items
+    exposes:
+        row.loaded_items
+            when row.is_expanded
+
+    -- Collapse action
+    provides:
+        ToggleExpenseRow(viewer, row, to: collapsed)
+            when row.is_expanded
+
+    @guarantee ChevronVisibility
+        -- The expand chevron is rendered only when viewer.can_expand_items = true
+        -- and expense.item_count > 0.
+        -- Viewer and member roles see no chevron on any expense row.
+
+    @guarantee ChevronRotation
+        -- The chevron icon rotates 90° when expand_state = expanded
+        -- and returns to its resting angle when collapsed.
+        -- This is a visual affordance only; it carries no domain meaning.
+
+    @guarantee LazyFetch
+        -- Items are not fetched at list-load time.
+        -- The fetch is triggered only when a row is expanded for the first time.
+        -- Subsequent expands of the same row within the page session use
+        -- cached loaded_items and transition directly to expanded without
+        -- a network request.
+
+    @guarantee SkeletonWhileLoading
+        -- While expand_state = loading, skeleton rows are shown in the
+        -- expanded area beneath the expense row.
+        -- Skeleton rows are replaced by actual item data when
+        -- ExpenseItemsLoaded fires.
+
+    @guarantee ReadonlyItems
+        -- The expanded area renders article_canonical_name, qty, unit_price,
+        -- and line_total for each item.
+        -- raw_label (OCR alias label) is deliberately excluded.
+        -- No edit or delete affordances are present in this surface.
+
+    @guarantee ItemCountInListResponse
+        -- The expense list API response includes item_count per expense,
+        -- derived from a COUNT aggregate on expense_items.
+        -- This is the sole mechanism for deciding whether to render the chevron.
+        -- No separate prefetch of items is performed during list load.
+}

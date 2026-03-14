@@ -195,7 +195,7 @@
 
 (defui table
   {:prop-types table-props}
-  [{:keys [headers rows row-key render-row editing entity-name entity-spec _display-settings _page-display-settings
+  [{:keys [headers rows row-key render-row render-row-expansion editing entity-name entity-spec _display-settings _page-display-settings
            per-page on-per-page-change rows-per-page-options] :as props}]
   (let [header-cells (ensure-seq headers)
         header-count (count header-cells)
@@ -305,12 +305,11 @@
                                                  :on-per-page-change on-per-page-change
                                                  :rows-per-page-options rows-per-page-options}))))))
           ($ :tbody
-            (map-indexed
-              (fn [idx row-data]
+            (mapcat
+              (fn [[idx row-data]]
                 (let [row-id (row-key row-data)
                       rendered-result (render-row row-data editing)
-
-;; Extract cells and highlight flags from the result
+                      ;; Extract cells and highlight flags from the result
                       cells (if (and (map? rendered-result) (:cells rendered-result))
                               (:cells rendered-result)
                               rendered-result)
@@ -326,25 +325,31 @@
                       ;; Apply different highlight classes based on status and if highlights are shown
                       highlight-class (if show-highlights?
                                         (cond
-                                          recently-updated? " bg-green-200/50" ;; More visible green for updates
-                                          recently-created? " bg-blue-200/50" ;; More visible blue for new items
+                                          recently-updated? " bg-green-200/50"
+                                          recently-created? " bg-blue-200/50"
                                           :else "")
                                         "")
-                      selection-class (if selected?
-                                        " bg-primary/5"
-                                        "")]
-                  ($ row
-                    {:key (str "row-" idx "-" row-id)
-                     :cells cells
-                     :class (str "ds-hover" highlight-class selection-class)
-                     :num-columns header-count
-                     :is-header? false
-                     :entity-name entity-name
-                     :row-index idx
-                     :column-widths column-widths
-                     :resizable-columns resizable-columns
-                     :fixed-width-columns fixed-width-columns
-                     :sticky-columns sticky-columns})))
-              (ensure-seq rows))))))))
+                      selection-class (if selected? " bg-primary/5" "")
+                      main-row ($ row
+                                 {:key (str "row-" idx "-" row-id)
+                                  :cells cells
+                                  :class (str "ds-hover" highlight-class selection-class)
+                                  :num-columns header-count
+                                  :is-header? false
+                                  :entity-name entity-name
+                                  :row-index idx
+                                  :column-widths column-widths
+                                  :resizable-columns resizable-columns
+                                  :fixed-width-columns fixed-width-columns
+                                  :sticky-columns sticky-columns})
+                      expansion-content (when render-row-expansion
+                                          (render-row-expansion row-data))]
+                  (if expansion-content
+                    [main-row
+                     ($ :tr {:key (str "exp-" idx "-" row-id)}
+                       ($ :td {:colSpan header-count :class "p-0"}
+                         expansion-content))]
+                    [main-row])))
+              (map-indexed vector (ensure-seq rows)))))))))
 
 ;; Removed the batch edit form from here

@@ -85,6 +85,13 @@
                       :updated-at :updated_at}
    :default-order-by :display_name
    :search-fields [:display_name :normalized_key]
+   ;; Include store_count so the supplier list page can show/hide the expand chevron
+   ;; without a separate prefetch. The correlated subquery is evaluated per-row.
+   :select-fields [[:*]
+                   [{:select [[[:count :*]]]
+                     :from [:stores]
+                     :where [:= :stores/supplier_id :suppliers/id]}
+                    :store_count]]
    :field-transformers {:normalized_key normalize/normalize-supplier-key}
    :before-insert (fn [data]
                     (let [display-name (normalize/unescape-html-entities (:display_name data))]

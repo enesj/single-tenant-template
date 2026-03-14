@@ -79,17 +79,24 @@
                 search (h/get-param qp :search)
                 order-by (h/parse-order-by qp)
                 order-dir (h/parse-order-dir qp)
-                extra-filters (when tenant-id
-                                [[:or
-                                  [:in :st/id {:select-distinct [:sta/store_id]
-                                               :from [[:receipts :r]]
-                                               :join [[:store_aliases :sta] [:= :sta/id :r/store_alias_id]]
-                                               :where [:and [:= :r/tenant_id tenant-id]
-                                                       [:is-not :r/store_alias_id nil]]}]
-                                  [:in :st/id {:select-distinct [:store_id]
-                                               :from [:expenses]
-                                               :where [:and [:= :tenant_id tenant-id]
-                                                       [:is-not :store_id nil]]}]]])
+                supplier-id (some-> (h/get-param qp :supplier_id) h/try-parse-uuid)
+                ;; When supplier_id is given (expand drill-down), skip tenant scoping —
+                ;; the admin/owner is explicitly viewing all stores for that supplier.
+                extra-filters (cond-> []
+                                (and tenant-id (nil? supplier-id))
+                                (conj [:or
+                                       [:in :st/id {:select-distinct [:sta/store_id]
+                                                    :from [[:receipts :r]]
+                                                    :join [[:store_aliases :sta] [:= :sta/id :r/store_alias_id]]
+                                                    :where [:and [:= :r/tenant_id tenant-id]
+                                                            [:is-not :r/store_alias_id nil]]}]
+                                       [:in :st/id {:select-distinct [:store_id]
+                                                    :from [:expenses]
+                                                    :where [:and [:= :tenant_id tenant-id]
+                                                            [:is-not :store_id nil]]}]])
+                                supplier-id
+                                (conj [:= :st/supplier_id supplier-id]))
+                extra-filters (when (seq extra-filters) extra-filters)
                 opts (cond-> {:limit limit
                               :offset offset
                               :search search}

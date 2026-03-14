@@ -73,19 +73,22 @@
 
   Allowed roles: admin/owner.
 
-  Supports order-by/order-dir for server-side sorting."
+  Supports order-by/order-dir for server-side sorting.
+  Optional expense_id param to fetch items for a specific expense."
   [db]
   (fn [request]
     (if-let [user-id (h/get-user-id request)]
-      (if-let [forbidden (h/ensure-role request h/expenses-read-roles
-                           "Role assignment required")]
+      (if-let [forbidden (h/ensure-role request power-user-roles
+                           "Admin or owner role required")]
         forbidden
-        (let [tenant-id (h/get-tenant-id request)]
+        (let [tenant-id (h/get-tenant-id request)
+              elevated? (h/tenant-elevated? request)]
           (try
             (let [params (:query-params request)
                   limit (clamp-limit (some-> (h/get-param params :limit) parse-long))
                   offset (max 0 (long (or (some-> (h/get-param params :offset) parse-long) 0)))
                   search (some-> (h/get-param params :search) str)
+                  expense-id (some-> (h/get-param params :expense_id) h/try-parse-uuid)
                   order-by (h/parse-order-by params)
                   order-dir (or (h/parse-order-dir params) :desc)
                   order-col (get allowed-expense-items-order-by order-by :ei.created_at)
@@ -94,9 +97,12 @@
                                    [:ei.id :asc]]
                   search* (when (and (string? search) (not (str/blank? search)))
                             (str "%" search "%"))
-                  where (cond-> [:and
-                                 [:= :e.user_id user-id]]
+                  ;; Elevated users (admin/owner) see all tenant items; others see only their own.
+                  effective-user-id (when-not elevated? user-id)
+                  where (cond-> [:and]
+                          (some? effective-user-id) (conj [:= :e.user_id effective-user-id])
                           tenant-id (conj [:= :e.tenant_id tenant-id])
+                          expense-id (conj [:= :ei.expense_id expense-id])
                           search*
                           (conj [:or
                                  [:ilike :aa.raw_label search*]

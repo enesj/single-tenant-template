@@ -8,12 +8,14 @@
    page)."
   (:require
     [app.domain.frontend.expenses.components.user-expense-form :refer [user-expense-edit-form-modal]]
+    [app.domain.frontend.expenses.events.expense-items :as expense-items-events]
     [app.domain.frontend.expenses.pages.user.expense-new :refer [standard-expense-form]]
     [app.domain.frontend.expenses.pages.user.expense-detail :refer [expense-detail-page]]
+    [app.domain.frontend.expenses.subs.expense-items :as expense-items-subs]
     [app.template.frontend.components.button :refer [button]]
     [app.template.frontend.components.confirm-dialog :as confirm-dialog]
     [app.template.frontend.components.dropdown.action :as dropdown]
-    [app.template.frontend.components.icons :refer [delete-icon edit-icon view-icon]]
+    [app.template.frontend.components.icons :refer [chevron-right-icon delete-icon edit-icon view-icon]]
     [app.template.frontend.components.list :refer [list-view]]
     [app.template.frontend.components.modal-wrapper :refer [modal-wrapper]]
     [app.template.frontend.events.list.ui-state :as list-ui-state-events]
@@ -55,9 +57,12 @@
 (defn- render-actions
   "Row action dropdown (admin-style) for user expenses.
 
-   Supports an optional :on-view callback for opening a custom modal."
-  [t item {:keys [on-view]}]
+   Supports an optional :on-view callback for opening a custom modal.
+   Supports expand chevron when :on-toggle-expand is provided and item has items."
+  [t item {:keys [on-view on-toggle-expand expanded? power-user?]}]
   (let [expense-id (id-utils/extract-entity-id item)
+        item-count (or (:item-count item) (:item_count item) 0)
+        show-expand? (and power-user? (pos? item-count))
         on-edit-click (:on-edit-click item)
         show-edit? (not (false? (:show-edit? item)))
         show-delete? (not (false? (:show-delete? item)))
@@ -65,6 +70,19 @@
         edit-disabled? (true? (:edit-disabled? item))
         delete-disabled? (true? (:delete-disabled? item))]
     ($ :div {:class "flex items-center justify-center gap-2"}
+      (when show-expand?
+        ($ button
+          {:id (str "btn-expand-expenses-" expense-id)
+           :btn-type :ghost
+           :shape "circle"
+           :title (if expanded? "Collapse items" "Expand items")
+           :on-click (fn [e]
+                       (.stopPropagation e)
+                       (on-toggle-expand expense-id))}
+          ($ :span {:class (str "inline-flex transition-transform duration-150"
+                             (when expanded? " rotate-90"))}
+            ($ chevron-right-icon))))
+
       (when show-edit?
         ($ button
           {:id (str "btn-edit-expenses-" expense-id)
@@ -115,11 +133,52 @@
 ;; Main Page
 ;; =============================================================================
 
+(defui expense-items-expand-row
+  "Renders line items for a single expense in readonly mode.
+   Used as the row-expansion panel in the expense list."
+  [{:keys [expense-id]}]
+  (let [items (use-subscribe [::expense-items-subs/items-for-expense expense-id])
+        loading? (use-subscribe [::expense-items-subs/loading-for-expense? expense-id])]
+    ($ :div {:class "px-6 py-3 bg-base-50 border-b border-base-200"}
+      (if loading?
+        ;; Skeleton rows while fetching
+        ($ :div {:class "space-y-2 py-1"}
+          (for [i (range 3)]
+            ($ :div {:key i :class "h-4 bg-base-200 rounded animate-pulse"})))
+        ;; Readonly items table
+        (if (empty? items)
+          ($ :div {:class "text-sm text-base-content/50 py-1"} "No items")
+          ($ :table {:class "w-full text-sm"}
+            ($ :thead
+              ($ :tr {:class "text-left text-xs text-base-content/50 uppercase border-b border-base-200"}
+                ($ :th {:class "py-1.5 pr-4 font-medium"} "Article")
+                ($ :th {:class "py-1.5 pr-4 font-medium text-right"} "Qty")
+                ($ :th {:class "py-1.5 pr-4 font-medium text-right"} "Unit Price")
+                ($ :th {:class "py-1.5 font-medium text-right"} "Total")))
+            ($ :tbody
+              (for [item items]
+                ($ :tr {:key (or (:id item) (str item))
+                        :class "border-b border-base-100 last:border-0"}
+                  ($ :td {:class "py-1.5 pr-4 text-base-content"}
+                    (or (:article-canonical-name item)
+                      (:article_canonical_name item)
+                      ($ :span {:class "text-base-content/30"} "—")))
+                  ($ :td {:class "py-1.5 pr-4 text-right tabular-nums text-base-content/70"}
+                    (or (:qty item) "—"))
+                  ($ :td {:class "py-1.5 pr-4 text-right tabular-nums text-base-content/70"}
+                    (if-let [up (or (:unit-price item) (:unit_price item))]
+                      (str up)
+                      "—"))
+                  ($ :td {:class "py-1.5 text-right tabular-nums font-medium"}
+                    (or (:line-total item) (:line_total item) "—")))))))))))
+
 (defui expenses-list-page
   []
   (let [t (use-t)
         entity-name :expenses
         [viewing-id set-viewing-id!] (use-state nil)
+        [expanded-ids set-expanded-ids!] (use-state #{})
+        power-user? (boolean (use-subscribe [:expenses/power-user?]))
         ;; Use shared entity specs when available; fall back to nil which
         ;; list-view can still handle for basic rendering.
         entity-spec (use-subscribe [:entity-specs/by-name entity-name])
@@ -128,7 +187,16 @@
         refresh-list (use-callback
                        (fn []
                          (rf/dispatch [:user-expenses/refresh-expenses-list]))
-                       [])]
+                       [])
+        toggle-expand (use-callback
+                        (fn [expense-id]
+                          (set-expanded-ids!
+                            (fn [ids]
+                              (if (contains? ids expense-id)
+                                (disj ids expense-id)
+                                (conj ids expense-id))))
+                          (rf/dispatch [::expense-items-events/fetch-items-for-expense expense-id]))
+                        [])]
 
     ;; Initial load + list-view wiring for server pagination/sorting
     (use-effect
@@ -169,8 +237,19 @@
            :on-add-success refresh-list
            :on-edit-success refresh-list
            :render-actions (fn [item]
-                             (render-actions t item
-                               {:on-view #(set-viewing-id! (id-utils/extract-entity-id %))}))}))
+                             (let [expense-id (id-utils/extract-entity-id item)]
+                               (render-actions t item
+                                 {:on-view #(set-viewing-id! (id-utils/extract-entity-id %))
+                                  :on-toggle-expand toggle-expand
+                                  :expanded? (contains? expanded-ids expense-id)
+                                  :power-user? power-user?})))
+           :render-row-expansion (when power-user?
+                                   (fn [item]
+                                     (let [expense-id (id-utils/extract-entity-id item)
+                                           item-count (or (:item-count item) (:item_count item) 0)]
+                                       (when (and (pos? item-count)
+                                               (contains? expanded-ids expense-id))
+                                         ($ expense-items-expand-row {:expense-id expense-id})))))}))
 
       (when viewing-id
         (let [supplier-name (or (:supplier_display_name current-expense) "Expense Details")]

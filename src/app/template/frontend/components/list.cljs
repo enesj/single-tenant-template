@@ -547,6 +547,7 @@
                        :entity-spec entity-spec
                        :show-highlights? show-highlights?
                        :render-row render-row-fn
+                       :render-row-expansion (:render-row-expansion props)
                          ;; IMPORTANT: Pass the merged display settings for behavior
                        :display-settings merged-display-settings
                          ;; IMPORTANT: Pass hardcoded settings (page props + view-options) for settings panel control visibility
