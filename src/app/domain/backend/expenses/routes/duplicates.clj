@@ -30,7 +30,7 @@
     (let [k (cond
               (keyword? x) x
               :else (keyword (str x)))]
-      (when (#{:prefix :trigram :levenshtein} k)
+      (when (#{:exact :prefix :trigram :levenshtein} k)
         k))))
 
 (def ^:private default-detect-fetch-limit
