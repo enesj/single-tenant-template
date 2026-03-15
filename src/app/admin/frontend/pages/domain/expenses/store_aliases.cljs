@@ -32,14 +32,7 @@
 
     ($ layout/admin-layout
       ($ :div {:class "p-6 min-h-screen"}
-        ($ :div {:class "mb-6"}
-          ($ :h1 {:class "text-2xl font-semibold text-base-content"}
-            "Store Aliases")
-          ($ :p {:class "text-sm text-base-content/70 mt-1"}
-            "Raw store/address guesses mapped to canonical stores (admin API)."))
-
         ($ list-view
           {:entity-name entity-name
            :entity-spec entity-spec
-           :title "Store Aliases"
-           })))))
+           :title "Store Aliases"})))))

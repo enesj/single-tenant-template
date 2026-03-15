@@ -112,7 +112,6 @@
            ($ list-view
              {:entity-name entity-name
               :entity-spec entity-spec
-              :title (t :store-aliases/title)
               :render-edit-form render-edit-form
               :on-edit-success refresh-aliases
               :render-actions (fn [item] (render-actions t item))

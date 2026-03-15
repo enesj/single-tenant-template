@@ -106,7 +106,6 @@
            ($ list-view
              {:entity-name entity-name
               :entity-spec entity-spec
-              :title "Expense Categories"
               :render-add-form render-add-form
               :render-edit-form render-edit-form
               :on-add-success refresh-list

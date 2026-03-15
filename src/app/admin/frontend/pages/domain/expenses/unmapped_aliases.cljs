@@ -31,14 +31,7 @@
 
     ($ layout/admin-layout
       ($ :div {:class "p-6 min-h-screen"}
-        ($ :div {:class "mb-6"}
-          ($ :h1 {:class "text-2xl font-semibold text-base-content"}
-            "Unmapped Aliases")
-          ($ :p {:class "text-sm text-base-content/70 mt-1"}
-            "Unmapped article aliases (admin API helper endpoint)."))
-
         ($ list-view
           {:entity-name entity-name
            :entity-spec entity-spec
-           :title "Unmapped Aliases"
-           })))))
+           :title "Unmapped Aliases"})))))

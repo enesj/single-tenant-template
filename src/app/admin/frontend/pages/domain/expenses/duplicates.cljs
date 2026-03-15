@@ -269,12 +269,6 @@
         strategy (use-subscribe [::dup-events/strategy])]
     ($ layout/admin-layout
       ($ :div {:class "p-6 min-h-screen"}
-        ($ :div {:class "mb-6"}
-          ($ :h1 {:class "text-2xl font-semibold text-base-content"}
-            "Dedup & Merge")
-          ($ :p {:class "text-sm text-base-content/70 mt-1"}
-            "Detect and merge near-duplicate canonical records across entity types."))
-
         ;; Entity type tabs
         ($ entity-tabs)
 

@@ -42,7 +42,7 @@
   [{:keys [title show-add-form? set-show-add-form! set-editing! entity-name show-add-button? add-disabled?
            on-add-click]}]
   (let [plus-icon-el ($ plus-icon)
-        button-id (str "btn-add-" (str/lower-case (name title)))
+        button-id (str "btn-add-" (when title (str/lower-case (name title))))
         ;; Session + metadata to determine if adding is allowed
         current-tenant (use-subscribe [:current-tenant])
         models-data (use-subscribe [:models-data])
@@ -57,8 +57,9 @@
         show-add-button? (if (nil? show-add-button?) true show-add-button?)
         add-disabled? (boolean add-disabled?)]
     ($ :div {:class "flex justify-between items-center mb-4"}
-      ($ :h2 {:class "text-2xl font-bold"} ($ :span (str title)))
-      ($ :div {:class "flex items-center space-x-2"}
+      (when title
+        ($ :h2 {:class "text-2xl font-bold"} ($ :span (str title))))
+      ($ :div {:class "flex items-center space-x-2 ml-auto"}
         (when (and (not show-add-form?) can-add? show-add-button?)
           ($ button
             {:shape "circle"

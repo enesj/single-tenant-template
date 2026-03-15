@@ -58,14 +58,15 @@
   ["display_name" "normalized_key" "store_count" "created_at"],
   :always-visible ["display_name"],
   :computed-fields
-  {:store_count {:label "Stores"
+  {:store_count {:label-key :common/stores
                  :type :number
                  :admin {:visible-in-table? true
                          :filterable? false
                          :sortable? true}}},
   :column-metadata
-  {:display_name {:label-key :common/name},
+  {:display_name {:label-key :common/supplier-name},
    :normalized_key {:label-key :common/normalized-key},
+   :store_count {:label-key :common/stores},
    :created_at {:label-key :common/created-at},
    :id {:label-key :common/id},
    :updated_at {:label-key :common/updated-at}}},
@@ -84,7 +85,7 @@
   :column-metadata
   {:category_name {:label-key :common/category},
    :category_id {:label-key :common/category-id},
-   :name {:label-key :common/name},
+   :name {:label-key :common/subcategory-name},
    :description {:label-key :common/description},
    :created_at {:label-key :common/created-at},
    :updated_at {:label-key :common/updated-at},
@@ -106,7 +107,7 @@
   ["name" "normalized_key" "zip" "country" "created_at" "updated_at"],
   :always-visible ["name"],
   :column-metadata
-  {:name {:label-key :common/name},
+  {:name {:label-key :common/city-name},
    :normalized_key {:label-key :common/normalized-key},
    :zip {:label-key :common/zip},
    :country {:label-key :common/country},
@@ -246,7 +247,7 @@
   :sortable-columns ["display_name" "normalized_key" "created_at"],
   :always-visible ["display_name"],
   :column-metadata
-  {:display_name {:label-key :common/name},
+  {:display_name {:label-key :common/manufacturer-name},
    :normalized_key {:label-key :common/normalized-key},
    :created_at {:label-key :common/created-at},
    :updated_at {:label-key :common/updated-at},
@@ -290,7 +291,7 @@
   :sortable-columns ["name" "description" "created_at" "updated_at"],
   :always-visible ["name"],
   :column-metadata
-  {:name {:label-key :common/name},
+  {:name {:label-key :common/category-name},
    :description {:label-key :common/description},
    :created_at {:label-key :common/created-at},
    :updated_at {:label-key :common/updated-at},
@@ -413,7 +414,7 @@
   :column-metadata
   {:supplier_display_name {:label-key :common/supplier},
    :supplier_id {:label-key :common/supplier-id},
-   :display_name {:label-key :common/name},
+   :display_name {:label-key :common/store-name},
    :normalized_key {:label-key :common/normalized-key},
    :address {:label-key :common/address},
    :city_name {:label-key :common/city},
@@ -512,7 +513,7 @@
   :sortable-columns ["name" "created_at" "updated_at"],
   :always-visible ["name"],
   :column-metadata
-  {:name {:label-key :common/name},
+  {:name {:label-key :common/expense-category-name},
    :created_at {:label-key :common/created-at},
    :updated_at {:label-key :common/updated-at},
    :id {:label-key :common/id}}}}

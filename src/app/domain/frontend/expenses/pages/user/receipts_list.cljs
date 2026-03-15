@@ -147,7 +147,6 @@
 (defui receipts-list-page
   []
   (let [t (use-t)
-        title (t :receipts/title)
         error (use-subscribe [:user-expenses/receipts-error])
         form-error (use-subscribe [:user-expenses/form-error])
         receipts (or (use-subscribe [:user-expenses/receipts]) [])
@@ -296,7 +295,6 @@
               ($ list-view
                 {:entity-name :receipts
                  :entity-spec (receipts-entity-spec t)
-                 :title title
                  :custom-actions (fn [receipt]
                                    (receipt-actions t can-ocr? receipt))
                  :on-add-click #(rf/dispatch [:navigate-to "/expenses/upload"])})))))

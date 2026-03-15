@@ -130,7 +130,6 @@
           ($ list-view
             {:entity-name entity-name
              :entity-spec payers-entity-spec
-             :title "Payers"
              :render-add-form render-add-form
              :render-edit-form render-edit-form
              :render-actions render-actions}))))))

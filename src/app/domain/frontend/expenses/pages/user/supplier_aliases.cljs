@@ -99,6 +99,5 @@
            ($ list-view
              {:entity-name entity-name
               :entity-spec entity-spec
-              :title (t :supplier-aliases/title)
               :render-edit-form render-edit-form
               :render-actions (fn [item] (render-actions t item))})))})))
