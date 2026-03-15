@@ -74,7 +74,6 @@
   {:id :suppliers
    :fields [{:id :display-name :label "Name" :type :text}
             {:id :normalized-key :label "Normalized key" :type :text}
-            {:id :address :label "Address" :type :text}
             {:id :created-at :label "Created at" :type :datetime}]})
 
 (def categories-entity-spec

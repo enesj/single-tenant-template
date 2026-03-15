@@ -82,7 +82,8 @@
                       :normalized-key :normalized_key
                       :address :address
                       :created-at :created_at
-                      :updated-at :updated_at}
+                      :updated-at :updated_at
+                      :store-count :store_count}
    :default-order-by :display_name
    :search-fields [:display_name :normalized_key]
    ;; Include store_count so the supplier list page can show/hide the expand chevron

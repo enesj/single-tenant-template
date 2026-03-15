@@ -46,21 +46,26 @@
  {:available-columns
   ["display_name"
    "normalized_key"
-   "address"
+   "store_count"
    "created_at"
    "id"
    "updated_at"],
   :default-visible-columns
-  ["display_name" "normalized_key" "address" "created_at"],
+  ["display_name" "normalized_key" "store_count" "created_at"],
   :filterable-columns
-  ["display_name" "normalized_key" "address" "created_at"],
+  ["display_name" "normalized_key" "created_at"],
   :sortable-columns
-  ["display_name" "normalized_key" "address" "created_at"],
+  ["display_name" "normalized_key" "store_count" "created_at"],
   :always-visible ["display_name"],
+  :computed-fields
+  {:store_count {:label "Stores"
+                 :type :number
+                 :admin {:visible-in-table? true
+                         :filterable? false
+                         :sortable? true}}},
   :column-metadata
   {:display_name {:label-key :common/name},
    :normalized_key {:label-key :common/normalized-key},
-   :address {:label-key :common/address},
    :created_at {:label-key :common/created-at},
    :id {:label-key :common/id},
    :updated_at {:label-key :common/updated-at}}},
