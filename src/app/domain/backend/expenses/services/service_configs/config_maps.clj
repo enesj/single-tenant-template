@@ -466,15 +466,3 @@
    :has-count? true
    :custom-service? true})
 
-(def report-config
-  {:table-name "reports"
-   :primary-key :id
-   :required-fields [:report_type :report_data]
-   :allowed-order-by {:created-at :created_at
-                      :report-type :report_type}
-   :default-order-by :created_at
-   :search-fields [:report_type]
-   :before-insert (fn [data]
-                    (assoc data :id (java.util.UUID/randomUUID)
-                      :created_at [:now]))
-   :has-count? true})

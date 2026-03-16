@@ -8,6 +8,84 @@
     [next.jdbc.result-set :as rs]
     [taoensso.timbre :as log]))
 
+;; ---------------------------------------------------------------------------
+;; Shared query helpers
+;; ---------------------------------------------------------------------------
+
+(defn- tenant-scope
+  "Optionally extend a HoneySQL WHERE condition with tenant_id scoping."
+  [cond tenant-id]
+  (if tenant-id [:and cond [:= :e.tenant_id tenant-id]] cond))
+
+(defn- fetch-article-aggs
+  "Article aggregates: id, canonical_name, total_qty, total_bam.
+  `joins` must start from [:expense_items :ei] and include at least
+  [:expenses :e], [:article_aliases :aa], [:articles :a].
+  Optional `opts` map supports `:limit`."
+  ([db joins where] (fetch-article-aggs db joins where nil))
+  ([db joins where opts]
+   (jdbc/execute!
+     db
+     (sql/format (cond-> {:select [[:a.id :id]
+                                   [:a.canonical_name :canonical_name]
+                                   [[:sum :ei.qty] :total_qty]
+                                   [[:sum :ei.line_total] :total_bam]]
+                          :from [[:expense_items :ei]]
+                          :join joins
+                          :where where
+                          :group-by [:a.id :a.canonical_name]
+                          :order-by [[[:sum :ei.line_total] :desc]]}
+                   (:limit opts) (assoc :limit (:limit opts))))
+     {:builder-fn rs/as-unqualified-lower-maps})))
+
+(defn- fetch-last-prices
+  "Last price per article using ROW_NUMBER window function.
+  `joins` and `where` scope the expense_items rows."
+  [db joins where]
+  (jdbc/execute!
+    db
+    (sql/format {:select [:article_id :unit_price]
+                 :from [[{:select [[:aa.article_id :article_id]
+                                   [:ei.unit_price :unit_price]
+                                   [[:over [[:row_number]
+                                            {:partition-by :aa.article_id
+                                             :order-by [[:e.purchased_at :desc]]}]]
+                                    :rn]]
+                          :from [[:expense_items :ei]]
+                          :join joins
+                          :where where}
+                         :sub]]
+                 :where [:= :rn 1]})
+    {:builder-fn rs/as-unqualified-lower-maps}))
+
+(defn- merge-last-prices
+  "Merge last-price data into article-aggs rows.
+  Returns article-aggs with :last_price assoc'd."
+  [article-aggs last-prices]
+  (let [price-map (reduce (fn [acc {:keys [article_id unit_price]}]
+                            (assoc acc (str article_id) unit_price))
+                    {} last-prices)]
+    (mapv (fn [art]
+            (assoc art :last_price (get price-map (str (:id art)))))
+      article-aggs)))
+
+(defn- articles-with-last-prices
+  "Fetch article aggregates and merge last-price data.
+  Convenience wrapper combining fetch-article-aggs + fetch-last-prices + merge-last-prices.
+  Optional `agg-opts` passed through to fetch-article-aggs (e.g. {:limit 10})."
+  ([db agg-joins agg-where price-joins price-where]
+   (articles-with-last-prices db agg-joins agg-where price-joins price-where nil))
+  ([db agg-joins agg-where price-joins price-where agg-opts]
+   (let [article-aggs (fetch-article-aggs db agg-joins agg-where agg-opts)]
+     (if (seq article-aggs)
+       (let [last-prices (fetch-last-prices db price-joins price-where)]
+         (merge-last-prices article-aggs last-prices))
+       article-aggs))))
+
+;; ---------------------------------------------------------------------------
+;; Entity-specific related data
+;; ---------------------------------------------------------------------------
+
 (defn- related-for-article
   "Rich article detail: metadata, price history, stores, aggregates."
   [db article-id _limit tenant-id]
@@ -28,10 +106,7 @@
                    {:builder-fn rs/as-unqualified-lower-maps}))
 
         ;; Common WHERE: expense_items links to articles via article_aliases
-        aa-cond [:= :aa.article_id article-id]
-        ei-where (if tenant-id
-                   [:and aa-cond [:= :e.tenant_id tenant-id]]
-                   aa-cond)
+        ei-where (tenant-scope [:= :aa.article_id article-id] tenant-id)
 
         ;; 2. Aggregate stats: total turnover, item count
         stats (first
@@ -94,17 +169,18 @@
 (defn- related-for-supplier
   "Supplier detail: stores for this supplier + articles purchased from this supplier."
   [db supplier-id limit tenant-id]
-  (let [sup-cond [:= :st.supplier_id supplier-id]
-        expense-join-cond (if tenant-id
+  (let [expense-join-cond (if tenant-id
                             [:and [:= :e.store_id :st.id]
                              [:= :e.tenant_id tenant-id]]
                             [:= :e.store_id :st.id])
-        where (if tenant-id
-                [:and [:= :e.supplier_id supplier-id]
-                 [:= :e.tenant_id tenant-id]]
-                [:= :e.supplier_id supplier-id])
+        where (tenant-scope [:= :e.supplier_id supplier-id] tenant-id)
+        agg-joins [[:expenses :e] [:= :e.id :ei.expense_id]
+                   [:article_aliases :aa] [:= :aa.id :ei.alias_id]
+                   [:articles :a] [:= :a.id :aa.article_id]]
+        price-joins [[:expenses :e] [:= :e.id :ei.expense_id]
+                     [:article_aliases :aa] [:= :aa.id :ei.alias_id]]
 
-        ;; 1. All stores belonging to this supplier, with tenant-scoped total spendings when present.
+        ;; 1. All stores belonging to this supplier, with tenant-scoped total spendings.
         stores (jdbc/execute!
                  db
                  (sql/format {:select [[:st.id :id]
@@ -114,55 +190,15 @@
                                        [[:coalesce [:sum :e.total_amount] [:inline 0]] :total_spendings]]
                               :from [[:stores :st]]
                               :left-join [[:expenses :e] expense-join-cond]
-                              :where sup-cond
+                              :where [:= :st.supplier_id supplier-id]
                               :group-by [:st.id :st.display_name :st.address :st.supplier_id]
                               :order-by [[[:sum :e.total_amount] :desc]
                                          [:st.display_name :asc]]
                               :limit limit})
                  {:builder-fn rs/as-unqualified-lower-maps})
 
-        ;; 2. Articles purchased from this supplier (aggregates)
-        article-aggs (jdbc/execute!
-                       db
-                       (sql/format {:select [[:a.id :id]
-                                             [:a.canonical_name :canonical_name]
-                                             [[:sum :ei.qty] :total_qty]
-                                             [[:sum :ei.line_total] :total_bam]]
-                                    :from [[:expense_items :ei]]
-                                    :join [[:expenses :e] [:= :e.id :ei.expense_id]
-                                           [:article_aliases :aa] [:= :aa.id :ei.alias_id]
-                                           [:articles :a] [:= :a.id :aa.article_id]]
-                                    :where where
-                                    :group-by [:a.id :a.canonical_name]
-                                    :order-by [[[:sum :ei.line_total] :desc]]
-                                    :limit limit})
-                       {:builder-fn rs/as-unqualified-lower-maps})
-
-        ;; 3. Last price per article (most recent expense from this supplier)
-        last-prices (when (seq article-aggs)
-                      (jdbc/execute!
-                        db
-                        (sql/format {:select [:article_id :unit_price]
-                                     :from [[{:select [[:aa.article_id :article_id]
-                                                       [:ei.unit_price :unit_price]
-                                                       [[:over [[:row_number]
-                                                                {:partition-by :aa.article_id
-                                                                 :order-by [[:e.purchased_at :desc]]}]]
-                                                        :rn]]
-                                              :from [[:expense_items :ei]]
-                                              :join [[:expenses :e] [:= :e.id :ei.expense_id]
-                                                     [:article_aliases :aa] [:= :aa.id :ei.alias_id]]
-                                              :where where}
-                                             :sub]]
-                                     :where [:= :rn 1]})
-                        {:builder-fn rs/as-unqualified-lower-maps}))
-
-        price-map (reduce (fn [acc {:keys [article_id unit_price]}]
-                            (assoc acc (str article_id) unit_price))
-                    {} last-prices)
-        articles (mapv (fn [art]
-                         (assoc art :last_price (get price-map (str (:id art)))))
-                   article-aggs)]
+        ;; 2+3. Articles + last prices
+        articles (articles-with-last-prices db agg-joins where price-joins where {:limit limit})]
     {:stores stores
      :articles articles}))
 
@@ -183,61 +219,22 @@
                                 :where [:= :s.id store-id]})
                    {:builder-fn rs/as-unqualified-lower-maps}))
 
-        ;; 2. Articles purchased at this store (aggregates)
-        store-cond [:= :e.store_id store-id]
-        art-where  (if tenant-id
-                     [:and store-cond [:= :e.tenant_id tenant-id]]
-                     store-cond)
+        art-where (tenant-scope [:= :e.store_id store-id] tenant-id)
+        agg-joins [[:expenses :e] [:= :e.id :ei.expense_id]
+                   [:article_aliases :aa] [:= :aa.id :ei.alias_id]
+                   [:articles :a] [:= :a.id :aa.article_id]]
+        price-joins [[:expenses :e] [:= :e.id :ei.expense_id]
+                     [:article_aliases :aa] [:= :aa.id :ei.alias_id]]
 
-        article-aggs (jdbc/execute!
-                       db
-                       (sql/format {:select [[:a.id :id]
-                                             [:a.canonical_name :canonical_name]
-                                             [[:sum :ei.qty] :total_qty]
-                                             [[:sum :ei.line_total] :total_bam]]
-                                    :from [[:expense_items :ei]]
-                                    :join [[:expenses :e] [:= :e.id :ei.expense_id]
-                                           [:article_aliases :aa] [:= :aa.id :ei.alias_id]
-                                           [:articles :a] [:= :a.id :aa.article_id]]
-                                    :where art-where
-                                    :group-by [:a.id :a.canonical_name]
-                                    :order-by [[[:sum :ei.line_total] :desc]]})
-                       {:builder-fn rs/as-unqualified-lower-maps})
-
-        ;; 3. Last price per article (most recent expense at this store)
-        last-prices (when (seq article-aggs)
-                      (jdbc/execute!
-                        db
-                        (sql/format {:select [:article_id :unit_price]
-                                     :from [[{:select [[:aa.article_id :article_id]
-                                                       [:ei.unit_price :unit_price]
-                                                       [[:over [[:row_number]
-                                                                {:partition-by :aa.article_id
-                                                                 :order-by [[:e.purchased_at :desc]]}]]
-                                                        :rn]]
-                                              :from [[:expense_items :ei]]
-                                              :join [[:expenses :e] [:= :e.id :ei.expense_id]
-                                                     [:article_aliases :aa] [:= :aa.id :ei.alias_id]]
-                                              :where art-where}
-                                             :sub]]
-                                     :where [:= :rn 1]})
-                        {:builder-fn rs/as-unqualified-lower-maps}))
-
-        ;; Merge last prices into article rows
-        price-map (reduce (fn [acc {:keys [article_id unit_price]}]
-                            (assoc acc (str article_id) unit_price))
-                    {} last-prices)
-        articles  (mapv (fn [art]
-                          (assoc art :last_price (get price-map (str (:id art)))))
-                    article-aggs)]
+        ;; 2+3. Articles + last prices
+        articles (articles-with-last-prices db agg-joins art-where price-joins art-where)]
     {:detail detail
      :articles articles}))
 
 (defn- related-for-payer
   "Recent expenses for this payer."
   [db payer-id limit tenant-id]
-  (let [id-cond [:= :e.payer_id payer-id]
-        where   (if tenant-id [:and id-cond [:= :e.tenant_id tenant-id]] id-cond)]
+  (let [where (tenant-scope [:= :e.payer_id payer-id] tenant-id)]
     {:expenses (jdbc/execute!
                  db
                  (sql/format {:select [[:e.id :id]
@@ -255,8 +252,7 @@
 (defn- related-for-expense-cat
   "Recent expenses in this category."
   [db cat-id limit tenant-id]
-  (let [id-cond [:= :e.expense_category_id cat-id]
-        where   (if tenant-id [:and id-cond [:= :e.tenant_id tenant-id]] id-cond)]
+  (let [where (tenant-scope [:= :e.expense_category_id cat-id] tenant-id)]
     {:expenses (jdbc/execute!
                  db
                  (sql/format {:select [[:e.id :id]
@@ -275,11 +271,10 @@
   "Manufacturer detail: suppliers + articles purchased (aggregates + last prices).
    Articles include supplier_id so the frontend can filter by supplier."
   [db manufacturer-id _limit tenant-id]
-  (let [;; Common WHERE: articles by this manufacturer, joined via expense_items
-        mfr-cond [:= :a.manufacturer_id manufacturer-id]
-        where    (if tenant-id
-                   [:and mfr-cond [:= :e.tenant_id tenant-id]]
-                   mfr-cond)
+  (let [where (tenant-scope [:= :a.manufacturer_id manufacturer-id] tenant-id)
+        base-joins [[:expenses :e] [:= :e.id :ei.expense_id]
+                    [:article_aliases :aa] [:= :aa.id :ei.alias_id]
+                    [:articles :a] [:= :a.id :aa.article_id]]
 
         ;; 1. Suppliers that carry this manufacturer's articles (via expenses)
         suppliers (jdbc/execute!
@@ -288,29 +283,14 @@
                                                    [:sup.display_name :display_name]
                                                    [:sup.address :address]]
                                  :from [[:expense_items :ei]]
-                                 :join [[:expenses :e] [:= :e.id :ei.expense_id]
-                                        [:article_aliases :aa] [:= :aa.id :ei.alias_id]
-                                        [:articles :a] [:= :a.id :aa.article_id]
-                                        [:suppliers :sup] [:= :sup.id :e.supplier_id]]
+                                 :join (into base-joins
+                                         [[:suppliers :sup] [:= :sup.id :e.supplier_id]])
                                  :where where
                                  :order-by [[:sup.display_name :asc]]})
                     {:builder-fn rs/as-unqualified-lower-maps})
 
-        ;; 2. Articles aggregated globally (all suppliers)
-        article-aggs (jdbc/execute!
-                       db
-                       (sql/format {:select [[:a.id :id]
-                                             [:a.canonical_name :canonical_name]
-                                             [[:sum :ei.qty] :total_qty]
-                                             [[:sum :ei.line_total] :total_bam]]
-                                    :from [[:expense_items :ei]]
-                                    :join [[:expenses :e] [:= :e.id :ei.expense_id]
-                                           [:article_aliases :aa] [:= :aa.id :ei.alias_id]
-                                           [:articles :a] [:= :a.id :aa.article_id]]
-                                    :where where
-                                    :group-by [:a.id :a.canonical_name]
-                                    :order-by [[[:sum :ei.line_total] :desc]]})
-                       {:builder-fn rs/as-unqualified-lower-maps})
+        ;; 2+4. Articles + last prices
+        articles (articles-with-last-prices db base-joins where base-joins where)
 
         ;; 3. Per-supplier article aggregates (for filtering)
         supplier-articles (jdbc/execute!
@@ -320,39 +300,10 @@
                                                   [[:sum :ei.qty] :total_qty]
                                                   [[:sum :ei.line_total] :total_bam]]
                                          :from [[:expense_items :ei]]
-                                         :join [[:expenses :e] [:= :e.id :ei.expense_id]
-                                                [:article_aliases :aa] [:= :aa.id :ei.alias_id]
-                                                [:articles :a] [:= :a.id :aa.article_id]]
+                                         :join base-joins
                                          :where where
                                          :group-by [:a.id :e.supplier_id]})
-                            {:builder-fn rs/as-unqualified-lower-maps})
-
-        ;; 4. Last price per article
-        last-prices (when (seq article-aggs)
-                      (jdbc/execute!
-                        db
-                        (sql/format {:select [:article_id :unit_price]
-                                     :from [[{:select [[:aa.article_id :article_id]
-                                                       [:ei.unit_price :unit_price]
-                                                       [[:over [[:row_number]
-                                                                {:partition-by :aa.article_id
-                                                                 :order-by [[:e.purchased_at :desc]]}]]
-                                                        :rn]]
-                                              :from [[:expense_items :ei]]
-                                              :join [[:expenses :e] [:= :e.id :ei.expense_id]
-                                                     [:article_aliases :aa] [:= :aa.id :ei.alias_id]
-                                                     [:articles :a] [:= :a.id :aa.article_id]]
-                                              :where where}
-                                             :sub]]
-                                     :where [:= :rn 1]})
-                        {:builder-fn rs/as-unqualified-lower-maps}))
-
-        price-map (reduce (fn [acc {:keys [article_id unit_price]}]
-                            (assoc acc (str article_id) unit_price))
-                    {} last-prices)
-        articles  (mapv (fn [art]
-                          (assoc art :last_price (get price-map (str (:id art)))))
-                    article-aggs)]
+                            {:builder-fn rs/as-unqualified-lower-maps})]
     {:suppliers suppliers
      :articles articles
      :supplier-articles supplier-articles}))
@@ -369,11 +320,11 @@
                                      :order-by [[:name :asc]]})
                         {:builder-fn rs/as-unqualified-lower-maps})
 
-        ;; Common WHERE: articles in this category (via subcategories)
-        cat-cond [:= :sub.category_id category-id]
-        where    (if tenant-id
-                   [:and cat-cond [:= :e.tenant_id tenant-id]]
-                   cat-cond)
+        where (tenant-scope [:= :sub.category_id category-id] tenant-id)
+        subcat-joins [[:expenses :e] [:= :e.id :ei.expense_id]
+                      [:article_aliases :aa] [:= :aa.id :ei.alias_id]
+                      [:articles :a] [:= :a.id :aa.article_id]
+                      [:subcategories :sub] [:= :sub.id :a.subcategory_id]]
 
         ;; 2. Stores where articles from this category were purchased
         stores (jdbc/execute!
@@ -382,31 +333,14 @@
                                                 [:st.display_name :display_name]
                                                 [:st.address :address]]
                               :from [[:expense_items :ei]]
-                              :join [[:expenses :e] [:= :e.id :ei.expense_id]
-                                     [:article_aliases :aa] [:= :aa.id :ei.alias_id]
-                                     [:articles :a] [:= :a.id :aa.article_id]
-                                     [:subcategories :sub] [:= :sub.id :a.subcategory_id]
-                                     [:stores :st] [:= :st.id :e.store_id]]
+                              :join (into subcat-joins
+                                      [[:stores :st] [:= :st.id :e.store_id]])
                               :where where
                               :order-by [[:st.display_name :asc]]})
                  {:builder-fn rs/as-unqualified-lower-maps})
 
-        ;; 3. Articles aggregated globally
-        article-aggs (jdbc/execute!
-                       db
-                       (sql/format {:select [[:a.id :id]
-                                             [:a.canonical_name :canonical_name]
-                                             [[:sum :ei.qty] :total_qty]
-                                             [[:sum :ei.line_total] :total_bam]]
-                                    :from [[:expense_items :ei]]
-                                    :join [[:expenses :e] [:= :e.id :ei.expense_id]
-                                           [:article_aliases :aa] [:= :aa.id :ei.alias_id]
-                                           [:articles :a] [:= :a.id :aa.article_id]
-                                           [:subcategories :sub] [:= :sub.id :a.subcategory_id]]
-                                    :where where
-                                    :group-by [:a.id :a.canonical_name]
-                                    :order-by [[[:sum :ei.line_total] :desc]]})
-                       {:builder-fn rs/as-unqualified-lower-maps})
+        ;; 3+6. Articles + last prices
+        articles (articles-with-last-prices db subcat-joins where subcat-joins where)
 
         ;; 4. Per-subcategory article aggregates (for filtering)
         subcat-articles (jdbc/execute!
@@ -416,10 +350,7 @@
                                                 [[:sum :ei.qty] :total_qty]
                                                 [[:sum :ei.line_total] :total_bam]]
                                        :from [[:expense_items :ei]]
-                                       :join [[:expenses :e] [:= :e.id :ei.expense_id]
-                                              [:article_aliases :aa] [:= :aa.id :ei.alias_id]
-                                              [:articles :a] [:= :a.id :aa.article_id]
-                                              [:subcategories :sub] [:= :sub.id :a.subcategory_id]]
+                                       :join subcat-joins
                                        :where where
                                        :group-by [:a.id :a.subcategory_id]})
                           {:builder-fn rs/as-unqualified-lower-maps})
@@ -432,41 +363,10 @@
                                                [[:sum :ei.qty] :total_qty]
                                                [[:sum :ei.line_total] :total_bam]]
                                       :from [[:expense_items :ei]]
-                                      :join [[:expenses :e] [:= :e.id :ei.expense_id]
-                                             [:article_aliases :aa] [:= :aa.id :ei.alias_id]
-                                             [:articles :a] [:= :a.id :aa.article_id]
-                                             [:subcategories :sub] [:= :sub.id :a.subcategory_id]]
+                                      :join subcat-joins
                                       :where where
                                       :group-by [:a.id :e.store_id]})
-                         {:builder-fn rs/as-unqualified-lower-maps})
-
-        ;; 6. Last price per article
-        last-prices (when (seq article-aggs)
-                      (jdbc/execute!
-                        db
-                        (sql/format {:select [:article_id :unit_price]
-                                     :from [[{:select [[:aa.article_id :article_id]
-                                                       [:ei.unit_price :unit_price]
-                                                       [[:over [[:row_number]
-                                                                {:partition-by :aa.article_id
-                                                                 :order-by [[:e.purchased_at :desc]]}]]
-                                                        :rn]]
-                                              :from [[:expense_items :ei]]
-                                              :join [[:expenses :e] [:= :e.id :ei.expense_id]
-                                                     [:article_aliases :aa] [:= :aa.id :ei.alias_id]
-                                                     [:articles :a] [:= :a.id :aa.article_id]
-                                                     [:subcategories :sub] [:= :sub.id :a.subcategory_id]]
-                                              :where where}
-                                             :sub]]
-                                     :where [:= :rn 1]})
-                        {:builder-fn rs/as-unqualified-lower-maps}))
-
-        price-map (reduce (fn [acc {:keys [article_id unit_price]}]
-                            (assoc acc (str article_id) unit_price))
-                    {} last-prices)
-        articles  (mapv (fn [art]
-                          (assoc art :last_price (get price-map (str (:id art)))))
-                    article-aggs)]
+                         {:builder-fn rs/as-unqualified-lower-maps})]
     {:subcategories subcategories
      :stores stores
      :articles articles
@@ -476,10 +376,10 @@
 (defn- related-for-subcategory
   "Subcategory detail: stores + articles in this subcategory."
   [db subcategory-id _limit tenant-id]
-  (let [sub-cond [:= :a.subcategory_id subcategory-id]
-        where    (if tenant-id
-                   [:and sub-cond [:= :e.tenant_id tenant-id]]
-                   sub-cond)
+  (let [where (tenant-scope [:= :a.subcategory_id subcategory-id] tenant-id)
+        base-joins [[:expenses :e] [:= :e.id :ei.expense_id]
+                    [:article_aliases :aa] [:= :aa.id :ei.alias_id]
+                    [:articles :a] [:= :a.id :aa.article_id]]
 
         ;; 1. Stores
         stores (jdbc/execute!
@@ -488,29 +388,14 @@
                                                 [:st.display_name :display_name]
                                                 [:st.address :address]]
                               :from [[:expense_items :ei]]
-                              :join [[:expenses :e] [:= :e.id :ei.expense_id]
-                                     [:article_aliases :aa] [:= :aa.id :ei.alias_id]
-                                     [:articles :a] [:= :a.id :aa.article_id]
-                                     [:stores :st] [:= :st.id :e.store_id]]
+                              :join (into base-joins
+                                      [[:stores :st] [:= :st.id :e.store_id]])
                               :where where
                               :order-by [[:st.display_name :asc]]})
                  {:builder-fn rs/as-unqualified-lower-maps})
 
-        ;; 2. Articles aggregated
-        article-aggs (jdbc/execute!
-                       db
-                       (sql/format {:select [[:a.id :id]
-                                             [:a.canonical_name :canonical_name]
-                                             [[:sum :ei.qty] :total_qty]
-                                             [[:sum :ei.line_total] :total_bam]]
-                                    :from [[:expense_items :ei]]
-                                    :join [[:expenses :e] [:= :e.id :ei.expense_id]
-                                           [:article_aliases :aa] [:= :aa.id :ei.alias_id]
-                                           [:articles :a] [:= :a.id :aa.article_id]]
-                                    :where where
-                                    :group-by [:a.id :a.canonical_name]
-                                    :order-by [[[:sum :ei.line_total] :desc]]})
-                       {:builder-fn rs/as-unqualified-lower-maps})
+        ;; 2+4. Articles + last prices
+        articles (articles-with-last-prices db base-joins where base-joins where)
 
         ;; 3. Per-store article aggregates
         store-articles (jdbc/execute!
@@ -520,39 +405,10 @@
                                                [[:sum :ei.qty] :total_qty]
                                                [[:sum :ei.line_total] :total_bam]]
                                       :from [[:expense_items :ei]]
-                                      :join [[:expenses :e] [:= :e.id :ei.expense_id]
-                                             [:article_aliases :aa] [:= :aa.id :ei.alias_id]
-                                             [:articles :a] [:= :a.id :aa.article_id]]
+                                      :join base-joins
                                       :where where
                                       :group-by [:a.id :e.store_id]})
-                         {:builder-fn rs/as-unqualified-lower-maps})
-
-        ;; 4. Last price per article
-        last-prices (when (seq article-aggs)
-                      (jdbc/execute!
-                        db
-                        (sql/format {:select [:article_id :unit_price]
-                                     :from [[{:select [[:aa.article_id :article_id]
-                                                       [:ei.unit_price :unit_price]
-                                                       [[:over [[:row_number]
-                                                                {:partition-by :aa.article_id
-                                                                 :order-by [[:e.purchased_at :desc]]}]]
-                                                        :rn]]
-                                              :from [[:expense_items :ei]]
-                                              :join [[:expenses :e] [:= :e.id :ei.expense_id]
-                                                     [:article_aliases :aa] [:= :aa.id :ei.alias_id]
-                                                     [:articles :a] [:= :a.id :aa.article_id]]
-                                              :where where}
-                                             :sub]]
-                                     :where [:= :rn 1]})
-                        {:builder-fn rs/as-unqualified-lower-maps}))
-
-        price-map (reduce (fn [acc {:keys [article_id unit_price]}]
-                            (assoc acc (str article_id) unit_price))
-                    {} last-prices)
-        articles  (mapv (fn [art]
-                          (assoc art :last_price (get price-map (str (:id art)))))
-                    article-aggs)]
+                         {:builder-fn rs/as-unqualified-lower-maps})]
     {:stores stores
      :articles articles
      :store-articles store-articles}))

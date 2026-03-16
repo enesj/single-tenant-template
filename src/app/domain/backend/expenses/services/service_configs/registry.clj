@@ -21,9 +21,7 @@
    :article config-maps/article-config
    :expense config-maps/expense-config
    :expense-item config-maps/expense-item-config
-   :receipt config-maps/receipt-config
-
-   :report config-maps/report-config})
+   :receipt config-maps/receipt-config})
 
 (defn get-entity-config
   [entity-key]

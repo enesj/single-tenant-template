@@ -11,37 +11,8 @@
     [app.domain.backend.expenses.handlers.user-expenses.helpers :as h]
     [app.domain.backend.expenses.services.article-aliases :as aliases]
     [app.domain.backend.expenses.services.articles :as articles]
-    [app.shared.adapters.database :as shared-db]
     [clojure.string :as str]
     [taoensso.timbre :as log]))
-
-;; -----------------------------------------------------------------------------
-;; Helpers
-;; -----------------------------------------------------------------------------
-
-(def ^:private to-app shared-db/to-app)
-
-(def ^:private allowed-roles
-  #{"admin" "owner"})
-
-(defn- ensure-admin-or-owner
-  [request]
-  (h/ensure-role request allowed-roles "Only admins and owners can access this page."))
-
-(def ^:private max-page-limit
-  500)
-
-(defn- parse-page-limit
-  [params default-limit]
-  (-> (or (some-> (h/get-param params :limit) parse-long)
-        default-limit)
-    long
-    (max 1)
-    (min max-page-limit)))
-
-(defn- parse-page-offset
-  [params]
-  (max 0 (long (or (some-> (h/get-param params :offset) parse-long) 0))))
 
 ;; -----------------------------------------------------------------------------
 ;; Handlers
@@ -57,8 +28,8 @@
         forbidden
         (try
           (let [qp (:query-params request)
-                limit (parse-page-limit qp 200)
-                offset (parse-page-offset qp)
+                limit (h/parse-page-limit qp 200)
+                offset (h/parse-page-offset qp)
                 search (h/get-param qp :search)
                 order-by (h/parse-order-by qp)
                 order-dir (h/parse-order-dir qp)
@@ -67,7 +38,7 @@
                        (some? search) (assoc :search search)
                        order-by (assoc :order-by order-by)
                        order-dir (assoc :order-dir order-dir))
-                rows (to-app (articles/list-articles db opts))
+                rows (h/to-app (articles/list-articles db opts))
                 total (long (or (:total (articles/count-articles db {:search search})) 0))]
             (h/json-response {:data rows
                               :total total
@@ -82,12 +53,12 @@
   (fn [request]
     (if-not (h/get-user request)
       (h/unauthorized-response)
-      (if-let [forbidden (ensure-admin-or-owner request)]
+      (if-let [forbidden (h/ensure-admin-or-owner request)]
         forbidden
         (try
           (let [body (h/read-body-params request)
                 canonical-name (:canonical_name body)
-                article (to-app (articles/create-article! db {:canonical_name canonical-name}))]
+                article (h/to-app (articles/create-article! db {:canonical_name canonical-name}))]
             (h/json-response {:data article} 201))
           (catch clojure.lang.ExceptionInfo e
             (log/warn "Validation error creating article" {:error (ex-message e) :data (ex-data e)})
@@ -101,10 +72,9 @@
   (fn [request]
     (if-not (h/get-user request)
       (h/unauthorized-response)
-      (if-let [forbidden (ensure-admin-or-owner request)]
+      (if-let [forbidden (h/ensure-admin-or-owner request)]
         forbidden
-        (let [article-id (h/try-parse-uuid (or (get-in request [:path-params :id])
-                                             (get-in request [:parameters :path :id])))]
+        (let [article-id (h/parse-path-id request)]
           (if-not article-id
             (h/json-response {:error "Invalid article id"} 400)
             (try
@@ -169,7 +139,7 @@
 
                       updated (articles/update-article! db article-id updates)]
                   (if updated
-                    (h/json-response {:data (to-app updated)})
+                    (h/json-response {:data (h/to-app updated)})
                     (h/not-found-response "Article not found"))))
               (catch clojure.lang.ExceptionInfo e
                 (log/warn "Validation error updating article" {:error (ex-message e)
@@ -193,16 +163,11 @@
   (fn [request]
     (if-not (h/get-user request)
       (h/unauthorized-response)
-      (if-let [forbidden (ensure-admin-or-owner request)]
+      (if-let [forbidden (h/ensure-admin-or-owner request)]
         forbidden
         (try
           (let [body (h/read-body-params request)
-                raw-ids (or (:ids body)
-                          (:article_ids body)
-                          (:article-ids body)
-                          (:articleIds body)
-                          [])
-                ids (->> raw-ids (map h/try-parse-uuid) (filter some?) vec)]
+                [raw-ids ids] (h/parse-batch-ids body [:ids :article_ids :article-ids :articleIds])]
             (cond
               (empty? raw-ids)
               (h/json-response {:error "No article ids provided"} 400)
@@ -211,27 +176,7 @@
               (h/json-response {:error "One or more article ids are invalid"} 400)
 
               :else
-              (let [deleted-ids (atom [])
-                    errors (atom [])]
-                (doseq [article-id ids]
-                  (try
-                    (if (boolean (articles/delete-article! db article-id))
-                      (swap! deleted-ids conj (str article-id))
-                      (swap! errors conj {:id (str article-id)
-                                          :error "not found"}))
-                    (catch org.postgresql.util.PSQLException e
-                      (let [sql-state (.getSQLState e)]
-                        (swap! errors conj {:id (str article-id)
-                                            :error (if (= "23503" sql-state)
-                                                     "foreign key constraint"
-                                                     "database error")
-                                            :sql-state sql-state})))
-                    (catch Exception e
-                      (swap! errors conj {:id (str article-id)
-                                          :error (.getMessage e)}))))
-                (h/json-response {:data {:deleted-count (count @deleted-ids)
-                                         :deleted-ids (vec @deleted-ids)
-                                         :errors (vec @errors)}}))))
+              (h/json-response {:data (h/batch-delete-entities #(articles/delete-article! db %) ids)})))
           (catch Exception e
             (log/error e "Failed to batch delete articles" {:message (.getMessage e)})
             (h/json-response {:error "Failed to delete articles"} 500)))))))
@@ -247,11 +192,11 @@
         (try
           (let [qp (:query-params request)
                 supplier-id (h/try-parse-uuid (h/get-param qp :supplier_id))
-                limit (parse-page-limit qp 50)
-                offset (parse-page-offset qp)
+                limit (h/parse-page-limit qp 50)
+                offset (h/parse-page-offset qp)
                 opts (cond-> {:limit limit :offset offset}
                        supplier-id (assoc :supplier-id supplier-id))
-                rows (to-app (aliases/list-unmapped-aliases db opts))
+                rows (h/to-app (aliases/list-unmapped-aliases db opts))
                 total (long (or (aliases/count-unmapped-aliases db opts) 0))]
             (h/json-response {:data rows
                               :total total
@@ -266,11 +211,10 @@
   (fn [request]
     (if-not (h/get-user request)
       (h/unauthorized-response)
-      (if-let [forbidden (ensure-admin-or-owner request)]
+      (if-let [forbidden (h/ensure-admin-or-owner request)]
         forbidden
         (try
-          (let [alias-id (h/try-parse-uuid (or (get-in request [:path-params :alias-id])
-                                             (get-in request [:parameters :path :alias-id])))
+          (let [alias-id (h/parse-path-id request :alias-id)
                 body (h/read-body-params request)
                 article-id (h/try-parse-uuid (or (:article-id body) (:article_id body)))]
             (when-not alias-id
@@ -279,7 +223,7 @@
               (throw (ex-info "Invalid article-id" {:status 400})))
 
             (let [updated (aliases/map-alias-to-article! db alias-id article-id)]
-              (h/json-response {:data (to-app updated)})))
+              (h/json-response {:data (h/to-app updated)})))
           (catch clojure.lang.ExceptionInfo e
             (let [{:keys [status]} (ex-data e)]
               (h/json-response {:error (ex-message e)} (or status 400))))
@@ -292,11 +236,10 @@
   (fn [request]
     (if-not (h/get-user request)
       (h/unauthorized-response)
-      (if-let [forbidden (ensure-admin-or-owner request)]
+      (if-let [forbidden (h/ensure-admin-or-owner request)]
         forbidden
         (try
-          (let [article-id (h/try-parse-uuid (or (get-in request [:path-params :id])
-                                               (get-in request [:parameters :path :id])))
+          (let [article-id (h/parse-path-id request)
                 body (h/read-body-params request)
                 supplier-id (h/try-parse-uuid (or (:supplier-id body) (:supplier_id body)))
                 raw-labels (or (:raw-labels body)
@@ -315,7 +258,7 @@
                             :article-id article-id
                             :raw-labels raw-labels
                             :allow-reassign? allow-reassign?})]
-              (h/json-response {:data (to-app result)})))
+              (h/json-response {:data (h/to-app result)})))
           (catch clojure.lang.ExceptionInfo e
             (let [{:keys [status]} (ex-data e)]
               (h/json-response {:error (ex-message e)} (or status 400))))

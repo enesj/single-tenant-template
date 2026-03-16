@@ -4,13 +4,15 @@
   Intended to be used by all /api/v1/expenses/** endpoints (not just expenses CRUD),
   so we keep auth/role extraction and JSON responses consistent."
   (:require
+    [app.shared.adapters.database :as shared-db]
     [app.shared.http :as shared-http]
     [app.shared.model-naming :as model-naming]
     [app.shared.type-conversion :as type-conv]
     [cheshire.core :as json]
     [clojure.string :as str])
   (:import
-    [java.util UUID]))
+    [java.util UUID]
+    [org.postgresql.util PSQLException]))
 
 (defn get-param
   "Get a parameter from a params map that may have keyword keys, string keys,
@@ -221,3 +223,73 @@
         (string? b) (json/parse-string b true)
         :else (json/parse-string (slurp b) true)))
     {}))
+
+;; ---------------------------------------------------------------------------
+;; Shared handler helpers
+;; ---------------------------------------------------------------------------
+
+(def to-app
+  "Normalize database result keys to app (kebab-case) format."
+  shared-db/to-app)
+
+(def admin-owner-roles
+  "Roles with administrative management access (admin and owner only)."
+  #{"admin" "owner"})
+
+(defn ensure-admin-or-owner
+  "Check that the requesting user has admin or owner role.
+  Returns a forbidden response if not authorized, nil if ok."
+  ([request]
+   (ensure-admin-or-owner request "Only admins and owners can access this resource."))
+  ([request message]
+   (ensure-role request admin-owner-roles message)))
+
+(defn body-has-any-key?
+  "True if `body` contains any of the given keys."
+  [body ks]
+  (boolean (some #(contains? body %) ks)))
+
+(defn body-get-first
+  "Return the value for the first matching key found in `body`."
+  [body ks]
+  (some #(get body %) ks))
+
+(defn parse-path-id
+  "Extract and parse a UUID from the request path parameters."
+  ([request] (parse-path-id request :id))
+  ([request param-key]
+   (try-parse-uuid (or (get-in request [:path-params param-key])
+                     (get-in request [:parameters :path param-key])))))
+
+(defn parse-batch-ids
+  "Parse batch IDs from request body, trying multiple key variants.
+  Returns [raw-ids parsed-ids] where parsed-ids are valid UUIDs."
+  [body id-keys]
+  (let [raw-ids (or (some #(get body %) id-keys) [])
+        ids (->> raw-ids (map try-parse-uuid) (filter some?) vec)]
+    [raw-ids ids]))
+
+(defn batch-delete-entities
+  "Execute batch delete of entities by IDs.
+  `delete-one!` is a function of (id) that returns truthy on success.
+  Returns a map of {:deleted-count :deleted-ids :errors}."
+  [delete-one! ids]
+  (let [deleted-ids (atom [])
+        errors (atom [])]
+    (doseq [id ids]
+      (try
+        (if (boolean (delete-one! id))
+          (swap! deleted-ids conj (str id))
+          (swap! errors conj {:id (str id) :error "not found"}))
+        (catch PSQLException e
+          (let [sql-state (.getSQLState e)]
+            (swap! errors conj {:id (str id)
+                                :error (if (= "23503" sql-state)
+                                         "foreign key constraint"
+                                         "database error")
+                                :sql-state sql-state})))
+        (catch Exception e
+          (swap! errors conj {:id (str id) :error (.getMessage e)}))))
+    {:deleted-count (count @deleted-ids)
+     :deleted-ids (vec @deleted-ids)
+     :errors (vec @errors)}))
