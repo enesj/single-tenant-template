@@ -107,13 +107,19 @@
                                           (and (seq formatted-key)
                                             (str/includes? normalized-query formatted-key))))
                       city-allowed? (cond
+                                      ;; Candidate matches Place city name
                                       (and (seq candidate*) (seq city))
                                       (normalize/place-city-matches-candidate? candidate* city)
 
-                                      (and (seq normalized-text) (seq city-key))
-                                      (str/includes? normalized-text city-key)
+                                      ;; City name appears literally in the source text
+                                      (and (seq normalized-text) (seq city-key)
+                                        (str/includes? normalized-text city-key))
+                                      true
 
-                                      (and explicit-query? street-allowed?)
+                                      ;; Street-confirmed: the route from Places appears in
+                                      ;; our query — whether or not we derived an explicit
+                                      ;; street-only query string
+                                      street-allowed?
                                       true
 
                                       :else false)

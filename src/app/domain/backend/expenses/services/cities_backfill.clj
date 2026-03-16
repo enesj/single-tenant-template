@@ -3,6 +3,7 @@
   (:require
     [app.domain.backend.expenses.services.cities-normalize :as normalize]
     [app.domain.backend.expenses.services.cities-resolver :as resolver]
+    [app.domain.backend.expenses.services.places-api :as places-api]
     [clojure.java.io :as io]
     [clojure.string :as str]
     [honey.sql :as sql]
@@ -95,11 +96,16 @@
       (assoc report :report-file report-file))))
 
 (defn backfill-store-cities-with-places!
-  "Backfill stores.city_id and optionally create missing `cities` rows via Places."
+  "Backfill stores.city_id and optionally create missing `cities` rows via Places.
+
+  `places-cfg` may be either the raw `:places` sub-map from the app config or the
+  fully-built map returned by `places-api/build-config` — the function normalises it
+  either way so callers don't need to remember which form to pass."
   [db places-cfg & {:keys [dry-run? limit country user-region]
                     :or {dry-run? true
                          limit 25}}]
-  (let [country* (or (some-> country str str/trim not-empty) normalize/default-country)
+  (let [places-cfg* (places-api/build-config {:places places-cfg})
+        country* (or (some-> country str str/trim not-empty) normalize/default-country)
         query {:select [:id :address :display_name]
                :from [:stores]
                :where [:and
@@ -115,7 +121,7 @@
         total-scanned (count rows)
         timestamp (str (Instant/now))
         report-file (str "tmp/backfill-city-ids-with-places-" timestamp ".edn")
-        opts {:places-cfg places-cfg
+        opts {:places-cfg places-cfg*
               :user-region user-region}]
 
     (println (format "\n=== Backfill stores.city_id (with Places) ==="))
