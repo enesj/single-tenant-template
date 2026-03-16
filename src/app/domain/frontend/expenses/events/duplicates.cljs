@@ -211,16 +211,8 @@
   (fn [db [_ strategy]]
     (get-in db (conj state-path :loading-by-strategy strategy) false)))
 
-(rf/reg-sub ::loading?
-  :<- [::loading-by-strategy]
-  (fn [loading-map _]
-    (boolean (some true? (vals loading-map)))))
-
 (rf/reg-sub ::error
   (fn [db _] (get-in db (conj state-path :error))))
-
-(rf/reg-sub ::clusters-by-strategy
-  (fn [db _] (get-in db (conj state-path :clusters-by-strategy) {})))
 
 (rf/reg-sub ::clusters
   (fn [db _]

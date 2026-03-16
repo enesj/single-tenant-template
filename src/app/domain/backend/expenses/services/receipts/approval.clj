@@ -18,8 +18,11 @@
   "Persist reviewed receipt values without posting an expense.
 
   - Updates raw_extract_json.extraction.items to reviewed items
-  - Updates supplier_guess/total_amount_guess/currency_guess/purchased_at_guess
-  - Optionally flips status review_required → extracted when totals match
+  - Updates supplier_guess/supplier_alias_id/currency_guess/purchased_at_guess
+  - Flips status review_required → extracted once all required fields are provided
+    (supplier, purchased_at, items, total_amount). Totals alignment is a soft
+    quality check handled by the effective-status layer in the API response, not
+    a hard gate here.
 
   Returns the updated receipt row."
   [db receipt-id {:keys [supplier_id purchased_at total_amount currency items] :as review-data}]
@@ -59,15 +62,7 @@
                     nil)))
             purchased-at* (parsing/parse-instant! :purchased_at purchased_at)
             currency* (parsing/normalize-currency! currency)
-            total* (parsing/parse-money total_amount)
-            lines* (parsing/lines-total items)
-            abs-dec (fn [d] (if (neg? d) (- d) d))
-            guess-total (:total_amount_guess receipt)
-            totals-match? (when (and (some? guess-total) (some? lines*))
-                            (<= (abs-dec (- guess-total lines*)) 0.01M))
-            new-status (if (and (= "review_required" (:status receipt)) (true? totals-match?))
-                         "extracted"
-                         (:status receipt))]
+            total* (parsing/parse-money total_amount)]
 
         (when-not supplier-uuid
           (throw (ex-info "supplier_id is required" {:status 400 :field :supplier_id})))
@@ -78,24 +73,31 @@
         (when-not (some? total*)
           (throw (ex-info "total_amount is required" {:status 400 :field :total_amount})))
 
-        (jdbc/execute-one!
-          tx
-          (sql/format
-            {:update :receipts
-             :set {:raw_extract_json
-                   [:call :jsonb_set
-                    [:call :coalesce :raw_extract_json [:cast "{}" :jsonb]]
-                    [:raw "'{extraction,items}'::text[]"]
-                    (storage/jsonb-value items)
-                    true]
-                   :supplier_guess supplier-guess
-                   :supplier_alias_id supplier-alias-id
-                   :currency_guess (when currency* [:cast currency* :currency])
-                   :purchased_at_guess purchased-at*
-                   :status (storage/receipt-status-cast new-status)}
-             :where [:= :id receipt-id]
-             :returning [:*]})
-          {:builder-fn rs/as-unqualified-lower-maps})))))
+        ;; All required fields are present: a human has reviewed the receipt.
+        ;; Promote review_required → extracted unconditionally. The effective-status
+        ;; layer in the API response will still surface a soft warning if the
+        ;; submitted items do not sum to the total.
+        (let [new-status (if (= "review_required" (:status receipt))
+                           "extracted"
+                           (:status receipt))]
+          (jdbc/execute-one!
+            tx
+            (sql/format
+              {:update :receipts
+               :set {:raw_extract_json
+                     [:call :jsonb_set
+                      [:call :coalesce :raw_extract_json [:cast "{}" :jsonb]]
+                      [:raw "'{extraction,items}'::text[]"]
+                      (storage/jsonb-value items)
+                      true]
+                     :supplier_guess supplier-guess
+                     :supplier_alias_id supplier-alias-id
+                     :currency_guess (when currency* [:cast currency* :currency])
+                     :purchased_at_guess purchased-at*
+                     :status (storage/receipt-status-cast new-status)}
+               :where [:= :id receipt-id]
+               :returning [:*]})
+            {:builder-fn rs/as-unqualified-lower-maps}))))))
 
 (defn approve-and-post!
   "Create an expense from a receipt and update status → posted.
