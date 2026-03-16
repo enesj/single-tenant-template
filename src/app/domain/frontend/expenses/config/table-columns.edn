@@ -267,19 +267,19 @@
    :id {:label-key :common/id}}},
  :payers
  {:available-columns
-  ["label" "payer_type_label" "is_default" "created_at" "payer_type_id" "updated_at" "id" "tenant_id"],
-  :default-visible-columns ["label" "payer_type_label" "is_default"],
+  ["label" "payer_type_label" "is_default" "user_email" "created_at" "updated_at" "id" "tenant_id"],
+  :default-visible-columns ["label" "payer_type_label" "is_default" "user_email"],
   :filterable-columns ["label" "payer_type_label" "is_default"],
   :sortable-columns ["label" "payer_type_label" "is_default"],
   :always-visible ["label"],
   :computed-fields
-  {:payer_type_label {:type "string", :label "Payer Type"}},
-  :column-config {:payer_type_id {:type "text"}},
+  {:payer_type_label {:type "string", :label "Payer Type"},
+   :user_email {:type "string", :label "Email"}},
   :column-metadata
   {:label {:label-key :common/label},
    :payer_type_label {:label-key :common/payer-type},
-   :payer_type_id {:label-key :common/payer-type-id},
    :is_default {:label-key :common/is-default},
+   :user_email {:label "Email"},
    :created_at {:label-key :common/created-at},
    :updated_at {:label-key :common/updated-at},
    :id {:label-key :common/id}}},

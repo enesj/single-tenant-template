@@ -47,7 +47,9 @@
                (assoc-in [:session :verification-required?] verification-required?)
                (assoc-in [:session :user] user)
                (assoc-in [:session :registration-message] message)
-               (update :session dissoc :error))
+               (update :session dissoc :error)
+               ;; Clear stale tenant state from any previous session
+               (dissoc :tenant))
          :fx [[:dispatch
                [:app.template.frontend.events.messages/show-success
                 "Registration Successful"

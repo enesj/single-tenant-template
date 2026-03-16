@@ -41,6 +41,23 @@
             :id))
     (normalize/candidate-normalized-keys candidate)))
 
+(defn find-city-by-zip-prefix
+  "Find a city by progressively shorter ZIP prefixes (4 → 3 → 2 digits).
+   Returns the first city whose ZIP starts with the longest matching prefix."
+  [db zip]
+  (when-let [zip* (normalize/normalize-zip zip)]
+    (some (fn [prefix-len]
+            (let [prefix (subs zip* 0 prefix-len)]
+              (jdbc/execute-one!
+                db
+                (sql/format {:select [:id :name :zip]
+                             :from [:cities]
+                             :where [:like :zip (str prefix "%")]
+                             :order-by [[:zip :asc]]
+                             :limit 1})
+                {:builder-fn rs/as-unqualified-lower-maps})))
+      [4 3 2])))
+
 (defn ensure-city-by-country-and-zip!
   [db country zip city-name]
   (let [country* (or (some-> country str str/trim not-empty)

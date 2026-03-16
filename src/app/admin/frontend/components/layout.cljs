@@ -12,13 +12,13 @@
                                                     chart-bar
                                                     dashboard-icon
                                                     login-events-icon
+                                                    logout-icon
                                                     search-icon
                                                     settings-icon
                                                     suppliers-icon
                                                     unmapped-items-icon
                                                     user-settings-icon
                                                     users-icon]]
-    [clojure.string :as str]
     [re-frame.core :as rf]
     [uix.core :refer [$ defui use-state]]
     [uix.re-frame :refer [use-subscribe]]))
@@ -115,7 +115,6 @@
                          :href "/admin/cities"
                          :icon ($ suppliers-icon {:class "w-6 h-6"})
                          :active? (= route-name :admin-cities)}
-
                         {:id "admin-sidebar-expenses-unmapped-aliases"
                          :label "Unmapped Aliases"
                          :href "/admin/unmapped-aliases"
@@ -150,18 +149,23 @@
     ($ sidebar {:title "Admin Panel"
                 :open? open?
                 :sections sections
-                :footer ($ :ul {:class "ds-menu w-full p-0"}
-                          ($ :li
-                            ($ :a {:href "/admin/admin-settings"
-                                   :class (if (= route-name :admin-admin-settings) "ds-active" "")}
-                              ($ settings-icon {:class "w-5 h-5"})
-                              "Admin Settings"))
-
-                          ($ :li
-                            ($ :a {:href "/admin/user-settings"
-                                   :class (if (= route-name :admin-user-settings) "ds-active" "")}
-                              ($ user-settings-icon {:class "w-5 h-5"})
-                              "User Settings")))})))
+                :footer ($ :div {:class "p-3 border-t border-base-300"}
+                          ($ :ul {:class "ds-menu w-full p-0"}
+                            ($ :li
+                              ($ :a {:href "/admin/admin-settings"
+                                     :class (if (= route-name :admin-admin-settings) "ds-active" "")}
+                                ($ settings-icon {:class "w-5 h-5"})
+                                "Admin Settings"))
+                            ($ :li
+                              ($ :a {:href "/admin/user-settings"
+                                     :class (if (= route-name :admin-user-settings) "ds-active" "")}
+                                ($ user-settings-icon {:class "w-5 h-5"})
+                                "User Settings")))
+                          ($ :button {:id "admin-sidebar-logout"
+                                      :class "flex items-center gap-2 text-sm font-medium py-2 px-2 rounded-lg w-full text-error hover:bg-error/10 transition-colors"
+                                      :on-click #(rf/dispatch [:admin/logout])}
+                            ($ logout-icon {:class "w-4 h-4"})
+                            "Sign Out"))})))
 
 (defui admin-settings-panel
   "Simple settings dropdown with theme selector"
@@ -174,7 +178,7 @@
     ($ :div {:class "relative"}
       ;; Gear icon button
       ($ button {:btn-type :ghost
-                 :class "ds-btn-circle border border-base-200 bg-base-100/70 text-base-content/90 shadow-sm hover:bg-base-100"
+                 :class "ds-btn-circle"
                  :id "admin-settings-gear"
                  :title "Settings"
                  :on-click #(set-expanded! (not expanded?))}
@@ -198,58 +202,49 @@
 
 (defui admin-header [{:keys [on-toggle-sidebar]}]
   (let [authenticated? (use-subscribe [:admin/authenticated?])
-        current-user (use-subscribe [:admin/current-user])
-        current-role (use-subscribe [:admin/current-user-role])
-        admin-name (:full-name current-user)
-        admin-email (:email current-user)
-        role-str (when current-role (name current-role))
-        display-name (if admin-name
-                       (let [parts (str/split admin-name #"\s+")
-                             first-init (first (first parts))
-                             last-init (when (> (count parts) 1) (first (last parts)))]
-                         (str first-init (or last-init "")))
-                       (when admin-email
-                         (first (str/split (str admin-email) #"@"))))]
+        current-user   (use-subscribe [:admin/current-user])
+        current-role   (use-subscribe [:admin/current-user-role])
+        admin-name     (:full-name current-user)
+        admin-email    (:email current-user)
+        role-str       (when current-role (name current-role))]
     ($ :div {:class "flex-shrink-0 flex h-16 bg-base-300 shadow"}
-      ($ :div {:class "flex-1 px-4 flex justify-between items-center"}
-        ($ :div {:class "flex items-center"}
-          ($ :button {:class "p-2 rounded-lg hover:bg-base-200 transition-colors"
-                      :id "admin-sidebar-toggle"
-                      :on-click on-toggle-sidebar
+      ($ :div {:class "flex-1 px-4 flex items-center"}
+        ;; Left: hamburger
+        ($ :div {:class "flex-none flex items-center"}
+          ($ :button {:class     "p-2 rounded-lg hover:bg-base-200 transition-colors"
+                      :id        "admin-sidebar-toggle"
+                      :on-click  on-toggle-sidebar
                       :aria-label "Toggle sidebar"}
             ($ :svg {:class "w-6 h-6" :fill "none" :stroke "currentColor" :viewBox "0 0 24 24"}
               ($ :path {:stroke-linecap "round" :stroke-linejoin "round" :stroke-width "2"
                         :d "M4 6h16M4 12h16M4 18h16"}))))
-        ($ :div {:class "flex items-center space-x-2"}
-          ;; Admin info - only show when actually authenticated (not just cached from localStorage)
+
+        ;; Center: admin user info
+        ($ :div {:class "flex-1 flex justify-center items-center"}
           (when (and authenticated? current-user)
-            ($ :div {:class "flex items-center space-x-2"}
-              ;; Person icon
-              ($ :svg {:class "w-5 h-5 text-base-content" :fill "none" :stroke "currentColor" :viewBox "0 0 24 24"}
+            ($ :div {:class "flex items-end space-x-2"}
+              ;; Person icon (aligned to bottom like provider icon in user header)
+              ($ :svg {:class "w-6 h-6 text-base-content/60 mb-0.5" :fill "none" :stroke "currentColor" :viewBox "0 0 24 24"}
                 ($ :path {:stroke-linecap "round" :stroke-linejoin "round" :stroke-width "2"
                           :d "M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"}))
-              ;; Name/initials
-              ($ :span {:class "font-medium text-sm"}
-                (or display-name "Admin"))
+              ;; Name + email stacked
+              ($ :div {:class "flex flex-col items-center"}
+                ($ :span {:class "font-bold text-lg text-base-content leading-tight"}
+                  (or admin-name admin-email "Admin"))
+                (when (and admin-name admin-email)
+                  ($ :span {:class "text-sm text-base-content/60 leading-tight"}
+                    admin-email)))
               ;; Role badge
               (when role-str
-                ($ :span {:class (str "ds-badge ds-badge-sm "
+                ($ :span {:class (str "ds-badge ds-badge-md ml-2 "
                                    (case role-str
-                                     "owner" "ds-badge-primary"
+                                     "owner"       "ds-badge-primary"
                                      "super_admin" "ds-badge-primary"
-                                     "admin" "ds-badge-secondary"
                                      "ds-badge-secondary"))}
-                  role-str))))
+                  role-str)))))
 
-          ;; Sign Out button - only show when authenticated
-          (when authenticated?
-            ($ button {:btn-type :error
-                       :class "ds-btn-sm"
-                       :id "admin-sign-out-btn"
-                       :on-click #(rf/dispatch [:admin/logout])}
-              "Sign Out"))
-
-          ;; Settings gear (on the right, opens popover with theme)
+        ;; Right: settings gear
+        ($ :div {:class "flex-none flex items-center"}
           ($ admin-settings-panel))))))
 
 (defui admin-layout [{:keys [children]}]

@@ -129,7 +129,7 @@
             (some-> user-email clojure.string/lower-case))
       (throw (ex-info "Invitation email does not match your account"
                {:type :validation-error
-                :errors {:email ["This invitation was sent to a different email address"]}}))))
+                :errors {:email [(str "This invitation was sent to " inv-email " but you are logged in as " user-email)]}}))))
 
   ;; Guard: not already a member
   (let [tenant-id (or (:tenant_id invitation) (:tenant_invitations/tenant_id invitation))

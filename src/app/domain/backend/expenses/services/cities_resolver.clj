@@ -7,18 +7,25 @@
     [clojure.string :as str]))
 
 (defn resolve-city-id-from-text
-  "Resolve city_id from free text with strict ZIP precedence."
+  "Resolve city_id from free text with strict ZIP precedence.
+   When ZIP is found but not in DB, tries all extracted name candidates,
+   then falls back to ZIP prefix matching."
   ([db text]
    (resolve-city-id-from-text db normalize/default-country text))
   ([db country text]
    (if-let [zip (normalize/extract-zip-from-text text)]
-     (some-> (repository/find-city-by-country-and-zip db country zip)
-       :id)
+     (or
+       (some-> (repository/find-city-by-country-and-zip db country zip) :id)
+       (some #(repository/find-city-id-by-candidate db %)
+         (normalize/extract-city-fallback-candidates text))
+       (some-> (repository/find-city-by-zip-prefix db zip) :id))
      (some-> (normalize/extract-city-fallback-candidate text)
        (#(repository/find-city-id-by-candidate db %))))))
 
 (defn resolve-city-id-from-text!
-  "Resolve city id from free text and optionally create missing city rows."
+  "Resolve city id from free text and optionally create missing city rows.
+   When ZIP is found but not in DB, tries all extracted name candidates,
+   then ZIP prefix matching, then Places API."
   ([db text]
    (resolve-city-id-from-text! db normalize/default-country text nil))
   ([db country-or-text text-or-opts]
@@ -32,8 +39,10 @@
      (when (seq text*)
        (if-let [zip (normalize/extract-zip-from-text text*)]
          (or
-           (some-> (repository/find-city-by-country-and-zip db country* zip)
-             :id)
+           (some-> (repository/find-city-by-country-and-zip db country* zip) :id)
+           (some #(repository/find-city-id-by-candidate db %)
+             (normalize/extract-city-fallback-candidates text*))
+           (some-> (repository/find-city-by-zip-prefix db zip) :id)
            (when-let [candidate (normalize/extract-city-fallback-candidate text*)]
              (when-let [confirmed-city (places/confirm-city-via-places zip candidate opts)]
                (repository/ensure-city-by-country-and-zip! db country* zip confirmed-city)))

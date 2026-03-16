@@ -294,7 +294,16 @@
    :joins [[:payer_types :pt] [:= :pt/id :p/payer_type_id]]
    :select-fields [[:p/*]
                    [:pt/label :payer_type_label]
-                   [:pt/is_system :payer_type_is_system]]
+                   [:pt/is_system :payer_type_is_system]
+                   ;; Correlated subquery: email of the user whose system payer this is.
+                   ;; Uses a subquery (not JOIN) to avoid row duplication when multiple
+                   ;; user_expense_settings rows reference the same payer.
+                   [{:select [:u/email]
+                     :from [[:users :u]]
+                     :join [[:user_expense_settings :ues] [:= :ues/user_id :u/id]]
+                     :where [:= :ues/default_payer_id :p/id]
+                     :limit 1}
+                    :user_email]]
    :before-insert (fn [data]
                     (when-not (get data :payer_type_id)
                       (throw (ex-info "payer_type_id is required" {:data data})))

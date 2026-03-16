@@ -209,9 +209,12 @@
      :id-keys [:id]
      :stringify-keys [:payer_type_id]
      :alias-keys {:payer_type_id [:payer-type-id :payers/payer-type-id]
-                  :payer_type_label [:payer-type]
+                  :payer_type_label [:payer-type :payer-type-label]
+                  :payer_type_is_system [:payer-type-is-system]
                   :is_default [:is-default]
-                  :created_at [:created-at]}}))
+                  :is_active [:is-active]
+                  :created_at [:created-at]
+                  :user_email [:user-email]}}))
 
 (defn payer-type->template-entity
   [payer-type]

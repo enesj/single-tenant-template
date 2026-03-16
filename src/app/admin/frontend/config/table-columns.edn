@@ -189,17 +189,15 @@
   :always-visible ["display_name"]},
  :payers
  {:available-columns
-  ["label" "payer_type_label" "is_default" "created_at" "payer_type_id" "updated_at" "id" "tenant_id"],
+  ["label" "payer_type_label" "is_default" "created_at" "updated_at" "id" "tenant_id"],
   :default-visible-columns ["label" "payer_type_label" "is_default"],
   :filterable-columns ["label" "payer_type_label" "is_default"],
   :sortable-columns ["label" "payer_type_label" "is_default"],
   :always-visible ["label"],
   :computed-fields
   {:payer_type_label {:type "string", :label "Payer Type"}},
-  :column-config {:payer_type_id {:type "text"}},
   :column-metadata
-  {:payer_type_label {:label-key :common/payer-type},
-   :payer_type_id {:label-key :common/payer-type-id}}},
+  {:payer_type_label {:label-key :common/payer-type}}},
  :supplier-aliases
  {:available-columns
   ["supplier_display_name"

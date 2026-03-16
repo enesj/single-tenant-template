@@ -40,11 +40,16 @@
     (let [result (reduce
                    (fn [acc {:keys [id address display_name]}]
                      (try
-                       (let [source-text (->> [address display_name]
-                                           (remove str/blank?)
-                                           (str/join " "))
+                       (let [;; Try address alone first (avoids token-count inflation from
+                             ;; appending display_name when address already contains the city)
+                             source-text (or (when-not (str/blank? address) address)
+                                           (->> [address display_name]
+                                             (remove str/blank?)
+                                             (str/join " ")))
                              zip (normalize/extract-zip-from-text source-text)
-                             city-id (resolver/resolve-city-id-from-text db source-text)]
+                             city-id (or (resolver/resolve-city-id-from-text db source-text)
+                                       (when (and (str/blank? address) (not (str/blank? display_name)))
+                                         (resolver/resolve-city-id-from-text db display_name)))]
                          (if city-id
                            (do
                              (when-not dry-run?

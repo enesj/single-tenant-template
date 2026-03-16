@@ -150,13 +150,15 @@
   common-interceptors
   (fn [{:keys [db]} [response]]
     (let [payers (vec (or (:data response) []))
-          total (or (:total response) (count payers))]
-      {:db (-> db
-             (assoc-in [:user-expenses :payers :data] payers)
-             (assoc-in [:user-expenses :payers :items] payers)
-             (assoc-in [:user-expenses :payers :loading?] false)
-             (assoc-in [:user-expenses :payers :error] nil)
-             (assoc-in (paths/list-total-items :payers) total))
+          total (or (:total response) (count payers))
+          user-payer-id (some-> (:user_payer_id response) str)]
+      {:db (cond-> (-> db
+                     (assoc-in [:user-expenses :payers :data] payers)
+                     (assoc-in [:user-expenses :payers :items] payers)
+                     (assoc-in [:user-expenses :payers :loading?] false)
+                     (assoc-in [:user-expenses :payers :error] nil)
+                     (assoc-in (paths/list-total-items :payers) total))
+             user-payer-id (assoc-in [:user-expenses :payers :user-payer-id] user-payer-id))
        :dispatch [::expenses-sync/sync-payers payers]})))
 
 (rf/reg-event-db

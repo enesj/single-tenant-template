@@ -138,9 +138,9 @@
       ($ :a {:id "user-sidebar-logout"
              :href "/logout"
              :on-click (fn [e] (stop-and-push! e :logout "/logout"))
-             :class (str "flex items-center gap-2 text-sm py-2 px-2 rounded-lg "
-                      "hover:bg-base-200 transition-colors "
-                      (when (= route-name :logout) "bg-base-200 font-medium"))}
+             :class (str "flex items-center gap-2 text-sm font-medium py-2 px-2 rounded-lg "
+                      "text-error hover:bg-error/10 transition-colors "
+                      (when (= route-name :logout) "bg-error/10"))}
         ($ logout-icon {:class "w-4 h-4"})
         (t :nav/log-out))
       ;; Language switcher
@@ -303,8 +303,9 @@
 
 (defui user-header [{:keys [on-toggle-sidebar]}]
   ($ :div {:class "flex-shrink-0 flex h-16 bg-base-300 shadow"}
-    ($ :div {:class "flex-1 px-4 flex justify-between items-center"}
-      ($ :div {:class "flex items-center"}
+    ($ :div {:class "flex-1 px-4 flex items-center"}
+      ;; Left: hamburger
+      ($ :div {:class "flex-none flex items-center"}
         ($ :button {:class "p-2 rounded-lg hover:bg-base-200 transition-colors"
                     :id "user-sidebar-toggle"
                     :on-click on-toggle-sidebar
@@ -312,8 +313,11 @@
           ($ :svg {:class "w-6 h-6" :fill "none" :stroke "currentColor" :viewBox "0 0 24 24"}
             ($ :path {:stroke-linecap "round" :stroke-linejoin "round" :stroke-width "2"
                       :d "M4 6h16M4 12h16M4 18h16"}))))
-      ($ :div {:class "flex items-center space-x-2"}
-        ($ auth-component)
+      ;; Center: user/workspace info (prominent, centered)
+      ($ :div {:class "flex-1 flex justify-center items-center"}
+        ($ auth-component))
+      ;; Right: settings
+      ($ :div {:class "flex-none flex items-center"}
         ($ settings-panel {:global-settings? true})))))
 
 (defui user-layout

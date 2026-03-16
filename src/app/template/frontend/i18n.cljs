@@ -365,6 +365,13 @@
     :invitation/expired-or-used      "Pozivnica možda je istekla ili je već korištena."
     :invitation/ready-text           "Pozvani ste da se pridružite radnom prostoru. Kliknite ispod za prihvatanje."
     :invitation/accept               "Prihvati pozivnicu"
+    :invitation/error-email-mismatch "Ova pozivnica je poslana na drugu email adresu."
+    :invitation/error-expired        "Ova pozivnica je istekla."
+    :invitation/error-not-valid      "Ova pozivnica više nije validna."
+    :invitation/error-already-member "Već ste član ovog radnog prostora."
+    :invitation/error-generic        "Nije moguće prihvatiti pozivnicu."
+    :invitation/sign-in-different    "Prijavite se drugim računom"
+    :invitation/logged-in-as         "Prijavljeni ste kao"
 
     ;; Email verification page
     :email-verification/verified-title    "E-mail potvrđen!"
@@ -1177,6 +1184,13 @@
     :invitation/expired-or-used      "The invitation may have expired or already been used."
     :invitation/ready-text           "You've been invited to join a workspace. Click below to accept."
     :invitation/accept               "Accept Invitation"
+    :invitation/error-email-mismatch "This invitation was sent to a different email address."
+    :invitation/error-expired        "This invitation has expired."
+    :invitation/error-not-valid      "This invitation is no longer valid."
+    :invitation/error-already-member "You are already a member of this workspace."
+    :invitation/error-generic        "Unable to accept invitation."
+    :invitation/sign-in-different    "Sign in with a different account"
+    :invitation/logged-in-as         "Logged in as"
 
     ;; Email verification page
     :email-verification/verified-title    "Email Verified!"

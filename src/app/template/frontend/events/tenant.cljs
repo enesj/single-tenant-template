@@ -166,6 +166,7 @@
     (log/error "Failed to fetch members:" response)
     (-> db
       (assoc-in [:tenant :members-loading?] false)
+      (assoc-in [:tenant :members] nil)
       (assoc-in [:tenant :error] "Failed to fetch members"))))
 
 ;; ============================================================================
@@ -475,8 +476,9 @@
     (-> db
       (assoc-in [:tenant :accept-loading?] false)
       (assoc-in [:tenant :error]
-        (or (get-in response [:response :errors :token 0])
-          (get-in response [:response :message])
+        (or (get-in response [:response :details :token 0])
+          (get-in response [:response :details :email 0])
+          (get-in response [:response :error])
           "Failed to accept invitation")))))
 
 ;; ============================================================================

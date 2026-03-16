@@ -133,7 +133,7 @@
               :d "M15 12a3 3 0 11-6 0 3 3 0 016 0z"})))
 
 (defui settings-icon-large []
-  ($ :svg {:class "w-8 h-8 text-primary-content"
+  ($ :svg {:class "w-6 h-6 text-base-content/70"
            :fill "none"
            :stroke "currentColor"
            :viewBox "0 0 24 24"

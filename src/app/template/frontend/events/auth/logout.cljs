@@ -21,7 +21,9 @@
            (assoc-in [:session :user] nil)
            (assoc-in [:session :tenant] nil)
            (assoc-in [:session :permissions] nil)
-           (update :session dissoc :provider))
+           (update :session dissoc :provider)
+           ;; Clear tenant-scoped data so it doesn't leak to the next session
+           (dissoc :tenant))
      ;; Call backend logout to clear server session
      :http-xhrio (http/api-request
                    {:method :post

@@ -124,7 +124,7 @@
          :button-text "Save Payer"}))))
 
 (defui user-payer-edit-form-modal
-  [{:keys [payer-id initial-data on-success on-cancel]}]
+  [{:keys [payer-id initial-data on-success on-cancel label-only?]}]
   (let [form-error (use-subscribe [:user-expenses/form-error])
         ;; Get dynamic form spec from user-settings config
         dynamic-spec (use-subscribe [:form-entity-specs/by-name :payers true])
@@ -141,10 +141,12 @@
         ;; Build initial values from data.
         ;; Dynamic form spec uses kebab-case IDs (e.g. :payer-type-id, :is-default).
         ;; The entity data often uses snake_case keys.
-        initial-values (-> (norm/convert-db-keys->app-keys (or initial-data {}))
-                         (select-keys [:label :payer-type-id :is-default :id])
-                         (update :payer-type-id #(or (when % (str %)) default-type-id))
-                         (update :is-default boolean))]
+        initial-values (if label-only?
+                         {:label (or (:label initial-data) "")}
+                         (-> (norm/convert-db-keys->app-keys (or initial-data {}))
+                           (select-keys [:label :payer-type-id :is-default :id])
+                           (update :payer-type-id #(or (when % (str %)) default-type-id))
+                           (update :is-default boolean)))]
     ($ :div {:class "space-y-4"}
       (when form-error
         ($ :div {:class "ds-alert ds-alert-error"}
@@ -152,8 +154,15 @@
 
       ($ form
         {:entity-name "payers"
-         ;; Only use hardcoded spec as fallback if dynamic config not available
-         :entity-spec (when-not (seq dynamic-spec) (payer-form-spec payer-type-options))
+         ;; label-only? uses a minimal spec; otherwise prefer dynamic config, fall back to full spec
+         :entity-spec (cond
+                        label-only? [{:id :label
+                                      :type :text
+                                      :label "Label"
+                                      :required true
+                                      :placeholder "e.g. Visa 1234"}]
+                        (seq dynamic-spec) nil
+                        :else (payer-form-spec payer-type-options))
          :editing true
          :initial-values initial-values
          :on-cancel on-cancel
@@ -161,7 +170,9 @@
                       ;; Convert kebab-case form keys to snake_case for the API.
                       (rf/dispatch [:user-expenses/update-payer-modal
                                     payer-id
-                                    (model-naming/app-map-keys->db values)
+                                    (if label-only?
+                                      {:label (:label values)}
+                                      (model-naming/app-map-keys->db values))
                                     on-success]))
          :button-text "Update Payer"}))))
 

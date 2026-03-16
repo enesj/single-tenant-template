@@ -23,18 +23,16 @@
 ;; It uses the AuthenticationService to perform the actual logic.
 
 (def logout-handler
-  "Handle logout by clearing *user* auth from the session.
+  "Handle logout by clearing the entire session.
 
-  IMPORTANT: We keep other session keys (e.g. :admin-token) intact so that
-  signing out of the user UI does not implicitly sign out of the admin UI."
+  Previous approach preserved non-auth keys (e.g. :admin-token), but this caused
+  cookie-store serialization issues where stale auth data persisted despite logout.
+  A full session clear is safer — admin sessions can be re-established independently."
   (fn [req]
     (log/info "Processing logout request")
-    (let [existing-session (or (:session req) {})
-          new-session (-> existing-session
-                        (dissoc :auth-session :user :tenant :tenant-id :user-id))]
-      (-> (response/response (json/generate-string {:success true}))
-        (response/content-type "application/json")
-        (assoc :session (when (seq new-session) new-session))))))
+    (-> (response/response (json/generate-string {:success true}))
+      (response/content-type "application/json")
+      (assoc :session nil))))
 
 (defn- sanitize-for-serialization
   "Helper function to sanitize objects for JSON/EDN serialization"
@@ -430,7 +428,7 @@
                :user-id (or (get-in effective-auth-session [:user :id])
                           (get-in effective-auth-session [:user :users/id]))
                :tenant-id (or (get-in effective-auth-session [:tenant :id])
-                           (get-in effective-auth-session [:tenant :tenants/id]))}))
+                            (get-in effective-auth-session [:tenant :tenants/id]))}))
           (cond-> {:status 200
                    :headers {"Content-Type" "application/json"}
                    :body (json/generate-string

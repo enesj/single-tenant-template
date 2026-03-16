@@ -5,14 +5,16 @@
     [app.template.frontend.components.button :refer [button]]
     [app.template.frontend.events.tenant :as tenant]
     [app.template.frontend.i18n :refer [use-t]]
+    [clojure.string :as str]
     [re-frame.core :as rf]
     [uix.core :refer [$ defui use-effect]]
     [uix.re-frame :refer [use-subscribe]]))
 
 (defui invitation-accept-page []
   (let [t (use-t)
-        authenticated? (:authenticated (use-subscribe [:auth-status]))
-        accept-loading? (get (use-subscribe [:auth-status]) :loading?)
+        auth-status (use-subscribe [:auth-status])
+        authenticated? (:authenticated auth-status)
+        current-user-email (:email (:user auth-status))
         error (use-subscribe [:tenant/error])
         token (use-subscribe [:tenant/accept-token])
         tenant-loading? (use-subscribe [:tenant/loading?])
@@ -72,22 +74,43 @@
 
             ;; Error state
             error
-            ($ :div
-              ($ :div {:class "ds-alert ds-alert-error mb-4"}
-                ($ :span error))
-              ($ :p {:class "text-slate-500 mb-4"}
-                (t :invitation/expired-or-used))
-              ($ button
-                {:on-click #(rf/dispatch [:navigate-to "/dashboard"])
-                 :variant :outline
-                 :class "w-full"}
-                (t :invitation/go-to-dashboard)))
+            (let [email-mismatch? (str/includes? error "logged in as")
+                  translated-error
+                  (condp #(str/includes? %2 %1) error
+                    "logged in as"   error ;; already descriptive with both emails
+                    "expired"        (t :invitation/error-expired)
+                    "no longer valid" (t :invitation/error-not-valid)
+                    "already a member" (t :invitation/error-already-member)
+                    (t :invitation/error-generic))]
+              ($ :div
+                ($ :div {:class "ds-alert ds-alert-error mb-4"}
+                  ($ :span translated-error))
+                (when email-mismatch?
+                  ($ button
+                    {:on-click #(do (rf/dispatch [::tenant/clear-messages])
+                                  (rf/dispatch [:app.template.frontend.events.auth.ids/logout])
+                                  ;; After logout clears session, redirect to login with return URL
+                                  (js/setTimeout
+                                    (fn [] (set! (.-href js/window.location)
+                                             (str "/login?return=" (js/encodeURIComponent (.-href js/window.location)))))
+                                    500))
+                     :btn-type :primary
+                     :class "w-full mb-2"}
+                    (t :invitation/sign-in-different)))
+                ($ button
+                  {:on-click #(rf/dispatch [:navigate-to "/dashboard"])
+                   :variant :outline
+                   :class "w-full"}
+                  (t :invitation/go-to-dashboard))))
 
             ;; Ready to accept
             :else
             ($ :div
-              ($ :p {:class "text-slate-500 mb-6"}
+              ($ :p {:class "text-slate-500 mb-2"}
                 (t :invitation/ready-text))
+              (when current-user-email
+                ($ :p {:class "text-sm text-slate-400 mb-6"}
+                  (t :invitation/logged-in-as) " " ($ :strong current-user-email)))
               ($ button
                 {:on-click #(rf/dispatch [::tenant/accept-invitation
                                           {:token (or token url-token)}])

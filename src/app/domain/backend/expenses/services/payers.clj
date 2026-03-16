@@ -30,10 +30,31 @@
 (def ^:private create-payer!* (:create! service))
 (def ^:private update-payer!* (:update! service))
 
+(defn- assert-payer-type-not-system!
+  "Guard: throw if the given payer_type_id belongs to a system payer type.
+   Called before creation so users cannot create system-provisioned payers."
+  [db payer-type-id]
+  (when payer-type-id
+    (let [pt-id (if (string? payer-type-id)
+                  (java.util.UUID/fromString payer-type-id)
+                  payer-type-id)
+          row   (jdbc/execute-one! db
+                  (sql/format {:select [:is_system]
+                               :from   [:payer_types]
+                               :where  [:= :id pt-id]
+                               :limit  1})
+                  {:builder-fn rs/as-unqualified-lower-maps})]
+      (when (:is_system row)
+        (throw (ex-info "Cannot create a system-provisioned payer"
+                 {:type   :validation-error
+                  :status 403
+                  :errors {:payer_type_id ["System payer types can only be created by the application"]}}))))))
+
 (def create-payer!
   (fn
     ([db payer-data] (create-payer! db payer-data nil))
     ([db payer-data opts]
+     (assert-payer-type-not-system! db (:payer_type_id payer-data))
      (let [want-default? (true? (:is_default payer-data))
            tenant-id (or (:tenant-id opts) (:tenant_id payer-data))]
        (if want-default?
@@ -134,3 +155,18 @@
   ([db payer-id tenant-id]
    (jdbc/with-transaction [tx db]
      (set-default-payer-in-tx! tx payer-id tenant-id))))
+
+(defn get-user-payer-id
+  "Look up the user's own payer ID from user_expense_settings for the given user + tenant.
+   Returns the payer UUID or nil when no settings row exists."
+  [db user-id tenant-id]
+  (when (and user-id tenant-id)
+    (:default_payer_id
+     (jdbc/execute-one! db
+       (sql/format {:select [:default_payer_id]
+                    :from   [:user_expense_settings]
+                    :where  [:and
+                             [:= :user_id user-id]
+                             [:= :tenant_id tenant-id]]
+                    :limit  1})
+       {:builder-fn rs/as-unqualified-lower-maps}))))

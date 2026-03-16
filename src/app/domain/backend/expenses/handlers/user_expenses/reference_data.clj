@@ -114,11 +114,17 @@
             (h/json-response {:error "Invalid supplier ID"} 400))))
       (h/unauthorized-response))))
 
+(def ^:private payer-manage-roles
+  "Roles allowed to create or delete payers (admin and owner only)."
+  #{"admin" "owner"})
+
 (defn list-payers-handler
-  "Handler factory for listing payers available to users (tenant-scoped)."
+  "Handler factory for listing payers available to users (tenant-scoped).
+   Includes :user_payer_id in the response so the frontend can identify
+   which payer belongs to the requesting user."
   [db]
   (fn [request]
-    (if-let [_user-id (h/get-user-id request)]
+    (if-let [user-id (h/get-user-id request)]
       (if-let [forbidden (h/ensure-role request h/reference-data-read-roles "Role assignment required")]
         forbidden
         (let [tenant-id (h/get-tenant-id request)]
@@ -143,11 +149,17 @@
                                  'app.domain.backend.expenses.services.payers
                                  :count)
                   payers (vec (payers-svc db opts))
-                  total (long (or (count-payers db {:search search :tenant-id tenant-id}) 0))]
-              (h/json-response {:data payers
-                                :total total
-                                :limit limit
-                                :offset offset}))
+                  total (long (or (count-payers db {:search search :tenant-id tenant-id}) 0))
+                  user-payer-id (some->> ((requiring-resolve
+                                            'app.domain.backend.expenses.services.payers/get-user-payer-id)
+                                          db user-id tenant-id)
+                                  str)]
+              (h/json-response
+                (cond-> {:data   payers
+                         :total  total
+                         :limit  limit
+                         :offset offset}
+                  user-payer-id (assoc :user_payer_id user-payer-id))))
             (catch Exception e
               (log/error e "Error listing payers")
               (h/json-response {:error "Failed to list payers"} 500)))))
@@ -272,16 +284,16 @@
 (defn create-payer-handler
   "Handler factory for creating a payer (tenant-scoped).
 
-  Allowed roles: member/admin."
+  Allowed roles: admin/owner only. Members cannot create payers —
+  their system payer is provisioned automatically on invitation accept."
   [db]
   (fn [request]
     (if-let [_user-id (h/get-user-id request)]
-      (if-let [forbidden (h/ensure-role request h/reference-data-write-roles "Only members and admins can modify payers")]
+      (if-let [forbidden (h/ensure-role request payer-manage-roles "Only admins and owners can create payers")]
         forbidden
         (let [tenant-id (h/get-tenant-id request)]
           (try
             (let [body (h/read-json-body request)
-                  ;; Require FK; fall back to default payer type when not provided
                   payer-type-id-raw (or (:payer_type_id body) (default-payer-type-id db tenant-id))
                   payer-type-id (cond
                                   (instance? java.util.UUID payer-type-id-raw) payer-type-id-raw
@@ -307,35 +319,61 @@
 (defn update-payer-handler
   "Handler factory for updating a payer (tenant-scoped).
 
-  Allowed roles: member/admin."
+  Role rules:
+  - admin/owner: full update (label, payer_type_id, is_default) on any payer.
+  - member: may only update the :label of their own provisioned payer."
   [db]
   (fn [request]
-    (if-let [_user-id (h/get-user-id request)]
-      (if-let [forbidden (h/ensure-role request h/reference-data-write-roles "Only members and admins can modify payers")]
+    (if-let [user-id (h/get-user-id request)]
+      (if-let [forbidden (h/ensure-role request h/reference-data-write-roles "Role assignment required")]
         forbidden
         (let [tenant-id (h/get-tenant-id request)
-              payer-id (or (h/try-parse-uuid (get-in request [:path-params :id]))
-                         (h/try-parse-uuid (get-in request [:parameters :path :id])))]
+              role      (h/get-user-role request)
+              payer-id  (or (h/try-parse-uuid (get-in request [:path-params :id]))
+                          (h/try-parse-uuid (get-in request [:parameters :path :id])))]
           (if payer-id
             (try
-              (let [body (h/read-json-body request)
-                    payer-type-id-raw (:payer_type_id body)
-                    payer-type-id (when (contains? body :payer_type_id)
-                                    (cond
-                                      (instance? java.util.UUID payer-type-id-raw) payer-type-id-raw
-                                      :else (h/try-parse-uuid payer-type-id-raw)))
-                    _ (when (and (contains? body :payer_type_id) (nil? payer-type-id))
-                        (throw (ex-info "Invalid payer_type_id" {:status 400})))
-                    updates (-> (select-keys body [:label :is_default])
-                              (cond-> (contains? body :payer_type_id)
-                                (assoc :payer_type_id payer-type-id))
-                              (cond-> (contains? body :is_default)
-                                (update :is_default boolean)))
-                    update-payer! (requiring-resolve 'app.domain.backend.expenses.services.payers/update-payer!)
-                    payer (update-payer! db payer-id updates {:tenant-id tenant-id})]
-                (if payer
-                  (h/json-response {:data payer})
-                  (h/not-found-response "Payer not found")))
+              (cond
+                ;; admin/owner: full update of any payer
+                (contains? payer-manage-roles role)
+                (let [body            (h/read-json-body request)
+                      payer-type-id-raw (:payer_type_id body)
+                      payer-type-id   (when (contains? body :payer_type_id)
+                                        (cond
+                                          (instance? java.util.UUID payer-type-id-raw) payer-type-id-raw
+                                          :else (h/try-parse-uuid payer-type-id-raw)))
+                      _               (when (and (contains? body :payer_type_id) (nil? payer-type-id))
+                                        (throw (ex-info "Invalid payer_type_id" {:status 400})))
+                      updates         (-> (select-keys body [:label :is_default])
+                                        (cond-> (contains? body :payer_type_id)
+                                          (assoc :payer_type_id payer-type-id))
+                                        (cond-> (contains? body :is_default)
+                                          (update :is_default boolean)))
+                      update-payer!   (requiring-resolve 'app.domain.backend.expenses.services.payers/update-payer!)
+                      payer           (update-payer! db payer-id updates {:tenant-id tenant-id})]
+                  (if payer
+                    (h/json-response {:data payer})
+                    (h/not-found-response "Payer not found")))
+
+                ;; member: only their own payer, only the label field
+                (= role "member")
+                (let [own-payer-id ((requiring-resolve
+                                      'app.domain.backend.expenses.services.payers/get-user-payer-id)
+                                    db user-id tenant-id)]
+                  (if (= (str payer-id) (str own-payer-id))
+                    (let [body  (h/read-json-body request)
+                          label (:label body)]
+                      (if (seq (str label))
+                        (let [update-payer! (requiring-resolve 'app.domain.backend.expenses.services.payers/update-payer!)
+                              payer         (update-payer! db payer-id {:label label} {:tenant-id tenant-id})]
+                          (if payer
+                            (h/json-response {:data payer})
+                            (h/not-found-response "Payer not found")))
+                        (h/json-response {:error "Label is required"} 400)))
+                    (h/forbidden-response "You can only edit your own payer")))
+
+                :else
+                (h/forbidden-response "Insufficient permissions"))
               (catch clojure.lang.ExceptionInfo e
                 (log/warn "Validation error updating payer" {:error (ex-message e) :data (ex-data e)})
                 (h/json-response {:error (ex-message e)} 400))
@@ -348,7 +386,7 @@
 (defn batch-delete-payers-handler
   "Handler factory for deleting multiple payers (tenant-scoped).
 
-  Allowed roles: member/admin.
+  Allowed roles: admin/owner only.
 
   Expects JSON body like:
   {:ids [<uuid> ...]}
@@ -358,7 +396,7 @@
   [db]
   (fn [request]
     (if-let [_user-id (h/get-user-id request)]
-      (if-let [forbidden (h/ensure-role request h/reference-data-write-roles "Only members and admins can modify payers")]
+      (if-let [forbidden (h/ensure-role request payer-manage-roles "Only admins and owners can delete payers")]
         forbidden
         (let [tenant-id (h/get-tenant-id request)]
           (try
@@ -394,18 +432,17 @@
                           (swap! errors conj {:id (str payer-id)
                                               :error (if (= "23503" sql-state)
                                                        "foreign key constraint"
-                                                       "database error")
-                                              :sql-state sql-state})))
+                                                       "database error")})))
                       (catch Exception e
                         (swap! errors conj {:id (str payer-id)
                                             :error (.getMessage e)}))))
-                  (h/json-response {:data {:deleted-count (count @deleted-ids)
-                                           :deleted-ids (vec @deleted-ids)
-                                           :errors (vec @errors)}}))))
+                  (h/json-response
+                    {:data {:deleted-count (count @deleted-ids)
+                            :deleted-ids @deleted-ids
+                            :errors @errors}}))))
             (catch Exception e
-              (log/error e "Error batch deleting payers")
-              (h/json-response {:error "Failed to delete payers"} 500)))))
-      (h/unauthorized-response))))
+              (h/json-response {:error (.getMessage e)} 500)))))
+      (h/unauthorized-response "Authentication required"))))
 
 (def ^:private payer-type-manage-roles
   "User roles allowed to manage payer types."

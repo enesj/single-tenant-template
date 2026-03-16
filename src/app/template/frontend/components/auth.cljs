@@ -22,7 +22,7 @@
       ;; User is authenticated - show info only (no Sign Out button)
       ($ :div {:class "flex justify-between items-center space-x-2"}
         ;; Provider logo + user info container
-        ($ :div {:class "flex items-center space-x-2"}
+        ($ :div {:class "flex items-end space-x-2"}
           ;; Provider Logo
           (let [provider (when (:provider auth-status) (name (:provider auth-status)))]
             (case provider
@@ -32,38 +32,20 @@
               ($ default-provider-icon)))
 
           ;; User info - updated for multi-tenant
-          ($ :div {:class "flex flex-col"}
-            ;; User name/initials - ensure string output
-            ($ :span {:class "font-medium text-sm"}
-              (let [user current-user
-                    full-name (:full-name user)
-                    email (:email user)
-                    initials (cond
-                               (seq full-name)
-                               (let [parts (str/split full-name #"\s+")
-                                     first-initial (first (first parts))
-                                     last-initial (when (> (count parts) 1)
-                                                    (first (last parts)))]
-                                 (str first-initial (when last-initial last-initial)))
-                               (seq email)
-                               (first (str/split (str email) #"@"))
-                               :else
-                               (let [provider (some-> (:provider auth-status) name)]
-                                 (case provider
-                                   "google" "G"
-                                   "github" "GH"
-                                   (some-> provider first)
-                                   "U")))]
-                (str initials)))
-
-            ;; Tenant info for multi-tenant sessions
+          ($ :div {:class "flex flex-col items-center"}
+            ;; Workspace name — primary info, bold on top
             (when current-tenant
-              ($ :span {:class "text-xs text-gray-600"}
-                (str (or (:name current-tenant) (:tenants/name current-tenant))))))
+              ($ :span {:class "font-bold text-lg text-base-content leading-tight"}
+                (str (or (:name current-tenant) (:tenants/name current-tenant)))))
+
+            ;; User email below
+            ($ :span {:class "text-sm text-base-content/60 leading-tight"}
+              (let [user current-user]
+                (str (or (:full-name user) (:email user))))))
 
           ;; Role badge — use membership role (not global user role)
           (when user-role
-            ($ :span {:class (str "ds-badge ds-badge-sm "
+            ($ :span {:class (str "ds-badge ds-badge-md ml-2 "
                                (if is-owner? "ds-badge-primary" "ds-badge-secondary"))}
               (str (if (keyword? user-role) (name user-role) user-role))))))
 

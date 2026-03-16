@@ -92,6 +92,47 @@
       (when (valid-city-fallback-candidate? candidate)
         candidate))))
 
+(defn extract-city-fallback-candidates
+  "Returns an ordered seq of unique city-name candidates from free text.
+   Tries all segments after the last ZIP code, then the tail segment of the full
+   text — so that addresses like '71103 Centar, Sarajevo' yield both
+   'Centar' and 'Sarajevo' rather than only the first segment."
+  [text]
+  (when-let [text* (some-> text str str/trim not-empty)]
+    (let [normalized (-> text*
+                       (str/replace #"[\r\n\t]+" " ")
+                       (str/replace #"\s+" " ")
+                       str/trim)
+          matcher (re-matcher #"(?<!\d)(\d{5})(?!\d)" normalized)
+          last-zip-end (loop [last-end nil]
+                         (if (.find matcher)
+                           (recur (.end matcher))
+                           last-end))
+          normalize-seg (fn [s]
+                          (some-> s
+                            (str/replace #"(?<!\d)\d{5}(?!\d)" "")
+                            (str/replace #"^[\s,;:\-]+|[\s,;:\-]+$" "")
+                            (str/replace #"\s+" " ")
+                            str/trim
+                            not-empty
+                            (#(when (valid-city-fallback-candidate? %) %))))
+          after-zip-segs (when last-zip-end
+                           (some->> (subs normalized last-zip-end)
+                             (#(str/replace % #"^[\s,;:\-]+" ""))
+                             not-empty
+                             (#(str/split % #"[,;|]"))
+                             (keep normalize-seg)
+                             seq))
+          tail-seg (some-> normalized
+                     (str/split #"[,;|]")
+                     last
+                     normalize-seg)]
+      (not-empty
+        (distinct
+          (remove nil?
+            (concat (or after-zip-segs [])
+              (when tail-seg [tail-seg]))))))))
+
 (defn places-query-from-text
   "Derive a safer Places query string from noisy OCR/store text."
   [text candidate]

@@ -16,12 +16,13 @@
     app.domain.frontend.expenses.subs.user-expenses))
 
 (defn- render-edit-form
-  [item {:keys [on-success on-cancel]}]
+  [label-only? item {:keys [on-success on-cancel]}]
   (let [payer-id (id-utils/extract-entity-id item)
         initial-data (dissoc item :show-edit? :show-delete? :on-edit-click)]
     ($ user-payer-edit-form-modal
       {:payer-id payer-id
        :initial-data initial-data
+       :label-only? label-only?
        :on-success on-success
        :on-cancel on-cancel})))
 
@@ -35,19 +36,10 @@
   (let [t (use-t)
         role (use-subscribe [:expenses/user-role])
         can-modify? (authz/can? role :expenses/reference.write)
+        can-manage? (authz/power-user? role)
+        user-payer-id (use-subscribe [:user-expenses/user-payer-id])
         entity-name :payers
         entity-spec (use-subscribe [:entity-specs/by-name entity-name])
-        payers-entity-spec (mapv (fn [field]
-                                   (let [fid (:id field)
-                                         fid-name (cond
-                                                    (keyword? fid) (name fid)
-                                                    (string? fid) fid
-                                                    :else (str fid))]
-                                     (if (#{"payer_type_id" "payer-type-id"}
-                                          fid-name)
-                                       (assoc field :type "select" :options [:payer-types :label])
-                                       field)))
-                             (or entity-spec []))
         refresh-list (use-callback
                        (fn []
                          (rf/dispatch [:user-expenses/refresh-payers-list])
@@ -69,10 +61,15 @@
                   is-system-payer? (boolean (or (:payer-type-is-system item) (:payer_type_is_system item)))
                   is-active? (let [v (if (contains? item :is-active) (:is-active item) (get item :is_active true))]
                                (not (false? v)))
-                  show-edit? (not (false? (:show-edit? item)))
-                  show-delete? (and (not (false? (:show-delete? item))) (not is-system-payer?))
+                  is-own-payer? (and (some? user-payer-id) (= payer-id-str user-payer-id))
+                  ;; admin/owner: edit any non-system payer; member: edit only own payer
+                  show-edit? (if can-manage?
+                               (not is-system-payer?)
+                               is-own-payer?)
+                  ;; delete: admin/owner only, non-system payers only
+                  show-delete? (and can-manage? (not is-system-payer?))
                   edit-disabled? (true? (:edit-disabled? item))
-                  delete-disabled? (or (true? (:delete-disabled? item)) is-system-payer?)
+                  delete-disabled? (true? (:delete-disabled? item))
                   item-data (dissoc item :show-edit? :show-delete? :edit-disabled? :delete-disabled? :on-edit-click)]
               ($ :div {:class "flex items-center justify-center gap-2"}
                 (when is-system-payer?
@@ -129,7 +126,9 @@
         ($ :main {:class "w-full px-4 py-6"}
           ($ list-view
             {:entity-name entity-name
-             :entity-spec payers-entity-spec
-             :render-add-form render-add-form
-             :render-edit-form render-edit-form
+             :entity-spec entity-spec
+             ;; only admin/owner can add new payers
+             :render-add-form (when can-manage? render-add-form)
+             ;; members get label-only edit form; admin/owner get full form
+             :render-edit-form (partial render-edit-form (not can-manage?))
              :render-actions render-actions}))))))

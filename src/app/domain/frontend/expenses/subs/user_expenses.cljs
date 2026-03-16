@@ -126,6 +126,11 @@
     (get-in db [:user-expenses :payers :loading?])))
 
 (rf/reg-sub
+  :user-expenses/user-payer-id
+  (fn [db _]
+    (get-in db [:user-expenses :payers :user-payer-id])))
+
+(rf/reg-sub
   :user-expenses/payer-types
   (fn [db _]
     (get-in db [:user-expenses :payer-types :items])))
