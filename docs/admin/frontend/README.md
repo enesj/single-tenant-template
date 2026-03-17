@@ -9,6 +9,7 @@ The admin frontend powers users, audit logs, login events, and settings. It is t
 - `admin.md` — admin feature guide (users, audit, login events)
 - `admin-panel-single-tenant.md` — admin routing/bootstrapping basics
 - `admin-settings.md` — settings UI configuration guide
+- `settings-testing.md` — real-UI workflow for verifying settings behavior
 - `app-shell.md` — admin entrypoint, state shape, events, routing
 - `list-view-controls-configuration.md` — list controls and column config
 

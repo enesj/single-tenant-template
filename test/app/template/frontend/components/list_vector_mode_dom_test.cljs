@@ -35,6 +35,21 @@
               btn))
       (array-seq buttons))))
 
+(deftest admin-routes-bypass-action-gates
+  (let [gate-allows? @#'list/gate-allows-action?]
+    (is (true? (gate-allows? :expenses/articles.manage
+                 {:admin-route? true
+                  :expenses-role nil
+                  :can-write? false
+                  :power-user? false}))
+      "Admin routes should bypass expenses action gates")
+    (is (false? (gate-allows? :expenses/articles.manage
+                  {:admin-route? false
+                   :expenses-role nil
+                   :can-write? false
+                   :power-user? false}))
+      "Non-admin routes should still respect expenses action gates")))
+
 (deftest column-visibility-uses-legacy-when-admin-config-not-loaded
   (async done
     (let [dispatched (atom nil)]

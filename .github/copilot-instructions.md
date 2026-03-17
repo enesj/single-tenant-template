@@ -11,6 +11,7 @@
   - If `(empty)`, verify before assuming failure: `mcp__postgres__list_tables` → `SELECT current_database(), current_user;` → `SELECT COUNT(*) FROM <table>;`.
   - VS Code: if results look inconsistent, reconnect/restart the PostgreSQL MCP session and re-run.
 - **Browser**: use `chrome-devtools`; ensure stable `:id` attributes (see `AGENTS.md` for ID patterns).
+- **Settings verification**: for `/admin/admin-settings` or `/admin/user-settings`, follow `docs/admin/frontend/settings-testing.md`. Reusable Copilot entry points live in `.github/agents/settings-testing.agent.md` and `.github/prompts/settings-testing.prompt.md`.
 - **Railway (production)**: use `Railway-mcp` tools when the server is configured. Prefer MCP over CLI for structured output. Install once: `claude mcp add Railway npx @railway/mcp-server`. Key tools: `get-logs`, `list-variables`, `list-services`, `deploy`. Full reference: `docs/general/operations/railway-deployment.md#railway-mcp-server-ai-native-debugging`.
 
 ## Entrypoints

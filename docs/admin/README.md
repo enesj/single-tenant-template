@@ -9,6 +9,7 @@ Admin documentation covers the admin console UI and admin-only backend APIs.
 - `frontend/admin.md`
 - `frontend/admin-panel-single-tenant.md`
 - `frontend/admin-settings.md`
+- `frontend/settings-testing.md`
 - `frontend/app-shell.md`
 
 ## Backend

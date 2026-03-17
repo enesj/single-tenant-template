@@ -57,9 +57,10 @@
     :else nil))
 
 (defn- gate-allows-action?
-  [gate-id {:keys [expenses-role can-write? power-user?]}]
+  [gate-id {:keys [admin-route? expenses-role can-write? power-user?]}]
   (let [gate-id (normalize-gate-id gate-id)]
     (cond
+      admin-route? true
       (nil? gate-id) true
       (= gate-id :expenses/can-write) (boolean can-write?)
       (= gate-id :expenses/power-user) (boolean power-user?)
@@ -119,10 +120,18 @@
         ;; IMPORTANT: Only view-options.edn settings should hide controls, not entities.edn settings
         hardcoded-view-options (use-subscribe [::ui-subs/hardcoded-view-options entity-name])
         resolved-list-config (use-subscribe [::ui-subs/entity-list-config entity-name])
+        ;; Admin pages use the shared list-view but do not have an expenses
+        ;; membership session, so action-gates must not disable admin CRUD.
+        admin-config-loaded? (use-subscribe [:admin/config-loaded?])
+        template-config-loaded? (use-subscribe [::ui-subs/template-config-loaded?])
+        current-route (use-subscribe [:current-route])
+        route-name (get-in current-route [:data :name])
+        admin-route? (and route-name (boolean (re-find #"^admin" (name route-name))))
         expenses-role (use-subscribe [:expenses/user-role])
         can-write? (use-subscribe [:expenses/can-write?])
         power-user? (use-subscribe [:expenses/power-user?])
-        gate-ctx {:expenses-role expenses-role
+        gate-ctx {:admin-route? admin-route?
+                  :expenses-role expenses-role
                   :can-write? can-write?
                   :power-user? power-user?}
         merged-display-settings (let [subscribed-settings (use-subscribe [::ui-subs/entity-display-settings entity-name])
@@ -138,11 +147,6 @@
         filterable-fields (or filterable-columns filterable-fields-subscription)
         ;; Vector-config is only enabled once admin config is loaded.
         ;; We still use the unified visible-columns subscription underneath so policy defaults/locks apply.
-        admin-config-loaded? (use-subscribe [:admin/config-loaded?])
-        template-config-loaded? (use-subscribe [::ui-subs/template-config-loaded?])
-        current-route (use-subscribe [:current-route])
-        route-name (get-in current-route [:data :name])
-        admin-route? (and route-name (boolean (re-find #"^admin" (name route-name))))
         vector-mode? (and admin-config-loaded?
                        (column-config/vector-config? entity-kw))
         visible-columns-raw (use-subscribe (column-config/visible-columns-source vector-mode? entity-kw))
