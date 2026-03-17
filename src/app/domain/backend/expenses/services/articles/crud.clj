@@ -80,12 +80,36 @@
    :created-at :a/created_at
    :updated-at :a/updated_at})
 
+(defn- apply-column-filters
+  "Apply optional per-column ILIKE filters to a HoneySQL query map.
+  Each filter key maps to a qualified column on the joined article query."
+  [query {:keys [search category-name subcategory-name manufacturer-display-name]}]
+  (cond-> query
+    (seq search)
+    (update :where shared-qb/merge-where-and
+      [:or
+       [:ilike :a.canonical_name (str "%" search "%")]
+       [:ilike :a.normalized_key (str "%" search "%")]])
+
+    (seq category-name)
+    (update :where shared-qb/merge-where-and
+      [:ilike :c.name (str "%" category-name "%")])
+
+    (seq subcategory-name)
+    (update :where shared-qb/merge-where-and
+      [:ilike :s.name (str "%" subcategory-name "%")])
+
+    (seq manufacturer-display-name)
+    (update :where shared-qb/merge-where-and
+      [:ilike :m.display_name (str "%" manufacturer-display-name "%")])))
+
 (defn list-articles
-  "List articles with optional search/pagination.
+  "List articles with optional search/pagination and per-column filters.
 
   Sorting is allowlisted via `allowed-articles-order-by` to prevent ordering by
   arbitrary columns."
-  [db {:keys [search limit offset order-by order-dir]
+  [db {:keys [search category-name subcategory-name manufacturer-display-name
+              limit offset order-by order-dir]
        :or {limit 50 offset 0 order-by :canonical_name order-dir :asc}}]
   (let [order-by* (model-naming/ensure-app-keyword order-by)
         order-col (get allowed-articles-order-by order-by* :a/canonical_name)
@@ -102,11 +126,11 @@
                          [:a.id :asc]]
               :limit limit
               :offset offset}
-        query (cond-> base
-                (seq search)
-                (assoc :where [:or
-                               [:ilike :a.canonical_name (str "%" search "%")]
-                               [:ilike :a.normalized_key (str "%" search "%")]]))]
+        query (apply-column-filters base
+                {:search search
+                 :category-name category-name
+                 :subcategory-name subcategory-name
+                 :manufacturer-display-name manufacturer-display-name})]
     (jdbc/execute! db (sql/format query) {:builder-fn rs/as-unqualified-lower-maps})))
 
 (defn update-article!
@@ -146,18 +170,21 @@
                      :where [:= :id id]})))))
 
 (defn count-articles
-  "Count total articles, optionally with search filter.
+  "Count total articles, with the same column filters as list-articles.
 
-  Accepts a map with optional :search key, matching the signature expected by
-  the routes factory count handler."
-  [db {:keys [search]}]
+  JOINs are included so that category/subcategory/manufacturer ILIKE filters
+  work identically to the list query. All JOINs are 1:1, so the count is correct."
+  [db {:keys [search category-name subcategory-name manufacturer-display-name]}]
   (let [base-query {:select [[[:count :*] :total]]
-                    :from [:articles]}
-        final-query (if (seq search)
-                      (assoc base-query :where [:or
-                                                [:ilike :canonical_name (str "%" search "%")]
-                                                [:ilike :normalized_key (str "%" search "%")]])
-                      base-query)]
+                    :from [[:articles :a]]
+                    :left-join [[:manufacturers :m] [:= :m.id :a.manufacturer_id]
+                                [:subcategories :s] [:= :s.id :a.subcategory_id]
+                                [:categories :c] [:= :c.id :s.category_id]]}
+        final-query (apply-column-filters base-query
+                      {:search search
+                       :category-name category-name
+                       :subcategory-name subcategory-name
+                       :manufacturer-display-name manufacturer-display-name})]
     {:total (or (:total (jdbc/execute-one! db (sql/format final-query)
                           {:builder-fn rs/as-unqualified-lower-maps}))
               0)}))

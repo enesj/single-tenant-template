@@ -122,11 +122,17 @@
 
 (defn generate-list-events
   "Generates load-list, list-loaded, and load-failed events for an entity."
-  [{:keys [entity-key base-path api-endpoint pagination-opts server-search-keys] :as config}]
+  [{:keys [entity-key base-path api-endpoint pagination-opts
+           server-search-keys server-filter-keys] :as config}]
   (validate-entity-config config)
 
   (let [pag-opts (or pagination-opts {:default-per-page pagination/default-page-size})
-        search-keys (or server-search-keys #{})
+        ;; Unify both config shapes into a single filter-key map.
+        ;; :server-filter-keys is {field-id backend-param}, e.g. {:canonical-name :search}
+        ;; :server-search-keys (legacy) is #{field-id} where all map to :search
+        filter-key-map (or server-filter-keys
+                         (when (seq server-search-keys)
+                           (zipmap server-search-keys (repeat :search))))
         event-ns (str "app.domain.frontend.expenses.events." (name entity-key))]
 
     ;; load-list event
@@ -137,28 +143,25 @@
               fetch-limit (:fetch-limit params)
               fetch-offset (or (:fetch-offset params) 0)
               fetch-mode? (some? fetch-limit)
-              ;; In server mode, forward server-searchable filters to the backend as
-              ;; the :search query param. Only filter field-ids listed in
-              ;; :server-search-keys are forwarded; other column filters remain
-              ;; client-side only (applied on the current page by subscriptions).
+              ;; In server mode, forward mapped column filters to the backend.
+              ;; Each entry in filter-key-map says which frontend filter field-id
+              ;; maps to which backend query param name.
               server-mode? (= :server (get-in db (paths/list-pagination-mode entity-key)))
-              ;; Forward server-searchable filters as the :search query param.
-              ;; Filter keys in the db may be snake_case (:canonical_name) while
-              ;; server-search-keys use kebab-case (:canonical-name), so normalise
-              ;; with ensure-app-keyword before the lookup.
-              db-filters (when (and server-mode? (not fetch-mode?) (seq search-keys))
+              db-filters (when (and server-mode? (not fetch-mode?) (seq filter-key-map))
                            (let [raw-filters (get-in db (paths/list-filters entity-key) {})]
                              (when (seq raw-filters)
-                               (let [search-val (some (fn [[k v]]
-                                                        (when (and (or (contains? search-keys k)
-                                                                     (contains? search-keys
-                                                                       (model-naming/ensure-app-keyword k)))
-                                                                (string? v)
-                                                                (seq v))
-                                                          v))
-                                                  raw-filters)]
-                                 (when search-val
-                                   {:search search-val})))))
+                               (reduce-kv
+                                 (fn [acc field-id filter-value]
+                                   (let [app-key (model-naming/ensure-app-keyword field-id)
+                                         backend-param (or (get filter-key-map field-id)
+                                                         (get filter-key-map app-key))]
+                                     (if (and backend-param
+                                           (string? filter-value)
+                                           (seq filter-value))
+                                       (assoc acc backend-param filter-value)
+                                       acc)))
+                                 {}
+                                 raw-filters))))
               params (cond-> params
                        (seq db-filters) (as-> p (merge db-filters p)))
               params* (cond-> params

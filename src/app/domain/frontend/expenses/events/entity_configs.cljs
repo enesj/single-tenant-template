@@ -48,9 +48,13 @@
    :api-endpoint "/admin/api/expenses/articles"
    :detail-response-key :article
    :has-forms? false
-   ;; Filter field-ids whose text values should be forwarded as the backend
-   ;; :search query param. Other column filters remain client-side only.
-   :server-search-keys #{:canonical-name}})
+   ;; Map frontend filter field-ids → backend query param names.
+   ;; :canonical-name stays as :search for backward compat with the generic
+   ;; text-search endpoint; other columns get per-column ILIKE params.
+   :server-filter-keys {:canonical-name              :search
+                        :category-name               :category-name
+                        :subcategory-name            :subcategory-name
+                        :manufacturer-display-name   :manufacturer-display-name}})
 
 (def receipts-config
   {:entity-key :receipts

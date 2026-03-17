@@ -135,46 +135,58 @@
   :admin/auth-valid
   (fn [{:keys [db]} [_ first-arg second-arg]]
     ;; Handle two calling patterns:
-    ;; 1. [:admin/auth-valid response] - from :admin/check-auth (line 81)
-    ;; 2. [:admin/auth-valid on-auth-success response] - from :admin/check-auth-protected (line 183)
-    ;;
-    ;; When on-auth-success is passed, the response is the second arg.
-    ;; When only response is passed, second-arg is nil.
-    (let [;; Determine which arg is the response and which is the callback
-          [on-auth-success response] (if (map? first-arg)
-                                       ;; Pattern 1: first-arg is the response
+    ;; 1. [:admin/auth-valid response] - from :admin/check-auth (no on-auth-success)
+    ;; 2. [:admin/auth-valid on-auth-success response] - from :admin/check-auth-protected
+    (let [[on-auth-success response] (if (map? first-arg)
                                        [nil first-arg]
-                                       ;; Pattern 2: first-arg is callback, second-arg is response
                                        [first-arg second-arg])
-          ;; Extract admin info from dashboard response if present
           current-admin (when (map? response)
                           (:current-admin response))
-          ;; Get role from new admin data or existing db
           admin-data (or current-admin (:admin/current-user db))
           role (some-> admin-data :role keyword)
-          current-route (:admin/current-route db)]
+          current-route (get-in db [:current-route :data :name])
+          ;; Combine explicit extras with any pending callbacks queued
+          ;; by check-auth-protected while auth was in progress.
+          pending (get db :admin/pending-auth-callbacks [])
+          extras (into (normalize-dispatch-events on-auth-success) pending)
+          ;; The auth check already hit /admin/api/dashboard and got the response.
+          ;; Reuse it instead of firing another load-dashboard API call.
+          on-dashboard? (contains? #{:admin-dashboard :admin-dashboard-alt} current-route)
+          has-dashboard-response? (and (map? response) (some? (:current-admin response)))
+          ;; Replace :admin/load-dashboard in extras with :admin/dashboard-loaded
+          rewritten-extras (if (and has-dashboard-response? on-dashboard?)
+                             (->> extras
+                               (remove #(= (first %) :admin/load-dashboard))
+                               (into [[:admin/dashboard-loaded response]]))
+                             extras)
+          ;; For non-protected auth (check-auth with no extras), add route-events
+          route-events (if (seq extras)
+                         []
+                         (cond
+                           (and on-dashboard? has-dashboard-response?)
+                           [[:admin/dashboard-loaded response]]
+                           on-dashboard? [[:admin/load-dashboard]]
+                           (= current-route :admin-advanced-dashboard)
+                           (if has-dashboard-response?
+                             [[:admin/advanced-dashboard-loaded response]]
+                             [[:admin/load-advanced-dashboard]])
+                           :else []))]
       {:db (-> db
              (assoc :admin/authenticated? true)
              (cond-> current-admin (assoc :admin/current-user current-admin))
              (cond-> role (assoc :admin/current-user-role role))
-             (dissoc :admin/auth-checking?))
-       ;; Execute the success callback(s) if provided, plus any route-specific actions
-       :dispatch-n (let [extras (normalize-dispatch-events on-auth-success)
-                         route-events (cond
-                                        (= current-route :admin-advanced-dashboard) [[:admin/load-advanced-dashboard]]
-                                        (= current-route :admin-dashboard) [[:admin/load-dashboard]]
-                                        :else [])]
-                     (into [] (concat extras route-events)))})))
+             (dissoc :admin/auth-checking? :admin/pending-auth-callbacks))
+       :dispatch-n (into [] (concat rewritten-extras route-events))})))
 
-;; Immediate auth success event (when already authenticated)
+;; Immediate auth success event (when already authenticated).
+;; Route-specific data loading is handled by the caller
+;; (check-auth-protected dispatches on-auth-success extras),
+;; so this event only needs to exist as a no-op hook for
+;; any future global side effects on re-authentication.
 (rf/reg-event-fx
   :admin/auth-success-immediate
-  (fn [{:keys [db]} _]
-    (let [current-route (:admin/current-route db)]
-      (case current-route
-        :admin-advanced-dashboard {:dispatch [:admin/load-advanced-dashboard]}
-        :admin-dashboard {:dispatch [:admin/load-dashboard]}
-        {}))))
+  (fn [_ _]
+    {}))
 
 (rf/reg-event-fx
   :admin/auth-invalid
@@ -202,9 +214,13 @@
         (let [extras (normalize-dispatch-events on-auth-success)]
           {:dispatch-n (into [] (concat extras [[:admin/auth-success-immediate]]))})
 
-        ;; Already checking auth, don't start another check
+        ;; Already checking auth — queue the callbacks to be dispatched when auth completes.
+        ;; Without this, on-auth-success events from route controllers are silently dropped.
         auth-checking?
-        {}
+        (let [extras (normalize-dispatch-events on-auth-success)]
+          (if (seq extras)
+            {:db (update db :admin/pending-auth-callbacks (fnil into []) extras)}
+            {}))
 
         ;; Has token but not authenticated yet, validate it
         token
@@ -279,8 +295,12 @@
              (cond-> user (assoc :admin/current-user user))
              (cond-> (and user (:role user))
                (assoc :admin/current-user-role (keyword (:role user))))
-             ;; Force fresh validation instead of trusting persisted state blindly
-             (dissoc :admin/authenticated? :admin/auth-checking?))
+             ;; Force fresh validation instead of trusting persisted state blindly.
+             ;; Keep :admin/auth-checking? true so that check-auth-protected
+             ;; (from the route controller) sees the guard and doesn't fire
+             ;; a duplicate auth validation request.
+             (dissoc :admin/authenticated?)
+             (assoc :admin/auth-checking? true))
        ;; Always re-validate the token with the backend to avoid stale sessions
        :dispatch (when token [:admin/check-auth])})))
 

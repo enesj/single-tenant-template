@@ -20,6 +20,26 @@
     [ring.middleware.resource :refer [wrap-resource]]
     [taoensso.timbre :as log]))
 
+(defn- wrap-static-cache-headers
+  "Add Cache-Control headers for static assets.
+  Versioned assets (with ?v= query string) get immutable long-lived cache.
+  Unversioned static assets get a short cache for development."
+  [handler]
+  (fn [request]
+    (let [response (handler request)
+          uri (:uri request)]
+      (if (and response
+            (or (str/starts-with? uri "/assets/")
+              (str/starts-with? uri "/js/")
+              (str/starts-with? uri "/favicon")))
+        (let [query-string (:query-string request)
+              versioned? (and query-string (str/includes? query-string "v="))
+              cache-value (if versioned?
+                            "public, max-age=31536000, immutable"
+                            "public, max-age=3600")]
+          (assoc-in response [:headers "Cache-Control"] cache-value))
+        response))))
+
 (defn- render-page [_]
   (let [;; Render the page with authentication info
         html-content (slurp (io/resource "public/index.html"))
@@ -236,6 +256,7 @@
                       global-debug-middleware         ; Add global request debugging FIRST
                       (security/wrap-security)        ; HTTPS + security headers - RE-ENABLED
                       (wrap-resource "public")
+                      wrap-static-cache-headers
                       (wrap-content-type)
                       ;; Removed wrap-oauth2 - using custom handlers with CSRF protection
                       (wrap-defaults site-config))]

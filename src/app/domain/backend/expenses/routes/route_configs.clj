@@ -25,6 +25,15 @@
   [qp]
   {:search (:search qp)})
 
+(defn- article-query-params
+  "Extract search and per-column filter params for articles.
+  Each key maps to a column filter applied as ILIKE in the list/count queries."
+  [qp]
+  {:search                     (:search qp)
+   :category-name              (:category-name qp)
+   :subcategory-name           (:subcategory-name qp)
+   :manufacturer-display-name  (:manufacturer-display-name qp)})
+
 (def category-config
   {:entity-key :category
    :entity-plural :categories
@@ -170,8 +179,8 @@
    :required-fields [:canonical-name]
    :has-count? true
    :has-search? true
-   :custom-query-params search-query-params
-   :custom-count-params search-query-params})
+   :custom-query-params article-query-params
+   :custom-count-params article-query-params})
 
 (def expense-config
   {:entity-key :expense
