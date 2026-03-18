@@ -66,3 +66,17 @@
       (throw (ex-info
                "Invalid related type. Expected one of: articles."
                {:status 400 :type type})))))
+
+(defn- count-related-articles [db manufacturer-id]
+  (:cnt (jdbc/execute-one! db
+          (sql/format {:select [[[:count :*] :cnt]]
+                       :from [[:articles :a]]
+                       :where [:= :a.manufacturer_id manufacturer-id]})
+          {:builder-fn rs/as-unqualified-lower-maps})))
+
+(defn count-all-related
+  "Count related records for all types for a manufacturer."
+  [db manufacturer-id]
+  (when-not manufacturer-id
+    (throw (ex-info "manufacturer-id is required" {:status 400})))
+  {"articles" (or (count-related-articles db manufacturer-id) 0)})

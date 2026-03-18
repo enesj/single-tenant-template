@@ -119,3 +119,53 @@
       (throw (ex-info
                "Invalid related type. Expected one of: expenses, receipts, articles."
                {:status 400 :type type})))))
+
+;; ============================================================================
+;; Count helpers
+;; ============================================================================
+
+(defn- count-related-expenses [db store-id]
+  (:cnt (jdbc/execute-one! db
+          (sql/format {:select [[[:count :*] :cnt]]
+                       :from [[:expenses :e]]
+                       :where [:= :e.store_id store-id]})
+          {:builder-fn rs/as-unqualified-lower-maps})))
+
+(defn- count-related-receipts [db store-id]
+  (:cnt (jdbc/execute-one! db
+          (sql/format {:select [[[:raw "COUNT(DISTINCT r.id)"] :cnt]]
+                       :from [[:expenses :e]]
+                       :join [[:receipts :r] [:= :r.id :e.receipt_id]]
+                       :where [:= :e.store_id store-id]})
+          {:builder-fn rs/as-unqualified-lower-maps})))
+
+(defn- count-related-articles [db store-id]
+  (:cnt (jdbc/execute-one! db
+          (sql/format {:select [[[:count :*] :cnt]]
+                       :from [[{:union [{:select [[:a.id :id]]
+                                         :from [[:expense_items :ei]]
+                                         :join [[:expenses :e] [:= :e.id :ei.expense_id]
+                                                [:articles :a] [:= :a.id :ei.article_id]]
+                                         :where [:and
+                                                 [:= :e.store_id store-id]
+                                                 [:is-not :ei.article_id nil]]}
+                                        {:select [[:a.id :id]]
+                                         :from [[:expense_items :ei]]
+                                         :join [[:expenses :e] [:= :e.id :ei.expense_id]
+                                                [:article_aliases :aa] [:= :aa.id :ei.alias_id]
+                                                [:articles :a] [:= :a.id :aa.article_id]]
+                                         :where [:and
+                                                 [:= :e.store_id store-id]
+                                                 [:is-not :aa.article_id nil]]}]}
+                               :sub]]})
+          {:builder-fn rs/as-unqualified-lower-maps})))
+
+(defn count-all-related
+  "Count related records for all types for a store.
+  Returns a map of type string to count."
+  [db store-id]
+  (when-not store-id
+    (throw (ex-info "store-id is required" {:status 400})))
+  {"expenses" (or (count-related-expenses db store-id) 0)
+   "receipts" (or (count-related-receipts db store-id) 0)
+   "articles" (or (count-related-articles db store-id) 0)})

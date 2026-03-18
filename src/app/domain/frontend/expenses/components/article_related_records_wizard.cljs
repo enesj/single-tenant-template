@@ -4,6 +4,7 @@
     app.domain.frontend.expenses.subs.articles
     [app.template.frontend.components.modal-wrapper :refer [modal-wrapper]]
     [app.template.frontend.components.shared-utils :as shared]
+    [app.template.frontend.utils.timestamp :as timestamp]
     [clojure.string :as str]
     [re-frame.core :as rf]
     [uix.core :refer [$ defui]]
@@ -112,6 +113,8 @@
         selected-record (use-subscribe [:expenses/article-related-record])
         loading? (use-subscribe [:expenses/article-related-records-loading?])
         error (use-subscribe [:expenses/article-related-records-error])
+        counts (use-subscribe [:expenses/article-related-records-counts])
+        counts-loading? (use-subscribe [:expenses/article-related-records-counts-loading?])
         article-id* (or (article-id article) "unknown")]
     ($ modal-wrapper
       {:id (str "modal-related-records-article-" article-id*)
@@ -142,7 +145,8 @@
               "Choose related record type")
             ($ :div {:class "grid grid-cols-1 sm:grid-cols-2 gap-2"}
               (for [{:keys [id label description]} related-type-options
-                    :let [selected? (= related-type id)]]
+                    :let [selected? (= related-type id)
+                          cnt (get counts (keyword id))]]
                 ($ :button {:key id
                             :id (str "btn-related-type-" id "-article-" article-id*)
                             :class (str "w-full rounded-lg border px-4 py-3 text-left transition "
@@ -155,9 +159,18 @@
                   ($ :div {:class "flex items-start justify-between gap-2"}
                     ($ :span {:class "text-sm font-medium text-base-content"}
                       label)
-                    (when selected?
-                      ($ :span {:class "ds-badge ds-badge-primary ds-badge-sm"}
-                        "Selected")))
+                    ($ :div {:class "flex items-center gap-1.5"}
+                      (if counts-loading?
+                        ($ :span {:class "ds-loading ds-loading-spinner ds-loading-xs text-base-content/40"})
+                        (when (some? cnt)
+                          ($ :span {:class (str "ds-badge ds-badge-sm "
+                                             (if (pos? cnt)
+                                               "ds-badge-neutral"
+                                               "ds-badge-ghost text-base-content/40"))}
+                            (str cnt))))
+                      (when selected?
+                        ($ :span {:class "ds-badge ds-badge-primary ds-badge-sm"}
+                          "Selected"))))
                   ($ :div {:class "text-xs text-base-content/70 mt-1"}
                     description))))
             ($ :div {:class "flex items-center justify-between gap-3"}
@@ -246,14 +259,24 @@
             (if (map? selected-record)
               ($ :div {:class "grid grid-cols-1 md:grid-cols-2 gap-2"
                        :id (str "details-related-record-article-" article-id*)}
-                (for [[key-value value] (sort-by (comp name key) (seq selected-record))]
+                (for [[key-value value] (->> (seq selected-record)
+                                          (remove (fn [[k _]]
+                                                    (let [n (name k)]
+                                                      (or (str/ends-with? n "id")
+                                                        (str/ends-with? n "key")))))
+                                          (remove (fn [[_ v]] (nil? v)))
+                                          (sort-by (comp name key)))]
                   ($ :div {:key (str (name key-value))
                            :id (str "detail-related-record-" (name key-value) "-article-" article-id*)
                            :class "p-3 rounded-lg border border-base-300 bg-base-100 space-y-1"}
                     ($ :div {:class "text-xs uppercase tracking-wide text-base-content/60"}
                       (details-label key-value))
                     ($ :div {:class "text-sm"}
-                      (shared/format-value value "—" false)))))
+                      (if (str/ends-with? (name key-value) "-at")
+                        (timestamp/render-timestamp value {:show-seconds? true
+                                                           :highlight-seconds? true
+                                                           :nil-text "—"})
+                        (shared/format-value value "—" false))))))
               ($ :div {:class "rounded-lg border border-dashed border-base-300 bg-base-100 p-3 text-sm text-base-content/70"}
                 "No record selected.")))
 

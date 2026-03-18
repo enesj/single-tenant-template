@@ -60,4 +60,14 @@
     (rf/reg-sub
       (keyword "expenses" (str s "-related-records-error"))
       (fn [db _]
-        (get-in db (conj modal-path :error))))))
+        (get-in db (conj modal-path :error))))
+
+    (rf/reg-sub
+      (keyword "expenses" (str s "-related-records-counts"))
+      (fn [db _]
+        (get-in db (conj modal-path :counts))))
+
+    (rf/reg-sub
+      (keyword "expenses" (str s "-related-records-counts-loading?"))
+      (fn [db _]
+        (true? (get-in db (conj modal-path :counts-loading?)))))))

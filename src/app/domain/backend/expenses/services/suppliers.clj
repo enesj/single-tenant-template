@@ -147,3 +147,7 @@
 (defn list-related-records
   [db supplier-id opts]
   (related-records/list-related-records db supplier-id opts))
+
+(defn count-all-related
+  [db supplier-id]
+  (related-records/count-all-related db supplier-id))

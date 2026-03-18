@@ -25,6 +25,7 @@
 
 ;; Related records
 (def list-related-records related-records/list-related-records)
+(def count-all-related related-records/count-all-related)
 
 ;; Aliases
 (def find-article-by-alias aliases/find-article-by-alias)

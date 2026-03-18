@@ -291,3 +291,28 @@
                "Invalid related type. Expected one of: expenses, receipts."
                {:status 400 :type type})))))
 
+(defn- count-related-expenses [db alias-id]
+  (:cnt (jdbc/execute-one! db
+          (sql/format {:select [[[:raw "COUNT(DISTINCT e.id)"] :cnt]]
+                       :from [[:expense_items :ei]]
+                       :join [[:expenses :e] [:= :e.id :ei.expense_id]]
+                       :where [:= :ei.alias_id alias-id]})
+          {:builder-fn rs/as-unqualified-lower-maps})))
+
+(defn- count-related-receipts [db alias-id]
+  (:cnt (jdbc/execute-one! db
+          (sql/format {:select [[[:raw "COUNT(DISTINCT r.id)"] :cnt]]
+                       :from [[:expense_items :ei]]
+                       :join [[:expenses :e] [:= :e.id :ei.expense_id]
+                              [:receipts :r] [:= :r.id :e.receipt_id]]
+                       :where [:= :ei.alias_id alias-id]})
+          {:builder-fn rs/as-unqualified-lower-maps})))
+
+(defn count-all-related
+  "Count related records for all types for an article alias."
+  [db alias-id]
+  (when-not alias-id
+    (throw (ex-info "alias-id is required" {:status 400})))
+  {"expenses" (or (count-related-expenses db alias-id) 0)
+   "receipts" (or (count-related-receipts db alias-id) 0)})
+

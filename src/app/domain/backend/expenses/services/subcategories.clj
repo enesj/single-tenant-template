@@ -61,3 +61,17 @@
       (throw (ex-info
                "Invalid related type. Expected one of: articles."
                {:status 400 :type type})))))
+
+(defn- count-related-articles [db subcategory-id]
+  (:cnt (jdbc/execute-one! db
+          (sql/format {:select [[[:count :*] :cnt]]
+                       :from [[:articles :a]]
+                       :where [:= :a.subcategory_id subcategory-id]})
+          {:builder-fn rs/as-unqualified-lower-maps})))
+
+(defn count-all-related
+  "Count related records for all types for a subcategory."
+  [db subcategory-id]
+  (when-not subcategory-id
+    (throw (ex-info "subcategory-id is required" {:status 400})))
+  {"articles" (or (count-related-articles db subcategory-id) 0)})

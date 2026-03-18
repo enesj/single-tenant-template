@@ -97,4 +97,15 @@
                    "Failed to list article related records")
                  request))}]
 
+       ["/:id/related-records/counts"
+        {:get (fn [request]
+                ((utils/with-error-handling
+                   (fn [req]
+                     (let [article-id (utils/parse-uuid-custom (get-in req [:path-params :id]))]
+                       (when-not article-id
+                         (throw (ex-info "Invalid article id" {:status 400})))
+                       (utils/success-response {:counts (articles/count-all-related db article-id)})))
+                   "Failed to count article related records")
+                 request))}]
+
        id-route])))

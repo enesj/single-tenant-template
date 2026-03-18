@@ -18,6 +18,7 @@
 (def count-articles service/count-articles)
 
 (def list-related-records service/list-related-records)
+(def count-all-related service/count-all-related)
 
 (def find-article-by-alias service/find-article-by-alias)
 (def create-alias! service/create-alias!)

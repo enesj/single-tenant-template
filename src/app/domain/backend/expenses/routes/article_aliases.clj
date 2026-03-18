@@ -10,20 +10,30 @@
   (let [config (-> configs/article-alias-config
                  (factory/register-entity-routes!))
         base-routes (factory/build-standard-routes db config)]
-    (conj base-routes
-      ["/:id/related-records"
-       {:get (fn [request]
-               ((utils/with-error-handling
-                  (fn [req]
-                    (let [alias-id (utils/parse-uuid-custom (get-in req [:path-params :id]))
-                          qp (:query-params req)
-                          related-type (or (get qp "type") (:type qp))
-                          limit (utils/parse-int-param qp :limit 100)]
-                      (when-not alias-id
-                        (throw (ex-info "Invalid article alias id" {:status 400})))
-                      (let [rows (article-aliases/list-related-records
-                                   db alias-id
-                                   {:type related-type :limit limit})]
-                        (utils/success-response {:related-records (factory/to-app rows)}))))
-                  "Failed to list article alias related records")
-                request))}])))
+    (into base-routes
+      [["/:id/related-records"
+        {:get (fn [request]
+                ((utils/with-error-handling
+                   (fn [req]
+                     (let [alias-id (utils/parse-uuid-custom (get-in req [:path-params :id]))
+                           qp (:query-params req)
+                           related-type (or (get qp "type") (:type qp))
+                           limit (utils/parse-int-param qp :limit 100)]
+                       (when-not alias-id
+                         (throw (ex-info "Invalid article alias id" {:status 400})))
+                       (let [rows (article-aliases/list-related-records
+                                    db alias-id
+                                    {:type related-type :limit limit})]
+                         (utils/success-response {:related-records (factory/to-app rows)}))))
+                   "Failed to list article alias related records")
+                 request))}]
+       ["/:id/related-records/counts"
+        {:get (fn [request]
+                ((utils/with-error-handling
+                   (fn [req]
+                     (let [alias-id (utils/parse-uuid-custom (get-in req [:path-params :id]))]
+                       (when-not alias-id
+                         (throw (ex-info "Invalid article alias id" {:status 400})))
+                       (utils/success-response {:counts (article-aliases/count-all-related db alias-id)})))
+                   "Failed to count article alias related records")
+                 request))}]])))

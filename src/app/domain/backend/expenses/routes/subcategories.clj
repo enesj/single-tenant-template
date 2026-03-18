@@ -10,20 +10,30 @@
   (let [config (-> configs/subcategory-config
                  (factory/register-entity-routes!))
         base-routes (factory/build-extended-routes db config)]
-    (conj base-routes
-      ["/:id/related-records"
-       {:get (fn [request]
-               ((utils/with-error-handling
-                  (fn [req]
-                    (let [subcategory-id (utils/parse-uuid-custom (get-in req [:path-params :id]))
-                          qp (:query-params req)
-                          related-type (or (get qp "type") (:type qp))
-                          limit (utils/parse-int-param qp :limit 100)]
-                      (when-not subcategory-id
-                        (throw (ex-info "Invalid subcategory id" {:status 400})))
-                      (let [rows (subcategories/list-related-records
-                                   db subcategory-id
-                                   {:type related-type :limit limit})]
-                        (utils/success-response {:related-records (factory/to-app rows)}))))
-                  "Failed to list subcategory related records")
-                request))}])))
+    (into base-routes
+      [["/:id/related-records"
+        {:get (fn [request]
+                ((utils/with-error-handling
+                   (fn [req]
+                     (let [subcategory-id (utils/parse-uuid-custom (get-in req [:path-params :id]))
+                           qp (:query-params req)
+                           related-type (or (get qp "type") (:type qp))
+                           limit (utils/parse-int-param qp :limit 100)]
+                       (when-not subcategory-id
+                         (throw (ex-info "Invalid subcategory id" {:status 400})))
+                       (let [rows (subcategories/list-related-records
+                                    db subcategory-id
+                                    {:type related-type :limit limit})]
+                         (utils/success-response {:related-records (factory/to-app rows)}))))
+                   "Failed to list subcategory related records")
+                 request))}]
+       ["/:id/related-records/counts"
+        {:get (fn [request]
+                ((utils/with-error-handling
+                   (fn [req]
+                     (let [subcategory-id (utils/parse-uuid-custom (get-in req [:path-params :id]))]
+                       (when-not subcategory-id
+                         (throw (ex-info "Invalid subcategory id" {:status 400})))
+                       (utils/success-response {:counts (subcategories/count-all-related db subcategory-id)})))
+                   "Failed to count subcategory related records")
+                 request))}]])))

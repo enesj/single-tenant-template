@@ -167,6 +167,8 @@
         selected-record (use-subscribe [(keyword "expenses" (str s "-related-record"))])
         loading? (use-subscribe [(keyword "expenses" (str s "-related-records-loading?"))])
         error (use-subscribe [(keyword "expenses" (str s "-related-records-error"))])
+        counts (use-subscribe [(keyword "expenses" (str s "-related-records-counts"))])
+        counts-loading? (use-subscribe [(keyword "expenses" (str s "-related-records-counts-loading?"))])
         entity-id* (or (:id entity) "unknown")
         entity-display (if entity-name-fn
                          (entity-name-fn entity)
@@ -206,7 +208,8 @@
               "Choose related record type")
             ($ :div {:class "grid grid-cols-1 sm:grid-cols-2 gap-2"}
               (for [{:keys [id label description]} type-options
-                    :let [selected? (= related-type id)]]
+                    :let [selected? (= related-type id)
+                          cnt (get counts (keyword id))]]
                 ($ :button {:key id
                             :id (str "btn-related-type-" id "-" s "-" entity-id*)
                             :class (str "w-full rounded-lg border px-4 py-3 text-left transition "
@@ -218,8 +221,17 @@
                                         (rf/dispatch [(keyword events-ns "select-related-type") id]))}
                   ($ :div {:class "flex items-start justify-between gap-2"}
                     ($ :span {:class "text-sm font-medium text-base-content"} label)
-                    (when selected?
-                      ($ :span {:class "ds-badge ds-badge-primary ds-badge-sm"} "Selected")))
+                    ($ :div {:class "flex items-center gap-1.5"}
+                      (if counts-loading?
+                        ($ :span {:class "ds-loading ds-loading-spinner ds-loading-xs text-base-content/40"})
+                        (when (some? cnt)
+                          ($ :span {:class (str "ds-badge ds-badge-sm "
+                                             (if (pos? cnt)
+                                               "ds-badge-neutral"
+                                               "ds-badge-ghost text-base-content/40"))}
+                            (str cnt))))
+                      (when selected?
+                        ($ :span {:class "ds-badge ds-badge-primary ds-badge-sm"} "Selected"))))
                   ($ :div {:class "text-xs text-base-content/70 mt-1"} description))))
             ($ :div {:class "flex items-center justify-between gap-3"}
               ($ :div {:id (str "text-related-step-1-selection-" s "-" entity-id*)
@@ -307,7 +319,10 @@
 
             (if (map? selected-record)
               (let [all-fields   (->> (seq selected-record)
-                                   (remove (fn [[k _]] (= k :id)))
+                                   (remove (fn [[k _]]
+                                             (let [n (name k)]
+                                               (or (str/ends-with? n "id")
+                                                 (str/ends-with? n "key")))))
                                    (remove (fn [[_ v]] (nil? v)))
                                    (sort-by (comp name key)))
                     items-entry  (some (fn [[k v]] (when (= k :items) v)) all-fields)

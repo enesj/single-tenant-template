@@ -94,11 +94,11 @@
     {:builder-fn rs/as-unqualified-lower-maps}))
 
 (defn- list-related-receipts
+  "List receipts where this article actually appears in expense items.
+  Intentionally excludes the broad alias-linked query (which over-counts by
+  including all receipts from any supplier that sells this article)."
   [db article-id limit]
-  (shared-related/merge-related-rows
-    limit
-    (list-related-receipts-expense-linked db article-id limit)
-    (list-related-receipts-alias-linked db article-id limit)))
+  (list-related-receipts-expense-linked db article-id limit))
 
 (defn- list-related-providers
   [db article-id limit]
@@ -172,11 +172,11 @@
     {:builder-fn rs/as-unqualified-lower-maps}))
 
 (defn- list-related-stores
+  "List stores where this article actually appears in expenses.
+  Intentionally excludes the broad alias-linked query (which over-counts by
+  including all stores of a supplier that sells this article)."
   [db article-id limit]
-  (shared-related/merge-related-rows
-    limit
-    (list-related-stores-expense-linked db article-id limit)
-    (list-related-stores-alias-linked db article-id limit)))
+  (list-related-stores-expense-linked db article-id limit))
 
 (defn- list-related-manufacturers
   [db article-id limit]
@@ -233,3 +233,91 @@
       (throw (ex-info
                "Invalid related type. Expected one of: expenses, receipts, providers, stores, manufacturers, subcategories."
                {:status 400 :type type})))))
+
+;; ============================================================================
+;; Count helpers (lightweight COUNT queries for the counts endpoint)
+;; ============================================================================
+
+(defn- count-related-expenses [db article-id]
+  (:cnt (jdbc/execute-one! db
+          (sql/format {:select [[[:raw "COUNT(DISTINCT e.id)"] :cnt]]
+                       :from [[:expense_items :ei]]
+                       :join [[:expenses :e] [:= :e.id :ei.expense_id]]
+                       :left-join [[:article_aliases :aa] [:= :aa.id :ei.alias_id]]
+                       :where (article-item-linkage-where article-id)})
+          {:builder-fn rs/as-unqualified-lower-maps})))
+
+(defn- count-related-receipts
+  "Count receipts where this article actually appears in expense items.
+  Intentionally excludes the broad alias-linked query (which over-counts by
+  including all receipts from any supplier that sells this article)."
+  [db article-id]
+  (:cnt (jdbc/execute-one! db
+          (sql/format {:select [[[:raw "COUNT(DISTINCT r.id)"] :cnt]]
+                       :from [[:expense_items :ei]]
+                       :join [[:expenses :e] [:= :e.id :ei.expense_id]
+                              [:receipts :r] [:= :r.id :e.receipt_id]]
+                       :left-join [[:article_aliases :aa] [:= :aa.id :ei.alias_id]]
+                       :where (article-item-linkage-where article-id)})
+          {:builder-fn rs/as-unqualified-lower-maps})))
+
+(defn- count-related-providers [db article-id]
+  (:cnt (jdbc/execute-one! db
+          (sql/format {:select [[[:count :*] :cnt]]
+                       :from [[:suppliers :s]]
+                       :where [:or
+                               [:exists {:select [1]
+                                         :from [[:article_aliases :aa]]
+                                         :where [:and
+                                                 [:= :aa.article_id article-id]
+                                                 [:= :aa.supplier_id :s.id]]}]
+                               [:exists {:select [1]
+                                         :from [[:expense_items :ei]]
+                                         :join [[:expenses :e] [:= :e.id :ei.expense_id]]
+                                         :where [:and
+                                                 [:= :ei.article_id article-id]
+                                                 [:= :e.supplier_id :s.id]]}]]})
+          {:builder-fn rs/as-unqualified-lower-maps})))
+
+(defn- count-related-stores
+  "Count stores where this article actually appears in expenses.
+  Excludes broad alias-linked stores (all stores of a supplier that sells
+  this article) to avoid over-counting."
+  [db article-id]
+  (:cnt (jdbc/execute-one! db
+          (sql/format {:select [[[:raw "COUNT(DISTINCT st.id)"] :cnt]]
+                       :from [[:expense_items :ei]]
+                       :join [[:expenses :e] [:= :e.id :ei.expense_id]
+                              [:stores :st] [:= :st.id :e.store_id]]
+                       :left-join [[:article_aliases :aa] [:= :aa.id :ei.alias_id]]
+                       :where (article-item-linkage-where article-id)})
+          {:builder-fn rs/as-unqualified-lower-maps})))
+
+(defn- count-related-manufacturers [db article-id]
+  (:cnt (jdbc/execute-one! db
+          (sql/format {:select [[[:raw "COUNT(DISTINCT m.id)"] :cnt]]
+                       :from [[:articles :a]]
+                       :join [[:manufacturers :m] [:= :m.id :a.manufacturer_id]]
+                       :where [:= :a.id article-id]})
+          {:builder-fn rs/as-unqualified-lower-maps})))
+
+(defn- count-related-subcategories [db article-id]
+  (:cnt (jdbc/execute-one! db
+          (sql/format {:select [[[:raw "COUNT(DISTINCT s.id)"] :cnt]]
+                       :from [[:articles :a]]
+                       :join [[:subcategories :s] [:= :s.id :a.subcategory_id]]
+                       :where [:= :a.id article-id]})
+          {:builder-fn rs/as-unqualified-lower-maps})))
+
+(defn count-all-related
+  "Count related records for all types for an article.
+  Returns a map of type string to count."
+  [db article-id]
+  (when-not article-id
+    (throw (ex-info "article-id is required" {:status 400})))
+  {"expenses" (or (count-related-expenses db article-id) 0)
+   "receipts" (or (count-related-receipts db article-id) 0)
+   "providers" (or (count-related-providers db article-id) 0)
+   "stores" (or (count-related-stores db article-id) 0)
+   "manufacturers" (or (count-related-manufacturers db article-id) 0)
+   "subcategories" (or (count-related-subcategories db article-id) 0)})

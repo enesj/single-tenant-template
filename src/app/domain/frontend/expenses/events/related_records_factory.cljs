@@ -28,13 +28,33 @@
                        :records []
                        :selected-record nil
                        :loading? false
-                       :error nil}]
+                       :error nil
+                       :counts nil
+                       :counts-loading? false}]
+
+    (rf/reg-event-fx
+      (keyword event-ns "open-related-records-modal")
+      (fn [{:keys [db]} [_ entity]]
+        (let [entity-id (:id entity)]
+          {:db (assoc-in db modal-path
+                         (assoc initial-state :open? true :entity entity :step 1
+                           :counts-loading? true))
+           :http-xhrio (admin-http/admin-get
+                         {:uri (str api-endpoint "/" entity-id "/related-records/counts")
+                          :on-success [(keyword event-ns "related-records-counts-loaded")]
+                          :on-failure [(keyword event-ns "related-records-counts-failed")]})})))
 
     (rf/reg-event-db
-      (keyword event-ns "open-related-records-modal")
-      (fn [db [_ entity]]
-        (assoc-in db modal-path
-                  (assoc initial-state :open? true :entity entity :step 1))))
+      (keyword event-ns "related-records-counts-loaded")
+      (fn [db [_ response]]
+        (-> db
+          (assoc-in (conj modal-path :counts) (or (:counts response) {}))
+          (assoc-in (conj modal-path :counts-loading?) false))))
+
+    (rf/reg-event-db
+      (keyword event-ns "related-records-counts-failed")
+      (fn [db [_ _error]]
+        (assoc-in db (conj modal-path :counts-loading?) false)))
 
     (rf/reg-event-db
       (keyword event-ns "close-related-records-modal")
