@@ -3,6 +3,7 @@
   (:require
     [app.domain.backend.expenses.services.expenses :as expenses]
     [app.domain.backend.expenses.services.receipts.storage :as storage]
+    [app.shared.query-builders :as shared-qb]
     [honey.sql :as sql]
     [next.jdbc :as jdbc]
     [next.jdbc.result-set :as rs]))
@@ -186,6 +187,11 @@
       1 (first clauses)
       (into [:and] clauses))))
 
+(def ^:private receipt-text-filter-columns
+  "Mapping from text filter keys to SQL column identifiers for receipts."
+  {:original-filename :receipts.original_filename
+   :supplier-guess    :receipts.supplier_guess})
+
 (def ^:private sortable-receipt-columns
   "Whitelist mapping client-supplied column names to ORDER BY expressions.
   :status uses the effective-status SQL expression so sorting matches
@@ -203,12 +209,14 @@
    "updated-at" :updated_at})
 
 (defn list-receipts
-  "List receipts with optional status filter.
+  "List receipts with optional status and text filters.
 
   Returns a lightweight projection for list views (detail endpoints return
   raw_extract_json / parsed_markdown, etc.).
-  Optional :tenant-id in opts scopes to a specific tenant."
-  [db {:keys [status tenant-id limit offset order-dir order-by]
+  Optional :tenant-id in opts scopes to a specific tenant.
+  Text filter keys: :original-filename, :supplier-guess."
+  [db {:keys [status tenant-id limit offset order-dir order-by
+              original-filename supplier-guess]
        :or {limit 50 offset 0 order-dir :desc}}]
   (let [helpers (build-status-query-helpers)
         {:keys [lines-total-sql effective-status-sql]} helpers
@@ -216,6 +224,8 @@
         order-col (if (= (some-> order-by name) "status")
                     [:raw effective-status-sql]
                     (or (get sortable-receipt-columns (some-> order-by name)) :created_at))
+        text-filters {:original-filename original-filename
+                      :supplier-guess supplier-guess}
         query (cond-> {:select [:receipts.id
                                 :receipts.original_filename
                                 [[:raw effective-status-sql] :status]
@@ -234,7 +244,8 @@
                        :order-by [[order-col order-dir]]
                        :limit limit
                        :offset offset}
-                where-clause (assoc :where where-clause))]
+                where-clause (assoc :where where-clause))
+        query (shared-qb/apply-text-filters query receipt-text-filter-columns text-filters)]
     (jdbc/execute! db (sql/format query) {:builder-fn rs/as-unqualified-lower-maps})))
 
 (defn list-user-receipts
@@ -244,12 +255,14 @@
   - receipts owned by `user-id`
   - receipts with no `user_id` (unassigned/admin-uploaded)
 
-  Supports optional status filter.
+  Supports optional status and text filters.
   Optional :tenant-id in opts scopes to a specific tenant.
+  Text filter keys: :original-filename, :supplier-guess.
 
   Returns a lightweight projection for list views (detail endpoints return
   raw_extract_json / parsed_markdown, etc.)."
-  [db user-id {:keys [status tenant-id limit offset order-dir order-by]
+  [db user-id {:keys [status tenant-id limit offset order-dir order-by
+                      original-filename supplier-guess]
                :or {limit 50 offset 0 order-dir :desc}}]
   (when-not user-id
     (throw (ex-info "user-id is required" {:status 400})))
@@ -259,50 +272,61 @@
         order-col (if (= (some-> order-by name) "status")
                     [:raw effective-status-sql]
                     (or (get sortable-receipt-columns (some-> order-by name)) :created_at))
-        query {:select [:receipts.id
-                        :receipts.original_filename
-                        [[:raw effective-status-sql] :status]
-                        :receipts.supplier_guess
-                        :receipts.total_amount_guess
-                        [[:raw lines-total-sql] :lines_total_amount_guess]
-                        :receipts.currency_guess
-                        :receipts.payer_id
-                        :receipts.created_by
-                        [[:coalesce :cb.full_name :cb.email] :created_by_name]
-                        [[:raw "coalesce((receipts.raw_extract_json->>'refine_pending')::boolean, false)"] :refine_pending]
-                        :receipts.created_at
-                        :receipts.updated_at]
-               :from [:receipts]
-               :left-join [[:users :cb] [:= :cb.id :receipts.created_by]]
-               :where where-clause
-               :order-by [[order-col order-dir]]
-               :limit limit
-               :offset offset}]
+        text-filters {:original-filename original-filename
+                      :supplier-guess supplier-guess}
+        query (-> {:select [:receipts.id
+                            :receipts.original_filename
+                            [[:raw effective-status-sql] :status]
+                            :receipts.supplier_guess
+                            :receipts.total_amount_guess
+                            [[:raw lines-total-sql] :lines_total_amount_guess]
+                            :receipts.currency_guess
+                            :receipts.payer_id
+                            :receipts.created_by
+                            [[:coalesce :cb.full_name :cb.email] :created_by_name]
+                            [[:raw "coalesce((receipts.raw_extract_json->>'refine_pending')::boolean, false)"] :refine_pending]
+                            :receipts.created_at
+                            :receipts.updated_at]
+                   :from [:receipts]
+                   :left-join [[:users :cb] [:= :cb.id :receipts.created_by]]
+                   :where where-clause
+                   :order-by [[order-col order-dir]]
+                   :limit limit
+                   :offset offset}
+                (shared-qb/apply-text-filters receipt-text-filter-columns text-filters))]
     (jdbc/execute! db (sql/format query) {:builder-fn rs/as-unqualified-lower-maps})))
 
 (defn count-receipts
-  "Count receipts using the same status filter semantics as `list-receipts`.
-   Optional :tenant-id in opts scopes to a specific tenant."
-  [db {:keys [status tenant-id]}]
+  "Count receipts using the same status/text filter semantics as `list-receipts`.
+   Optional :tenant-id in opts scopes to a specific tenant.
+   Text filter keys: :original-filename, :supplier-guess."
+  [db {:keys [status tenant-id original-filename supplier-guess]}]
   (let [helpers (build-status-query-helpers)
         where-clause (build-receipts-where-clause status nil helpers :tenant-id tenant-id)
-        query (cond-> {:select [[[:count :*] :total]]
-                       :from [:receipts]}
-                where-clause (assoc :where where-clause))
+        text-filters {:original-filename original-filename
+                      :supplier-guess supplier-guess}
+        query (-> (cond-> {:select [[[:count :*] :total]]
+                           :from [:receipts]}
+                    where-clause (assoc :where where-clause))
+                (shared-qb/apply-text-filters receipt-text-filter-columns text-filters))
         row (jdbc/execute-one! db (sql/format query) {:builder-fn rs/as-unqualified-lower-maps})]
     (long (or (:total row) 0))))
 
 (defn count-user-receipts
   "Count receipts visible to `user-id` using the same filters as `list-user-receipts`.
-   Optional :tenant-id in opts scopes to a specific tenant."
-  [db user-id {:keys [status tenant-id]}]
+   Optional :tenant-id in opts scopes to a specific tenant.
+   Text filter keys: :original-filename, :supplier-guess."
+  [db user-id {:keys [status tenant-id original-filename supplier-guess]}]
   (when-not user-id
     (throw (ex-info "user-id is required" {:status 400})))
   (let [helpers (build-status-query-helpers)
         where-clause (build-receipts-where-clause status user-id helpers :tenant-id tenant-id)
-        query {:select [[[:count :*] :total]]
-               :from [:receipts]
-               :where where-clause}
+        text-filters {:original-filename original-filename
+                      :supplier-guess supplier-guess}
+        query (-> {:select [[[:count :*] :total]]
+                   :from [:receipts]
+                   :where where-clause}
+                (shared-qb/apply-text-filters receipt-text-filter-columns text-filters))
         row (jdbc/execute-one! db (sql/format query) {:builder-fn rs/as-unqualified-lower-maps})]
     (long (or (:total row) 0))))
 

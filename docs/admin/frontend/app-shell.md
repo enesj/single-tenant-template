@@ -209,5 +209,5 @@ See also: [Frontend HTTP Request Standards](../../shared/frontend/http-standards
 
 **Related Documentation**
 - [Admin Features](./admin.md)
-- [Admin Settings](./admin-settings.md)
+- [Unified Settings](./unified-settings.md)
 - [Shared Component Library](../../shared/frontend/component-library.md)

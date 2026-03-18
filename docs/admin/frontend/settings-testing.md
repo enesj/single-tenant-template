@@ -7,7 +7,7 @@ Use this guide when verifying settings behavior from:
 - `/admin/admin-settings` for admin-scope pages
 - `/admin/user-settings` for domain-owned user-facing pages
 
-Current emphasis is **admin settings testing**. The user-settings-specific workflow is included as an extension point and should be expanded as coverage grows.
+Both scopes share the same page component and editor tabs. The full architecture and config reference is in `./unified-settings.md`.
 
 ## Goal
 
@@ -24,7 +24,8 @@ This is a **UI verification workflow**, not a config-file-only or script-only wo
   - settings page
   - live page being verified
 - Optional third browser page:
-  - `/admin/user-settings` when testing lock propagation or domain-owned settings
+  - `/admin/user-settings` when testing admin lock propagation
+  - `/admin/admin-settings` when testing upstream locks from user-settings
 
 ## Standard artifacts
 
@@ -47,8 +48,9 @@ When this workflow is executed through an assistant skill, the incoming prompt s
 The prompt should specify as many of these as possible:
 
 - entity, for example `Articles`
+- scope, for example `admin` or `user`
 - source page, for example `/admin/admin-settings` or `/admin/user-settings`
-- consuming page, for example `/admin/articles`
+- consuming page, for example `/admin/articles` or `/t/:tenant/expenses/list`
 - settings section, for example `View Options`, `Form Fields`, or `Table Columns`
 - exact task(s) or plan references to execute
 - any required test data setup or cleanup
@@ -126,13 +128,23 @@ At the end of the run, perform a final restoration pass and record:
 
 ## Browser layout
 
-Recommended page pairing:
+### Admin-scope testing
 
-1. Page A: `/admin/admin-settings` or `/admin/user-settings`
-2. Page B: the live consuming page, for example `/admin/articles`
-3. Page C: optional propagation check page, usually `/admin/user-settings`
+| Tab | Page | Purpose |
+|-----|------|---------|
+| A | `/admin/admin-settings` | Change settings |
+| B | `/admin/articles` (or other admin list page) | Verify consuming page effect |
+| C (optional) | `/admin/user-settings` | Verify lock propagation downstream |
 
-Recommended working pattern:
+### User-scope testing
+
+| Tab | Page | Purpose |
+|-----|------|---------|
+| A | `/admin/user-settings` | Change settings |
+| B | `/t/:tenant/expenses/list` (or other user-facing page) | Verify consuming page effect |
+| C (optional) | `/admin/admin-settings` | Check upstream admin locks |
+
+### Working pattern
 
 1. Make the setting change on Page A.
 2. Save if required.
@@ -141,15 +153,29 @@ Recommended working pattern:
 5. If locks are involved, inspect Page C.
 6. Restore the change on Page A.
 
-## Save semantics to respect
+## Save semantics by scope
 
-Treat save behavior as part of the test, not background noise.
+Treat save behavior as part of the test, not background noise. Save semantics differ between admin and user scopes.
 
-- `View Options` policy changes: expect `Save settings`
-- `List Behavior` changes: expect `Save settings`
-- `Table Columns` policy lock/default buttons: expect `Save settings`
-- `Form Fields` structural changes: expected to save immediately
-- `Table Columns` structural edits such as display label, filterable, sortable, available/default-visible: expected to save immediately
+### Admin scope
+
+| Category | Save behavior |
+|----------|---------------|
+| View Options (display toggles, per-page, list behavior) | Draft model — requires **"Save settings"** button |
+| Form Fields (create/edit field checkboxes) | **Immediate** via PATCH |
+| Table Columns structural (label, filterable, sortable, available/visible checkboxes) | **Immediate** via PATCH |
+| Table Columns policy (visibility defaults/locks) | Draft model — requires **"Save settings"** button |
+
+### User scope
+
+| Category | Save behavior |
+|----------|---------------|
+| View Options (display toggles, per-page, list behavior) | Draft model — requires **"Save settings"** button |
+| Form Fields (create/edit field checkboxes) | Draft model — requires **"Save settings"** button |
+| Table Columns structural (label, filterable, sortable, available/visible checkboxes) | Draft model — requires **"Save settings"** button |
+| Table Columns policy (visibility defaults/locks) | Draft model — requires **"Save settings"** button |
+
+**Key difference:** In user scope, **all** changes are draft-based. Nothing saves immediately.
 
 If the UI shows a save failure or a value silently reverts:
 
@@ -208,7 +234,7 @@ Verify these separately:
 - sortable
 - lock propagation
 
-Do not collapse them into one “table columns works” result.
+Do not collapse them into one "table columns works" result.
 
 ### List Behavior
 
@@ -220,6 +246,10 @@ Test with observable UI effects:
 
 If a gate test has no observable effect, record that explicitly instead of forcing a pass/fail label.
 
+**Scope-specific notes:**
+- Admin routes: action gates are **bypassed** (`gate-allows-action?` returns `true` when `admin-route? = true`). Gate effects are only observable on user-facing pages.
+- User routes: gates evaluate against the user's **membership role**. Test with a user whose role does not match the gate to observe hide/disable behavior.
+
 ### Locks
 
 A lock test is incomplete unless it checks **both**:
@@ -227,7 +257,21 @@ A lock test is incomplete unless it checks **both**:
 1. the consuming page behavior
 2. the downstream settings UI where the user would normally try to override it
 
-For admin-driven locks, verify propagation into `/admin/user-settings` when that layer is relevant.
+#### Admin → user lock propagation
+
+When testing a lock set in `/admin/admin-settings`:
+
+1. Verify the lock takes effect on the admin consuming page
+2. Navigate to `/admin/user-settings` → select the same entity → View Options tab
+3. Verify the locked setting shows as **"Enforced"** (non-interactive static text) rather than a tristate button
+4. If possible, verify on the live user-facing page (requires admin settings loaded in app-db)
+
+#### User-scope locks
+
+When testing a lock set in `/admin/user-settings`:
+
+1. Verify the lock takes effect on the user-facing consuming page
+2. Verify the user cannot override it via browser-local preferences
 
 ## Known pitfalls and lessons learned
 
@@ -250,7 +294,7 @@ Propagation itself is a test surface.
 
 This especially matters for:
 
-- locks
+- locks (admin locks should appear as "Enforced" in user settings)
 - column labels
 - column policy state
 
@@ -290,7 +334,11 @@ Also inspect:
 
 - `Disallowed action mode`
 - action gates
-- route-specific gate behavior
+- route-specific gate behavior (admin routes bypass gates)
+
+### User-scope save requires explicit save for all tabs
+
+Unlike admin scope where form-fields and table-columns structural changes save immediately, user scope requires an explicit **"Save settings"** click for all changes. If a user-scope test appears to not persist, check whether the save button was clicked.
 
 ## Output contract for assistants
 
@@ -308,17 +356,10 @@ Any assistant running settings verification should:
 7. call out local-override hazards
 8. leave the environment restored except for explicitly documented sticky failures
 9. treat the user prompt as the scope definition unless the prompt explicitly asks for a broad/full verification pass
+10. when testing user-scope settings, pair with the correct user-facing consuming page (not an admin page)
 
-## User settings extension point
+## Reference
 
-When expanding this workflow for `/admin/user-settings`, follow the same loop with a different page pairing:
-
-1. `/admin/user-settings`
-2. the actual user-facing/domain page
-3. optional `/admin/admin-settings` page when checking upstream lock/default propagation
-
-Future additions should document:
-
-- target routes per domain page
-- expected precedence between admin policy, domain policy, and per-user preferences
-- lock rendering expectations in the user-facing settings UI
+- Architecture and config details: `./unified-settings.md`
+- Prior admin test results: `ADMIN-SETTINGS-TEST-RESULTS.md`, `ADMIN-ARTICLES-SETTINGS-VERIFICATION-RESULTS.md`, `ADMIN-ARTICLES-SETTINGS-POST-OPTIMIZATION-RESULTS.md`
+- Prior user test results: `USER-SETTINGS-OPTIMIZATION-RESULTS.md`

@@ -73,13 +73,29 @@
          current-page (paths/resolved-list-current-page db entity-key)
          active-filters (or (get-in db (paths/list-filters entity-key)) {})
          status (normalize-status-filter (:status active-filters))
+         ;; Text filters: everything except :status, normalized to simple strings
+         text-filters (reduce-kv
+                        (fn [acc k v]
+                          (if (= k :status)
+                            acc
+                            (let [normalized (cond
+                                               (map? v) (or (:value v) (get v "value"))
+                                               (keyword? v) (name v)
+                                               (string? v) (some-> v str/trim not-empty)
+                                               :else v)]
+                              (if (some? normalized)
+                                (assoc acc k normalized)
+                                acc))))
+                        {}
+                        active-filters)
          sort-config (or (get-in db (paths/list-sort-config entity-key)) {})
          order-dir (let [direction (:direction sort-config)]
                      (when (contains? #{:asc :desc "asc" "desc"} direction)
                        (name (keyword direction))))
          order-field (when-let [f (:field sort-config)] (name f))]
-     (cond-> {:limit per-page
-              :offset (* (max 0 (dec current-page)) per-page)}
+     (cond-> (merge {:limit per-page
+                     :offset (* (max 0 (dec current-page)) per-page)}
+               text-filters)
        (and include-status? (some? status)) (assoc :status status)
        (some? order-dir) (assoc :order-dir order-dir)
        (some? order-field) (assoc :order-by order-field)))))
@@ -211,9 +227,9 @@
   :user-expenses/fetch-receipts
   common-interceptors
   (fn [{:keys [db]} [payload]]
-    (let [{:keys [limit offset status order-dir order-by]} (or payload {})
-          limit* (or limit 50)
-          offset* (or offset 0)]
+    (let [request-params (merge {:limit 50 :offset 0} (when (map? payload) payload))
+          limit* (:limit request-params)
+          offset* (:offset request-params)]
       {:db (-> db
              (assoc-in (paths/entity-loading? :receipts) true)
              (assoc-in (paths/entity-error :receipts) nil)
@@ -224,10 +240,7 @@
        :http-xhrio (x/xhrio db
                      {:method :get
                       :uri endpoints/receipts-endpoint
-                      :params (cond-> {:limit limit* :offset offset*}
-                                (some? status) (assoc :status status)
-                                (some? order-dir) (assoc :order-dir order-dir)
-                                (some? order-by) (assoc :order-by order-by))
+                      :params request-params
                       :on-success [:user-expenses/fetch-receipts-success]
                       :on-failure [:user-expenses/fetch-receipts-failure]})})))
 

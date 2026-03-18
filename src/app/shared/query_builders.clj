@@ -6,7 +6,7 @@
    opinionated query-builder abstraction.
 
    NOTE: This namespace is CLJ-only (not .cljc) because it targets backend
-   HoneySQL query maps." )
+   HoneySQL query maps.")
 
 ;; -----------------------------------------------------------------------------
 ;; Pagination helpers
@@ -44,7 +44,7 @@
   ([offset {:keys [default min]
             :or {default 0
                  min 0}}]
-    (clojure.core/max (long min) (long (or offset default)))))
+   (clojure.core/max (long min) (long (or offset default)))))
 
 (defn apply-pagination
   "Apply limit/offset to a HoneySQL query map.
@@ -56,7 +56,7 @@
    - :max-limit
    - :default-offset
 
-   If :limit is nil and :default-limit is nil, :limit will not be assoc'd." 
+   If :limit is nil and :default-limit is nil, :limit will not be assoc'd."
   ([query pagination]
    (apply-pagination query pagination {}))
   ([query {:keys [limit offset]} {:keys [default-limit max-limit default-offset]
@@ -75,7 +75,7 @@
   "Normalize an order direction input to :asc or :desc.
 
   Accepts keywords or strings. Anything other than :asc/\"asc\" becomes :desc by
-   default unless a custom :default is provided." 
+   default unless a custom :default is provided."
   ([dir]
    (normalize-order-direction dir {}))
   ([dir {:keys [default]
@@ -88,7 +88,7 @@
 (defn apply-order-by
   "Apply an ORDER BY clause to a HoneySQL query map.
 
-   No-ops if `column` is nil." 
+   No-ops if `column` is nil."
   [query column direction]
   (if (some? column)
     (assoc query :order-by [[column direction]])
@@ -103,7 +103,7 @@
 
    Example:
    (build-ilike-or [:u/email :u/full_name] \"%john%\")
-   => [:or [:ilike :u/email \"%john%\"] [:ilike :u/full_name \"%john%\"]]" 
+   => [:or [:ilike :u/email \"%john%\"] [:ilike :u/full_name \"%john%\"]]"
   [fields pattern]
   (into [:or]
     (map (fn [field] [:ilike field pattern]) fields)))
@@ -113,7 +113,7 @@
 
    Mirrors the common pattern used across the codebase:
    - if existing exists => [:and existing new]
-   - else => new" 
+   - else => new"
   [existing clause]
   (if existing
     [:and existing clause]
@@ -123,10 +123,47 @@
   "Apply an ILIKE OR search clause to a HoneySQL query map.
 
   `pattern` should already include any desired wildcards (e.g. \"%term%\")
-   and callers should decide how/if to trim/blank-check the term." 
+   and callers should decide how/if to trim/blank-check the term."
   [query search-fields pattern]
   (if (and pattern (seq search-fields))
     (let [search-where (build-ilike-or search-fields pattern)]
       (update query :where (fn [existing]
                              (merge-where-and existing search-where))))
     query))
+
+;; -----------------------------------------------------------------------------
+;; Per-column text filters
+;; -----------------------------------------------------------------------------
+
+(defn apply-text-filters
+  "Apply per-column ILIKE text filters to a HoneySQL query map.
+
+   `column-mapping` is a map from filter key (keyword) to SQL column (keyword):
+     {:supplier-display-name :s.display_name
+      :original-filename     :receipts.original_filename}
+
+   `filters` is a map of filter values (same keys as column-mapping):
+     {:supplier-display-name \"BINGO\"}
+
+   Only non-blank string values produce WHERE conditions.
+
+   Example:
+     (apply-text-filters query
+       {:supplier-display-name :s.display_name}
+       {:supplier-display-name \"BINGO\"})
+     ;; => adds [:ilike :s.display_name \"%BINGO%\"] to :where"
+  [query column-mapping filters]
+  (reduce-kv
+    (fn [q filter-key sql-col]
+      (let [v (get filters filter-key)]
+        (if (and (string? v) (seq v))
+          (update q :where merge-where-and
+            [:ilike sql-col (str "%" v "%")])
+          q)))
+    query
+    column-mapping))
+
+(defn has-text-filters?
+  "Returns true if any of the given filter keys have non-blank values in `filters`."
+  [filter-keys filters]
+  (some (fn [k] (seq (get filters k))) filter-keys))

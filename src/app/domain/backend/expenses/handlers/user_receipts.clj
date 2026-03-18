@@ -156,7 +156,9 @@
   - status (optional, string or comma-separated)
   - limit (default 50)
   - offset (default 0)
-  - order-dir (default desc)"
+  - order-dir (default desc)
+  - original-filename (text filter, ILIKE)
+  - supplier-guess (text filter, ILIKE)"
   [db]
   (with-error-handling
     (fn [request]
@@ -166,11 +168,14 @@
           (let [tenant-id (h/get-tenant-id request)
                 qp (:query-params request)
                 status (parse-status-param (or (:status qp) (get qp "status")))
-                opts (cond-> {:status status
-                              :limit (parse-long-param qp :limit 50)
-                              :offset (parse-long-param qp :offset 0)
-                              :order-dir (keyword (or (:order-dir qp) (get qp "order-dir") "desc"))
-                              :order-by (or (:order-by qp) (get qp "order-by"))}
+                text-filters (h/extract-text-filter-params qp
+                               [:original-filename :supplier-guess])
+                opts (cond-> (merge {:status status
+                                     :limit (parse-long-param qp :limit 50)
+                                     :offset (parse-long-param qp :offset 0)
+                                     :order-dir (keyword (or (:order-dir qp) (get qp "order-dir") "desc"))
+                                     :order-by (or (:order-by qp) (get qp "order-by"))}
+                               text-filters)
                        tenant-id (assoc :tenant-id tenant-id))
                 {:keys [rows total limit offset]}
                 (if (h/tenant-elevated? request)

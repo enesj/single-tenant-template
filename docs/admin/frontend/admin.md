@@ -77,7 +77,7 @@ The admin settings UI is split into:
 - `/admin/admin-settings` — admin panel configuration (admin scope)
 - `/admin/user-settings` — domain-owned user UI config (user-facing defaults/locks)
 
-See the complete guide in `./admin-settings.md`.
+See the complete guide in `./unified-settings.md`.
 
 ### Key Features
 - **Unified Interface**: Toggle between Admin and User scopes in one UI.

@@ -8,7 +8,7 @@ This repository is the **single-tenant template** extracted from the Hosting mul
 
 **New (2025-12-08):** Home Expenses Tracker domain is included and exposed under `/admin/api/expenses` (suppliers, payers, receipts, expenses, articles, article aliases, internal price-history endpoints, reports). See `../domain/expenses/http-api.md` and `../domain/expenses/index.md` for details.
 
-**New (2025-12-10):** Admin Settings UI expansion with comprehensive configuration management for view options, form fields, and table columns. See `../admin/frontend/admin-settings.md` for the complete guide.
+**New (2025-12-10):** Admin Settings UI expansion with comprehensive configuration management for view options, form fields, and table columns. See `../admin/frontend/unified-settings.md` for the complete guide.
 
 **New (2025-12-25):** Expense Items sub-entity added with full CRUD support for managing individual expense line items. See `../domain/expenses/index.md` for details.
 
@@ -49,7 +49,7 @@ Common tasks:
 - `../template/frontend/app-shell.md` — app shell, routing, Shadow-CLJS builds
 - `../template/frontend/template-component-integration.md` — using template UI components
 - `../admin/frontend/admin.md` — admin panel features (users, audit, settings)
-- `../admin/frontend/admin-settings.md` — comprehensive admin settings configuration guide
+- `../admin/frontend/unified-settings.md` — comprehensive admin settings configuration guide
 - `../admin/frontend/admin-panel-single-tenant.md` — single-tenant admin flow and extension points
 - `../admin/frontend/list-view-controls-configuration.md` — list view controls and configuration
 - `../shared/frontend/component-library.md` — component library with **ID requirements for browser testing**
@@ -87,7 +87,7 @@ Browser → app.template.frontend.core → routes (template + domains) → servi
 
 | Area | Key Docs | Code Pointers |
 |------|----------|---------------|
-| Admin (template) | `../admin/frontend/admin.md`, `../admin/frontend/admin-settings.md`, `../admin/frontend/admin-panel-single-tenant.md` | `src/app/admin/frontend` |
+| Admin (template) | `../admin/frontend/admin.md`, `../admin/frontend/unified-settings.md`, `../admin/frontend/admin-panel-single-tenant.md` | `src/app/admin/frontend` |
 | Template frontend | `../template/frontend/app-shell.md`, `../template/frontend/template-component-integration.md` | `src/app/template/frontend` |
 | Backend core | `../template/backend/single-tenant-template.md`, `../template/backend/http-api.md` | `src/app/template/backend` |
 | Domains | `../domain/expenses/index.md` | `src/app/domain/backend/expenses`, `src/app/domain/frontend/expenses` |

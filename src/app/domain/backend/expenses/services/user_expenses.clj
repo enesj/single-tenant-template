@@ -210,35 +210,14 @@
       (when expense
         (assoc expense :items items)))))
 
-(defn- apply-text-filters
-  "Apply optional per-column ILIKE filters to a HoneySQL query map.
-  Each non-nil string value adds a case-insensitive ILIKE condition."
-  [query {:keys [supplier-display-name store-display-name expense-category-name
-                 payer-label currency notes]}]
-  (cond-> query
-    (seq supplier-display-name)
-    (update :where shared-qb/merge-where-and
-      [:ilike :s.display_name (str "%" supplier-display-name "%")])
-
-    (seq store-display-name)
-    (update :where shared-qb/merge-where-and
-      [:ilike :st.display_name (str "%" store-display-name "%")])
-
-    (seq expense-category-name)
-    (update :where shared-qb/merge-where-and
-      [:ilike :ec.name (str "%" expense-category-name "%")])
-
-    (seq payer-label)
-    (update :where shared-qb/merge-where-and
-      [:ilike :p.label (str "%" payer-label "%")])
-
-    (seq currency)
-    (update :where shared-qb/merge-where-and
-      [:ilike :e.currency (str "%" currency "%")])
-
-    (seq notes)
-    (update :where shared-qb/merge-where-and
-      [:ilike :e.notes (str "%" notes "%")])))
+(def ^:private expense-text-filter-columns
+  "Mapping from text filter keys to SQL column identifiers for expenses."
+  {:supplier-display-name  :s.display_name
+   :store-display-name     :st.display_name
+   :expense-category-name  :ec.name
+   :payer-label            :p.label
+   :currency               :e.currency
+   :notes                  :e.notes})
 
 (def ^:private allowed-user-expenses-order-by
   "Allowlisted sort keys for `list-user-expenses`.
@@ -309,12 +288,13 @@
                                 [:e.id :asc]]
                      :limit limit
                      :offset offset}
-                  (apply-text-filters {:supplier-display-name supplier-display-name
-                                       :store-display-name store-display-name
-                                       :expense-category-name expense-category-name
-                                       :payer-label payer-label
-                                       :currency currency
-                                       :notes notes}))]
+                  (shared-qb/apply-text-filters expense-text-filter-columns
+                    {:supplier-display-name supplier-display-name
+                     :store-display-name store-display-name
+                     :expense-category-name expense-category-name
+                     :payer-label payer-label
+                     :currency currency
+                     :notes notes}))]
       (jdbc/execute! db (sql/format query) {:builder-fn rs/as-unqualified-lower-maps}))))
 
 (defn count-user-expenses
@@ -327,9 +307,14 @@
                                 expense-category-name payer-label currency notes]}]
   (let [user-id (ensure-uuid user-id)
         tenant-id (ensure-uuid tenant-id)
-        has-text-filters? (some seq [supplier-display-name store-display-name
-                                     expense-category-name payer-label
-                                     currency notes])]
+        text-filters {:supplier-display-name supplier-display-name
+                      :store-display-name store-display-name
+                      :expense-category-name expense-category-name
+                      :payer-label payer-label
+                      :currency currency
+                      :notes notes}
+        has-text-filters? (shared-qb/has-text-filters?
+                            (keys expense-text-filter-columns) text-filters)]
     (let [base-where (cond-> [:and]
                        user-id (conj [:= (if has-text-filters? :e.user_id :user_id) user-id])
                        tenant-id (conj [:= (if has-text-filters? :e.tenant_id :tenant_id) tenant-id])
@@ -346,12 +331,7 @@
                                    [:payers :p] [:= :p.id :e.payer_id]
                                    [:expense_categories :ec] [:= :ec.id :e.expense_category_id]]
                        :where base-where}
-                    (apply-text-filters {:supplier-display-name supplier-display-name
-                                         :store-display-name store-display-name
-                                         :expense-category-name expense-category-name
-                                         :payer-label payer-label
-                                         :currency currency
-                                         :notes notes}))
+                    (shared-qb/apply-text-filters expense-text-filter-columns text-filters))
                   {:select [[[:count :*] :total]]
                    :from [:expenses]
                    :where base-where})]

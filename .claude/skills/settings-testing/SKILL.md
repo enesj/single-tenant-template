@@ -8,12 +8,13 @@ metadata:
 
 Use this when someone asks to test:
 
-- admin settings
-- user settings
-- view options
-- form fields
-- table columns
-- lock propagation
+- admin settings (`/admin/admin-settings`)
+- user settings (`/admin/user-settings`)
+- view options (display toggles, per-page, list behavior)
+- form fields (create/edit field checkboxes)
+- table columns (visibility, labels, filterable, sortable, locks)
+- lock propagation (admin → user settings, locks → live pages)
+- action gates (permission gating on user-facing pages)
 
 ## Source of truth
 
@@ -21,7 +22,8 @@ Follow:
 
 - `AGENTS.md`
 - `.github/copilot-instructions.md`
-- `docs/admin/frontend/settings-testing.md`
+- `docs/admin/frontend/settings-testing.md` (primary workflow)
+- `docs/admin/frontend/unified-settings.md` (architecture and config reference)
 
 ## Default flow
 
@@ -42,6 +44,7 @@ Treat the invoking prompt as the scope definition for this run.
 The prompt should explain what exactly to test, for example:
 
 - entity
+- scope (`admin` or `user`)
 - source settings page
 - consuming page
 - settings section
@@ -55,6 +58,26 @@ If the prompt is incomplete:
 - state that assumption in the results
 - do not silently expand into a full sweep
 
+## Scope-specific guidance
+
+### Admin scope
+
+- Source page: `/admin/admin-settings`
+- Consuming pages: `/admin/articles`, `/admin/suppliers`, and other admin list pages
+- Form-fields and table-columns structural edits save **immediately** via PATCH
+- View Options and Table Columns policy use **draft model** with Save/Discard
+- Action gates are **bypassed** on admin routes — gate effects are not observable here
+- To verify lock propagation: also check `/admin/user-settings` for "Enforced" labels
+
+### User scope
+
+- Source page: `/admin/user-settings`
+- Consuming pages: `/t/:tenant/expenses/list`, `/t/:tenant/receipts`, and other user-facing pages
+- **All changes are draft-based** — nothing saves immediately, always requires "Save settings"
+- Admin locks appear as **"Enforced"** (non-interactive) in the user-settings editor
+- Action gates are **enforced** on user routes against the user's membership role
+- To verify upstream locks: also check `/admin/admin-settings`
+
 ## Rules
 
 - Use the real UI first; scripts are secondary evidence only.
@@ -62,6 +85,8 @@ If the prompt is incomplete:
 - Check for local `ui-entity-prefs` overrides before judging admin defaults.
 - If locks are involved, also inspect the downstream settings UI where overrides would normally be attempted.
 - If a value sticks or fails to propagate, record it instead of hiding it during cleanup.
+- When testing user-scope settings, pair with the correct user-facing consuming page (not an admin page).
+- When testing action gates, use a user route — admin routes bypass all gates.
 
 ## Before finishing
 

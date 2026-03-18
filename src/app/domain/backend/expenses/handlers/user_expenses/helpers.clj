@@ -269,6 +269,20 @@
         ids (->> raw-ids (map try-parse-uuid) (filter some?) vec)]
     [raw-ids ids]))
 
+(defn extract-text-filter-params
+  "Extract text filter params from a query-params map given a whitelist of keys.
+
+  `filter-keys` is a collection of keywords (e.g. [:supplier-display-name :notes]).
+  Returns a map of {key value} for non-nil values found in params."
+  [params filter-keys]
+  (reduce
+    (fn [acc k]
+      (if-let [v (get-param params k)]
+        (assoc acc k v)
+        acc))
+    {}
+    filter-keys))
+
 (defn batch-delete-entities
   "Execute batch delete of entities by IDs.
   `delete-one!` is a function of (id) that returns truthy on success.
