@@ -56,6 +56,7 @@
           tenant-a-id tenant-id
           {:keys [tenant-id] :as _tb} (th/ensure-test-tenant! db user-b)
           tenant-b-id tenant-id
+          default-b-before (payers/get-default-payer db tenant-b-id)
           ;; Create default payer in tenant A
           _payer-a (th/create-payer! db {:type "cash"
                                          :label (str "A-default-" (UUID/randomUUID))
@@ -63,11 +64,15 @@
                                          :tenant_id tenant-a-id})
           ;; Query default payer for each tenant
           default-a (payers/get-default-payer db tenant-a-id)
-          default-b (payers/get-default-payer db tenant-b-id)]
+          default-b-after (payers/get-default-payer db tenant-b-id)]
       (is (some? default-a)
         "Tenant A should have a default payer")
-      (is (nil? default-b)
-        "Tenant B should have no default payer (none created)"))))
+      (is (some? default-b-before)
+        "Tenant B gets its own default owner payer during tenant provisioning")
+      (is (= (:id default-b-before) (:id default-b-after))
+        "Tenant B default payer should remain unchanged")
+      (is (not= (:id default-a) (:id default-b-after))
+        "Tenant defaults should remain isolated"))))
 
 ;; ---------------------------------------------------------------------------
 ;; Payer-type isolation

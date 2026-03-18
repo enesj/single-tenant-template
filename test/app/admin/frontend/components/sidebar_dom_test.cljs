@@ -30,7 +30,7 @@
         (fn [container]
           (let [active-link (.querySelector container "a.ds-active")]
             (is (some? active-link) "There should be an active link")
-            (is (= "Users" (.-textContent active-link))
+            (is (= "User Accounts" (.-textContent active-link))
               "The 'Users' link should be active when route is :admin-users"))))))
 
   (testing "Sidebar highlights dashboard when route matches"

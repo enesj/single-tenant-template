@@ -225,7 +225,15 @@
       [processing? processing-started-at last-checked])
 
     ($ :<>
-      ($ :div {:class "p-6 min-h-screen bg-base-100"}
+      ($ :div {:class "min-h-screen bg-base-100"}
+        ($ :header {:class "bg-white border-b border-base-200"}
+          ($ :div {:class "w-full px-4 py-4 sm:py-6"}
+            ($ :div {:class "flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"}
+              ($ :div
+                ($ :h1 {:class "text-xl sm:text-2xl font-bold text-base-content"} (t :receipts/title))
+                ($ :p {:class "text-sm text-base-content/70"}
+                  (t :receipts/subtitle))))))
+        ($ :main {:class "w-full px-4 py-6"}
         ($ :div {:class "ds-card ds-bg-base-100 ds-shadow-xl"}
           ($ :div {:class "ds-card-body p-0"}
             (when error
@@ -297,5 +305,5 @@
                  :entity-spec (receipts-entity-spec t)
                  :custom-actions (fn [receipt]
                                    (receipt-actions t can-ocr? receipt))
-                 :on-add-click #(rf/dispatch [:navigate-to "/expenses/upload"])})))))
+                 :on-add-click #(rf/dispatch [:navigate-to "/expenses/upload"])}))))))
       ($ receipt-detail-modal))))

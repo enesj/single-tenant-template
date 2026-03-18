@@ -150,7 +150,7 @@
                       :content-type "image/jpeg"})
             expand (get-in @get-calls [0 :opts :query-params :expand])
             md (:parsed-markdown result)]
-        (is (= "items,markdown,text" expand))
+        (is (= "items,text" expand))
         (is (string? (:provider-markdown result)))
         (is (string? md))
         (is (str/includes? md "MY STORE"))

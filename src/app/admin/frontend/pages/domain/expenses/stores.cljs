@@ -67,7 +67,7 @@
   ;; Cities are reference data for filter/select rendering and should stay unpaginated.
   (dispatch! [:app.domain.frontend.expenses.events.cities/load-list
               {:fetch-limit 200 :fetch-offset 0}])
-  (dispatch! [::stores-events/load-list {:page 1}]))
+  (dispatch! [::stores-events/load-list {:page 1 :per-page 25}]))
 
 (defui admin-stores-page
   "Admin route: /admin/stores"

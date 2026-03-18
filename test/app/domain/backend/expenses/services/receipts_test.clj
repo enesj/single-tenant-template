@@ -86,8 +86,8 @@
                          :total_amount "12.00"
                          :currency "eur"
                          :items items})]
-          (is (= "review_required" (str (:status updated)))
-            "status should remain review_required when edited line items no longer match the original total guess")
+          (is (= "extracted" (str (:status updated)))
+            "status should be promoted to extracted once the reviewed receipt has all required fields")
           (is (= 10.00M (:total_amount_guess updated))
             "total_amount_guess should remain the original OCR/extraction guess")
           (is (some? (:purchased_at_guess updated))

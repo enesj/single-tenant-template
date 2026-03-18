@@ -107,25 +107,44 @@
      {:results [] :seen {}}
      results)))
 
-(def ^:private entity-type-priority
-  "When relevance scores tie, prefer more specific entity types."
-  {:article 0 :category 1 :store 2 :supplier 3})
+(def ^:private entity-type-order
+  "Canonical round-robin order for interleaving mixed entity types."
+  [:supplier :store :category :article])
+
+(defn- result-score
+  [result]
+  (or (:score result)
+    (some-> (:relevance result) (* 100))
+    0))
 
 (defn balance-results
-  "Sort results by relevance score (descending), with entity-type priority as
-   tiebreaker. Handles both backend :relevance (0–1) and local :score (0–100)."
+  "Interleave results round-robin by entity type so the user sees a diverse mix.
+   Within each type group, higher-scored items appear first."
   [results limit]
-  (->> results
-    (sort-by (fn [result]
-               (let [score (or (:score result)
-                             (some-> (:relevance result) (* 100))
-                             0)
-                     type-pri (get entity-type-priority
-                                (normalize-entity-type result) 4)]
-                 [(- score) type-pri]))
-      compare)
-    (take limit)
-    vec))
+  (let [groups (reduce (fn [acc result]
+                         (let [etype (normalize-entity-type result)]
+                           (update acc etype (fnil conj []) result)))
+                 {} results)
+        groups (into {} (map (fn [[k v]] [k (sort-by result-score > v)])) groups)
+        present-types (filterv #(contains? groups %) entity-type-order)]
+    (loop [remaining (into {} (map (fn [[k v]] [k (seq v)])) groups)
+           type-cycle (cycle present-types)
+           out []
+           empty-passes 0]
+      (cond
+        (>= (count out) limit) (vec (take limit out))
+        (empty? remaining) (vec out)
+        (>= empty-passes (count present-types)) (vec out)
+        :else
+        (let [etype (first type-cycle)]
+          (if-let [items (get remaining etype)]
+            (recur (if (next items)
+                     (assoc remaining etype (next items))
+                     (dissoc remaining etype))
+              (rest type-cycle)
+              (conj out (first items))
+              0)
+            (recur remaining (rest type-cycle) out (inc empty-passes))))))))
 
 (defn merge-search-results
   [local-results backend-results limit]

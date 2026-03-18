@@ -1,6 +1,7 @@
 (ns app.domain.frontend.expenses.components.manual-expense-form.smart-input-test
   (:require
-    [app.domain.frontend.expenses.components.manual-expense-form.smart-input :as smart-input]
+    [app.domain.frontend.expenses.components.manual-expense-form.smart-input.components :as smart-input-components]
+    [app.domain.frontend.expenses.components.manual-expense-form.smart-input.helpers :as smart-input]
     [cljs.test :refer [deftest is testing]]))
 
 (deftest focused-search-types-drop-selected-context-types
@@ -57,7 +58,7 @@
                           :display-name (str "Store " n)
                           :supplier_id "sup-1"})
                    (range 12))
-          groups (smart-input/build-quick-pick-groups
+          groups (smart-input-components/build-quick-pick-groups
                    [:store]
                    []
                    stores
@@ -81,7 +82,7 @@
                            {:id (str "article-" n)
                             :canonical-name (str "Article " n)})
                      (range 7))
-          groups (smart-input/build-quick-pick-groups
+          groups (smart-input-components/build-quick-pick-groups
                    [:store :category :article]
                    []
                    stores
@@ -103,7 +104,7 @@
                              {:id (str "cat-" n)
                               :name (str "Category " n)})
                        (range 7))
-          groups (smart-input/phase-two-quick-pick-groups
+          groups (smart-input-components/phase-two-quick-pick-groups
                    [:supplier :category]
                    context-suggestions
                    []

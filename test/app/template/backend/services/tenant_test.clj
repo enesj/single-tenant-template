@@ -102,13 +102,20 @@
       (is (= "owner" (or (:role (:membership result))
                        (:tenant_memberships/role (:membership result))))))
 
-    (testing "seeds payer_types"
+    (testing "seeds payer_types plus the auto-provisioned system payer type"
       (let [tenant-id (or (:id (:tenant result)) (:tenants/id (:tenant result)))
             pts (jdbc/execute! db
                   (sql/format {:select [:*]
                                :from [:payer_types]
-                               :where [:= :tenant_id tenant-id]}))]
-        (is (= 2 (count pts)))))
+                               :where [:= :tenant_id tenant-id]}))
+            seeded-pts (jdbc/execute! db
+                         (sql/format {:select [:*]
+                                      :from [:payer_types]
+                                      :where [:and
+                                              [:= :tenant_id tenant-id]
+                                              [:= :is_system false]]}))]
+        (is (= 3 (count pts)))
+        (is (= 2 (count seeded-pts)))))
 
     (testing "seeds expense_categories"
       (let [tenant-id (or (:id (:tenant result)) (:tenants/id (:tenant result)))

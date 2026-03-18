@@ -8,4 +8,5 @@
   "Admin users page using the generic entity system"
   []
   ($ generic-admin-entity-page
-    {:children :users}))
+    {:children :users
+     :list-overrides {:form-display :modal}}))

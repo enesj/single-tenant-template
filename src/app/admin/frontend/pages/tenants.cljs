@@ -86,6 +86,12 @@
   {:entity-name :tenants
    :entity-spec tenants-entity-spec
    :title "Tenants"
+   :allow-add? false
+   :allow-edit? true
+   :allow-delete? true
+   :form-display :modal
+   :display-settings {:show-add-button? false
+                      :show-filtering? false}
    :render-actions #(render-tenant-row-actions on-select %)})
 
 ;; ============================================================================

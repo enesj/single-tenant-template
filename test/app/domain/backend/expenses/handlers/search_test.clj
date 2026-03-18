@@ -192,18 +192,24 @@
 
 (deftest related-for-supplier-includes-all-supplier-stores-even-without-expenses
   (let [supplier-id (java.util.UUID/randomUUID)
-        tenant-id (java.util.UUID/randomUUID)]
+        tenant-id (java.util.UUID/randomUUID)
+        calls (atom [])]
     (with-redefs [sql/format identity
-                  jdbc/execute! (fn [_db query _opts] query)]
-      (let [result (#'rr/related-for-supplier :mock-db supplier-id 5 tenant-id)
-            stores-query-str (pr-str (:stores result))]
+                  jdbc/execute! (fn [_db query _opts]
+                                  (swap! calls conj query)
+                                  [])]
+      (#'rr/related-for-supplier :mock-db supplier-id 5 tenant-id)
+      (let [stores-query-str (pr-str (first @calls))
+            articles-query-str (pr-str (second @calls))]
         (is (clojure.string/includes? stores-query-str ":st.supplier_id"))
         (is (clojure.string/includes? stores-query-str "[:and [:= :e.store_id :st.id]"))
         (is (clojure.string/includes? stores-query-str ":e.tenant_id"))
         (is (clojure.string/includes? stores-query-str ":supplier_id"))
         (is (clojure.string/includes? stores-query-str ":left-join"))
         (is (clojure.string/includes? stores-query-str ":st.display_name"))
-        (is (clojure.string/includes? stores-query-str ":e.total_amount"))))))
+        (is (clojure.string/includes? stores-query-str ":e.total_amount"))
+        (is (clojure.string/includes? articles-query-str ":e.supplier_id"))
+        (is (clojure.string/includes? articles-query-str ":aa.article_id"))))))
 
 (deftest quick-add-search-handler-all-tags-results-and-filters-stores
   (let [db :mock-db

@@ -39,6 +39,11 @@
 (deftest settings-get-returns-defaults-when-missing
   (when-let [db fixtures/*test-db*]
     (let [{:keys [user-id tenant-id]} (create-test-context! db)
+          _ (jdbc/execute-one! db
+              (hsql/format {:delete-from [:user_expense_settings]
+                            :where [:and
+                                    [:= :tenant_id tenant-id]
+                                    [:= :user_id user-id]]}))
           handler (settings/get-settings-handler db)
           resp (handler (req {:user-id user-id
                               :tenant-id tenant-id

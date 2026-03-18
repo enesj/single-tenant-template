@@ -72,10 +72,11 @@
           (is (= {:user {:id "user-1"}}
                 (get-in resp [:session :auth-session]))))))))
 
-(deftest user-logout-does-not-wipe-admin-session
-  (testing "User logout removes only :auth-session"
+(deftest user-logout-clears-entire-session
+  (testing "User logout clears the full session, including any admin token"
     (let [req {:session {:auth-session {:user {:id "user-1"}}
                          :admin-token "admin-token-1"}}
           resp (user-auth-routes/logout-handler req)]
-      (is (= "admin-token-1" (get-in resp [:session :admin-token])))
-      (is (nil? (get-in resp [:session :auth-session]))))))
+      (is (nil? (:session resp)))
+      (is (nil? (get-in resp [:session :auth-session])))
+      (is (nil? (get-in resp [:session :admin-token]))))))
