@@ -5,6 +5,7 @@
     [app.domain.frontend.expenses.events.user-expenses.endpoints :as endpoints]
     [app.domain.frontend.expenses.events.user-expenses.xhrio :as x]
     [app.template.frontend.api.http :as http]
+    [app.shared.pagination :as pagination]
     [app.template.frontend.db.db :refer [common-interceptors]]
     [app.template.frontend.db.paths :as paths]
     [app.template.frontend.shared.bridges.crud :as crud-bridges]
@@ -227,7 +228,7 @@
   :user-expenses/fetch-receipts
   common-interceptors
   (fn [{:keys [db]} [payload]]
-    (let [request-params (merge {:limit 50 :offset 0} (when (map? payload) payload))
+    (let [request-params (merge {:limit pagination/default-page-size :offset 0} (when (map? payload) payload))
           limit* (:limit request-params)
           offset* (:offset request-params)]
       {:db (-> db

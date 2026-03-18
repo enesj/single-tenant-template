@@ -5,6 +5,7 @@
     [app.domain.frontend.expenses.events.user-expenses.endpoints :as endpoints]
     [app.domain.frontend.expenses.events.user-expenses.xhrio :as x]
     [app.template.frontend.api.http :as http]
+    [app.shared.pagination :as pagination]
     [app.template.frontend.db.db :refer [common-interceptors]]
     [app.template.frontend.db.paths :as paths]
     [clojure.string :as str]
@@ -63,7 +64,7 @@
   :user-expenses/refresh-suppliers-list
   common-interceptors
   (fn [{:keys [db]} _]
-    {:dispatch [:user-expenses/fetch-suppliers (current-list-page-params db :suppliers 200)]}))
+    {:dispatch [:user-expenses/fetch-suppliers (current-list-page-params db :suppliers pagination/default-page-size)]}))
 
 (rf/reg-event-fx
   :user-expenses/refresh-payers-list

@@ -78,8 +78,7 @@
   :page/init-receipts-list
   common-interceptors
   (fn [{:keys [db]} _]
-    {:db (assoc-in db (paths/current-page) :receipts-list)
-     :dispatch [:user-expenses/fetch-receipts {:limit 50 :offset 0}]}))
+    {:db (assoc-in db (paths/current-page) :receipts-list)}))
 
 (rf/reg-event-fx
   :page/init-receipt-detail
@@ -117,8 +116,7 @@
   (fn [{:keys [db]} _]
     {:db (assoc-in db (paths/current-page) :expense-suppliers)
      :dispatch-n [[:app.template.frontend.events.config/set-show-add-form false]
-                  [:app.template.frontend.events.config/set-editing nil]
-                  [:user-expenses/fetch-suppliers]]}))
+                  [:app.template.frontend.events.config/set-editing nil]]}))
 
 (rf/reg-event-fx
   :page/init-expense-payers
