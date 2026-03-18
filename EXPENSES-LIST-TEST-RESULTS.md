@@ -17,7 +17,7 @@
 | 4 | Filtering | PASS (FIXED) | Backend text filters implemented; 16 BINGO results across 2 pages |
 | 5 | Row Selection & Batch Ops | PASS | Single, multi, select-all, batch edit/delete buttons |
 | 6 | Row Actions | PASS | Expand items, edit modal, delete button present |
-| 7 | Add Expense | N/A | Expenses created via receipt upload, not standalone add |
+| 7 | Add Expense | PASS (FIXED) | Button visible + functional; fixed ID and aria-label |
 | 8 | Column Visibility | PASS | Visible columns match config |
 | 9 | Display Settings | PASS | All settings resolved correctly |
 | 10 | Loading/Error States | SKIPPED | Not directly testable without network manipulation |
@@ -251,10 +251,16 @@ Not directly testable without network throttling or error injection. The page lo
 
 **Supported text filters**: `supplier-display-name`, `store-display-name`, `expense-category-name`, `payer-label`, `currency`, `notes`
 
-### BUG-2: Add Button Rendered But Not Visible (NOT FIXED)
+### BUG-2: Add Button Missing Accessible Label & ID — FIXED
 
-**Priority**: Low
-**Impact**: `show-add-button?` is `true` and DOM has `btn-add-` element, but it's not visible. Either the button should be visible or the setting should be `false` for expenses (since expenses are created via receipt upload).
+**Priority**: Low → **RESOLVED**
+**Original report**: Button appeared as unlabeled `button` in a11y tree with empty ID `btn-add-`.
+**Root cause**: `header-section` derived `button-id` from `title` prop, which is `nil` when the expenses list page uses its own custom header instead of the list-view title.
+**Actual state**: The button IS visible (blue "+" circle) and IS functional (opens a full expense creation modal with supplier/store/category search, payer, line items, etc.)
+
+**Fix applied** (`src/app/template/frontend/components/list/ui.cljs`):
+- `button-id` now falls back to `entity-name` when `title` is nil → `btn-add-expenses`
+- Added `aria-label` (e.g., "Add expenses") for screen reader accessibility
 
 ---
 

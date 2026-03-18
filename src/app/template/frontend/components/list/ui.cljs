@@ -42,7 +42,9 @@
   [{:keys [title show-add-form? set-show-add-form! set-editing! entity-name show-add-button? add-disabled?
            on-add-click]}]
   (let [plus-icon-el ($ plus-icon)
-        button-id (str "btn-add-" (when title (str/lower-case (name title))))
+        entity-label (or (when title (str/lower-case (name title)))
+                       (when entity-name (str/lower-case (name entity-name))))
+        button-id (str "btn-add-" entity-label)
         ;; Session + metadata to determine if adding is allowed
         current-tenant (use-subscribe [:current-tenant])
         models-data (use-subscribe [:models-data])
@@ -64,6 +66,7 @@
           ($ button
             {:shape "circle"
              :id button-id
+             :aria-label (str "Add " (or entity-label "item"))
              :disabled add-disabled?
              :on-click (if on-add-click
                          ;; Use custom handler if provided (for modal mode)
