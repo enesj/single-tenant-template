@@ -265,7 +265,7 @@
              :per-page 25
              :display-settings {}})
           (fn [_container]
-            (is (some #(= [::ui-events/set-per-page :users 25] %)
+            (is (some #(= [::ui-events/seed-per-page-from-config :users 25] %)
                   @dispatched)
               "list-view should seed per-page into UI state when missing")
             (done)))))))
@@ -303,6 +303,8 @@
                                              (= (first query) :app.template.frontend.subs.list/batch-edit-inline) {:open? false}
                                              ;; Critical: simulate an existing per-page in UI state
                                              (= (first query) :app.template.frontend.subs.list/entity-ui-state) {:per-page 10}
+                                             ;; Simulate a user-set per-page preference (from localStorage)
+                                             (= (first query) :app.template.frontend.subs.ui/entity-display-prefs) {:per-page 10}
                                              (= (first query) :app.template.frontend.events.list.settings/table-width) 1200
                                              (= (first query) :form-entity-specs/by-name) {:fields []}
                                              (= (first query) :app.template.frontend.subs.ui/visible-columns) {}
@@ -316,7 +318,7 @@
              :per-page 25
              :display-settings {}})
           (fn [_container]
-            (is (not (some #(= [::ui-events/set-per-page :users 25] %)
+            (is (not (some #(= [::ui-events/seed-per-page-from-config :users 25] %)
                        @dispatched))
               "list-view must not overwrite an existing per-page")
             (done)))))))

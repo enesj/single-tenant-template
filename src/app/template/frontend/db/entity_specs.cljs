@@ -2,22 +2,11 @@
   "Entity specs; keep field configs in sync with backend."
   (:require
     [app.shared.field-specs :as field-specs]
-    [app.shared.labels :as labels]
     [app.shared.keywords :as kw]
     [app.shared.model-naming :as model-naming]
     [app.template.frontend.db.paths :as paths]
-    [app.template.frontend.i18n :as i18n]
-    [clojure.string :as str]
+    [app.template.frontend.settings.resolver :as resolver]
     [re-frame.core :as rf]))
-
-(defn- app-col->db-col
-  "Best-effort conversion from app/kebab-case keyword to db/snake_case keyword.
-
-  Used for looking up computed field metadata in table-columns config, where
-  keys are often authored in snake_case (e.g. :supplier_display_name)."
-  [col-kw]
-  (when col-kw
-    (-> col-kw name (str/replace "-" "_") keyword)))
 
 (defn- normalize-entity-name
   "Normalize entity identifiers so lookups are consistent.
@@ -29,59 +18,6 @@
   (some-> entity-name
     kw/ensure-keyword
     model-naming/db-keyword->app))
-
-(defn- column-key-candidates
-  [column-key]
-  (let [app-kw (some-> column-key model-naming/ensure-app-keyword)
-        app-name (some-> app-kw name)
-        db-kw (some-> app-kw app-col->db-col)
-        db-name (some-> db-kw name)]
-    (->> [column-key
-          (when (keyword? column-key) (name column-key))
-          (when (string? column-key) (keyword column-key))
-          app-kw
-          app-name
-          db-kw
-          db-name]
-      (remove nil?)
-      distinct
-      vec)))
-
-(defn- lookup-column-entry
-  [m column-key]
-  (let [sentinel ::not-found]
-    (some (fn [k]
-            (let [v (get m k sentinel)]
-              (when-not (= v sentinel) v)))
-      (column-key-candidates column-key))))
-
-(defn- translate-label-key
-  [locale label-key]
-  (when-let [translation-key (some-> label-key kw/ensure-keyword)]
-    (let [translated (try
-                       (i18n/translate locale translation-key)
-                       (catch :default _
-                         nil))
-          translated-str (some-> translated str str/trim)]
-      (when (and (seq translated-str)
-              (not= translated translation-key)
-              (not= translated-str (str translation-key)))
-        translated-str))))
-
-(defn- resolve-column-label-override
-  [locale table-config column-key]
-  (let [{:keys [label label-key]} (lookup-column-entry (:column-metadata table-config) column-key)
-        translated-label (translate-label-key locale label-key)
-        static-label (some-> label str str/trim)]
-    (or translated-label
-      (when (seq static-label)
-        static-label))))
-
-(defn- apply-column-label-override
-  [locale table-config column-key field-spec]
-  (if-let [label (resolve-column-label-override locale table-config column-key)]
-    (assoc field-spec :label label)
-    field-spec))
 
 ;; Event handler for initializing entity specs
 (rf/reg-event-db
@@ -110,10 +46,11 @@
                          (map? base-spec) (vals base-spec)
                          :else [])
           locale       (or (:locale db) :bs)
-          ;; Route-aware table-columns config (admin vs user routes).
+          ;; Route-aware table-columns config via unified resolver.
           admin-route? (paths/admin-route? db)
           table-config (when entity-kw
-                         (if admin-route?
+                         (resolver/resolve-config-source
+                           admin-route?
                            (get-in db [:admin :config :table-columns entity-kw])
                            (get-in db [:domain :config :table-columns entity-kw])))
           normalize-col (fn [col] (model-naming/ensure-app-keyword col))
@@ -132,49 +69,34 @@
                                (when-let [k (field-id->kw f)]
                                  [k f])))
                        base-fields)
-          computed-meta-for (fn [col-kw]
-                              (lookup-column-entry (:computed-fields table-config) col-kw))
           column-config-for (fn [col-kw]
-                              (lookup-column-entry (:column-config table-config) col-kw))
-          computed-field-spec (fn [col-kw]
-                                (let [m     (computed-meta-for col-kw)
-                                      label (or (resolve-column-label-override locale table-config col-kw)
-                                              (:label m)
-                                              (labels/field-name->label col-kw))]
-                                  {:id    (name col-kw)
-                                   :label label
-                                   :type  (or (:type m) :string)
-                                   :admin (merge
-                                            {:visible-in-table? true
-                                             :filterable? true
-                                             :sortable? true}
-                                            (:admin m))}))
+                              (resolver/lookup-column-entry (:column-config table-config) col-kw))
           ;; Computed field specs should be overridden by real field specs when both exist.
           merged-by-id (merge
-                         (into {} (map (fn [k] [k (computed-field-spec k)]) computed-cols))
+                         (into {} (map (fn [k] [k (resolver/computed-field-spec locale table-config k)]) computed-cols))
                          base-by-id)]
       ;; If table-columns provides an explicit order, use it as the canonical
       ;; list-view field order AND filter set (so config/locks/defaults apply
       ;; to the same columns the table renders).
       (if (seq available-cols)
         (mapv (fn [k]
-                (let [field-spec     (or (get merged-by-id k) (computed-field-spec k))
+                (let [field-spec     (or (get merged-by-id k) (resolver/computed-field-spec locale table-config k))
                       col-cfg        (column-config-for k)
                       field-spec*    (if (map? col-cfg)
                                        (merge field-spec col-cfg)
                                        field-spec)]
-                  (apply-column-label-override locale table-config k field-spec*)))
+                  (resolver/apply-column-label-override locale table-config k field-spec*)))
           available-cols)
         ;; Fallback: preserve backend/models-derived field order, and append any
         ;; computed fields not already present.
         (let [base-ids         (set (keep field-id->kw base-fields))
               base-fields*     (mapv (fn [field]
                                        (if-let [field-id (field-id->kw field)]
-                                         (apply-column-label-override locale table-config field-id field)
+                                         (resolver/apply-column-label-override locale table-config field-id field)
                                          field))
                                  base-fields)
               missing-computed (remove base-ids computed-cols)]
-          (vec (concat base-fields* (map computed-field-spec missing-computed))))))))
+          (vec (concat base-fields* (map #(resolver/computed-field-spec locale table-config %) missing-computed))))))))
 
 (rf/reg-sub
   :form-entity-specs

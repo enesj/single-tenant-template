@@ -111,6 +111,24 @@
           refresh-dispatch (assoc :dispatch refresh-dispatch)))
       {:db db})))
 
+(rf/reg-event-fx
+  ::seed-per-page-from-config
+  common-interceptors
+  (fn [{:keys [db]} [entity-type per-page]]
+    (if-let [entity-key (->entity-key entity-type)]
+      (let [parsed (cond
+                     (number? per-page) per-page
+                     (string? per-page) (js/parseInt per-page 10)
+                     :else per-page)
+            clamped (if (and parsed (pos? parsed)) parsed 10)
+            db* (-> db
+                  (sync-per-page entity-key clamped)
+                  (sync-current-page entity-key 1))
+            refresh-dispatch (refresh-dispatch-for-server-mode db* entity-key)]
+        (cond-> {:db db*}
+          refresh-dispatch (assoc :dispatch refresh-dispatch)))
+      {:db db})))
+
 (rf/reg-event-db
   ::set-pagination-mode
   common-interceptors

@@ -1,29 +1,27 @@
 (ns app.admin.frontend.subs.config
   "Simplified subscriptions for vector-based column configuration"
-  {:clj-kondo/ignore [:unused-namespace]}
   (:require
-    [app.admin.frontend.config.loader :as config-loader]
     [app.admin.frontend.system.entity-registry :as entity-registry]
+    [app.shared.model-naming :as model-naming]
+    [app.template.frontend.db.paths :as paths]
+    [app.template.frontend.settings.resolver :as resolver]
     [re-frame.core :as rf]))
 
 ;; =============================================================================
 ;; Core Column Configuration (Vector-based with Order Preservation)
 ;; =============================================================================
 
-;; Get the entire config for an entity
+;; Get the resolved table-columns config for an entity (route-aware).
 (rf/reg-sub
   ::entity-config
   (fn [db [_ entity-name]]
-    (get-in db [:admin :config :table-columns entity-name])))
-
-;; Get visible columns as a vector (maintains order!)
-(rf/reg-sub
-  ::visible-columns
-  (fn [db [_ entity-name]]
-    (or (get-in db [:admin :config :table-columns entity-name :visible-columns])
-       ;; Fallback to default if not set
-      (get-in db [:admin :config :table-columns entity-name :default-visible-columns])
-      [])))
+    (let [entity-kw (model-naming/ensure-app-keyword entity-name)
+          admin-route? (paths/admin-route? db)]
+      (when entity-kw
+        (resolver/resolve-config-source
+          admin-route?
+          (get-in db [:admin :config :table-columns entity-kw])
+          (get-in db [:domain :config :table-columns entity-kw]))))))
 
 ;; Admin entity metadata comes from the entity registry (preloaded from entities.edn)
 (rf/reg-sub
@@ -57,18 +55,16 @@
 ;; =============================================================================
 
 (rf/reg-sub
-  ::sortable-columns
-  (fn [[_ entity-name]]
-    (rf/subscribe [::entity-config entity-name]))
-  (fn [config _]
-    (:sortable-columns config [])))
-
-(rf/reg-sub
   :admin/sortable-columns
-  (fn [[_ entity-keyword]]
-    (rf/subscribe [::sortable-columns entity-keyword]))
-  (fn [sortable-columns _]
-    sortable-columns))
+  (fn [db [_ entity-name]]
+    (let [entity-kw (model-naming/ensure-app-keyword entity-name)
+          admin-route? (paths/admin-route? db)
+          table-config (when entity-kw
+                         (resolver/resolve-config-source
+                           admin-route?
+                           (get-in db [:admin :config :table-columns entity-kw])
+                           (get-in db [:domain :config :table-columns entity-kw])))]
+      (:sortable-columns table-config []))))
 
 ;; =============================================================================
 ;; View Options / Hardcoded Display Settings

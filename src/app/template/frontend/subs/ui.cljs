@@ -195,11 +195,14 @@
 (rf/reg-sub
   ::filterable-fields
   (fn [db [_ entity-name]]
-    (let [entity-kw (model-naming/ensure-app-keyword entity-name)]
-      ;; Read from app-db, not config-loader cache
-      (get-in db [:admin :config :table-columns entity-kw :filterable-columns]))))
-;; Note: We intentionally do not fall back to [:ui :entity-configs]
-;; to avoid mixing legacy settings with vector-config.
+    (let [entity-kw    (model-naming/ensure-app-keyword entity-name)
+          admin-route? (paths/admin-route? db)
+          table-config (when entity-kw
+                         (resolver/resolve-config-source
+                           admin-route?
+                           (get-in db [:admin :config :table-columns entity-kw])
+                           (get-in db [:domain :config :table-columns entity-kw])))]
+      (:filterable-columns table-config))))
 
 ;; Subscription to get the list of visible columns for an entity
 (rf/reg-sub
@@ -214,7 +217,8 @@
     (let [entity-kw    (model-naming/ensure-app-keyword entity-name)
           admin-route? (paths/admin-route? db)
           table-config (when entity-kw
-                         (if admin-route?
+                         (resolver/resolve-config-source
+                           admin-route?
                            (get-in db [:admin :config :table-columns entity-kw])
                            (get-in db [:domain :config :table-columns entity-kw])))
           available (->> (or (:available-columns table-config) [])
@@ -238,7 +242,7 @@
                              (keep normalize-col)
                              vec))
           admin-visible-vector (when entity-kw
-                                 (->> (get-in db [:admin :config :table-columns entity-kw :visible-columns])
+                                 (->> (:visible-columns table-config)
                                    (keep normalize-col)
                                    vec))
           derived-from-vector (when (and (seq available)
@@ -284,7 +288,8 @@
     (let [entity-kw    (model-naming/ensure-app-keyword entity-name)
           admin-route? (paths/admin-route? db)
           table-config (when entity-kw
-                         (if admin-route?
+                         (resolver/resolve-config-source
+                           admin-route?
                            (get-in db [:admin :config :table-columns entity-kw])
                            (get-in db [:domain :config :table-columns entity-kw])))
           always-visible (->> (or (:always-visible table-config) [])

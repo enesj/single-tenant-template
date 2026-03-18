@@ -18,73 +18,16 @@
     [app.shared.keywords :as kw]
     [app.shared.model-naming :as model-naming]
     [app.template.frontend.db.paths :as paths]
-    [app.template.frontend.i18n :as i18n]
+    [app.template.frontend.settings.resolver :as resolver]
     [clojure.string :as str]
     [re-frame.core :as rf]
     [taoensso.timbre :as log]))
 
-(defn- app-col->db-col
-  [column-key]
-  (some-> column-key
-    model-naming/ensure-app-keyword
-    name
-    (str/replace "-" "_")
-    keyword))
-
-(defn- column-key-candidates
-  [column-key]
-  (let [app-kw (model-naming/ensure-app-keyword column-key)
-        app-name (some-> app-kw name)
-        db-kw (app-col->db-col column-key)
-        db-name (some-> db-kw name)]
-    (->> [column-key
-          (when (keyword? column-key) (name column-key))
-          (when (string? column-key) (keyword column-key))
-          app-kw
-          app-name
-          db-kw
-          db-name]
-      (remove nil?)
-      distinct
-      vec)))
-
-(defn- lookup-column-entry
-  [m column-key]
-  (let [sentinel ::not-found]
-    (some (fn [k]
-            (let [v (get m k sentinel)]
-              (when-not (= v sentinel) v)))
-      (column-key-candidates column-key))))
-
-(defn- translate-label-key
-  [locale label-key]
-  (when-let [translation-key (some-> label-key kw/ensure-keyword)]
-    (let [translated (try
-                       (i18n/translate locale translation-key)
-                       (catch :default _
-                         nil))
-          translated-str (some-> translated str str/trim)]
-      (when (and (seq translated-str)
-              (not= translated translation-key)
-              (not= translated-str (str translation-key)))
-        translated-str))))
-
-(defn- resolve-column-label-override
-  [locale column-metadata column-key]
-  (let [{:keys [label label-key]} (lookup-column-entry column-metadata column-key)
-        translated-label (translate-label-key locale label-key)
-        static-label (some-> label str str/trim)]
-    (or translated-label
-      (when (seq static-label)
-        static-label))))
-
-;; Removed unused normalize-field-key function
-
 (defn- create-column-spec-from-config
   "Create a column spec from vector configuration"
   [locale column-key column-config computed-fields column-metadata base-field-spec]
-  (let [computed-field (lookup-column-entry computed-fields column-key)
-        label-override (resolve-column-label-override locale column-metadata column-key)
+  (let [computed-field (resolver/lookup-column-entry computed-fields column-key)
+        label-override (resolver/resolve-column-label-override locale {:column-metadata column-metadata} column-key)
         resolved-type (or (:type column-config)
                         (:type computed-field)
                         (:type base-field-spec)
@@ -123,43 +66,50 @@
       computed-config
       always-visible-config)))
 
-;; UPDATED: Read from Re-frame DB instead of config-loader cache
+;; Read from Re-frame DB with route-aware fallback via resolver.
 (defn- generate-admin-entity-spec-from-db
-  "Generate admin entity spec using vector-based configuration from Re-frame DB"
+  "Generate admin entity spec using vector-based configuration from Re-frame DB.
+
+   Uses resolver/resolve-config-source for route-aware admin/domain fallback."
   [db entity-keyword]
-  (if-let [table-config (get-in db [:admin :config :table-columns entity-keyword])]
-    (let [{:keys [available-columns computed-fields column-config always-visible column-metadata]} table-config
-          locale (or (:locale db) :bs)
-          model-fields (or (get-in db [:entities :specs (model-naming/ensure-app-keyword entity-keyword)])
-                         [])
-          fields-by-id (into {}
-                         (map (fn [field]
-                                [(:id field) field]))
-                         model-fields)
-          always-visible-set (->> (or always-visible [])
-                               (keep model-naming/ensure-app-keyword)
-                               set)
-          column-specs (mapv (fn [column-key]
-                               (let [normalized-column (model-naming/ensure-app-keyword column-key)
-                                     specific-config (or (lookup-column-entry column-config column-key) {})
-                                     base-field-spec (lookup-column-entry fields-by-id column-key)
-                                     is-always-visible (contains? always-visible-set normalized-column)]
-                                 (create-column-spec-from-config
-                                   locale
-                                   column-key
-                                   (assoc specific-config :always-visible is-always-visible)
-                                   computed-fields
-                                   column-metadata
-                                   base-field-spec)))
-                         available-columns)]
-      {:id entity-keyword
-       :fields column-specs
-       :vector-config table-config})
-    ;; No config found in DB – only log after configs have been loaded
-    (do
-      (when (:admin/config-loaded? db)
-        (log/warn "No table config found for entity:" entity-keyword "available entities:" (keys (get-in db [:admin :config :table-columns]))))
-      nil)))
+  (let [admin-route? (paths/admin-route? db)
+        table-config (resolver/resolve-config-source
+                       admin-route?
+                       (get-in db [:admin :config :table-columns entity-keyword])
+                       (get-in db [:domain :config :table-columns entity-keyword]))]
+    (if table-config
+      (let [{:keys [available-columns computed-fields column-config always-visible column-metadata]} table-config
+            locale (or (:locale db) :bs)
+            model-fields (or (get-in db [:entities :specs (model-naming/ensure-app-keyword entity-keyword)])
+                           [])
+            fields-by-id (into {}
+                           (map (fn [field]
+                                  [(:id field) field]))
+                           model-fields)
+            always-visible-set (->> (or always-visible [])
+                                 (keep model-naming/ensure-app-keyword)
+                                 set)
+            column-specs (mapv (fn [column-key]
+                                 (let [normalized-column (model-naming/ensure-app-keyword column-key)
+                                       specific-config (or (resolver/lookup-column-entry column-config column-key) {})
+                                       base-field-spec (resolver/lookup-column-entry fields-by-id column-key)
+                                       is-always-visible (contains? always-visible-set normalized-column)]
+                                   (create-column-spec-from-config
+                                     locale
+                                     column-key
+                                     (assoc specific-config :always-visible is-always-visible)
+                                     computed-fields
+                                     column-metadata
+                                     base-field-spec)))
+                           available-columns)]
+        {:id entity-keyword
+         :fields column-specs
+         :vector-config table-config})
+      ;; No config found in DB – only log after configs have been loaded
+      (do
+        (when (:admin/config-loaded? db)
+          (log/warn "No table config found for entity:" entity-keyword "available entities:" (keys (get-in db [:admin :config :table-columns]))))
+        nil))))
 
 ;; LEGACY: Keep the old function for backward compatibility (but mark it as reading from cache)
 
@@ -440,24 +390,13 @@
                         ->kw
                         model-naming/db-keyword->app)
           editing? (boolean editing?)
-          route-name (get-in db (paths/current-route-name))
-          ;; Prefer explicit route context when available; otherwise infer from config presence.
-          ;; This keeps non-router contexts (notably Node tests) working as expected.
-          admin-route? (cond
-                         (some? route-name)
-                         (str/starts-with? (name route-name) "admin")
-
-                         (get-in db [:domain :config :form-fields entity-name])
-                         false
-
-                         (get-in db [:admin :config :form-fields entity-name])
-                         true
-
-                         :else
-                         false)
-          spec-from-config (if admin-route?
-                             (generate-admin-form-entity-spec-from-db db entity-name editing?)
-                             (generate-domain-form-entity-spec-from-db db entity-name editing?))
+          admin-route? (paths/admin-route? db)
+          form-config (resolver/resolve-config-source
+                        admin-route?
+                        (get-in db [:admin :config :form-fields entity-name])
+                        (get-in db [:domain :config :form-fields entity-name]))
+          spec-from-config (when form-config
+                             (generate-form-entity-spec-from-config entity-name form-config editing?))
           spec-from-models (when-let [md (:models-data db)]
                              (get (field-specs/form-entity-specs md) entity-name))
           spec-from-models* (if admin-route?

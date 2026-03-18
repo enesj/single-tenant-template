@@ -95,7 +95,6 @@
               ($ editors/form-fields-editor
                 {:entity-kw selected-entity
                  :form-fields-config form-fields-config
-                 :table-columns-config table-columns-config
                  :on-toggle (fn [entity-kw field-type field-name]
                               ;; Admin form-fields use immediate save via PATCH
                               (let [current-config (get form-fields-config entity-kw {})
@@ -269,7 +268,6 @@
               ($ editors/form-fields-editor
                 {:entity-kw selected-entity
                  :form-fields-config form-fields-config
-                 :table-columns-config table-columns-config
                  :on-toggle on-user-form-field-toggle
                  :on-reset on-user-form-fields-reset})
 
@@ -302,6 +300,7 @@
                 {:entity-kw selected-entity
                  :view-options view-options
                  :entity-config entity-config
+                 :admin-view-options (get admin-config selected-entity)
                  :on-change on-user-change
                  :on-display-settings-bulk on-user-display-settings-bulk
                  :on-list-config-change on-user-list-config-change

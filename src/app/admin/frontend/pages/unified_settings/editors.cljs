@@ -30,13 +30,36 @@
                     :active? (= tab "table-columns")
                     :on-select #(on-tab-change "table-columns")})))
 (defui form-fields-editor
-  "Editor for form-fields.edn - create/edit field lists."
-  [{:keys [entity-kw form-fields-config table-columns-config on-toggle on-reset]}]
+  "Editor for form-fields.edn - create/edit field lists.
+
+  Field universe is derived from:
+  1. Fields already referenced in :create-fields / :edit-fields / :field-config
+  2. Model spec fields (from models.edn) as additional available options"
+  [{:keys [entity-kw form-fields-config on-toggle on-reset]}]
   (let [entity-config (get form-fields-config entity-kw {})
-        table-config (get table-columns-config entity-kw {})
-        available-cols (or (:available-columns table-config) [])
         create-fields (set (or (:create-fields entity-config) []))
-        edit-fields (set (or (:edit-fields entity-config) []))]
+        edit-fields (set (or (:edit-fields entity-config) []))
+        field-config-keys (keys (or (:field-config entity-config) {}))
+        ;; Union of all fields referenced in form-fields config
+        config-field-set (into #{}
+                           (map (fn [x] (if (keyword? x) (name x) (str x))))
+                           (concat create-fields edit-fields field-config-keys))
+        ;; Model spec fields as fallback universe (base model specs, not config-overridden)
+        all-form-specs (use-subscribe [:form-entity-specs])
+        form-specs (get all-form-specs entity-kw)
+        model-field-ids (->> (or form-specs [])
+                          (keep (fn [f] (when (map? f) (let [id (:id f)]
+                                                         (if (keyword? id) (name id) (str id))))))
+                          vec)
+        ;; Config fields first (preserving order), then model fields not yet in config
+        available-cols (let [config-ordered (distinct (concat
+                                                        (map #(if (keyword? %) (name %) (str %))
+                                                          (concat (:create-fields entity-config)
+                                                            (:edit-fields entity-config)
+                                                            field-config-keys))))]
+                         (into (vec config-ordered)
+                           (remove config-field-set)
+                           model-field-ids))]
     ($ :div {:class "ds-card bg-base-100 shadow-md"}
       ($ :div {:class "ds-card-body p-4"}
         ($ :div {:class "flex items-center justify-between mb-4"}
@@ -166,25 +189,8 @@
         [label-edits set-label-edits!] (use-state {})
         can-reorder? (and (fn? on-set-list) (seq available*))
 
-        col-key-variants (fn [col]
-                           (let [base (to-style col)
-                                 kebab (some-> base (str/replace "_" "-"))
-                                 snake (some-> base (str/replace "-" "_"))]
-                             (->> [base
-                                   kebab
-                                   snake
-                                   (some-> base keyword)
-                                   (some-> kebab keyword)
-                                   (some-> snake keyword)]
-                               (remove nil?)
-                               distinct
-                               vec)))
         lookup-column-entry (fn [m col]
-                              (let [sentinel ::not-found]
-                                (some (fn [k]
-                                        (let [v (get m k sentinel)]
-                                          (when-not (= v sentinel) v)))
-                                  (col-key-variants col))))
+                              (resolver/lookup-column-entry m col))
         default-column-label (fn [col]
                                (-> col
                                  (str/replace "_" " ")
@@ -468,9 +474,15 @@
          :on-action-gate-change on-action-gate-change}))))
 
 (defui user-entity-editor
-  "Editor for a single user entity's settings."
-  [{:keys [entity-kw view-options entity-config on-change on-display-settings-bulk on-reset on-list-config-change on-action-gate-change]}]
-  (let [immutable-locks (resolver/feature-constraints->locks (:features entity-config))
+  "Editor for a single user entity's settings.
+
+  admin-view-options: the admin-scope view-options for this entity.
+  Used to show admin-imposed locks as inherited/immutable in the user editor."
+  [{:keys [entity-kw view-options entity-config admin-view-options
+           on-change on-display-settings-bulk on-reset on-list-config-change on-action-gate-change]}]
+  (let [feature-locks (resolver/feature-constraints->locks (:features entity-config))
+        admin-locks (:locks (resolver/parse-view-options (or admin-view-options {})))
+        immutable-locks (merge feature-locks admin-locks)
         draft-defaults (or (:display-defaults view-options) {})
         draft-locks (or (:display-locks view-options) {})
         local-display-prefs (use-subscribe [::ui-subs/entity-display-prefs entity-kw])

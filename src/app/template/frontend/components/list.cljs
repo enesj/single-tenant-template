@@ -262,13 +262,17 @@
         (fn [] nil))
       [entity-name])
 
-    ;; Seed per-page once per entity when the list has no existing per-page.
-    ;; Wait until the relevant config is loaded so we don't lock in fallback defaults (e.g., 25).
+    ;; Seed per-page from config when the resolved config value differs from the
+    ;; current per-page AND the user hasn't set an explicit per-page preference.
+    ;; Uses ::seed-per-page-from-config which does NOT persist to entity-prefs,
+    ;; so admin setting changes can propagate on subsequent page loads.
     (use-effect
       (fn []
-        (let [missing-per-page? (nil? existing-per-page)]
-          (when (and configured-per-page missing-per-page? configured-per-page-usable?)
-            (rf/dispatch [::ui-events/set-per-page entity-name configured-per-page])))
+        (when (and configured-per-page
+                configured-per-page-usable?
+                (not local-per-page?)
+                (not= existing-per-page configured-per-page))
+          (rf/dispatch [::ui-events/seed-per-page-from-config entity-name configured-per-page]))
         (fn [] nil))
       [entity-name
        configured-per-page
