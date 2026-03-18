@@ -24,6 +24,12 @@
                                 :supplier-id (h/try-parse-uuid (h/get-param params :supplier_id))
                                 :payer-id (h/try-parse-uuid (h/get-param params :payer_id))
                                 :is-posted? (h/parse-boolean-param params :is_posted)
+                                :supplier-display-name (h/get-param params :supplier-display-name)
+                                :store-display-name (h/get-param params :store-display-name)
+                                :expense-category-name (h/get-param params :expense-category-name)
+                                :payer-label (h/get-param params :payer-label)
+                                :currency (h/get-param params :currency)
+                                :notes (h/get-param params :notes)
                                 :limit (or (some-> (h/get-param params :limit) parse-long) 50)
                                 :offset (or (some-> (h/get-param params :offset) parse-long) 0)}
                          order-by (assoc :order-by order-by)

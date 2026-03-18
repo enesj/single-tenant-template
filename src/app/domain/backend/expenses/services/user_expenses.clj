@@ -210,6 +210,36 @@
       (when expense
         (assoc expense :items items)))))
 
+(defn- apply-text-filters
+  "Apply optional per-column ILIKE filters to a HoneySQL query map.
+  Each non-nil string value adds a case-insensitive ILIKE condition."
+  [query {:keys [supplier-display-name store-display-name expense-category-name
+                 payer-label currency notes]}]
+  (cond-> query
+    (seq supplier-display-name)
+    (update :where shared-qb/merge-where-and
+      [:ilike :s.display_name (str "%" supplier-display-name "%")])
+
+    (seq store-display-name)
+    (update :where shared-qb/merge-where-and
+      [:ilike :st.display_name (str "%" store-display-name "%")])
+
+    (seq expense-category-name)
+    (update :where shared-qb/merge-where-and
+      [:ilike :ec.name (str "%" expense-category-name "%")])
+
+    (seq payer-label)
+    (update :where shared-qb/merge-where-and
+      [:ilike :p.label (str "%" payer-label "%")])
+
+    (seq currency)
+    (update :where shared-qb/merge-where-and
+      [:ilike :e.currency (str "%" currency "%")])
+
+    (seq notes)
+    (update :where shared-qb/merge-where-and
+      [:ilike :e.notes (str "%" notes "%")])))
+
 (def ^:private allowed-user-expenses-order-by
   "Allowlisted sort keys for `list-user-expenses`.
 
@@ -233,12 +263,17 @@
   opts:
   - :from, :to
   - :supplier-id, :payer-id, :is-posted?
+  - :supplier-display-name, :store-display-name, :expense-category-name,
+    :payer-label, :currency, :notes  (text ILIKE filters)
   - :limit, :offset
   - :order-by (app keyword)
   - :order-dir (:asc/:desc)
 
   `tenant-id` scopes the query to a specific tenant."
-  [db tenant-id user-id {:keys [from to supplier-id payer-id is-posted? limit offset order-by order-dir]
+  [db tenant-id user-id {:keys [from to supplier-id payer-id is-posted?
+                                supplier-display-name store-display-name
+                                expense-category-name payer-label currency notes
+                                limit offset order-by order-dir]
                          :or {limit 50 offset 0 order-dir :desc}}]
   (let [user-id (ensure-uuid user-id)
         tenant-id (ensure-uuid tenant-id)
@@ -253,47 +288,73 @@
                        supplier-id (conj [:= :e.supplier_id supplier-id])
                        payer-id (conj [:= :e.payer_id payer-id])
                        (some? is-posted?) (conj [:= :e.is_posted (boolean is-posted?)]))
-          query {:select [[:e.*]
-                          [:s.display_name :supplier_display_name]
-                          [:st.display_name :store_display_name]
-                          [:s.normalized_key :supplier_normalized_key]
-                          [:p.label :payer_label]
-                          [:pt.label :payer_type]
-                          [:ec.name :expense_category_name]
-                          [{:select [[[:count :ei.id]]]
-                            :from [[:expense_items :ei]]
-                            :where [:= :ei.expense_id :e.id]} :item_count]]
-                 :from [[:expenses :e]]
-                 :left-join [[:suppliers :s] [:= :s.id :e.supplier_id]
-                             [:stores :st] [:= :st.id :e.store_id]
-                             [:payers :p] [:= :p.id :e.payer_id]
-                             [:payer_types :pt] [:= :pt.id :p.payer_type_id]
-                             [:expense_categories :ec] [:= :ec.id :e.expense_category_id]]
-                 :where base-where
-                 :order-by [[order-col order-dir*]
-                            [:e.id :asc]]
-                 :limit limit
-                 :offset offset}]
+          query (-> {:select [[:e.*]
+                              [:s.display_name :supplier_display_name]
+                              [:st.display_name :store_display_name]
+                              [:s.normalized_key :supplier_normalized_key]
+                              [:p.label :payer_label]
+                              [:pt.label :payer_type]
+                              [:ec.name :expense_category_name]
+                              [{:select [[[:count :ei.id]]]
+                                :from [[:expense_items :ei]]
+                                :where [:= :ei.expense_id :e.id]} :item_count]]
+                     :from [[:expenses :e]]
+                     :left-join [[:suppliers :s] [:= :s.id :e.supplier_id]
+                                 [:stores :st] [:= :st.id :e.store_id]
+                                 [:payers :p] [:= :p.id :e.payer_id]
+                                 [:payer_types :pt] [:= :pt.id :p.payer_type_id]
+                                 [:expense_categories :ec] [:= :ec.id :e.expense_category_id]]
+                     :where base-where
+                     :order-by [[order-col order-dir*]
+                                [:e.id :asc]]
+                     :limit limit
+                     :offset offset}
+                  (apply-text-filters {:supplier-display-name supplier-display-name
+                                       :store-display-name store-display-name
+                                       :expense-category-name expense-category-name
+                                       :payer-label payer-label
+                                       :currency currency
+                                       :notes notes}))]
       (jdbc/execute! db (sql/format query) {:builder-fn rs/as-unqualified-lower-maps}))))
 
 (defn count-user-expenses
   "Count total expenses for a specific user with optional filters.
    When user-id is nil, counts all tenant expenses.
-   `tenant-id` scopes the count to a specific tenant."
-  [db tenant-id user-id {:keys [from to supplier-id payer-id is-posted?]}]
+   `tenant-id` scopes the count to a specific tenant.
+   Text filters (supplier-display-name, etc.) require LEFT JOINs."
+  [db tenant-id user-id {:keys [from to supplier-id payer-id is-posted?
+                                supplier-display-name store-display-name
+                                expense-category-name payer-label currency notes]}]
   (let [user-id (ensure-uuid user-id)
-        tenant-id (ensure-uuid tenant-id)]
+        tenant-id (ensure-uuid tenant-id)
+        has-text-filters? (some seq [supplier-display-name store-display-name
+                                     expense-category-name payer-label
+                                     currency notes])]
     (let [base-where (cond-> [:and]
-                       user-id (conj [:= :user_id user-id])
-                       tenant-id (conj [:= :tenant_id tenant-id])
-                       from (conj [:>= :purchased_at from])
-                       to (conj [:<= :purchased_at to])
-                       supplier-id (conj [:= :supplier_id supplier-id])
-                       payer-id (conj [:= :payer_id payer-id])
-                       (some? is-posted?) (conj [:= :is_posted (boolean is-posted?)]))
-          query {:select [[[:count :*] :total]]
-                 :from [:expenses]
-                 :where base-where}]
+                       user-id (conj [:= (if has-text-filters? :e.user_id :user_id) user-id])
+                       tenant-id (conj [:= (if has-text-filters? :e.tenant_id :tenant_id) tenant-id])
+                       from (conj [:>= (if has-text-filters? :e.purchased_at :purchased_at) from])
+                       to (conj [:<= (if has-text-filters? :e.purchased_at :purchased_at) to])
+                       supplier-id (conj [:= (if has-text-filters? :e.supplier_id :supplier_id) supplier-id])
+                       payer-id (conj [:= (if has-text-filters? :e.payer_id :payer_id) payer-id])
+                       (some? is-posted?) (conj [:= (if has-text-filters? :e.is_posted :is_posted) (boolean is-posted?)]))
+          query (if has-text-filters?
+                  (-> {:select [[[:count :*] :total]]
+                       :from [[:expenses :e]]
+                       :left-join [[:suppliers :s] [:= :s.id :e.supplier_id]
+                                   [:stores :st] [:= :st.id :e.store_id]
+                                   [:payers :p] [:= :p.id :e.payer_id]
+                                   [:expense_categories :ec] [:= :ec.id :e.expense_category_id]]
+                       :where base-where}
+                    (apply-text-filters {:supplier-display-name supplier-display-name
+                                         :store-display-name store-display-name
+                                         :expense-category-name expense-category-name
+                                         :payer-label payer-label
+                                         :currency currency
+                                         :notes notes}))
+                  {:select [[[:count :*] :total]]
+                   :from [:expenses]
+                   :where base-where})]
       (:total (jdbc/execute-one! db (sql/format query)
                 {:builder-fn rs/as-unqualified-lower-maps})))))
 

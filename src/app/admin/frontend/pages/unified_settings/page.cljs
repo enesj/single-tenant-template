@@ -372,7 +372,7 @@
       (fn []
         (rf/dispatch [::unified-events/init {:initial-scope page-scope
                                              :fixed-scope page-scope
-                                             :load-admin? (= page-scope :admin)
+                                             :load-admin? true
                                              :load-user? (= page-scope :user)}])
         js/undefined)
       [page-scope])

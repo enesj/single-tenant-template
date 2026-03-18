@@ -59,6 +59,22 @@
 ;; Unified Display Settings Resolution
 ;; ============================================================================
 
+(defn- overlay-admin-locks
+  "When admin settings are loaded, merge admin-scope display-locks and column-locks
+  on top of the domain view-options. Admin locks act as a floor constraint —
+  they cascade to user routes so admin policy cannot be overridden by user config.
+  Only has effect when admin settings are present in app-db (i.e. on admin pages)."
+  [domain-view-options admin-settings-view-options]
+  (if-not admin-settings-view-options
+    domain-view-options
+    (let [admin-display-locks (:display-locks admin-settings-view-options)
+          admin-column-locks  (:column-locks admin-settings-view-options)]
+      (cond-> (or domain-view-options {})
+        (seq admin-display-locks)
+        (update :display-locks merge admin-display-locks)
+        (seq admin-column-locks)
+        (update :column-locks merge admin-column-locks)))))
+
 (defn- gather-resolver-sources
   "Collect all input sources needed by the display-settings resolver.
 
@@ -68,6 +84,9 @@
 
   This keeps admin vs user defaults separate even when they share an entity name
   (e.g. :expenses appears on both /admin/* and /expenses/*).
+
+  On user routes, admin-scope locks are overlaid when available so that admin
+  policy cascades to user-facing pages.
 
   User preferences ([:ui :entity-prefs]) still apply to both."
   [db entity-kw]
@@ -79,7 +98,7 @@
 
         view-options   (if admin-route?
                          (merge config-view-options settings-view-options)
-                         domain-view-options)
+                         (overlay-admin-locks domain-view-options settings-view-options))
 
         entity-config  (if admin-route?
                          (or (get-in db [:admin :config :entities entity-kw])
@@ -98,7 +117,7 @@
   "Return the appropriate entity-specific view-options map for the current route.
 
   Admin routes: merge preloaded config + runtime settings draft.
-  User routes:  use domain-owned config only."
+  User routes:  domain-owned config with admin lock overlay."
   [db entity-kw]
   (let [admin-route?          (paths/admin-route? db)
         settings-view-options (get-in db [:admin :settings :view-options entity-kw])
@@ -106,7 +125,7 @@
         domain-view-options   (get-in db [:domain :config :view-options entity-kw])]
     (if admin-route?
       (merge config-view-options settings-view-options)
-      domain-view-options)))
+      (overlay-admin-locks domain-view-options settings-view-options))))
 
 (defn- normalize-col
   [k]

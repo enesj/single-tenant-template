@@ -192,3 +192,81 @@
     (reset-db! {:admin {:config {:table-columns {:items {:filterable-columns [:name :status]}}}}})
     (is (= [:name :status]
           @(rf/subscribe [::ui-subs/filterable-fields :items])))))
+
+;; =============================================================================
+;; Admin Lock Propagation to User Routes (Step 2 of User Settings Optimization)
+;; =============================================================================
+
+(deftest admin-lock-propagation-display-locks-test
+  (testing "admin display-locks cascade to user routes via overlay"
+    ;; User route (no admin route in :current-route), domain config has no locks,
+    ;; but admin settings has a lock for show-delete?.
+    (reset-db!
+      {:domain {:config {:view-options {:items {:display-defaults {:show-edit? true
+                                                                   :show-delete? true}}}}}
+       :admin {:settings {:view-options {:items {:display-locks {:show-delete? false}}}}}
+       :ui {}})
+    (let [effective @(rf/subscribe [::ui-subs/entity-display-settings :items])
+          locked @(rf/subscribe [::ui-subs/locked-display-settings :items])]
+      (is (false? (:show-delete? effective))
+        "Admin lock should override domain default on user route")
+      (is (true? (:show-edit? effective))
+        "Non-locked settings should retain domain defaults")
+      (is (contains? locked :show-delete?)
+        "Admin lock should appear in locked settings map"))))
+
+(deftest admin-lock-propagation-merges-with-domain-locks-test
+  (testing "admin locks merge with (not replace) domain locks"
+    (reset-db!
+      {:domain {:config {:view-options {:items {:display-locks {:show-batch-edit? false}
+                                                :display-defaults {:show-delete? true
+                                                                   :show-batch-edit? true}}}}}
+       :admin {:settings {:view-options {:items {:display-locks {:show-delete? false}}}}}
+       :ui {}})
+    (let [effective @(rf/subscribe [::ui-subs/entity-display-settings :items])
+          locked @(rf/subscribe [::ui-subs/locked-display-settings :items])]
+      (is (false? (:show-delete? effective))
+        "Admin lock on show-delete? should apply")
+      (is (false? (:show-batch-edit? effective))
+        "Domain lock on show-batch-edit? should also apply")
+      (is (contains? locked :show-delete?)
+        "Admin lock should be in locked map")
+      (is (contains? locked :show-batch-edit?)
+        "Domain lock should also be in locked map"))))
+
+(deftest admin-lock-propagation-no-admin-settings-test
+  (testing "no admin settings loaded — domain config used as-is"
+    (reset-db!
+      {:domain {:config {:view-options {:items {:display-defaults {:show-delete? true}}}}}
+       :ui {}})
+    (let [effective @(rf/subscribe [::ui-subs/entity-display-settings :items])]
+      (is (true? (:show-delete? effective))
+        "Without admin settings, domain default should apply"))))
+
+(deftest admin-lock-propagation-user-prefs-cannot-override-admin-lock-test
+  (testing "user prefs cannot override admin-imposed lock"
+    (reset-db!
+      {:domain {:config {:view-options {:items {:display-defaults {:show-delete? true}}}}}
+       :admin {:settings {:view-options {:items {:display-locks {:show-delete? false}}}}}
+       :ui {:entity-prefs {:items {:display {:show-delete? true}}}}})
+    (let [effective @(rf/subscribe [::ui-subs/entity-display-settings :items])]
+      (is (false? (:show-delete? effective))
+        "Admin lock should win over user preference"))))
+
+(deftest admin-column-lock-propagation-test
+  (testing "admin column-locks cascade to visible-columns on user routes"
+    (reset-db!
+      {:domain {:config {:table-columns {:items {:available-columns [:a :b :c]
+                                                 :default-visible-columns [:a :b :c]}}
+                         :view-options {:items {}}}}
+       :admin {:settings {:view-options {:items {:column-locks {:b false}}}}}
+       :ui {}})
+    (let [visible @(rf/subscribe [::ui-subs/visible-columns :items])
+          locked @(rf/subscribe [::ui-subs/locked-visible-columns :items])]
+      (is (false? (:b visible))
+        "Admin column lock should hide column b")
+      ;; visible-columns returns a sparse map: nil = visible by default.
+      (is (not (false? (:a visible)))
+        "Non-locked columns should remain visible (nil or true)")
+      (is (contains? locked :b)
+        "Column b should appear in locked-visible-columns"))))
