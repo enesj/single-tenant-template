@@ -13,7 +13,8 @@
     [ring.util.response :as response]
     [taoensso.timbre :as log])
   (:import
-    [java.net URLEncoder]))
+    [java.net URLEncoder]
+    [java.util UUID]))
 
 ;; ============================================================================
 ;; Helpers
@@ -48,6 +49,16 @@
 
 (defn- get-tenant [req]
   (get-in req [:session :auth-session :tenant]))
+
+(defn- ->uuid
+  "Coerce a value to java.util.UUID. Accepts UUID instances and UUID strings.
+   Returns nil for nil input; throws on unparseable strings."
+  [v]
+  (cond
+    (nil? v)             nil
+    (instance? UUID v)   v
+    (string? v)          (UUID/fromString v)
+    :else                (UUID/fromString (str v))))
 
 (defn- require-role!
   "Throw 403 if the membership role is not in `allowed-roles`."
@@ -403,7 +414,7 @@
                       :errors {:body ["Provide at least one setting to update"]}})))
           ;; Lazy-require domain service to avoid template→domain compile-time coupling
           (let [update-fn! (requiring-resolve 'app.domain.backend.expenses.services.tenant-settings/update-tenant-settings!)
-                result     (update-fn! db tenant-id updates)]
+                result     (update-fn! db (->uuid tenant-id) updates)]
             (log/info "Updated tenant settings" {:tenant-id tenant-id :keys (keys updates)})
             (response/response {:success true :settings (sanitize result)})))))))
 

@@ -361,3 +361,15 @@ Phase 1 (DB) ──→ Phase 2 (Backend) ──→ Phase 3 (Profile FE) ──�
 - `specs/allium/drafts/expenses/expense-entry.candidate.allium` — updated (currency model)
 - `specs/allium/drafts/expenses/receipt-ocr.candidate.allium` — updated (BAM-only, mismatch detection)
 - `specs/allium/drafts/expenses/payer-and-defaults.candidate.allium` — updated (default_note removed)
+
+---
+
+## Remaining Follow-up
+
+There is no required frontend implementation work left for this plan.
+
+What remains is follow-up work only:
+- browser-based verification of the new profile/admin/settings/currency flows
+- optional UI polish for the receipt review warning presentation
+- optional broader currency UX polish outside the expense detail page
+- unrelated frontend config alignment cleanup reported by the migration helper
