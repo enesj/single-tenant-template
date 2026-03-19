@@ -8,11 +8,14 @@
 --   - PayerType entity + admin management (create, rename, delete)
 --   - System "user" PayerType — provisioned per-tenant, immutable
 --   - Auto-provisioned Payer on user join (email prefix label, "user" type)
---   - UserExpenseDefaults entity (default_payer, default_expense_category, default_note)
+--   - UserExpenseDefaults entity (default_payer, default_expense_category)
 --   - Sticky default: default_payer updates on any expense submit when payer changed
---   - UserExpenseDefaults settings surface (category + note editable; payer read-only)
 --   - Receipt upload defaults: user confirms Payer/category/note at upload time;
 --     values stored on Receipt and pre-filled at approval
+-- Removed (moved to settings-hierarchy.candidate.allium):
+--   - UserExpenseDefaults.default_note → GlobalSettings.default_note (admin-set, global)
+--   - UserExpenseDefaultsSettings surface → UserProfilePage in settings-hierarchy
+--   - UpdateDefaultNote rule → removed (note is now a global setting)
 -- Excludes:
 --   - Receipt OCR extraction logic (receipt-ocr.candidate.allium)
 --   - Manual expense entry form (expense-entry.candidate.allium)
@@ -40,6 +43,11 @@ external entity User {
     email: String
     membership_role: viewer | member | admin | owner
     is_admin_or_owner: membership_role in {admin, owner}
+}
+
+external entity GlobalSettings {
+    -- Singleton, defined in settings-hierarchy.candidate.allium.
+    default_note: String?
 }
 
 external entity Expense {
@@ -94,10 +102,10 @@ entity Payer {
 entity UserExpenseDefaults {
     -- Per-user persistent defaults for expense creation.
     -- Created alongside the user's provisioned Payer when they join a tenant.
+    -- Note: default_note has been moved to GlobalSettings (settings-hierarchy.candidate.allium).
     user: User
     default_payer: Payer
     default_expense_category: ExpenseCategory?
-    default_note: String?
 }
 
 
@@ -193,8 +201,7 @@ rule ProvisionUserPayer {
     ensures: UserExpenseDefaults.created(
         user: user,
         default_payer: payer,
-        default_expense_category: null,
-        default_note: null
+        default_expense_category: null
     )
 
     @guidance
@@ -252,16 +259,9 @@ rule UpdateDefaultExpenseCategory {
     ensures: defaults.default_expense_category = category
 }
 
-rule UpdateDefaultNote {
-    -- User changes their standing note default via settings.
-    -- Setting note to null clears the default (no pre-fill).
-    when: UserSetsDefaultNote(user: User, note: String?)
-
-    let defaults = UserExpenseDefaults where user = user
-    requires: defaults != null
-
-    ensures: defaults.default_note = note
-}
+-- UpdateDefaultNote rule REMOVED.
+-- Default note is now a global admin setting (GlobalSettings.default_note)
+-- managed via AdminGlobalSettingsPanel in settings-hierarchy.candidate.allium.
 
 
 -- ═════════════════════════════════════════════
@@ -420,6 +420,7 @@ surface ReceiptUploadDialog {
         UserExpenseDefaults where user = actor
             |> default_payer
             |> default_expense_category
+        GlobalSettings.first
             |> default_note
 
     provides:
@@ -436,10 +437,10 @@ surface ReceiptUploadDialog {
         )
 
     @guarantee DefaultsPrefilled
-        -- When the dialog opens, payer is pre-filled from
-        -- UserExpenseDefaults.default_payer, expense_category from
-        -- UserExpenseDefaults.default_expense_category (may be null),
-        -- and notes from UserExpenseDefaults.default_note (may be null).
+        -- When the dialog opens:
+        --   payer: from UserExpenseDefaults.default_payer (per-user, sticky)
+        --   expense_category: from UserExpenseDefaults.default_expense_category (per-user, may be null)
+        --   notes: from GlobalSettings.default_note (global, admin-set, may be null)
         -- The user may change any of these before uploading.
         -- Payer is required: if no default exists the user must select one.
 
@@ -478,26 +479,10 @@ surface ReceiptApprovalDefaults {
 -- SETTINGS SURFACES
 -- ═════════════════════════════════════════════
 
-surface UserExpenseDefaultsSettings {
-    -- User settings page for expense defaults.
-    facing user: TenantMember
-
-    exposes:
-        UserExpenseDefaults where user = user
-            |> default_payer
-            |> default_expense_category
-            |> default_note
-
-    provides:
-        UserSetsDefaultExpenseCategory(user, category: ExpenseCategory?)
-        UserSetsDefaultNote(user, note: String?)
-
-    @guarantee DefaultPayerReadOnly
-        -- default_payer is shown read-only in settings.
-        -- It updates automatically via the sticky-default mechanism
-        -- (UpdateDefaultPayerOnExpenseSubmit) and cannot be
-        -- directly edited by the user here.
-}
+-- UserExpenseDefaultsSettings surface REMOVED.
+-- Per-user defaults (payer read-only, category editable) are now exposed
+-- via UserProfilePage in settings-hierarchy.candidate.allium.
+-- The /expenses/settings page no longer exists.
 
 surface PayerTypeManagement {
     facing admin: TenantAdmin
@@ -561,4 +546,7 @@ surface PayerManagement {
 -- Q4: Admins CANNOT override per-user defaults — only the user's own actions
 --     (submitting expenses) control their sticky default.
 -- Q5: Admin IS a tenant user with their own provisioned Payer. Admin uploads
---     use the admin's own UserExpenseDefaults (payer, category, note).
+--     use the admin's own UserExpenseDefaults (payer, category) + GlobalSettings.default_note.
+-- Q6: default_note moved to GlobalSettings (admin-set, global). Not per-user anymore.
+-- Q7: UserExpenseDefaultsSettings surface removed — per-user defaults now on /profile
+--     (see settings-hierarchy.candidate.allium → UserProfilePage).

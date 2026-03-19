@@ -1,0 +1,871 @@
+-- allium: 2
+-- settings-hierarchy.candidate.allium
+--
+-- Scope: Settings architecture — three-tier hierarchy (global, tenant, per-user).
+--        Replaces the monolithic /expenses/settings page with:
+--          1. Admin panel section for system-wide global settings
+--          2. Tenant owner section on user profile page
+--          3. Per-user defaults on user profile page
+--
+-- Includes:
+--   - GlobalSettings entity (admin-managed, system-wide)
+--   - EnabledCurrency entity (admin-curated list of available currencies)
+--   - Currency model: receipts always BAM, manual expenses accept any enabled currency
+--   - Exchange rate capture at expense creation (automatic API lookup for non-BAM)
+--   - TenantSettings entity (owner-managed, per-tenant)
+--   - Per-user expense defaults (payer, category) on user profile
+--   - Workspace name management by tenant owner
+--   - Tenant data management (export CSV, delete all) by tenant owner
+--   - User profile page (/profile) for all users
+--
+-- Excludes:
+--   - Payer provisioning and payer types (payer-and-defaults.candidate.allium)
+--   - Receipt OCR pipeline (receipt-ocr.candidate.allium)
+--   - Authentication and tenant membership lifecycle (multi-tenancy.candidate.allium)
+--   - Locale/language selection (remains in sidebar, outside this spec)
+--   - Report aggregation in BAM (reports spec)
+--
+-- Supersedes:
+--   - The /expenses/settings page and its backend (removed entirely)
+--   - UserExpenseDefaultsSettings surface in payer-and-defaults.candidate.allium
+--   - UserExpenseDefaults.default_note (moved to GlobalSettings.default_note)
+--
+-- Changes required in companion specs:
+--   - payer-and-defaults.candidate.allium:
+--       UserExpenseDefaults: remove default_note field
+--       UserExpenseDefaultsSettings surface: remove (replaced by UserProfilePage here)
+--       ReceiptUploadDialog: default_note source changes from UserExpenseDefaults to GlobalSettings
+--       UpdateDefaultNote rule: remove (global setting, not per-user)
+--   - multi-tenancy.candidate.allium:
+--       Tenant entity: name becomes mutable (was implicitly set-once at provisioning)
+--       TenantManagementBoundary surface: add UpdateWorkspaceName action for owner
+--   - expense-entry.candidate.allium:
+--       Expense entity: add currency, original_amount, bam_amount, exchange_rate, rate_fetched_at
+--       Manual expense creation: user selects currency, system fetches rate for non-BAM
+--   - receipt-ocr.candidate.allium:
+--       Receipt-created expenses: currency always BAM, no conversion needed
+
+
+-- ─────────────────────────────────────────────
+-- External entities
+-- ─────────────────────────────────────────────
+
+external entity Tenant {
+    id: UUID
+    name: String
+    slug: String
+    status: active | suspended | archived
+}
+
+external entity User {
+    id: UUID
+    email: String
+    full_name: String?
+    tenant_id: UUID
+    membership_role: viewer | member | admin | owner
+}
+
+external entity TenantMembership {
+    tenant: Tenant
+    user: User
+    role: owner | admin | member | viewer
+    status: active | suspended
+}
+
+external entity Payer {
+    id: UUID
+    tenant_id: UUID
+    label: String
+    is_active: Boolean
+}
+
+external entity ExpenseCategory {
+    id: UUID
+    tenant_id: UUID
+    name: String
+}
+
+external entity UserExpenseDefaults {
+    -- Defined in payer-and-defaults.candidate.allium.
+    -- After this spec is applied, default_note is removed from this entity.
+    user: User
+    default_payer: Payer
+    default_expense_category: ExpenseCategory?
+}
+
+external entity Expense {
+    id: UUID
+    tenant_id: UUID
+    currency: String
+        -- ISO 4217 code. BAM for receipt-originated, any enabled currency for manual.
+    original_amount: Decimal
+        -- Amount in the expense's currency.
+    bam_amount: Decimal
+        -- Equivalent amount in BAM. Equals original_amount when currency = "BAM".
+    exchange_rate: Decimal?
+        -- Rate used: 1 unit of currency = exchange_rate BAM.
+        -- null when currency = "BAM" (no conversion needed).
+    rate_fetched_at: Timestamp?
+        -- When the exchange rate was fetched from the external API.
+        -- null when currency = "BAM".
+}
+
+external entity Receipt {
+    id: UUID
+    tenant_id: UUID
+    -- Receipts are always in BAM (Bosnian market).
+    -- OCR extraction produces BAM amounts exclusively.
+}
+
+
+-- ─────────────────────────────────────────────
+-- Entities
+-- ─────────────────────────────────────────────
+
+entity GlobalSettings {
+    -- Singleton: exactly one record in the system, managed by platform admin.
+    -- These values apply uniformly across all tenants.
+    default_currency: String
+        -- ISO 4217 currency code (e.g. "BAM", "EUR", "USD").
+        -- Pre-selected currency when a user creates a manual expense.
+        -- Must reference an enabled currency.
+        -- Does NOT affect receipts (always BAM).
+    default_note: String?
+        -- Pre-filled note on new expenses and receipt uploads.
+        -- null means no pre-fill.
+    auto_publish_after_upload: Boolean = false
+        -- When true, receipts are automatically published after
+        -- OCR extraction completes with sufficient data.
+    ai_receipt_enhancement: Boolean = false
+        -- When true, enables AI-assisted extraction enhancement
+        -- for uploaded receipts (may increase processing time).
+}
+
+entity EnabledCurrency {
+    -- Admin-curated list of currencies available for manual expense entry.
+    -- BAM is always enabled and cannot be removed.
+    -- Users select from this list when creating manual expenses.
+    code: String
+        -- ISO 4217 currency code (e.g. "EUR", "USD").
+    name: String
+        -- Human-readable name (e.g. "Euro", "US Dollar").
+    is_base: Boolean = false
+        -- true only for BAM. Base currency cannot be disabled or removed.
+}
+
+entity DailyExchangeRate {
+    -- Cached daily exchange rate from the Central Bank of BiH (CBBH).
+    -- One row per currency per date.
+    -- Lazily populated: first non-BAM expense of the day triggers a bulk fetch
+    -- for ALL enabled non-BAM currencies at once.
+    currency_code: String
+        -- ISO 4217 code of the foreign currency (e.g. "EUR", "USD").
+    rate_date: Date
+        -- The date this rate applies to (not a timestamp — one rate per day).
+    rate: Decimal
+        -- 1 unit of currency_code = rate BAM.
+    fetched_at: Timestamp
+        -- When this rate was actually fetched from CBBH via Serper API.
+    is_fallback: Boolean = false
+        -- true when this rate was copied from a previous day because
+        -- the CBBH fetch failed. Logged as an admin alert.
+}
+
+entity ExchangeRateFetchAlert {
+    -- Logged when a daily rate fetch fails and fallback rates are used.
+    -- Visible to platform admins in the admin panel.
+    rate_date: Date
+    error_message: String
+    fallback_source_date: Date
+        -- The date from which fallback rates were copied.
+    created_at: Timestamp
+    acknowledged: Boolean = false
+        -- Admin can acknowledge to dismiss the alert.
+}
+
+entity TenantSettings {
+    -- Per-tenant settings, managed by the tenant owner.
+    -- One record per tenant.
+    tenant: Tenant
+    email_notifications: Boolean = true
+        -- When true, tenant members receive weekly expense summary emails.
+        -- Not yet implemented — persisted for future use.
+}
+
+
+-- ─────────────────────────────────────────────
+-- Invariants
+-- ─────────────────────────────────────────────
+
+invariant SingletonGlobalSettings {
+    -- Exactly one GlobalSettings record exists in the system.
+    GlobalSettings |> count = 1
+}
+
+invariant OneTenantSettingsPerTenant {
+    for tenant in Tenant:
+        (TenantSettings where tenant = tenant) |> count <= 1
+}
+
+invariant OneDailyRatePerCurrencyPerDate {
+    -- Each currency has at most one rate per date.
+    for r1 in DailyExchangeRate:
+        for r2 in DailyExchangeRate where r2 != r1:
+            not (r1.currency_code = r2.currency_code and r1.rate_date = r2.rate_date)
+}
+
+invariant BAMAlwaysEnabled {
+    -- BAM cannot be removed from the enabled currencies list.
+    exists EnabledCurrency where code = "BAM" and is_base = true
+}
+
+invariant DefaultCurrencyMustBeEnabled {
+    -- The global default currency must be in the enabled list.
+    let settings = GlobalSettings.first
+    exists EnabledCurrency where code = settings.default_currency
+}
+
+invariant ReceiptsAlwaysBAM {
+    -- All receipt-originated expenses have currency = BAM.
+    -- This is enforced by the OCR pipeline, not user input.
+    for expense in Expense where expense.receipt_id != null:
+        expense.currency = "BAM"
+}
+
+invariant NonBAMExpenseHasRate {
+    -- Every expense in a non-BAM currency must have a captured exchange rate.
+    for expense in Expense where expense.currency != "BAM":
+        expense.exchange_rate != null
+        and expense.rate_fetched_at != null
+        and expense.bam_amount = expense.original_amount * expense.exchange_rate
+}
+
+invariant BAMExpenseNoRate {
+    -- BAM expenses have no exchange rate (no conversion needed).
+    for expense in Expense where expense.currency = "BAM":
+        expense.exchange_rate = null
+        and expense.rate_fetched_at = null
+        and expense.bam_amount = expense.original_amount
+}
+
+
+-- ─────────────────────────────────────────────
+-- Config
+-- ─────────────────────────────────────────────
+
+config {
+    -- Initial currencies seeded on system init. Admin can add/remove later.
+    seed_currencies: List<{code: String, name: String}> = [
+        {code: "BAM", name: "Konvertibilna marka"},
+        {code: "EUR", name: "Euro"},
+        {code: "USD", name: "Američki dolar"},
+        {code: "GBP", name: "Britanska funta"},
+        {code: "CHF", name: "Švicarski franak"},
+        {code: "HRK", name: "Hrvatska kuna"},
+        {code: "RSD", name: "Srpski dinar"},
+        {code: "TRY", name: "Turska lira"}
+    ]
+    default_currency_initial: String = "BAM"
+    base_currency: String = "BAM"
+        -- The system's base currency. All reports aggregate in this currency.
+        -- Hardcoded to BAM. Not user-configurable.
+    exchange_rate_source: String = "CBBH"
+        -- Central Bank of Bosnia and Herzegovina official daily rates.
+        -- Fetched via Serper API (Google search) targeting CBBH kursna lista.
+        -- One fetch per day, triggered lazily on first non-BAM expense.
+}
+
+
+-- ─────────────────────────────────────────────
+-- Actors
+-- ─────────────────────────────────────────────
+
+actor PlatformAdmin {
+    -- Platform administrator who manages global system settings.
+    -- Separate identity pool from tenant users (admins table).
+    identified_by: Admin
+}
+
+actor TenantOwner {
+    identified_by: User where membership_role = owner
+    within: Tenant
+}
+
+actor TenantUser {
+    -- Any authenticated tenant member (all roles).
+    identified_by: User
+    within: Tenant
+}
+
+
+-- ═════════════════════════════════════════════
+-- GLOBAL SETTINGS MANAGEMENT (platform admin)
+-- ═════════════════════════════════════════════
+
+rule InitializeGlobalSettings {
+    -- On first system boot, create the singleton GlobalSettings
+    -- and seed the enabled currencies list.
+    when: SystemInitialized()
+
+    requires: (GlobalSettings |> count) = 0
+
+    ensures:
+        GlobalSettings.created(
+            default_currency: config.default_currency_initial,
+            default_note: null,
+            auto_publish_after_upload: false,
+            ai_receipt_enhancement: false
+        )
+        for c in config.seed_currencies:
+            EnabledCurrency.created(
+                code: c.code,
+                name: c.name,
+                is_base: c.code = config.base_currency
+            )
+}
+
+rule UpdateGlobalCurrency {
+    when: AdminSetsCurrency(admin: PlatformAdmin, currency: String)
+
+    let settings = GlobalSettings.first
+
+    requires: exists EnabledCurrency where code = currency
+        -- Default currency must be an enabled currency.
+
+    ensures: settings.default_currency = currency
+}
+
+rule UpdateGlobalDefaultNote {
+    when: AdminSetsDefaultNote(admin: PlatformAdmin, note: String?)
+
+    let settings = GlobalSettings.first
+
+    ensures: settings.default_note = note
+}
+
+rule UpdateGlobalAutoPublish {
+    when: AdminSetsAutoPublish(admin: PlatformAdmin, enabled: Boolean)
+
+    let settings = GlobalSettings.first
+
+    ensures: settings.auto_publish_after_upload = enabled
+}
+
+rule UpdateGlobalAIEnhancement {
+    when: AdminSetsAIEnhancement(admin: PlatformAdmin, enabled: Boolean)
+
+    let settings = GlobalSettings.first
+
+    ensures: settings.ai_receipt_enhancement = enabled
+}
+
+
+rule AcknowledgeRateAlert {
+    when: AdminAcknowledgesRateAlert(admin: PlatformAdmin, alert: ExchangeRateFetchAlert)
+
+    requires: not alert.acknowledged
+
+    ensures: alert.acknowledged = true
+}
+
+
+-- ═════════════════════════════════════════════
+-- CURRENCY MANAGEMENT (platform admin)
+-- ═════════════════════════════════════════════
+
+rule AddEnabledCurrency {
+    when: AdminAddsCurrency(admin: PlatformAdmin, code: String, name: String)
+
+    requires: code.trim().length >= 3
+    requires: not exists EnabledCurrency where code = code.trim()
+
+    ensures: EnabledCurrency.created(
+        code: code.trim(),
+        name: name.trim(),
+        is_base: false
+    )
+}
+
+rule RemoveEnabledCurrency {
+    when: AdminRemovesCurrency(admin: PlatformAdmin, currency: EnabledCurrency)
+
+    requires: not currency.is_base
+        -- BAM cannot be removed.
+    requires: GlobalSettings.first.default_currency != currency.code
+        -- Cannot remove the current default currency.
+        -- Admin must change the default first.
+
+    ensures: not exists currency
+
+    @guidance
+        -- Removing a currency does NOT affect existing expenses in that currency.
+        -- Historical expenses retain their original currency and exchange rate.
+        -- Users can no longer create NEW expenses in the removed currency.
+}
+
+
+-- ═════════════════════════════════════════════
+-- DAILY EXCHANGE RATE CACHE
+-- ═════════════════════════════════════════════
+--
+-- Strategy: lazy daily cache.
+-- The first non-BAM expense of the day triggers a bulk fetch of CBBH
+-- official rates for ALL enabled non-BAM currencies via the Serper API.
+-- Subsequent expenses that day reuse the cached rates.
+-- If the fetch fails, the system falls back to the most recent cached
+-- rates and logs an alert for platform admins.
+
+rule FetchDailyRatesIfMissing {
+    -- Triggered when any expense is created (manual or receipt-originated).
+    -- Checks if today's rates exist; if not, fetches from CBBH.
+    when: ExpenseCreationStarted(date: Date)
+
+    let today = date
+    let enabled_non_bam = EnabledCurrency where is_base = false
+    let todays_rates = DailyExchangeRate where rate_date = today
+
+    requires: todays_rates |> count < enabled_non_bam |> count
+        -- Not all enabled currencies have rates for today yet.
+
+    let cbbh_rates = SerperAPI.search(
+        query: "CBBH kursna lista " + today,
+        considering: {
+            enabled_non_bam.code,
+            config.base_currency
+        }
+    )
+
+    ensures:
+        if cbbh_rates.success:
+            for currency in enabled_non_bam:
+                DailyExchangeRate.created(
+                    currency_code: currency.code,
+                    rate_date: today,
+                    rate: cbbh_rates.rate_for(currency.code),
+                    fetched_at: now,
+                    is_fallback: false
+                )
+            DailyRatesFetched(date: today, source: "CBBH")
+        else:
+            -- Fallback: copy most recent rates and alert admins.
+            let latest_date = DailyExchangeRate |> max(rate_date)
+            for currency in enabled_non_bam:
+                let fallback = DailyExchangeRate
+                    where currency_code = currency.code
+                    and rate_date = latest_date
+                if fallback != null:
+                    DailyExchangeRate.created(
+                        currency_code: currency.code,
+                        rate_date: today,
+                        rate: fallback.rate,
+                        fetched_at: now,
+                        is_fallback: true
+                    )
+            ExchangeRateFetchAlert.created(
+                rate_date: today,
+                error_message: cbbh_rates.error,
+                fallback_source_date: latest_date,
+                created_at: now,
+                acknowledged: false
+            )
+            DailyRatesFallback(date: today, fallback_from: latest_date)
+
+    @guidance
+        -- The Serper API is used to search for the official CBBH (Centralna
+        -- banka Bosne i Hercegovine) daily exchange rate list ("kursna lista").
+        -- CBBH publishes rates daily for major currencies against BAM.
+        -- The search query should target the CBBH website or its published
+        -- rate tables for the given date.
+        --
+        -- This fetch is idempotent: if rates for today already exist in the
+        -- cache, the rule's requires clause prevents re-fetching.
+        --
+        -- The fetch happens synchronously within expense creation — since it
+        -- occurs at most once per day, the latency is acceptable.
+        -- All subsequent expenses that day use the cached rates instantly.
+}
+
+rule ApplyExchangeRateToExpense {
+    -- After daily rates are cached, apply the rate to a non-BAM expense.
+    when: ManualExpenseCreated(expense: Expense)
+
+    requires: expense.currency != config.base_currency
+
+    let daily_rate = DailyExchangeRate
+        where currency_code = expense.currency
+        and rate_date = today
+
+    requires: daily_rate != null
+        -- FetchDailyRatesIfMissing must have run first.
+
+    ensures:
+        expense.exchange_rate = daily_rate.rate
+        expense.bam_amount = expense.original_amount * daily_rate.rate
+        expense.rate_fetched_at = daily_rate.fetched_at
+}
+
+rule SetBAMAmountForBAMExpense {
+    -- BAM expenses need no conversion — bam_amount equals original_amount.
+    when: ManualExpenseCreated(expense: Expense)
+
+    requires: expense.currency = config.base_currency
+
+    ensures:
+        expense.bam_amount = expense.original_amount
+        expense.exchange_rate = null
+        expense.rate_fetched_at = null
+}
+
+
+-- ═════════════════════════════════════════════
+-- TENANT SETTINGS MANAGEMENT (owner only)
+-- ═════════════════════════════════════════════
+
+rule ProvisionTenantSettings {
+    -- When a new tenant is provisioned, create its TenantSettings
+    -- with defaults.
+    when: TenantProvisioned(tenant: Tenant, owner: User)
+
+    ensures: TenantSettings.created(
+        tenant: tenant,
+        email_notifications: true
+    )
+}
+
+rule UpdateEmailNotifications {
+    when: OwnerSetsEmailNotifications(owner: TenantOwner, enabled: Boolean)
+
+    let settings = TenantSettings where tenant.id = owner.tenant_id
+
+    requires: settings != null
+
+    ensures: settings.email_notifications = enabled
+}
+
+rule UpdateWorkspaceName {
+    when: OwnerUpdatesWorkspaceName(owner: TenantOwner, name: String)
+
+    let tenant = Tenant{id: owner.tenant_id}
+
+    requires: name.trim().length >= 1
+    requires: name.trim().length <= 100
+
+    ensures: tenant.name = name.trim()
+
+    @guidance
+        -- The workspace name is displayed in the sidebar tenant switcher,
+        -- profile page, and anywhere the tenant name appears.
+        -- Changing the name does NOT change the tenant slug (URL-safe identifier).
+        -- The slug remains immutable after provisioning.
+}
+
+
+-- ═════════════════════════════════════════════
+-- TENANT DATA MANAGEMENT (owner only)
+-- ═════════════════════════════════════════════
+
+rule ExportTenantExpenses {
+    -- Owner exports all tenant expenses as a CSV file.
+    when: OwnerExportsTenantExpenses(owner: TenantOwner)
+
+    let tenant = Tenant{id: owner.tenant_id}
+    let expenses = Expense where tenant_id = tenant.id
+
+    ensures: TenantExpenseExportGenerated(
+        tenant: tenant,
+        requested_by: owner,
+        expense_count: expenses |> count
+    )
+
+    @guidance
+        -- The export includes all expenses for the tenant (not just the owner's).
+        -- Format: CSV with standard expense fields.
+        -- Delivered as a browser download, not emailed.
+}
+
+rule DeleteAllTenantExpenses {
+    -- Owner deletes all expenses and receipts for the tenant.
+    -- This is a destructive, irreversible action.
+    when: OwnerDeletesAllTenantExpenses(owner: TenantOwner, confirmation: String)
+
+    let tenant = Tenant{id: owner.tenant_id}
+
+    requires: confirmation = "DELETE"
+        -- Explicit typed confirmation to prevent accidental deletion.
+
+    ensures:
+        for expense in Expense where tenant_id = tenant.id:
+            not exists expense
+        for receipt in Receipt where tenant_id = tenant.id:
+            not exists receipt
+        TenantExpensesDeleted(tenant: tenant, deleted_by: owner)
+
+    @guidance
+        -- Deletes ALL expenses and receipts for the tenant.
+        -- Related records (expense_items, receipt OCR data) cascade-delete.
+        -- Payers, payer types, expense categories, and aliases are NOT deleted
+        -- (they are reference/lookup data, not transactional data).
+        -- This action is irreversible. The UI must show a confirmation dialog
+        -- requiring the user to type "DELETE" before proceeding.
+}
+
+
+-- ═════════════════════════════════════════════
+-- PER-USER DEFAULTS (on user profile)
+-- ═════════════════════════════════════════════
+
+-- Per-user default payer and default category are managed through
+-- the UserExpenseDefaults entity (defined in payer-and-defaults.candidate.allium).
+-- The rules UpdateDefaultPayerOnExpenseSubmit (sticky) and
+-- UpdateDefaultExpenseCategory remain in that spec.
+-- This spec defines the profile surface that exposes them.
+
+
+-- ═════════════════════════════════════════════
+-- SURFACES
+-- ═════════════════════════════════════════════
+
+surface AdminGlobalSettingsPanel {
+    -- Platform admin panel section for system-wide settings.
+    -- Accessible via the admin dashboard.
+    facing admin: PlatformAdmin
+
+    exposes:
+        GlobalSettings.first
+            |> default_currency
+            |> default_note
+            |> auto_publish_after_upload
+            |> ai_receipt_enhancement
+        for c in EnabledCurrency:
+            c.code
+            c.name
+            c.is_base
+        -- Today's cached exchange rates
+        for r in DailyExchangeRate where rate_date = today:
+            r.currency_code
+            r.rate
+            r.rate_date
+            r.fetched_at
+            r.is_fallback
+        -- Unacknowledged fetch alerts
+        for a in ExchangeRateFetchAlert where acknowledged = false:
+            a.rate_date
+            a.error_message
+            a.fallback_source_date
+            a.created_at
+
+    provides:
+        AdminSetsCurrency(admin, currency: String)
+        AdminSetsDefaultNote(admin, note: String?)
+        AdminSetsAutoPublish(admin, enabled: Boolean)
+        AdminSetsAIEnhancement(admin, enabled: Boolean)
+        AdminAddsCurrency(admin, code: String, name: String)
+        AdminRemovesCurrency(admin, currency: EnabledCurrency)
+            when not currency.is_base
+        AdminAcknowledgesRateAlert(admin, alert: ExchangeRateFetchAlert)
+
+    @guarantee DefaultCurrencyFromEnabledList
+        -- The default currency field is presented as an autocomplete dropdown
+        -- filtering from the enabled currencies list.
+        -- Only enabled currencies are accepted.
+
+    @guarantee BAMCannotBeRemoved
+        -- BAM (the base currency) appears in the list with is_base = true.
+        -- The remove action is not available for it.
+
+    @guarantee ToggleControls
+        -- auto_publish_after_upload and ai_receipt_enhancement are
+        -- presented as on/off toggle switches.
+
+    @guarantee CurrencyRemovalSafe
+        -- Removing a currency does not affect existing expenses.
+        -- The admin is informed that historical data is preserved.
+
+    @guarantee DailyRatesPanel
+        -- Today's exchange rates are displayed in a read-only table:
+        -- currency code, rate (1 unit = X BAM), fetch time.
+        -- Fallback rates are visually marked (e.g. warning icon)
+        -- to indicate they are from a previous day.
+        -- If no rates exist yet (no non-BAM expense today), the panel
+        -- shows "Rates will be fetched on first non-BAM expense today."
+
+    @guarantee RateAlertVisibility
+        -- When exchange rate fetch failures have occurred,
+        -- unacknowledged ExchangeRateFetchAlerts are shown prominently
+        -- as a warning banner on this panel.
+        -- Each alert shows: date, error message, fallback source date.
+        -- Admin can acknowledge to dismiss.
+}
+
+surface UserProfilePage {
+    -- User profile page at /profile, available to all authenticated users.
+    -- Shows account info (read-only) and per-user expense defaults.
+    facing user: TenantUser
+
+    context membership: TenantMembership where user = user and status = active
+
+    exposes:
+        -- Account info (read-only)
+        user.email
+        user.full_name
+
+        -- Per-user expense defaults
+        UserExpenseDefaults where user = user
+            |> default_payer
+            |> default_expense_category
+
+        -- Available options for dropdowns
+        for p in Payer where tenant_id = user.tenant_id and is_active = true:
+            p.id
+            p.label
+        for c in ExpenseCategory where tenant_id = user.tenant_id:
+            c.id
+            c.name
+
+    provides:
+        UserSetsDefaultExpenseCategory(user, category: ExpenseCategory?)
+            -- Defined in payer-and-defaults.candidate.allium.
+            -- User selects from tenant's expense categories or "None".
+
+    related:
+        OwnerProfileSection(membership.tenant)
+            when membership.role = owner
+
+    @guarantee DefaultPayerReadOnly
+        -- default_payer is displayed but not directly editable on this page.
+        -- It updates automatically via the sticky-default mechanism
+        -- (UpdateDefaultPayerOnExpenseSubmit in payer-and-defaults spec).
+
+    @guarantee AccountInfoReadOnly
+        -- Email and full_name are displayed for reference only.
+        -- They are not editable from this surface.
+}
+
+surface OwnerProfileSection {
+    -- Additional profile section visible only to tenant owners.
+    -- Appears below the standard profile content on the same /profile page.
+    facing owner: TenantOwner
+
+    context tenant: Tenant
+
+    exposes:
+        -- Workspace settings
+        tenant.name
+
+        -- Tenant settings
+        TenantSettings where tenant = tenant
+            |> email_notifications
+
+    provides:
+        OwnerUpdatesWorkspaceName(owner, name: String)
+
+        OwnerSetsEmailNotifications(owner, enabled: Boolean)
+
+        OwnerExportsTenantExpenses(owner)
+
+        OwnerDeletesAllTenantExpenses(owner, confirmation: String)
+
+    @guarantee WorkspaceNameEditable
+        -- The workspace name is shown in an editable text field.
+        -- Changes are saved explicitly (not auto-saved on blur).
+
+    @guarantee DeleteRequiresTypedConfirmation
+        -- The "Delete all expenses" action shows a confirmation dialog.
+        -- The user must type "DELETE" to proceed.
+        -- The button is styled as destructive (red).
+
+    @guarantee ExportIsNonDestructive
+        -- The "Export" action generates and downloads a CSV.
+        -- No data is modified or deleted.
+}
+
+
+surface ExpenseConversionDetail {
+    -- Conversion info displayed on the expense detail view.
+    -- Only visible for non-BAM expenses. Shows the original amount,
+    -- the exchange rate used, and the BAM equivalent.
+    facing user: TenantUser
+
+    context expense: Expense
+
+    exposes:
+        expense.currency
+        expense.original_amount
+        expense.bam_amount
+        expense.exchange_rate
+        expense.rate_fetched_at
+        -- Lookup whether this expense's rate was a fallback
+        DailyExchangeRate where currency_code = expense.currency
+            and rate_date = expense.rate_fetched_at |> to_date
+            |> is_fallback
+
+    @guarantee ConversionBreakdownForNonBAM
+        -- For non-BAM expenses, the detail view shows a conversion line:
+        -- "{original_amount} {currency} = {bam_amount} BAM (rate: {exchange_rate})"
+        -- Example: "50.00 EUR = 97.79 BAM (rate: 1.95583)"
+        -- The rate_fetched_at date is shown as secondary info
+        -- (e.g. "Rate from 2026-03-19").
+
+    @guarantee NoConversionLineForBAM
+        -- For BAM expenses, no conversion line is shown.
+        -- The amount is displayed directly without rate information.
+
+    @guarantee FallbackRateIndicator
+        -- If the expense used a fallback rate (DailyExchangeRate.is_fallback = true
+        -- for that currency+date), a subtle indicator is shown
+        -- (e.g. "Rate from previous day" tooltip).
+}
+
+
+-- ═════════════════════════════════════════════
+-- REMOVED SURFACE
+-- ═════════════════════════════════════════════
+
+-- The /expenses/settings page and route are removed entirely.
+-- Its functionality is redistributed:
+--   - default_currency → AdminGlobalSettingsPanel
+--   - default_note → AdminGlobalSettingsPanel
+--   - default_payer → UserProfilePage (read-only, sticky default)
+--   - default_category → UserProfilePage
+--   - auto_publish → AdminGlobalSettingsPanel
+--   - ai_enhancement → AdminGlobalSettingsPanel
+--   - email_notifications → OwnerProfileSection
+--   - account_info → UserProfilePage (read-only)
+--   - export → OwnerProfileSection
+--   - delete_all → OwnerProfileSection
+
+
+-- ═════════════════════════════════════════════
+-- RESOLVED DECISIONS
+-- ═════════════════════════════════════════════
+
+-- resolved: Three-tier settings hierarchy: global (admin) → tenant (owner) → per-user.
+-- resolved: Global settings are uniform across all tenants — no per-tenant override.
+-- resolved: Default payer and default category are per-user, shown on /profile.
+-- resolved: Default note is a global setting, not per-user.
+-- resolved: Workspace name is editable by owner, slug remains immutable.
+-- resolved: Delete all expenses requires typed "DELETE" confirmation, owner only.
+-- resolved: Export covers all tenant expenses (not just owner's), owner only.
+-- resolved: Email notifications toggle is tenant-level, persisted but not yet implemented.
+-- resolved: /expenses/settings page removed — no redirect, route deleted.
+-- resolved: Locale/language selection stays in the sidebar footer, outside this spec.
+-- resolved: User account info (email, name) is read-only on profile page.
+-- resolved: App targets Bosnian market — BAM is the base/report currency.
+-- resolved: Receipts are always in BAM (OCR produces BAM amounts exclusively).
+-- resolved: Manual expenses accept any admin-enabled currency.
+-- resolved: Default currency (global setting) = pre-selected currency on manual expense form.
+-- resolved: Admin curates available currencies (add/remove). BAM cannot be removed.
+-- resolved: Exchange rates sourced from CBBH (Central Bank of BiH) official daily rates.
+-- resolved: Rates fetched via Serper API, searching for CBBH kursna lista.
+-- resolved: Lazy daily cache — first non-BAM expense of the day triggers bulk fetch
+--           for ALL enabled non-BAM currencies. Subsequent expenses reuse cache.
+-- resolved: On fetch failure, system falls back to most recent cached rates (is_fallback = true)
+--           and creates ExchangeRateFetchAlert visible to platform admins.
+-- resolved: Conversion is silent — user enters amount in chosen currency, system applies daily rate.
+-- resolved: Reports aggregate all amounts in BAM using stored bam_amount.
+-- resolved: Historical expenses are unaffected by currency removal or rate changes.
+-- resolved: Admin panel shows today's cached rates (read-only table with fallback indicators).
+-- resolved: Admin panel shows unacknowledged rate fetch alerts (dismissible).
+-- resolved: Expense detail view shows conversion breakdown for non-BAM expenses:
+--           "{amount} {currency} = {bam_amount} BAM (rate: {rate})".
+-- resolved: Fallback rates indicated subtly on both admin panel and expense detail.

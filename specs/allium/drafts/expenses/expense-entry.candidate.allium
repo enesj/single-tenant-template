@@ -21,6 +21,10 @@
 --   - Admin reference-data management
 --   - Smart suggestions / hybrid ranking (deferred)
 --   - Expense list / dashboard (except entry-point actions)
+--   - Currency management & exchange rate fetching (settings-hierarchy.candidate.allium)
+-- Dependencies:
+--   - settings-hierarchy.candidate.allium: GlobalSettings, EnabledCurrency, DailyExchangeRate
+--   - payer-and-defaults.candidate.allium: UserExpenseDefaults (default_payer, default_expense_category)
 -- Note: No dedicated /expenses/new page — entry flow is a modal.
 --       A single Smart Input form serves both dashboard and list page.
 -- Supersedes:
@@ -108,9 +112,40 @@ external entity Expense {
     expense_category_id: UUID?
     purchased_at: Timestamp
     total_amount: Decimal
-    currency: Currency
+        -- Sum of line items in the expense's currency.
+    currency: String
+        -- ISO 4217 code. Must be an enabled currency (see EnabledCurrency).
+    original_amount: Decimal
+        -- Same as total_amount (the amount in the expense's currency).
+    bam_amount: Decimal
+        -- Equivalent in BAM. Equals original_amount when currency = "BAM".
+    exchange_rate: Decimal?
+        -- Rate used: 1 unit of currency = exchange_rate BAM.
+        -- null when currency = "BAM".
+    rate_fetched_at: Timestamp?
+        -- When the exchange rate was fetched. null when currency = "BAM".
     notes: String?
     is_posted: Boolean
+}
+
+external entity GlobalSettings {
+    -- Singleton, defined in settings-hierarchy.candidate.allium.
+    default_currency: String
+    default_note: String?
+}
+
+external entity EnabledCurrency {
+    -- Admin-curated list, defined in settings-hierarchy.candidate.allium.
+    code: String
+    name: String
+    is_base: Boolean
+}
+
+external entity DailyExchangeRate {
+    -- Daily cached rates, defined in settings-hierarchy.candidate.allium.
+    currency_code: String
+    rate_date: Date
+    rate: Decimal
 }
 
 external entity ExpenseItem {
@@ -130,7 +165,9 @@ external entity ExpenseItem {
 -- Value types
 -- ─────────────────────────────────────────────
 
-value Currency = BAM | EUR | USD
+-- Currency is no longer a hardcoded enum. Users select from the admin-curated
+-- EnabledCurrency list (see settings-hierarchy.candidate.allium).
+-- References to Currency in this spec use String (ISO 4217 code).
 
 value MoneyAmount {
     value: Decimal
@@ -210,7 +247,8 @@ value LastPriceInfo {
 -- ─────────────────────────────────────────────
 
 config {
-    default_currency: Currency = BAM
+    -- default_currency: removed — now sourced from GlobalSettings.default_currency
+    --   (see settings-hierarchy.candidate.allium)
     search_debounce_ms: Integer = 250
     search_min_query_length: Integer = 2
     search_default_limit: Integer = 8
@@ -262,8 +300,10 @@ entity SmartExpenseDraft {
     -- ── Metadata (Phase 2) ──
     payer: Payer?
     purchased_at: Timestamp = now
-    currency: Currency = config.default_currency
-    notes: String?
+    currency: String = GlobalSettings.first.default_currency
+        -- Pre-selected from GlobalSettings. User can change to any EnabledCurrency.
+    notes: String? = GlobalSettings.first.default_note
+        -- Pre-filled from GlobalSettings (was per-user, now global).
 
     -- ── Derived ──
     has_items: items.count > 0
@@ -310,6 +350,8 @@ rule CreateExpenseFromSmartInput {
     when: SubmitSmartExpense(writer: ExpenseWriter, draft: SmartExpenseDraft)
 
     requires: draft.is_submittable
+    requires: exists EnabledCurrency where code = draft.currency
+        -- Currency must be in the admin-enabled list.
 
     -- Store→supplier inference (server-side safety net)
     let final_supplier_id = if draft.store != null and draft.supplier = null
@@ -325,6 +367,19 @@ rule CreateExpenseFromSmartInput {
             line_total: item.line_total
         )
 
+    -- Exchange rate resolution (see settings-hierarchy.candidate.allium)
+    -- FetchDailyRatesIfMissing fires first if today's rates aren't cached.
+    let bam_conversion = if draft.currency = "BAM":
+        {bam_amount: draft.computed_total, exchange_rate: null, rate_fetched_at: null}
+    else:
+        let daily_rate = DailyExchangeRate
+            where currency_code = draft.currency and rate_date = today
+        {
+            bam_amount: draft.computed_total * daily_rate.rate,
+            exchange_rate: daily_rate.rate,
+            rate_fetched_at: daily_rate.fetched_at
+        }
+
     ensures: expense: Expense.created(
         tenant_id: writer.tenant_id,
         user_id: writer.id,
@@ -336,6 +391,10 @@ rule CreateExpenseFromSmartInput {
         purchased_at: draft.purchased_at,
         total_amount: draft.computed_total,
         currency: draft.currency,
+        original_amount: draft.computed_total,
+        bam_amount: bam_conversion.bam_amount,
+        exchange_rate: bam_conversion.exchange_rate,
+        rate_fetched_at: bam_conversion.rate_fetched_at,
         notes: draft.notes
     )
 
@@ -356,8 +415,13 @@ rule CreateExpenseFromSmartInput {
         -- Server validates: payer_id, purchased_at, total_amount required.
         -- Context validation: at least one of supplier, store, category required.
         -- Total is always computed from items; no user-entered override.
-        -- Backend also supports article_id → synthetic single line item path
-        -- (qty=1, unit_price=total_amount) but the Smart Input form does not use it.
+        -- Currency conversion: for non-BAM expenses, the daily CBBH rate is
+        -- looked up from DailyExchangeRate (fetched lazily on first non-BAM
+        -- expense of the day — see FetchDailyRatesIfMissing rule in
+        -- settings-hierarchy.candidate.allium). The BAM equivalent is stored
+        -- alongside the original amount for report aggregation.
+        -- If daily rates are not available and no fallback exists, submission
+        -- fails with an error asking the user to try again.
 }
 
 
@@ -635,12 +699,19 @@ surface SmartExpenseForm {
             when draft.phase = context
         draft.notes
             when draft.phase = context
+        -- Available currencies for the currency dropdown
+        for c in EnabledCurrency:
+            c.code
+            c.name
+            when draft.phase = context
 
     -- Context management (Phase 2)
     provides:
         BackspaceRemoveLastContext(draft)
             when draft.phase = context and draft.has_any_context
         SelectPayer(draft, payer: Payer)
+            when draft.phase = context
+        SelectCurrency(draft, currency: String)
             when draft.phase = context
 
     -- Navigation
@@ -687,12 +758,15 @@ surface SmartExpenseForm {
 
     -- Defaults
     @guarantee DefaultSelections
-        -- Opening the form pre-selects the user's default payer from
-        -- UserExpenseDefaults.default_payer (see payer-and-defaults.candidate.allium).
-        -- expense_category pre-fills from UserExpenseDefaults.default_expense_category.
-        -- notes pre-fills from UserExpenseDefaults.default_note.
-        -- Purchased_at defaults to today. Currency defaults to BAM.
+        -- Opening the form pre-selects:
+        --   payer: from UserExpenseDefaults.default_payer (per-user, sticky)
+        --   expense_category: from UserExpenseDefaults.default_expense_category (per-user)
+        --   notes: from GlobalSettings.default_note (global, admin-set)
+        --   currency: from GlobalSettings.default_currency (global, admin-set)
+        --   purchased_at: today
         -- Payer selection list shows only active payers (is_active = true).
+        -- Currency dropdown shows all EnabledCurrency entries.
+        -- (see payer-and-defaults.candidate.allium, settings-hierarchy.candidate.allium)
 
     -- Search
     @guarantee SearchDebouncing
@@ -765,6 +839,21 @@ surface SmartExpenseForm {
     @guarantee PayerChips
         -- In Phase 2, when no payer is selected, available payers are shown
         -- as clickable chips (up to config.payer_chip_limit) for instant selection.
+
+    -- Currency
+    @guarantee CurrencyDropdown
+        -- In Phase 2, currency is shown as a dropdown populated from
+        -- EnabledCurrency. Pre-selected to GlobalSettings.default_currency.
+        -- User can change to any enabled currency.
+        -- The currency is for the manual expense amount — it does not
+        -- affect receipt-originated expenses (always BAM).
+
+    @guarantee CurrencyConversionSilent
+        -- When a non-BAM currency is selected, no conversion preview is
+        -- shown in the form. The BAM equivalent is calculated silently
+        -- on the server at submission time using the daily CBBH rate.
+        -- If daily rates fail to fetch and no fallback exists, submission
+        -- fails with an error message.
 
     -- Store→supplier inference
     @guarantee StoreInfersSupplier

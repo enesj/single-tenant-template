@@ -1,4 +1,7 @@
-enum Currency { bam | eur | usd }
+-- Currency enum removed. Receipts are always in BAM (Bosnian market).
+-- The hardcoded Currency enum is replaced by String type with a BAM constraint.
+-- For manual expenses, currency comes from EnabledCurrency (see settings-hierarchy.candidate.allium).
+-- For receipt-originated expenses, currency is always "BAM" — no conversion needed.
 
 entity User {
     role: member | owner | admin
@@ -26,7 +29,10 @@ value MerchantGuess {
 value Extraction {
     merchant: MerchantGuess?
     purchased_at: Timestamp?
-    currency: Currency?
+    currency: String?
+        -- OCR may detect a currency string from the receipt text.
+        -- For Bosnian receipts this is always BAM (or KM).
+        -- Non-BAM detection is ignored — receipts are always treated as BAM.
     total_amount: Decimal?
     items: List<LineItem>
 }
@@ -55,7 +61,8 @@ entity Receipt {
     supplier_guess: String?
     store_guess: String?
     total_amount_guess: Decimal?
-    currency_guess: Currency?
+    currency_guess: String?
+        -- Always resolves to "BAM" for receipt-originated expenses.
     purchased_at_guess: Timestamp?
 
     error_message: String?
@@ -71,11 +78,19 @@ entity Receipt {
         and extraction?.items != null
         and abs(sum_line_totals(extraction.items) - total_amount_guess) <= 0.01
 
+    has_currency_mismatch:
+        currency_guess != null
+        and currency_guess != "BAM"
+        and currency_guess != "KM"
+        -- OCR detected a non-BAM currency on a receipt.
+        -- This always forces review_required with a clear warning.
+
     requires_human_review:
         supplier_guess = null
         or total_amount_guess = null
         or currency_guess = null
         or item_count = 0
+        or has_currency_mismatch
 
     effective_status:
         if status = extracted and not totals_match: review_required
@@ -94,15 +109,34 @@ external entity Expense {
     expense_category_id: UUID?
     purchased_at: Timestamp
     total_amount: Decimal
-    currency: Currency
+    currency: String
+        -- Always "BAM" for receipt-originated expenses.
+    original_amount: Decimal
+        -- Same as total_amount (receipts are BAM, no conversion).
+    bam_amount: Decimal
+        -- Same as total_amount (receipts are BAM, no conversion).
+    exchange_rate: Decimal?
+        -- Always null for receipt-originated expenses.
+    rate_fetched_at: Timestamp?
+        -- Always null for receipt-originated expenses.
     notes: String?
     items: List<LineItem>
 }
 
+external entity GlobalSettings {
+    -- Singleton, defined in settings-hierarchy.candidate.allium.
+    default_note: String?
+    auto_publish_after_upload: Boolean
+    ai_receipt_enhancement: Boolean
+}
+
 config {
     max_upload_size_bytes: Integer = 10_485_760
-    default_currency: Currency = bam
-    auto_post_after_upload: Boolean = false
+    base_currency: String = "BAM"
+        -- Receipts are always in BAM. This is not configurable.
+        -- OCR currency detection is used for validation only.
+    -- auto_post_after_upload: moved to GlobalSettings.auto_publish_after_upload
+    -- ai_receipt_enhancement: moved to GlobalSettings.ai_receipt_enhancement
     defer_refine: Boolean = true
 }
 
@@ -183,7 +217,7 @@ rule HandleOCRExtractionSuccess {
     requires: receipt.status = extracting
 
     let extraction = normalize_and_reconcile_extraction(provider_extraction, parsed_markdown)
-    let guesses = derive_receipt_guesses(extraction, config.default_currency)
+    let guesses = derive_receipt_guesses(extraction, config.base_currency)
     let store_alias_key =
         extraction.merchant?.raw_address
         ?? extraction.merchant?.address
@@ -199,8 +233,16 @@ rule HandleOCRExtractionSuccess {
     ensures: receipt.currency_guess = guesses.currency_guess
     ensures: receipt.purchased_at_guess = guesses.purchased_at_guess
 
-    ensures: receipt.error_message = null
-    ensures: receipt.error_details = null
+    ensures:
+        if receipt.has_currency_mismatch:
+            receipt.error_message = "OCR detected currency " + receipt.currency_guess
+                + " but receipts must be in BAM. Please verify the amount is correct."
+            receipt.error_details = "Detected currency: " + receipt.currency_guess
+                + ". All receipts are processed in BAM (Convertible Mark). "
+                + "If this is a foreign receipt, consider entering it as a manual expense instead."
+        else:
+            receipt.error_message = null
+            receipt.error_details = null
 
     ensures:
         if receipt.requires_human_review:
@@ -216,7 +258,7 @@ rule HandleOCRExtractionSuccess {
             receipt.refine_pending = false
 
     ensures:
-        if receipt.status = extracted and config.auto_post_after_upload:
+        if receipt.status = extracted and GlobalSettings.first.auto_publish_after_upload:
             AutoPostRequested(receipt: receipt)
 
     ensures:
@@ -278,7 +320,13 @@ rule AutoPostExtractedReceipt {
         expense_category_id: receipt.expense_category_id,
         purchased_at: receipt.purchased_at_guess,
         total_amount: receipt.total_amount_guess,
-        currency: receipt.currency_guess ?? config.default_currency,
+        currency: config.base_currency,
+            -- Always BAM for receipt-originated expenses.
+        original_amount: receipt.total_amount_guess,
+        bam_amount: receipt.total_amount_guess,
+            -- No conversion needed — receipt amounts are BAM.
+        exchange_rate: null,
+        rate_fetched_at: null,
         notes: receipt.notes,
         items: receipt.extraction.items
     )
@@ -303,7 +351,8 @@ rule AutoPostBlockedMovesToReviewRequired {
 }
 
 rule SaveReceiptReview {
-    when: SaveReceiptReview(actor, receipt, supplier, payer, purchased_at, total_amount, currency, items, expense_category_id?, notes?)
+    when: SaveReceiptReview(actor, receipt, supplier, payer, purchased_at, total_amount, items, expense_category_id?, notes?)
+        -- currency parameter removed — receipt currency is always BAM (not user-editable).
 
     requires: receipt.visible_to(actor) or actor.role = admin
     requires: receipt.status in {extracted, review_required}
@@ -321,7 +370,7 @@ rule SaveReceiptReview {
 
     ensures: receipt.supplier_guess = supplier.name
     ensures: receipt.total_amount_guess = total_amount
-    ensures: receipt.currency_guess = currency
+    ensures: receipt.currency_guess = config.base_currency
     ensures: receipt.purchased_at_guess = purchased_at
     ensures: receipt.extraction = with_reviewed_items(receipt.extraction, items)
 
@@ -331,7 +380,8 @@ rule SaveReceiptReview {
 }
 
 rule ApproveReceipt {
-    when: ApproveReceipt(actor, receipt, supplier, payer, purchased_at, total_amount, currency, items, expense_category_id?, notes?)
+    when: ApproveReceipt(actor, receipt, supplier, payer, purchased_at, total_amount, items, expense_category_id?, notes?)
+        -- currency parameter removed — receipt expenses are always BAM.
 
     requires: receipt.visible_to(actor) or actor.role = admin
     requires: receipt.status in {extracted, review_required}
@@ -350,7 +400,13 @@ rule ApproveReceipt {
         expense_category_id: expense_category_id,
         purchased_at: purchased_at,
         total_amount: total_amount,
-        currency: currency,
+        currency: config.base_currency,
+            -- Always BAM for receipt-originated expenses.
+        original_amount: total_amount,
+        bam_amount: total_amount,
+            -- No conversion needed.
+        exchange_rate: null,
+        rate_fetched_at: null,
         notes: notes,
         items: items
     )
@@ -395,10 +451,12 @@ surface ReceiptUploadBoundary {
     provides:
         UploadReceipt(actor, file_hash, storage_key, original_filename, content_type, file_size_bytes, payer?, expense_category_id?, notes?)
 
-    @guarantee DefaultsFromUserExpenseDefaults
-        -- payer, expense_category_id, and notes are pre-filled from the
-        -- uploading user's UserExpenseDefaults record. The user may change
-        -- them before submitting. See payer-and-defaults.candidate.allium.
+    @guarantee DefaultsPreFilled
+        -- payer: pre-filled from UserExpenseDefaults.default_payer (per-user, sticky)
+        -- expense_category_id: from UserExpenseDefaults.default_expense_category (per-user)
+        -- notes: from GlobalSettings.default_note (global, admin-set)
+        -- The user may change any of these before submitting.
+        -- See payer-and-defaults.candidate.allium, settings-hierarchy.candidate.allium.
 }
 
 surface UserReceiptOperations {
@@ -421,12 +479,24 @@ surface UserReceiptOperations {
 
     provides:
         RequestReceiptOCR(actor, receipt)
-        SaveReceiptReview(actor, receipt, supplier, payer, purchased_at, total_amount, currency, items, expense_category_id?, notes?)
+        SaveReceiptReview(actor, receipt, supplier, payer, purchased_at, total_amount, items, expense_category_id?, notes?)
             when receipt.status in {extracted, review_required}
-        ApproveReceipt(actor, receipt, supplier, payer, purchased_at, total_amount, currency, items, expense_category_id?, notes?)
+        ApproveReceipt(actor, receipt, supplier, payer, purchased_at, total_amount, items, expense_category_id?, notes?)
             when receipt.status in {extracted, review_required}
         DeleteReceipt(actor, receipt)
             when receipt.status != posted
+
+    @guarantee CurrencyNotEditable
+        -- Currency is not shown as an editable field in the receipt review/approval UI.
+        -- Receipts are always BAM. The currency_guess field is informational only.
+
+    @guarantee CurrencyMismatchWarning
+        -- When receipt.has_currency_mismatch is true, the review UI displays a
+        -- prominent warning banner with the error_message explaining that OCR
+        -- detected a non-BAM currency and the user should verify the amount.
+        -- The banner suggests using manual expense entry for foreign-currency receipts.
+        -- The receipt can still be approved (the amount is treated as BAM)
+        -- but the user must explicitly acknowledge the mismatch.
 
     guarantee:
         receipt.effective_status = if receipt.status = extracted and not receipt.totals_match: review_required else: receipt.status
@@ -448,9 +518,9 @@ surface AdminReceiptOperations {
         RequestReceiptOCR(admin, receipt)
         RetryReceiptProcessing(receipt)
         MarkReceiptFailed(receipt, message, details?)
-        SaveReceiptReview(admin, receipt, supplier, payer, purchased_at, total_amount, currency, items, expense_category_id?, notes?)
+        SaveReceiptReview(admin, receipt, supplier, payer, purchased_at, total_amount, items, expense_category_id?, notes?)
             when receipt.status in {extracted, review_required}
-        ApproveReceipt(admin, receipt, supplier, payer, purchased_at, total_amount, currency, items, expense_category_id?, notes?)
+        ApproveReceipt(admin, receipt, supplier, payer, purchased_at, total_amount, items, expense_category_id?, notes?)
             when receipt.status in {extracted, review_required}
         DeleteReceipt(admin, receipt)
             when receipt.status != posted
