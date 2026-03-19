@@ -2,6 +2,7 @@
   "User-facing expense services with user_id filtering.
    These services enforce that users can only access their own expenses."
   (:require
+    [app.domain.backend.expenses.services.exchange-rates :as exchange-rates]
     [app.domain.backend.expenses.services.expenses :as admin-expenses]
     [app.shared.model-naming :as model-naming]
     [app.shared.query-builders :as shared-qb]
@@ -11,6 +12,7 @@
     [next.jdbc.result-set :as rs]
     [taoensso.timbre :as log])
   (:import
+    [java.time Instant LocalDate]
     [java.util UUID]))
 
 ;; ============================================================================
@@ -28,16 +30,52 @@
 
 (defn create-user-expense!
   "Create an expense for a specific user. Returns expense with :items.
-   `tenant-id` scopes the expense to a specific tenant."
-  [db tenant-id user-id expense-data items]
-  (let [user-id (ensure-uuid user-id)
-        tenant-id (ensure-uuid tenant-id)]
-    (when-not user-id
-      (throw (ex-info "user-id is required" {:data expense-data})))
-    (log/debug "Creating expense for user" {:user-id user-id :tenant-id tenant-id})
-    (admin-expenses/create-expense! db (cond-> (assoc expense-data :user_id user-id :created_by user-id)
-                                         tenant-id (assoc :tenant_id tenant-id))
-      items)))
+
+   `tenant-id` scopes the expense to a specific tenant.
+
+   Currency conversion (Phase 2):
+   - When currency is non-BAM, fetches the daily exchange rate and populates
+     original_amount, bam_amount, exchange_rate, and rate_fetched_at.
+   - When currency is BAM (or nil/default), original_amount = bam_amount = total_amount."
+  ([db tenant-id user-id expense-data items]
+   (create-user-expense! db tenant-id user-id expense-data items nil))
+  ([db tenant-id user-id expense-data items app-config]
+   (let [user-id (ensure-uuid user-id)
+         tenant-id (ensure-uuid tenant-id)
+         currency (or (:currency expense-data) "BAM")
+         total-amount (some-> (:total_amount expense-data) bigdec)]
+     (when-not user-id
+       (throw (ex-info "user-id is required" {:data expense-data})))
+     (log/debug "Creating expense for user" {:user-id user-id :tenant-id tenant-id :currency currency})
+     (let [expense-data (cond-> (assoc expense-data
+                                  :user_id user-id
+                                  :created_by user-id
+                                  :currency currency)
+                          tenant-id (assoc :tenant_id tenant-id))
+           ;; Currency conversion: populate original_amount, bam_amount, exchange_rate
+           expense-data (if (and total-amount (not= currency "BAM"))
+                          (let [rate-date (LocalDate/now)
+                                ;; Ensure rates are cached for today
+                                _ (when app-config
+                                    (try
+                                      (exchange-rates/ensure-daily-rates!
+                                        db (exchange-rates/build-config app-config))
+                                      (catch Exception e
+                                        (log/warn e "Failed to ensure daily rates" {:currency currency}))))
+                                rate (exchange-rates/get-conversion-rate db currency rate-date)
+                                bam-amount (if rate
+                                             (.setScale (* total-amount rate) 2 java.math.RoundingMode/HALF_UP)
+                                             total-amount)]
+                            (cond-> (assoc expense-data
+                                      :original_amount total-amount
+                                      :bam_amount bam-amount)
+                              rate (assoc :exchange_rate rate
+                                     :rate_fetched_at (Instant/now))))
+                          ;; BAM: all amounts are the same, no rate needed
+                          (cond-> expense-data
+                            total-amount (assoc :original_amount total-amount
+                                           :bam_amount total-amount)))]
+       (admin-expenses/create-expense! db expense-data items)))))
 
 (defn update-user-expense!
   "Update expense fields for a user's own expense. Returns updated expense or nil if not found/unauthorized.

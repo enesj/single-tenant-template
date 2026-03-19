@@ -227,11 +227,15 @@
                      [:purchased_at :timestamptz {:null false}]
                      [:total_amount [:decimal 12 2] {:null false}]
                      [:currency [:enum :currency] {:null false :default "BAM"}]
+                     [:original_amount [:decimal 12 2]]
+                     [:bam_amount [:decimal 12 2]]
+                     [:exchange_rate [:decimal 18 8]]
+                     [:rate_fetched_at :timestamptz]
                      [:notes :text]
                      [:is_posted :boolean {:default true :null false}]
                      [:created_at :timestamptz {:default [:now]}]
                      [:updated_at :timestamptz {:default [:now]}]]
-            :types [[:currency :enum {:choices ["BAM" "EUR" "USD"]}]]
+            :types [[:currency :enum {:choices ["BAM" "EUR" "USD" "GBP" "CHF" "RSD" "TRY"]}]]
             :indexes [[:idx_expenses_tenant :btree {:fields [:tenant_id]}]
                       [:idx_expenses_user :btree {:fields [:user_id]}]
                       [:idx_expenses_store :btree {:fields [:store_id]}]
@@ -369,4 +373,76 @@
                             [:created_at :timestamptz {:default [:now]}]
                             [:updated_at :timestamptz {:default [:now]}]]
                    :indexes [[:idx_article_aliases_supplier_label :btree {:fields [:supplier_id :raw_label_normalized] :unique true}]
-                             [:idx_article_aliases_article :btree {:fields [:article_id]}]]}}
+                             [:idx_article_aliases_article :btree {:fields [:article_id]}]]}
+
+ ;; ============================================================================
+ ;; Settings Hierarchy Tables
+ ;; ============================================================================
+
+ ;; ----------------------------------------------------------------------------
+ ;; Global Settings (singleton — platform-wide defaults)
+ ;; ----------------------------------------------------------------------------
+
+ :global_settings {:fields [[:id :uuid {:primary-key true}]
+                            [:default_currency [:varchar 3] {:null false :default "BAM"}]
+                            [:default_note :text]
+                            [:auto_publish_after_upload :boolean {:null false :default false}]
+                            [:ai_receipt_enhancement :boolean {:null false :default false}]
+                            [:created_at :timestamptz {:default [:now]}]
+                            [:updated_at :timestamptz {:default [:now]}]]}
+
+ ;; ----------------------------------------------------------------------------
+ ;; Enabled Currencies (admin-curated list of available currencies)
+ ;; ----------------------------------------------------------------------------
+
+ :enabled_currencies {:fields [[:id :uuid {:primary-key true}]
+                               [:code [:varchar 3] {:null false}]
+                               [:name [:varchar 100] {:null false}]
+                               [:is_base :boolean {:null false :default false}]
+                               [:created_at :timestamptz {:default [:now]}]
+                               [:updated_at :timestamptz {:default [:now]}]]
+                      :indexes [[:uniq_enabled_currencies_code :btree {:fields [:code] :unique true}]]}
+
+ ;; ----------------------------------------------------------------------------
+ ;; Daily Exchange Rates (cached CBBH rates per currency per date)
+ ;; ----------------------------------------------------------------------------
+
+ :daily_exchange_rates {:fields [[:id :uuid {:primary-key true}]
+                                 [:currency_code [:varchar 3] {:null false}]
+                                 [:rate_date :date {:null false}]
+                                 [:rate [:decimal 18 8] {:null false}]
+                                 [:fetched_at :timestamptz]
+                                 [:is_fallback :boolean {:null false :default false}]
+                                 [:created_at :timestamptz {:default [:now]}]]
+                        :indexes [[:uniq_daily_exchange_rates_currency_date
+                                   :btree
+                                   {:fields [:currency_code :rate_date] :unique true}]]}
+
+ ;; ----------------------------------------------------------------------------
+ ;; Exchange Rate Fetch Alerts (failures logged for admin awareness)
+ ;; ----------------------------------------------------------------------------
+
+ :exchange_rate_fetch_alerts {:fields [[:id :uuid {:primary-key true}]
+                                       [:rate_date :date {:null false}]
+                                       [:error_message :text]
+                                       [:fallback_source_date :date]
+                                       [:acknowledged :boolean {:null false :default false}]
+                                       [:created_at :timestamptz {:default [:now]}]]
+                              :indexes [[:idx_exchange_rate_fetch_alerts_date
+                                         :btree
+                                         {:fields [:rate_date]}]
+                                        [:idx_exchange_rate_fetch_alerts_unacknowledged
+                                         :btree
+                                         {:fields [:acknowledged]
+                                          :where [:= :acknowledged false]}]]}
+
+ ;; ----------------------------------------------------------------------------
+ ;; Tenant Settings (per-tenant configuration — one row per tenant)
+ ;; ----------------------------------------------------------------------------
+
+ :tenant_settings {:fields [[:id :uuid {:primary-key true}]
+                            [:tenant_id :uuid {:foreign-key :tenants/id :null false :on-delete :cascade}]
+                            [:email_notifications :boolean {:null false :default true}]
+                            [:created_at :timestamptz {:default [:now]}]
+                            [:updated_at :timestamptz {:default [:now]}]]
+                   :indexes [[:uniq_tenant_settings_tenant :btree {:fields [:tenant_id] :unique true}]]}}

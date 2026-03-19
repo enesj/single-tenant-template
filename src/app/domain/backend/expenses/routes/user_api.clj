@@ -227,7 +227,7 @@
 
    ;; Expenses CRUD
    ["" {:get {:handler (user-expenses-crud/list-expenses-handler db)}
-        :post {:handler (user-expenses-crud/create-expense-handler db)}}]
+        :post {:handler (user-expenses-crud/create-expense-handler db app-config)}}]
 
    ;; Batch operations
    ["/batch" {:put {:handler (user-expenses-batch/batch-update-expenses-handler db)}

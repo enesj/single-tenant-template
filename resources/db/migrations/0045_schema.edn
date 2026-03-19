@@ -1,0 +1,102 @@
+({:action :alter-type,
+  :type-name :currency,
+  :model-name :expenses,
+  :options
+  {:choices ["BAM" "EUR" "USD" "GBP" "CHF" "HRK" "RSD" "TRY"],
+   :type :enum},
+  :changes
+  {:choices
+   {:from ["BAM" "EUR" "USD"],
+    :to ["BAM" "EUR" "USD" "GBP" "CHF" "HRK" "RSD" "TRY"]}}}
+ {:action :add-column,
+  :field-name :rate-fetched-at,
+  :model-name :expenses,
+  :options {:type :timestamptz}}
+ {:action :create-table,
+  :model-name :daily_exchange_rates,
+  :fields
+  {:id {:primary-key true, :type :uuid},
+   :currency-code {:null false, :type [:varchar 3]},
+   :rate-date {:null false, :type :date},
+   :rate {:null false, :type [:decimal 18 8]},
+   :fetched-at {:type :timestamptz},
+   :is-fallback {:null false, :default false, :type :boolean},
+   :created-at {:default [:now], :type :timestamptz}}}
+ {:action :create-index,
+  :index-name :uniq-daily-exchange-rates-currency-date,
+  :model-name :daily_exchange_rates,
+  :options
+  {:fields [:currency_code :rate_date], :unique true, :type :btree}}
+ {:action :create-table,
+  :model-name :global_settings,
+  :fields
+  {:id {:primary-key true, :type :uuid},
+   :default-currency {:null false, :default "BAM", :type [:varchar 3]},
+   :default-note {:type :text},
+   :auto-publish-after-upload
+   {:null false, :default false, :type :boolean},
+   :ai-receipt-enhancement
+   {:null false, :default false, :type :boolean},
+   :created-at {:default [:now], :type :timestamptz},
+   :updated-at {:default [:now], :type :timestamptz}}}
+ {:action :create-table,
+  :model-name :tenant_settings,
+  :fields
+  {:id {:primary-key true, :type :uuid},
+   :tenant-id
+   {:foreign-key :tenants/id,
+    :null false,
+    :on-delete :cascade,
+    :type :uuid},
+   :email-notifications {:null false, :default true, :type :boolean},
+   :created-at {:default [:now], :type :timestamptz},
+   :updated-at {:default [:now], :type :timestamptz}}}
+ {:action :create-table,
+  :model-name :enabled_currencies,
+  :fields
+  {:id {:primary-key true, :type :uuid},
+   :code {:null false, :type [:varchar 3]},
+   :name {:null false, :type [:varchar 100]},
+   :is-base {:null false, :default false, :type :boolean},
+   :created-at {:default [:now], :type :timestamptz},
+   :updated-at {:default [:now], :type :timestamptz}}}
+ {:action :create-index,
+  :index-name :uniq-tenant-settings-tenant,
+  :model-name :tenant_settings,
+  :options {:fields [:tenant_id], :unique true, :type :btree}}
+ {:action :create-table,
+  :model-name :exchange_rate_fetch_alerts,
+  :fields
+  {:id {:primary-key true, :type :uuid},
+   :rate-date {:null false, :type :date},
+   :error-message {:type :text},
+   :fallback-source-date {:type :date},
+   :acknowledged {:null false, :default false, :type :boolean},
+   :created-at {:default [:now], :type :timestamptz}}}
+ {:action :create-index,
+  :index-name :idx-exchange-rate-fetch-alerts-unacknowledged,
+  :model-name :exchange_rate_fetch_alerts,
+  :options
+  {:fields [:acknowledged],
+   :where [:= :acknowledged false],
+   :type :btree}}
+ {:action :add-column,
+  :field-name :exchange-rate,
+  :model-name :expenses,
+  :options {:type [:decimal 18 8]}}
+ {:action :create-index,
+  :index-name :uniq-enabled-currencies-code,
+  :model-name :enabled_currencies,
+  :options {:fields [:code], :unique true, :type :btree}}
+ {:action :create-index,
+  :index-name :idx-exchange-rate-fetch-alerts-date,
+  :model-name :exchange_rate_fetch_alerts,
+  :options {:fields [:rate_date], :type :btree}}
+ {:action :add-column,
+  :field-name :original-amount,
+  :model-name :expenses,
+  :options {:type [:decimal 12 2]}}
+ {:action :add-column,
+  :field-name :bam-amount,
+  :model-name :expenses,
+  :options {:type [:decimal 12 2]}})

@@ -11,10 +11,10 @@
     [app.domain.backend.expenses.routes.expense-categories :as expense-categories]
     [app.domain.backend.expenses.routes.expense-items :as expense-items]
     [app.domain.backend.expenses.routes.expenses :as expenses]
+    [app.domain.backend.expenses.routes.global-settings :as global-settings]
     [app.domain.backend.expenses.routes.manufacturers :as manufacturers]
     [app.domain.backend.expenses.routes.payer-types :as payer-types]
     [app.domain.backend.expenses.routes.payers :as payers]
-
     [app.domain.backend.expenses.routes.receipts :as receipts]
     [app.domain.backend.expenses.routes.reports :as reports]
     [app.domain.backend.expenses.routes.store-aliases :as store-aliases]
@@ -26,31 +26,34 @@
 (defn routes
   "Top-level router for the Home Expenses domain. Mounted under /admin/api/expenses."
   [db & [app-config]]
-  ["/expenses"
-   ;; Cross-entity admin search (global, no tenant filter)
-   ["/search" {:get {:handler (search/admin-search-handler db)}}]
-   ["/search/related" {:get {:handler (search/admin-related-handler db)}}]
+  (into
+    ["/expenses"
+     ;; Cross-entity admin search (global, no tenant filter)
+     ["/search" {:get {:handler (search/admin-search-handler db)}}]
+     ["/search/related" {:get {:handler (search/admin-related-handler db)}}]
 
-   (suppliers/routes db)
-   (stores/routes db)
-   (cities/routes db)
-   (countries/routes db)
-   (manufacturers/routes db)
-   (categories/routes db)
-   (expense-categories/routes db)
-   (subcategories/routes db)
-   (payers/routes db)
-   (payer-types/routes db)
-   (receipts/routes db app-config)
-   (article-aliases/routes db)
-   (supplier-aliases/routes db)
-   (store-aliases/routes db)
+     (suppliers/routes db)
+     (stores/routes db)
+     (cities/routes db)
+     (countries/routes db)
+     (manufacturers/routes db)
+     (categories/routes db)
+     (expense-categories/routes db)
+     (subcategories/routes db)
+     (payers/routes db)
+     (payer-types/routes db)
+     (receipts/routes db app-config)
+     (article-aliases/routes db)
+     (supplier-aliases/routes db)
+     (store-aliases/routes db)
 
-   (expenses/routes db)
-   (expense-items/routes db)
-   (articles/routes db)
-   (reports/routes db)
-   (duplicates/routes db)])
+     (expenses/routes db)
+     (expense-items/routes db)
+     (articles/routes db)
+     (reports/routes db)
+     (duplicates/routes db)]
+    ;; Global settings, currencies, exchange rates, alerts (Phase 2)
+    (global-settings/routes db app-config)))
 
 
 

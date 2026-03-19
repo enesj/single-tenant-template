@@ -73,8 +73,10 @@
       (h/unauthorized-response))))
 
 (defn create-expense-handler
-  "Handler factory for creating a user expense."
-  [db]
+  "Handler factory for creating a user expense.
+   `app-config` is optional; when provided, enables exchange rate fetching
+   for non-BAM currency expenses."
+  [db & [app-config]]
   (fn [request]
     (if-let [user-id (h/get-user-id request)]
       (if-let [forbidden (h/ensure-role request h/expenses-write-roles "Only members, admins, and owners can create expenses")]
@@ -85,7 +87,7 @@
                   expense-data (select-keys body [:supplier_id :store_id :payer_id :expense_category_id :article_id :purchased_at :total_amount :currency :notes :is_posted :receipt_id])
                   items (or (:items body) [])]
               (log/debug "Creating user expense" {:user-id user-id :tenant-id tenant-id :expense-data expense-data})
-              (let [expense (user-expenses/create-user-expense! db tenant-id user-id expense-data items)]
+              (let [expense (user-expenses/create-user-expense! db tenant-id user-id expense-data items app-config)]
                 ;; Sticky default: update default payer if it changed
                 (try
                   (user-settings/update-sticky-default-payer! db tenant-id user-id (:payer_id expense-data))

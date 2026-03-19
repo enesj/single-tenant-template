@@ -370,6 +370,66 @@
 ;; Route Tree
 ;; ============================================================================
 
+;; ---------------------------------------------------------------------------
+;; Tenant settings handlers (Phase 2 — settings hierarchy)
+;; ---------------------------------------------------------------------------
+
+(defn- update-tenant-settings-handler
+  "PUT /tenant/settings — update tenant-level settings (owner/admin only).
+   Currently supports: email-notifications (boolean)."
+  [db]
+  (fn [req]
+    (route-utils/with-error-handling "tenant-update-settings"
+      (let [user   (get-user req)
+            tenant (get-tenant req)]
+        (when-not tenant
+          (throw (ex-info "No active tenant" {:type :validation-error
+                                              :errors {:tenant ["No active tenant in session"]}})))
+        (let [tenant-id (or (:id tenant) (:tenants/id tenant))
+              actor-m   (tenant-svc/get-membership db tenant-id (:id user))
+              _         (require-role! actor-m ["owner" "admin"])
+              body      (:body-params req)
+              ;; Normalize body keys
+              updates   (cond-> {}
+                          (contains? body :email-notifications)
+                          (assoc :email-notifications (:email-notifications body))
+                          (contains? body :email_notifications)
+                          (assoc :email-notifications (:email_notifications body))
+                          (contains? body (keyword "emailNotifications"))
+                          (assoc :email-notifications (get body (keyword "emailNotifications"))))]
+          (when (empty? updates)
+            (throw (ex-info "No settings fields provided"
+                     {:type :validation-error
+                      :errors {:body ["Provide at least one setting to update"]}})))
+          ;; Lazy-require domain service to avoid template→domain compile-time coupling
+          (let [update-fn! (requiring-resolve 'app.domain.backend.expenses.services.tenant-settings/update-tenant-settings!)
+                result     (update-fn! db tenant-id updates)]
+            (log/info "Updated tenant settings" {:tenant-id tenant-id :keys (keys updates)})
+            (response/response {:success true :settings (sanitize result)})))))))
+
+(defn- update-tenant-name-handler
+  "PUT /tenant/name — rename the workspace (owner only)."
+  [db]
+  (fn [req]
+    (route-utils/with-error-handling "tenant-update-name"
+      (let [user   (get-user req)
+            tenant (get-tenant req)]
+        (when-not tenant
+          (throw (ex-info "No active tenant" {:type :validation-error
+                                              :errors {:tenant ["No active tenant in session"]}})))
+        (let [tenant-id (or (:id tenant) (:tenants/id tenant))
+              actor-m   (tenant-svc/get-membership db tenant-id (:id user))
+              _         (require-role! actor-m ["owner"])
+              body      (:body-params req)
+              new-name  (or (:name body) (get body "name"))]
+          (when (or (nil? new-name) (clojure.string/blank? new-name))
+            (throw (ex-info "Name is required"
+                     {:type :validation-error
+                      :errors {:name ["Workspace name cannot be blank"]}})))
+          (let [updated (tenant-svc/update-tenant! db tenant-id {:name new-name})]
+            (log/info "Updated tenant name" {:tenant-id tenant-id :name new-name})
+            (response/response {:success true :tenant (sanitize updated)})))))))
+
 (defn tenant-routes
   "Create tenant management routes. All protected by `wrap-user-auth`."
   [db wrap-user-auth email-service base-url config]
@@ -388,6 +448,11 @@
    ["/invitations/:id"    {:delete {:handler (revoke-invitation-handler db)}}]
    ["/invitations/:id/resend" {:post {:handler (resend-invitation-handler db email-service base-url)}}]
    ["/transfer-ownership" {:post {:handler (transfer-ownership-handler db)}}]
+
+   ;; Tenant-level settings (Phase 2 — settings hierarchy)
+   ["/settings" {:put {:handler (update-tenant-settings-handler db)}}]
+   ["/name"     {:put {:handler (update-tenant-name-handler db)}}]
+
    (impersonation-routes/routes db)])
 
 (comment

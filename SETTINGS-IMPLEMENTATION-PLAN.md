@@ -1,8 +1,9 @@
 # Settings Hierarchy Implementation Plan
 
 **Spec**: `specs/allium/domain/expenses/settings-hierarchy.candidate.allium`
-**Status**: Spec complete, implementation not started
+**Status**: Phase 1 complete (1.2 deferred), Phase 2 complete (minor items deferred), Phase 3–6 not started
 **Created**: 2026-03-19
+**Last updated**: 2026-03-19
 
 ## Overview
 
@@ -18,181 +19,181 @@ Also introduces: multi-currency support (manual expenses), daily CBBH exchange r
 
 ---
 
-## Phase 1: Database & Backend Foundation
+## Phase 1: Database & Backend Foundation  ✓ COMPLETE (1.2 deferred)
 
-### 1.1 New DB tables + migrations
-- [ ] Create `global_settings` table (singleton):
-  - `id`, `default_currency` (text, default "BAM"), `default_note` (text, nullable),
+### 1.1 New DB tables + migrations  ✓
+- [x] Create `global_settings` table (singleton):
+  - `id`, `default_currency` (varchar 3, default "BAM"), `default_note` (text, nullable),
     `auto_publish_after_upload` (boolean, default false), `ai_receipt_enhancement` (boolean, default false),
     `created_at`, `updated_at`
-- [ ] Create `enabled_currencies` table:
-  - `id`, `code` (text, unique), `name` (text), `is_base` (boolean, default false),
+- [x] Create `enabled_currencies` table:
+  - `id`, `code` (varchar 3, unique), `name` (varchar 100), `is_base` (boolean, default false),
     `created_at`, `updated_at`
-- [ ] Create `daily_exchange_rates` table:
-  - `id`, `currency_code` (text), `rate_date` (date), `rate` (numeric),
+- [x] Create `daily_exchange_rates` table:
+  - `id`, `currency_code` (varchar 3), `rate_date` (date), `rate` (decimal 18,8),
     `fetched_at` (timestamptz), `is_fallback` (boolean, default false),
     `created_at`
   - Unique index: `(currency_code, rate_date)`
-- [ ] Create `exchange_rate_fetch_alerts` table:
+- [x] Create `exchange_rate_fetch_alerts` table:
   - `id`, `rate_date` (date), `error_message` (text), `fallback_source_date` (date),
     `created_at` (timestamptz), `acknowledged` (boolean, default false)
-- [ ] Create `tenant_settings` table:
+- [x] Create `tenant_settings` table:
   - `id`, `tenant_id` (FK tenants, unique), `email_notifications` (boolean, default true),
     `created_at`, `updated_at`
-- [ ] Add currency fields to `expenses` table:
-  - `original_amount` (numeric), `bam_amount` (numeric),
-    `exchange_rate` (numeric, nullable), `rate_fetched_at` (timestamptz, nullable)
+- [x] Add currency fields to `expenses` table:
+  - `original_amount` (decimal 12,2), `bam_amount` (decimal 12,2),
+    `exchange_rate` (decimal 18,8, nullable), `rate_fetched_at` (timestamptz, nullable)
   - Backfill: `original_amount = total_amount`, `bam_amount = total_amount`, `exchange_rate = null`
     (all existing expenses are BAM)
-- [ ] Seed migration: insert singleton `global_settings` row + seed `enabled_currencies`
+- [x] Expand `currency` enum: `["BAM" "EUR" "USD" "GBP" "CHF" "HRK" "RSD" "TRY"]`
+- [x] Seed migration: insert singleton `global_settings` row + seed `enabled_currencies`
   (BAM, EUR, USD, GBP, CHF, HRK, RSD, TRY)
-- [ ] Seed migration: create `tenant_settings` row for each existing tenant
-- [ ] Apply migrations to dev + test DBs
+- [x] Seed migration: create `tenant_settings` row for each existing tenant
+- [x] Apply migrations to dev + test DBs (0045_schema.edn + 0046_seed_settings_hierarchy.sql)
 
-**Current files to modify**:
-- `resources/db/domain/models.edn` — add new table definitions
-- Generate migration via `simple_repl.clj`
-
-### 1.2 Remove columns from user_expense_settings
+### 1.2 Remove columns from user_expense_settings  ⏳ DEFERRED → Phase 5.3
 - [ ] Remove from `user_expense_settings`: `default_currency`, `default_note`,
   `auto_post_after_upload_enabled`, `receipt_refine_enabled`, `notifications_enabled`
 - [ ] Keep: `user_id`, `tenant_id`, `default_payer_id`, `default_expense_category_id`,
   `receipt_ocr_provider` (internal, not user-facing)
 - [ ] Migration to drop columns (after data migration to new tables)
 
-**Note**: Phase 1.2 should happen AFTER Phase 2 backend reads are migrated, to avoid breaking running code.
+**Note**: Phase 1.2 is deferred to Phase 5.3 because the old settings page and its backend
+still read these columns. Dropping them before Phase 3/5 completes would break running code.
 
 ---
 
-## Phase 2: Backend Services & API
+## Phase 2: Backend Services & API  ✓ COMPLETE (minor items deferred)
 
-### 2.1 Global settings service
-- [ ] New file: `src/app/domain/backend/expenses/services/global_settings.clj`
+### 2.1 Global settings service  ✓
+- [x] New file: `src/app/domain/backend/expenses/services/global_settings.clj`
   - `get-global-settings` (singleton read)
   - `update-global-settings!` (partial update)
   - `get-enabled-currencies` (list all)
   - `add-enabled-currency!`, `remove-enabled-currency!`
-- [ ] Validation: default_currency must be in enabled list, BAM cannot be removed
+- [x] Validation: default_currency must be in enabled list, BAM cannot be removed
 
-### 2.2 Daily exchange rate service
-- [ ] New file: `src/app/domain/backend/expenses/services/exchange_rates.clj`
+### 2.2 Daily exchange rate service  ✓
+- [x] New file: `src/app/domain/backend/expenses/services/exchange_rates.clj`
   - `get-daily-rates` (for a date)
-  - `fetch-and-cache-daily-rates!` (Serper API → CBBH kursna lista → parse → store)
+  - `fetch-and-cache-daily-rates!` (CBBH HTML primary → Serper fallback → DB fallback)
   - `ensure-daily-rates!` (idempotent: fetch only if missing for today)
   - `get-rate-for-currency` (lookup from cache)
   - `get-fallback-rates` (most recent cached)
   - `create-fetch-alert!`, `acknowledge-alert!`
-- [ ] Serper API integration: search "CBBH kursna lista {date}", parse rates
+- [x] CBBH HTML direct fetch (primary) + Serper API search (fallback)
 
-### 2.3 Tenant settings service
-- [ ] New file: `src/app/domain/backend/expenses/services/tenant_settings.clj`
+### 2.3 Tenant settings service  ✓
+- [x] New file: `src/app/domain/backend/expenses/services/tenant_settings.clj`
   - `get-tenant-settings`, `update-tenant-settings!`
   - `provision-tenant-settings!` (called from tenant provisioning)
 
-### 2.4 Update user_expense_settings service
-- [ ] Modify: `src/app/domain/backend/expenses/services/user_expense_settings.clj`
-  - Remove: `default-currency`, `default-note`, `notifications-enabled`,
-    `auto-post-after-upload-enabled`, `receipt-refine-enabled` from `default-settings`
-  - Remove: `allowed-currencies` (now in `enabled_currencies` table)
-  - Keep: `get-user-expense-settings`, `upsert-user-expense-settings!`,
-    `update-sticky-default-payer!`, `effective-settings`
-  - Update `effective-settings` to merge global settings where needed
+### 2.4 Update user_expense_settings service  ✓
+- [x] Modify: `src/app/domain/backend/expenses/services/user_expense_settings.clj`
+  - Added: `per-user-defaults`, `effective-settings-with-global`, `update-user-default-category!`
+  - Marked `allowed-currencies` as `^:deprecated` (now in `enabled_currencies` table)
+  - Kept: all old functions for backward compat with legacy settings handler
+  - `effective-settings-with-global` merges global + per-user settings
 
-### 2.5 Expense creation — currency conversion
-- [ ] Modify expense creation handlers to:
+### 2.5 Expense creation — currency conversion  ✓ (receipt side deferred)
+- [x] Modify expense creation handlers to:
   - Accept `currency` from frontend (manual expenses)
   - Call `ensure-daily-rates!` for non-BAM currencies
-  - Calculate `bam_amount = original_amount * rate`
+  - Calculate `bam_amount = original_amount * rate` (HALF_UP rounding to 2dp)
   - Store `exchange_rate` and `rate_fetched_at`
+- [x] BAM expenses: `original_amount = bam_amount = total_amount`, no rate
+- [x] Low-level `create-expense!` allowlist updated for new columns
 - [ ] Receipt-originated expenses: always set `currency = "BAM"`, `bam_amount = total_amount`
+  *(deferred — receipt auto-post already forces BAM via `build-review-data`, not urgent)*
 
-**Files to modify**:
-- `src/app/domain/backend/expenses/handlers/user_expenses/crud.clj`
-- `src/app/domain/backend/expenses/handlers/user_receipts.clj`
-- `src/app/domain/backend/expenses/workers/receipt_ocr/extraction/review.clj`
-  (read `ai_receipt_enhancement` from global_settings instead of user settings)
-
-### 2.6 Receipt OCR — currency mismatch detection
-- [ ] Modify receipt extraction success handler:
+### 2.6 Receipt OCR — currency mismatch detection  ✓
+- [x] Modify `auto-approve-extracted-receipt!`:
   - After OCR, if `currency_guess` is not "BAM" and not "KM":
     - Set `status = review_required`
     - Set `error_message` with clear currency mismatch warning
-  - Block auto-post for currency mismatches (already blocked by `requires_human_review`)
+  - Currency mismatch check is first in the cond chain (blocks auto-post)
+- [x] Fixed pre-existing bug: `resolve-payer-id` now passes `tenant_id` to `get-user-expense-settings`
 
-**Files to modify**:
-- `src/app/domain/backend/expenses/workers/receipt_ocr/extraction/review.clj`
-- Related supplier/store resolution files
+### 2.7 Admin API routes for global settings  ✓
+- [x] New admin routes (under `/admin/api/expenses/`):
+  - GET/PUT `/global-settings`
+  - GET/POST `/enabled-currencies`, DELETE `/enabled-currencies/:code`
+  - GET `/daily-exchange-rates`, POST `/daily-exchange-rates/fetch`
+  - GET `/exchange-rate-alerts`, PUT `/exchange-rate-alerts/:id/acknowledge`
+- [x] Handler: `src/app/domain/backend/expenses/handlers/admin_global_settings.clj`
+- [x] Routes: `src/app/domain/backend/expenses/routes/global_settings.clj`
+- [x] Admin route splicing: `core.clj` uses `(into [...] (global-settings/routes db app-config))`
 
-### 2.7 Admin API routes for global settings
-- [ ] New admin routes (in admin API):
-  - GET/PUT `/admin/api/global-settings`
-  - GET/POST/DELETE `/admin/api/enabled-currencies`
-  - GET `/admin/api/daily-exchange-rates` (today's rates)
-  - GET/PUT `/admin/api/exchange-rate-alerts` (list + acknowledge)
-
-### 2.8 User API routes — profile & tenant settings
-- [ ] New user API routes:
-  - GET `/api/v1/profile` (user info + defaults + owner section data)
+### 2.8 User API routes — profile & tenant settings  ✓ (deprecation deferred)
+- [x] New user API routes:
+  - GET `/api/v1/profile` (user info + effective settings + currencies + tenant settings for owner)
   - PUT `/api/v1/profile/defaults` (update default_expense_category_id)
-  - PUT `/api/v1/tenant/settings` (owner: email_notifications)
+  - PUT `/api/v1/tenant/settings` (owner/admin: email_notifications)
   - PUT `/api/v1/tenant/name` (owner: workspace name)
-- [ ] Modify existing:
-  - GET/PUT `/api/v1/expenses/settings` — deprecate, eventually remove
-  - GET `/api/v1/expenses/export` — move to profile/owner context
-  - DELETE `/api/v1/expenses/all` — move to profile/owner context
+- [x] Handler: `src/app/domain/backend/expenses/handlers/user_expenses/profile.clj`
+- [x] Profile routes mounted at template API level via `requiring-resolve` (avoids compile-time coupling)
+- [x] Tenant routes mounted in `src/app/template/backend/routes/tenant.clj` via `requiring-resolve`
+- [x] Tenant name: `update-tenant!` added to `services/tenant.clj`
+- [ ] Deprecate old routes (deferred → Phase 5.2):
+  - GET/PUT `/api/v1/expenses/settings`
+  - GET `/api/v1/expenses/export`
+  - DELETE `/api/v1/expenses/all`
 
-### 2.9 Tenant provisioning integration
-- [ ] Modify tenant provisioning to call `provision-tenant-settings!`
+### 2.9 Tenant provisioning integration  ✓ (startup seed deferred)
+- [x] Modify `provision-tenant!` to create `tenant_settings` row (step 4c, ON CONFLICT DO NOTHING)
 - [ ] Ensure `global_settings` singleton exists at app startup
-
-**Files to modify**:
-- `src/app/domain/backend/expenses/services/tenant_settings.clj` (new)
-- `src/app/template/backend/core.clj` or DI config (startup seed)
-- Tenant provisioning service
+  *(low priority — seed migration already creates it; only needed for fresh DBs without running migrations)*
 
 ---
 
-## Phase 3: Frontend — User Profile Page
+## Phase 3: Frontend — User Profile Page  ◻ NOT STARTED
+
+**Next phase to implement.** All backend APIs are ready (Phase 2 complete).
 
 ### 3.1 Profile page component
 - [ ] New file: `src/app/domain/frontend/expenses/pages/user/profile.cljs`
   - Account info section (email, name — read-only)
   - Per-user defaults section:
-    - Default payer (read-only display, sticky)
-    - Default category (dropdown, editable)
-  - Owner section (conditionally rendered):
-    - Workspace name (editable text field)
-    - Email notifications (toggle)
-    - Export all expenses (button → CSV download)
-    - Delete all expenses (button → typed "DELETE" confirmation)
+    - Default payer (read-only display, sticky from last-used payer)
+    - Default category (dropdown, editable → PUT `/api/v1/profile/defaults`)
+  - Owner/admin section (conditionally rendered via `:user-role` sub):
+    - Workspace name (editable text field → PUT `/api/v1/tenant/name`)
+    - Email notifications (toggle → PUT `/api/v1/tenant/settings`)
+    - Export all expenses (button → existing CSV download dispatch)
+    - Delete all expenses (button → typed "DELETE" confirmation dialog)
 
 ### 3.2 Profile events & subscriptions
 - [ ] New file: `src/app/domain/frontend/expenses/events/user_expenses/profile.cljs`
-  - Fetch profile data, update defaults, update tenant settings
-  - Update workspace name
-  - Export/delete actions
-- [ ] Register subscriptions for profile state
+  - `:profile/fetch` → GET `/api/v1/profile` (returns `{:data {:user ... :settings ... :enabled-currencies ... :tenant-settings ...}}`)
+  - `:profile/update-defaults` → PUT `/api/v1/profile/defaults`
+  - `:profile/update-tenant-settings` → PUT `/api/v1/tenant/settings`
+  - `:profile/update-tenant-name` → PUT `/api/v1/tenant/name`
+  - `:profile/export` → reuse existing `[:user-expenses/export {:format :csv :all true}]`
+  - `:profile/delete-all` → reuse existing `[:user-expenses/delete-all "DELETE_ALL_EXPENSES"]`
+- [ ] Subscriptions: `:profile/data`, `:profile/loading?`, `:profile/saving?`
 
-### 3.3 Profile route
-- [ ] Add route: `/profile` → `:user-profile` view
-- [ ] Add to router: `src/app/domain/shared/routes/expenses_user.cljc`
-- [ ] Add page init event: `:page/init-user-profile`
-- [ ] Add sidebar nav item (user avatar/name → profile)
+### 3.3 Profile route wiring (7 files to touch)
+- [ ] `src/app/domain/shared/routes/expenses_user.cljc` — add descriptor `{:id :user-profile :path "/profile" :spa-fallback? true}`
+- [ ] `src/app/domain/frontend/expenses/routes/user.cljs` — add `:user-profile` route options with `controllers/user-guarded-start :page/init-user-profile`
+- [ ] `src/app/domain/frontend/expenses/pages.cljs` — add `:user-profile profile-page` to pages map + require
+- [ ] `src/app/template/frontend/events/routing.cljs` — add `:page/init-user-profile` event (set page + dispatch `:profile/fetch`)
+- [ ] `src/app/template/frontend/components/settings/global_settings.cljs` — change "Expenses Settings" link to "Profile" → `/profile`
+- [ ] `src/app/template/frontend/i18n.cljs` — add `profile/*` BS/EN translations
 
 ### 3.4 i18n translations
-- [ ] Add BS/EN translations for profile page labels
+- [ ] Add BS/EN translations for profile page labels under `profile/*` namespace
 
-**Files to modify**:
-- `src/app/domain/frontend/expenses/pages.cljs` (add profile page mapping)
-- `src/app/domain/frontend/expenses/routes/user.cljs` (add route)
-- `src/app/domain/shared/routes/expenses_user.cljc` (add path)
-- `src/app/template/frontend/events/routing.cljs` (add init event)
-- `src/app/template/frontend/i18n.cljs` (add translations)
-- Layout/sidebar component (add profile nav link)
+**Implementation notes (lessons learned)**:
+- Profile routes live at `/api/v1/profile` (template level, not under `/expenses`) — use `requiring-resolve` pattern
+- Settings panel gear icon (top-right header) currently links to `/expenses/settings` — update to `/profile`
+- Sidebar does NOT have a settings nav item; the link is in the header settings panel dropdown
+- Use `xhrio` helper from `events/user_expenses/xhrio.cljs` for HTTP requests
+- Endpoints go in `endpoints.cljs` using `(api/versioned-endpoint "/profile")` etc.
+- Follow UIx patterns from `expense_settings.cljs`: `defui`, `use-state`, `use-effect`, `use-subscribe`, `use-t`
 
 ---
 
-## Phase 4: Frontend — Admin Global Settings
+## Phase 4: Frontend — Admin Global Settings  ◻ NOT STARTED
 
 ### 4.1 Admin global settings panel
 - [ ] New admin page/section for global settings:
@@ -208,31 +209,35 @@ Also introduces: multi-currency support (manual expenses), daily CBBH exchange r
 - [ ] Events for: fetch/update global settings, manage currencies, view rates, acknowledge alerts
 
 **Files to modify/create**:
-- Admin frontend components (new page or section)
+- Admin frontend components (new page or section in admin SPA)
 - Admin API integration events
 
 ---
 
-## Phase 5: Remove Old Settings Page
+## Phase 5: Remove Old Settings Page  ◻ NOT STARTED
 
-### 5.1 Remove /expenses/settings route & components
+**Prerequisite**: Phase 3 must be live (profile page replaces settings page).
+
+### 5.1 Remove /expenses/settings frontend
 - [ ] Delete: `src/app/domain/frontend/expenses/pages/user/expense_settings.cljs`
 - [ ] Remove: settings events from `events/user_expenses/settings.cljs`
-- [ ] Remove: endpoint definition from `events/user_expenses/endpoints.cljs`
-- [ ] Remove: route from `routes/user.cljs` and `routes/expenses_user.cljc`
-- [ ] Remove: page init event `:page/init-expense-settings` from routing.cljs
-- [ ] Remove: i18n keys for `expense-settings/*`
-- [ ] Remove: sidebar nav link to settings page
+- [ ] Remove: endpoint `settings-endpoint` from `events/user_expenses/endpoints.cljs`
+- [ ] Remove: `:expense-settings` route from `routes/user.cljs` and `routes/expenses_user.cljc`
+- [ ] Remove: page init event `:page/init-expense-settings` from `routing.cljs`
+- [ ] Remove: all `expense-settings/*` i18n keys from `i18n.cljs` (both `:bs` and `:en`)
+- [ ] Remove: `expense-settings-page` from `pages.cljs` require + pages map
 
 ### 5.2 Remove old backend routes
-- [ ] Remove: GET/PUT `/api/v1/expenses/settings`
-  (after frontend is fully migrated to new endpoints)
-- [ ] Remove: settings handler file or repurpose
+- [ ] Remove: GET/PUT `/api/v1/expenses/settings` handler + route registration
+- [ ] Remove or repurpose: `handlers/user_expenses/settings.clj`
+- [ ] Remove: `/expenses/export` and `/expenses/all` routes from `user_api.clj`
+  (export/delete-all move to profile page, hitting same backend services)
 
-### 5.3 Drop deprecated columns
+### 5.3 Drop deprecated columns (was Phase 1.2)
 - [ ] Migration: drop `default_currency`, `default_note`, `notifications_enabled`,
   `auto_post_after_upload_enabled`, `receipt_refine_enabled` from `user_expense_settings`
 - [ ] Clean up service code that referenced these columns
+- [ ] Remove `^:deprecated allowed-currencies` from `user_expense_settings.clj`
 
 ### 5.4 Clean up tests
 - [ ] Update: `test/app/domain/backend/expenses/handlers/user_expenses/settings_test.clj`
@@ -242,23 +247,26 @@ Also introduces: multi-currency support (manual expenses), daily CBBH exchange r
 
 ---
 
-## Phase 6: Exchange Rate Integration
+## Phase 6: Exchange Rate Integration  ◻ PARTIALLY DONE (backend complete, frontend not started)
 
-### 6.1 Serper API integration
-- [ ] Implement CBBH rate fetching via Serper API
-- [ ] Parse exchange rate data from search results
-- [ ] Store daily rates in `daily_exchange_rates`
-- [ ] Fallback logic: use latest cached rates + create alert
+Phase 6 backend work was largely completed in Phase 2. What remains is frontend integration.
 
-### 6.2 Manual expense currency flow
-- [ ] Frontend: currency dropdown in Smart Input Phase 2
-- [ ] Backend: validate currency is enabled, fetch rate, calculate BAM amount
+### 6.1 Serper API integration  ✓ (done in Phase 2.2)
+- [x] CBBH HTML direct fetch (primary source)
+- [x] Serper API search (fallback source)
+- [x] Store daily rates in `daily_exchange_rates`
+- [x] Fallback logic: use latest cached rates + create `exchange_rate_fetch_alerts`
+
+### 6.2 Manual expense currency conversion — backend  ✓ (done in Phase 2.5)
+- [x] Backend: validate currency, fetch rate via `ensure-daily-rates!`, calculate BAM amount
+- [x] `create-user-expense!` handles multi-arity for optional `app-config`
+- [ ] Frontend: currency dropdown in Smart Input (tied to Smart Input Phase 2, separate plan)
 - [ ] Expense detail view: show conversion breakdown for non-BAM expenses
 
-### 6.3 Receipt currency mismatch
-- [ ] Backend: detect non-BAM/KM currency in OCR extraction
-- [ ] Set receipt to `review_required` with clear error message
-- [ ] Frontend: show warning banner in receipt review UI
+### 6.3 Receipt currency mismatch  ✓ backend / ◻ frontend
+- [x] Backend: detect non-BAM/KM currency in OCR extraction (done in Phase 2.6)
+- [x] Set receipt to `review_required` with clear error message
+- [ ] Frontend: show warning banner in receipt review UI when currency mismatch detected
 
 ---
 
@@ -266,44 +274,103 @@ Also introduces: multi-currency support (manual expenses), daily CBBH exchange r
 
 ```
 Phase 1 (DB) ──→ Phase 2 (Backend) ──→ Phase 3 (Profile FE) ──→ Phase 5 (Cleanup)
-                      │                                              ↑
-                      └──→ Phase 4 (Admin FE) ───────────────────────┘
+       ✓                ✓                    NEXT                     │
+                      │                                               ↑
+                      └──→ Phase 4 (Admin FE) ────────────────────────┘
                       │
-                      └──→ Phase 6 (Exchange Rates) ─────────────────┘
+                      └──→ Phase 6 (FE only — backend done in Phase 2)
 ```
 
-- Phase 1 must complete first (DB foundation)
-- Phase 2 can partially parallelize (services are independent)
-- Phase 3 and 4 can run in parallel (different UI surfaces)
-- Phase 5 only after Phase 3 is live (old page replaced)
-- Phase 6 can start alongside Phase 3/4 (backend service is independent)
+- Phase 1: COMPLETE (1.2 deferred to 5.3)
+- Phase 2: COMPLETE (minor deferrals noted inline)
+- **Phase 3: NEXT** — all backend APIs ready, profile page is the critical path
+- Phase 4: can run in parallel with Phase 3 (different UI surface — admin vs user)
+- Phase 5: only after Phase 3 is live (old page replaced)
+- Phase 6: backend done; frontend items are independent of Phase 3/4
+
+---
+
+## Implementation Lessons Learned
+
+### Route architecture
+- **Profile routes live at template level**, not under `/expenses`. They use `requiring-resolve`
+  to lazy-load domain handlers, avoiding compile-time template→domain coupling.
+- **Tenant settings/name routes** extend existing `tenant.clj` routes in the template layer.
+- **Admin global settings routes** use `(into [...] (routes ...))` splicing because
+  `global-settings/routes` returns a vector of route vectors, not a single nested route.
+  Reitit would misinterpret the nested structure without splicing.
+
+### Domain→template boundary
+- `requiring-resolve` is the pattern for template code calling domain services/handlers.
+  This avoids `:require` at compile time and keeps the template domain-agnostic.
+- The `registry.clj` passes `(:config service-container)` to admin routes so domain
+  services can access app-config (Serper API key, etc.) without DI coupling.
+
+### Currency conversion
+- Conversion logic lives in `create-user-expense!` (user-facing service), not the
+  low-level `create-expense!`. Only manual user-created expenses can have non-BAM currencies.
+- `app-config` threading: registry → routes/core.clj → handlers → services.
+
+### Frontend patterns (for Phase 3)
+- Settings panel (gear icon, top-right) is the only path to settings — no sidebar nav item.
+  File: `src/app/template/frontend/components/settings/global_settings.cljs`
+- Route wiring requires touching 7 files (descriptor, route options, page mapping, init event,
+  settings panel link, i18n, and the page component itself).
+- UIx patterns: `defui`, `$` for JSX, `use-state`/`use-effect`/`use-subscribe`, `use-t` for i18n.
+- Re-frame `common-interceptors` includes `trim-v` — handlers destructure `[params]` not `[_ params]`.
+- HTTP requests use `xhrio` helper (wraps `http/api-request`).
+
+### Bug fixes applied during implementation
+- `resolve-payer-id` in `review.clj` was missing `tenant_id` argument (broke after multi-tenancy migration).
+  Fixed to destructure `tenant_id` and guard with `(when (and tenant_id user_id) ...)`.
 
 ---
 
 ## Key Files Reference
 
-### Currently exist (to modify)
-| File | Role |
-|------|------|
-| `resources/db/domain/models.edn` | DB schema definitions |
-| `src/app/domain/backend/expenses/services/user_expense_settings.clj` | Per-user settings service |
-| `src/app/domain/backend/expenses/handlers/user_expenses/settings.clj` | Settings API handlers |
-| `src/app/domain/backend/expenses/handlers/user_expenses/crud.clj` | Expense creation (add currency) |
-| `src/app/domain/backend/expenses/handlers/user_receipts.clj` | Receipt upload (auto-publish source) |
-| `src/app/domain/backend/expenses/workers/receipt_ocr/extraction/review.clj` | OCR review (AI enhancement source, currency mismatch) |
-| `src/app/domain/backend/expenses/routes/user_api.clj` | User API route definitions |
-| `src/app/domain/frontend/expenses/pages/user/expense_settings.cljs` | Old settings page (to delete) |
-| `src/app/domain/frontend/expenses/events/user_expenses/settings.cljs` | Old settings events (to delete) |
-| `src/app/template/frontend/i18n.cljs` | Translations |
+### Created in Phase 1–2 (backend complete)
+| File | Role | Status |
+|------|------|--------|
+| `resources/db/domain/models.edn` | DB schema (5 new tables + expense currency columns) | Modified |
+| `src/app/domain/backend/expenses/services/global_settings.clj` | Global settings service | **New** |
+| `src/app/domain/backend/expenses/services/exchange_rates.clj` | Daily CBBH rate service | **New** |
+| `src/app/domain/backend/expenses/services/tenant_settings.clj` | Tenant settings service | **New** |
+| `src/app/domain/backend/expenses/handlers/admin_global_settings.clj` | Admin API handlers | **New** |
+| `src/app/domain/backend/expenses/routes/global_settings.clj` | Admin route definitions | **New** |
+| `src/app/domain/backend/expenses/handlers/user_expenses/profile.clj` | Profile API handlers | **New** |
+| `src/app/domain/backend/expenses/routes/core.clj` | Admin route assembly (spliced global-settings) | Modified |
+| `src/app/domain/backend/registry.clj` | Passes app-config to admin routes | Modified |
+| `src/app/domain/backend/expenses/services/user_expense_settings.clj` | Added effective-settings merge | Modified |
+| `src/app/domain/backend/expenses/services/user_expenses.clj` | Currency conversion in create | Modified |
+| `src/app/domain/backend/expenses/services/expenses.clj` | Allowlist new columns | Modified |
+| `src/app/domain/backend/expenses/handlers/user_expenses/crud.clj` | Pass app-config | Modified |
+| `src/app/domain/backend/expenses/routes/user_api.clj` | Wire app-config to create handler | Modified |
+| `src/app/domain/backend/expenses/workers/receipt_ocr/extraction/review.clj` | Currency mismatch + payer-id fix | Modified |
+| `src/app/template/backend/routes/api.clj` | Profile routes via requiring-resolve | Modified |
+| `src/app/template/backend/routes/tenant.clj` | Tenant settings/name routes | Modified |
+| `src/app/template/backend/services/tenant.clj` | `update-tenant!` + provision tenant_settings | Modified |
 
-### To create (new)
+### To create in Phase 3 (frontend)
 | File | Role |
 |------|------|
-| `src/app/domain/backend/expenses/services/global_settings.clj` | Global settings service |
-| `src/app/domain/backend/expenses/services/exchange_rates.clj` | Daily CBBH rate service |
-| `src/app/domain/backend/expenses/services/tenant_settings.clj` | Tenant settings service |
 | `src/app/domain/frontend/expenses/pages/user/profile.cljs` | User profile page |
-| `src/app/domain/frontend/expenses/events/user_expenses/profile.cljs` | Profile events |
+| `src/app/domain/frontend/expenses/events/user_expenses/profile.cljs` | Profile events & subs |
+
+### To modify in Phase 3 (frontend wiring)
+| File | Change |
+|------|--------|
+| `src/app/domain/shared/routes/expenses_user.cljc` | Add `:user-profile` descriptor |
+| `src/app/domain/frontend/expenses/routes/user.cljs` | Add `:user-profile` route options |
+| `src/app/domain/frontend/expenses/pages.cljs` | Add `:user-profile` page mapping |
+| `src/app/template/frontend/events/routing.cljs` | Add `:page/init-user-profile` event |
+| `src/app/template/frontend/components/settings/global_settings.cljs` | Change settings link → `/profile` |
+| `src/app/template/frontend/i18n.cljs` | Add `profile/*` translations |
+
+### To delete in Phase 5
+| File | Role |
+|------|------|
+| `src/app/domain/frontend/expenses/pages/user/expense_settings.cljs` | Old settings page |
+| `src/app/domain/frontend/expenses/events/user_expenses/settings.cljs` | Old settings events |
 
 ---
 

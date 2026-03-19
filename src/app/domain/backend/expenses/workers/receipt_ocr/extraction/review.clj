@@ -7,10 +7,10 @@
     [taoensso.timbre :as log]))
 
 (defn- resolve-payer-id
-  [db {:keys [payer_id user_id]}]
+  [db {:keys [payer_id tenant_id user_id]}]
   (or payer_id
-    (when user_id
-      (-> (user-expense-settings/get-user-expense-settings db user_id)
+    (when (and tenant_id user_id)
+      (-> (user-expense-settings/get-user-expense-settings db tenant_id user_id)
         user-expense-settings/effective-settings
         :default-payer-id))))
 
@@ -53,8 +53,19 @@
             (nil? (:expense_id receipt)))
       (let [payer-id (resolve-payer-id db receipt)
             review-data (build-review-data supplier-id store-id payer-id receipt extraction opts)
-            {:keys [purchased_at total_amount items]} review-data]
+            {:keys [purchased_at total_amount currency items]} review-data
+            ;; Currency mismatch detection (Phase 2):
+            ;; OCR may detect a non-BAM currency on the receipt. Since receipts are
+            ;; always posted as BAM, a foreign currency needs human review.
+            currency-mismatch? (and (some? currency)
+                                 (not (contains? #{"BAM" "KM"} currency)))]
         (cond
+          currency-mismatch?
+          {:status "review_required"
+           :error (mark-review-required! db receipt-id
+                    (str "Receipt currency (" currency ") is not BAM. "
+                      "Please review the amount and currency before posting."))}
+
           (nil? payer-id)
           {:status "review_required"
            :error (mark-review-required! db receipt-id "Payer is required to auto-post receipt.")}

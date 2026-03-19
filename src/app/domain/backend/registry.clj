@@ -5,12 +5,11 @@
     [app.domain.backend.expenses.routes.user-api :as expenses-user-api-routes]
     [app.domain.shared.routes.expenses-user :as expenses-user-route-contract]))
 
-
 (def ^:private expenses-manifest
   {:id :expenses
    :routes
-   {:admin-api (fn [db _service-container]
-                 (expenses-admin-routes/routes db))
+   {:admin-api (fn [db service-container]
+                 (expenses-admin-routes/routes db (:config service-container)))
     :user-api (fn [db wrap-user-auth app-config]
                 (expenses-user-api-routes/routes db wrap-user-auth app-config))}
 

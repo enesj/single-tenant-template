@@ -281,12 +281,21 @@
                                                    (when-let [handler-fn (requiring-resolve 'app.template.backend.routes.email-verification/resend-verification-handler)]
                                                      ((handler-fn db email-service) req))))}}]]
 
-     ;; Tenant management routes (switch, members, invitations)
+     ;; Tenant management routes (switch, members, invitations, settings, name)
      (tenant-routes/tenant-routes
        db user-middleware/wrap-user-authentication
        (get service-container :email-service)
        (email-svc/create-base-url app-config)
        app-config)
+
+     ;; User profile routes (Phase 2 — settings hierarchy)
+     ;; Lazy-resolved from domain to avoid template→domain compile-time coupling
+     (let [get-profile (requiring-resolve 'app.domain.backend.expenses.handlers.user-expenses.profile/get-profile-handler)
+           update-defaults (requiring-resolve 'app.domain.backend.expenses.handlers.user-expenses.profile/update-profile-defaults-handler)]
+       ["/profile"
+        {:middleware [user-middleware/wrap-user-authentication]}
+        ["" {:get {:handler (get-profile db)}}]
+        ["/defaults" {:put {:handler (update-defaults db)}}]])
 
      ;; Domain user API routes (from registry)
      ;; Each domain provides routes under its own path prefix (e.g., /expenses)

@@ -179,6 +179,17 @@
                                      :created_at        now
                                      :updated_at        now}]})))
 
+          ;; 4c) Provision tenant_settings for the new tenant (Phase 2 — settings hierarchy)
+          (jdbc/execute-one! tx
+            (sql/format {:insert-into [:tenant_settings]
+                         :values [{:id                  (java.util.UUID/randomUUID)
+                                   :tenant_id           tenant-id
+                                   :email_notifications true
+                                   :created_at          now
+                                   :updated_at          now}]
+                         :on-conflict [:tenant_id]
+                         :do-nothing true}))
+
           ;; 5) Seed expense_categories
           (doseq [cat (:expense-categories defaults)]
             (jdbc/execute-one! tx
@@ -278,6 +289,21 @@
         (sql/format {:select [:*]
                      :from   [:tenants]
                      :where  [:= :id uuid-id]})))))
+
+(defn update-tenant!
+  "Update a tenant's mutable fields. Currently supports :name.
+   Returns the updated tenant row."
+  [db tenant-id updates]
+  (let [uuid-id (if (string? tenant-id) [:cast tenant-id :uuid] tenant-id)
+        set-map (cond-> {:updated_at [:now]}
+                  (contains? updates :name)
+                  (assoc :name (:name updates)))]
+    (convert-pg-objects
+      (jdbc/execute-one! (->jdbc-conn db)
+        (sql/format {:update :tenants
+                     :set set-map
+                     :where [:= :id uuid-id]
+                     :returning [:*]})))))
 
 ;; ============================================================================
 ;; Membership Queries

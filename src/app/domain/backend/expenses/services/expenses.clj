@@ -438,6 +438,10 @@
                                            :receipt_id
                                            :purchased_at
                                            :total_amount
+                                           :original_amount
+                                           :bam_amount
+                                           :exchange_rate
+                                           :rate_fetched_at
                                            :currency
                                            :notes
                                            :is_posted])
