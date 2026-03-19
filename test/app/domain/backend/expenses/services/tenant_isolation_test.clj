@@ -14,7 +14,8 @@
     [app.domain.backend.expenses.services.user-expense-settings :as settings]
     [app.domain.backend.expenses.services.user-expenses :as user-expenses]
     [app.domain.expenses.test-helpers :as th]
-    [clojure.test :refer [deftest is testing use-fixtures]])
+    [clojure.test :refer [deftest is testing use-fixtures]]
+    [next.jdbc :as jdbc])
   (:import
     [java.util UUID]))
 
@@ -117,20 +118,20 @@
           user-b (th/ensure-test-user! db {:email "settings-owner-b@shared.com"})
           {:keys [tenant-id] :as _tb} (th/ensure-test-tenant! db user-b)
           tenant-b-id tenant-id
+          category-id (UUID/randomUUID)
+          _ (jdbc/execute-one!
+              db
+              ["insert into expense_categories (id, tenant_id, name, created_at, updated_at) values (?, ?, ?, now(), now())"
+               category-id tenant-a-id (str "Tenant A category " category-id)])
           ;; Save settings in tenant A
-          _saved (settings/upsert-user-expense-settings!
-                   db tenant-a-id user-id
-                   {:default-currency "EUR"
-                    :notifications-enabled true
-                    :auto-post-after-upload-enabled false
-                    :receipt-refine-enabled false})
+          _saved (settings/update-user-default-category! db tenant-a-id user-id category-id)
           ;; Read settings from each tenant
           settings-a (settings/get-user-expense-settings db tenant-a-id user-id)
           settings-b (settings/get-user-expense-settings db tenant-b-id user-id)]
       (is (some? settings-a)
         "Settings should exist for user in tenant A")
-      (is (= "EUR" (:default-currency settings-a))
-        "Tenant A settings should have EUR currency")
+      (is (= category-id (:default-expense-category-id settings-a))
+        "Tenant A settings should keep its own default expense category")
       (is (nil? settings-b)
         "Tenant B should have no settings for this user"))))
 

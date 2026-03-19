@@ -3,6 +3,7 @@
   (:require
     [app.domain.backend.expenses.integrations.cerebras :as cerebras]
     [app.domain.backend.expenses.integrations.ocr-provider :as ocr-provider]
+    [app.domain.backend.expenses.services.global-settings :as global-settings]
     [app.domain.backend.expenses.services.places-api :as places-api]
     [app.domain.backend.expenses.services.receipts.image-preprocess :as image-preprocess]
     [app.domain.backend.expenses.services.receipts.queries :as receipt-queries]
@@ -15,10 +16,18 @@
 
 (defn- build-provider-deps
   "Build the shared provider-dependency map for worker opts."
-  [app-config ocr-cfg]
-  {:cerebras-cfg (cerebras/build-config app-config)
-   :places-cfg (places-api/build-config app-config)
-   :auto-post-after-upload? (:auto-post-after-upload? ocr-cfg)})
+  [db app-config ocr-cfg]
+  (let [global (try
+                 (global-settings/get-global-settings db)
+                 (catch Exception e
+                   (log/warn e "Failed to load global settings for receipt OCR worker")
+                   nil))]
+    {:cerebras-cfg (cerebras/build-config app-config)
+     :places-cfg (places-api/build-config app-config)
+     :auto-post-after-upload? (:auto-post-after-upload? ocr-cfg)
+     :global-auto-publish-after-upload? (boolean (:auto-publish-after-upload global))
+     :ai-receipt-enhancement? (boolean (:ai-receipt-enhancement global))
+     :default-currency (or (:default-currency global) "BAM")}))
 
 (defn- process-parse!
   [db ocr-cfg receipt opts]
@@ -76,8 +85,8 @@
                                  {:bytes bytes*
                                   :filename (:original_filename receipt)
                                   :content-type content-type*})
-                user-auto-post? (refine/user-allows-auto-post? db receipt)
-                auto-post-enabled? (and (:auto-post-after-upload? ocr-cfg) user-auto-post?)
+                global-auto-post? (:global-auto-publish-after-upload? opts)
+                auto-post-enabled? (and (:auto-post-after-upload? ocr-cfg) global-auto-post?)
                 opts* (assoc opts :auto-post-after-upload? auto-post-enabled?)
                 persist-result (-> (extraction/persist-extract-result! db receipt-id extract-result opts*)
                                  (assoc :auto-post-after-upload? auto-post-enabled?))]
@@ -128,7 +137,7 @@
    (run-pending! db app-config nil))
   ([db app-config {:keys [max-receipts] :as opts}]
    (let [ocr-cfg (ocr-provider/build-provider app-config)
-         deps (build-provider-deps app-config ocr-cfg)
+         deps (build-provider-deps db app-config ocr-cfg)
          opts (merge {:max-receipts 25
                       :lease-seconds 900
                       :default-currency "BAM"}
@@ -189,7 +198,7 @@
    (run-by-ids! db app-config receipt-ids nil))
   ([db app-config receipt-ids {:keys [reset?] :or {reset? true} :as opts}]
    (let [ocr-cfg (ocr-provider/build-provider app-config)
-         deps (build-provider-deps app-config ocr-cfg)
+         deps (build-provider-deps db app-config ocr-cfg)
          defer-refine? (if (contains? opts :defer-refine?)
                          (:defer-refine? opts)
                          true)

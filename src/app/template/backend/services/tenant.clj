@@ -171,13 +171,12 @@
             ;; 4b) Create user_expense_settings for the owner
             (jdbc/execute-one! tx
               (sql/format {:insert-into [:user_expense_settings]
-                           :values [{:id                (java.util.UUID/randomUUID)
-                                     :tenant_id         tenant-id
-                                     :user_id           (user-id user)
-                                     :default_currency  [:cast "BAM" :currency]
-                                     :default_payer_id  owner-payer-id
-                                     :created_at        now
-                                     :updated_at        now}]})))
+                           :values [{:id               (java.util.UUID/randomUUID)
+                                     :tenant_id        tenant-id
+                                     :user_id          (user-id user)
+                                     :default_payer_id owner-payer-id
+                                     :created_at       now
+                                     :updated_at       now}]})))
 
           ;; 4c) Provision tenant_settings for the new tenant (Phase 2 — settings hierarchy)
           (jdbc/execute-one! tx
@@ -255,7 +254,6 @@
                      :values [{:id               (java.util.UUID/randomUUID)
                                :tenant_id        t-id
                                :user_id          u-id
-                               :default_currency [:cast "BAM" :currency]
                                :default_payer_id payer-id
                                :created_at       now
                                :updated_at       now}]

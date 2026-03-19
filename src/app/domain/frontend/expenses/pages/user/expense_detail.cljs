@@ -29,6 +29,15 @@
 (defn format-short-date [date-str]
   (timestamp/format-timestamp-string date-str))
 
+(defn format-decimal
+  [value digits]
+  (cond
+    (nil? value) "—"
+    :else (try
+            (.toFixed (js/Number value) digits)
+            (catch :default _
+              (str value)))))
+
 ;; ========================================================================
 ;; Components
 ;; ========================================================================
@@ -66,8 +75,31 @@
                   ($ :td raw-label*)
                   ($ :td {:class "text-right font-mono"} (or qty "—"))
                   ($ :td {:class "text-right font-mono"} (when unit-price* (format-money unit-price* currency)))
-                  ($ :td {:class "text-right font-mono font-medium"} (format-money line-total* currency)))))))))
-    ($ :p {:class "text-base-content/50 text-sm"} (t :expense-detail/no-items))))
+                  ($ :td {:class "text-right font-mono font-medium"} (format-money line-total* currency))))))))
+      ($ :p {:class "text-base-content/50 text-sm"} (t :expense-detail/no-items)))))
+
+(defui conversion-breakdown
+  [{:keys [currency original-amount bam-amount exchange-rate rate-fetched-at]}]
+  (let [t (use-t)]
+    ($ :div {:class "bg-white rounded-xl shadow-sm border border-base-200 p-4"}
+      ($ :div {:class "flex items-center justify-between mb-4"}
+        ($ :div
+          ($ :h3 {:class "font-semibold text-base"} (t :expense-detail/conversion-title))
+          ($ :p {:class "text-sm text-base-content/60"} (t :expense-detail/conversion-desc))))
+      ($ :div {:class "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4"}
+        ($ info-card {:label (t :expense-detail/label-original-amount)
+                      :value (format-money original-amount currency)
+                      :icon "💱"})
+        ($ info-card {:label (t :expense-detail/label-bam-amount)
+                      :value (format-money bam-amount "BAM")
+                      :icon "🇧🇦"})
+        ($ info-card {:label (t :expense-detail/label-exchange-rate)
+                      :value (when exchange-rate
+                               (str "1 " currency " = " (format-decimal exchange-rate 4) " BAM"))
+                      :icon "📈"})
+        ($ info-card {:label (t :expense-detail/label-rate-fetched-at)
+                      :value (format-short-date rate-fetched-at)
+                      :icon "🕒"})))))
 
 (defui expense-detail-skeleton []
   ($ :div {:class "space-y-6 animate-pulse"}
@@ -103,6 +135,10 @@
     (let [{:keys [supplier_display_name supplier-display-name
                   payer_label payer-label
                   total_amount total-amount
+                  original_amount original-amount
+                  bam_amount bam-amount
+                  exchange_rate exchange-rate
+                  rate_fetched_at rate-fetched-at
                   currency
                   purchased_at purchased-at
                   notes
@@ -112,9 +148,16 @@
           supplier-name (or supplier-display-name supplier_display_name)
           payer-name (or payer-label payer_label)
           total (or total-amount total_amount)
+          original-total (or original-amount original_amount)
+          bam-total (or bam-amount bam_amount)
+          current-rate (or exchange-rate exchange_rate)
+          rate-fetched (or rate-fetched-at rate_fetched_at)
           purchased (or purchased-at purchased_at)
           created (or created-at created_at)
-          posted? (true? (or is-posted is_posted))]
+          posted? (true? (or is-posted is_posted))
+          show-conversion? (and (some? currency)
+                             (not= "BAM" currency)
+                             (or original-total bam-total current-rate))]
       ($ :div {:class "min-h-screen bg-base-100"}
         ;; Header (hidden when in modal)
         (when-not in-modal?
@@ -134,7 +177,7 @@
                     ($ button {:btn-type :outline
                                :id "btn-edit-expense"
                                :on-click #(rf/dispatch [:navigate-to (str "/expenses/" expense-id "?edit=true")])}
-                        (t :expense-detail/btn-edit)))
+                      (t :expense-detail/btn-edit)))
                   ($ button {:btn-type :ghost
                              :on-click #(when expense-id
                                           (rf/dispatch [:user-expenses/fetch-expense expense-id]))}
@@ -174,6 +217,14 @@
                 ($ info-card {:label (t :expense-detail/label-total) :value (format-money total currency) :icon "💰"})
                 ($ info-card {:label (t :expense-detail/label-date) :value (format-short-date purchased) :icon "📅"}))
 
+              (when show-conversion?
+                ($ conversion-breakdown
+                  {:currency currency
+                   :original-amount (or original-total total)
+                   :bam-amount (or bam-total total)
+                   :exchange-rate current-rate
+                   :rate-fetched-at rate-fetched}))
+
               ;; Notes
               (when (and notes (not (str/blank? notes)))
                 ($ :div {:class "bg-white rounded-xl shadow-sm border border-base-200 p-4"}
@@ -196,10 +247,10 @@
                                :size :sm
                                :id "btn-delete-expense"
                                :on-click #(rf/dispatch [:user-expenses/delete-expense expense-id])}
-                        (t :expense-detail/btn-delete)))
+                      (t :expense-detail/btn-delete)))
                   (when (not posted?)
                     ($ button {:btn-type :primary
                                :size :sm
                                :id "btn-post-expense"
                                :on-click #(rf/dispatch [:user-expenses/post-expense expense-id])}
-                        (t :expense-detail/btn-post))))))))))))
+                      (t :expense-detail/btn-post))))))))))))

@@ -91,10 +91,10 @@
                   "Settings")
                 ($ :ul {:class "ds-menu ds-menu-sm p-0"}
                   ($ :li
-                    ($ :a {:id "settings-panel-expenses-settings"
-                           :href "/expenses/settings"
+                    ($ :a {:id "settings-panel-profile"
+                           :href "/profile"
                            :on-click #(set-expanded false)}
-                      "Expenses Settings"))
+                      "Profile"))
                   ($ :li
                     ($ :a {:id "settings-panel-change-password"
                            :href "/change-password"

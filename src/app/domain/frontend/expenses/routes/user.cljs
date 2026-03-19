@@ -52,10 +52,10 @@
     :view :expense-reports
     :controllers (controllers/user-guarded-start :page/init-expense-reports)}
 
-   :expense-settings
-   {:name :expense-settings
-    :view :expense-settings
-    :controllers (controllers/user-guarded-start :page/init-expense-settings)}
+   :user-profile
+   {:name :user-profile
+    :view :user-profile
+    :controllers (controllers/user-guarded-start :page/init-user-profile)}
 
    :expense-suppliers
    {:name :expense-suppliers

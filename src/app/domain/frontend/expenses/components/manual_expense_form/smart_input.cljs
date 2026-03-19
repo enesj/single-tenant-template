@@ -14,11 +14,12 @@
      :refer [autocomplete-dropdown build-quick-pick-groups entity-chip
              item-row phase-two-quick-pick-groups quick-picks type-picker]]
     [app.domain.frontend.expenses.components.manual-expense-form.smart-input.constants
-     :refer [create-events create-field-names currency-options]]
+     :refer [create-events create-field-names]]
     [app.domain.frontend.expenses.components.manual-expense-form.smart-input.helpers
      :refer [compute-items-total current-related-context entity-type-label
              focused-search-types payer-default-id prepare-submit-values
              search-placeholder validate-form]]
+    [app.domain.frontend.expenses.ui.currencies :as currency-ui]
     [app.template.frontend.i18n :refer [use-t]]
     app.domain.frontend.expenses.events.user-expenses.quick-add-search
     [clojure.string :as str]
@@ -46,6 +47,7 @@
         articles (or (use-subscribe [:user-expenses/articles]) [])
         payers (or (use-subscribe [:user-expenses/payers]) [])
         payers-loading? (boolean (use-subscribe [:user-expenses/payers-loading?]))
+        profile (or (use-subscribe [:profile/data]) {})
 
         ;; Quick Add search (backend)
         quick-search-results (use-subscribe [:user-expenses/quick-add-search-results :all])
@@ -74,6 +76,7 @@
         [notes set-notes!] (use-state "")
         [error set-error!] (use-state nil)
         [ready? set-ready!] (use-state false)
+        currency-options (currency-ui/enabled-currency-options profile)
 
         input-ref (use-ref nil)
 
@@ -369,13 +372,28 @@
         (rf/dispatch [:user-expenses/fetch-articles {:limit 200 :offset 0}])
         (rf/dispatch [:user-expenses/fetch-payers {:limit 100 :offset 0}])
         (rf/dispatch [:user-expenses/fetch-expense-categories {:limit 500 :offset 0}])
+        (when-not (currency-ui/has-enabled-currencies? profile)
+          (rf/dispatch [:profile/fetch]))
         ;; Cleanup quick add search on unmount
         (fn []
           (rf/dispatch [:user-expenses/clear-quick-add-search :all])
           (rf/dispatch [:user-expenses/clear-quick-add-related])
           (rf/dispatch [:user-expenses/clear-cooccurring-articles])
           (rf/dispatch [:user-expenses/clear-context-suggestions])))
-      [])
+      [profile])
+
+    (use-effect
+      (fn []
+        (let [allowed-values (set (map :value currency-options))
+              preferred (currency-ui/default-currency profile)
+              next-currency (if (contains? allowed-values preferred)
+                              preferred
+                              (some-> currency-options first :value))]
+          (when (and next-currency
+                  (not (contains? allowed-values currency)))
+            (set-currency! next-currency)))
+        js/undefined)
+      [currency-options profile currency])
 
     ;; Set default payer once loaded
     (use-effect

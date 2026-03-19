@@ -103,12 +103,13 @@
      :dispatch [:user-expenses/init-reports]}))
 
 (rf/reg-event-fx
-  :page/init-expense-settings
+  :page/init-user-profile
   common-interceptors
   (fn [{:keys [db]} _]
-    {:db (assoc-in db (paths/current-page) :expense-settings)
-     :dispatch-n [[:user-expenses/fetch-settings]
-                  [:user-expenses/fetch-payers {:limit 100}]]}))
+    {:db (assoc-in db (paths/current-page) :user-profile)
+     :dispatch-n [[:profile/fetch]
+                  [:user-expenses/fetch-payers {:limit 100}]
+                  [:user-expenses/fetch-expense-categories {:limit 500 :offset 0}]]}))
 
 (rf/reg-event-fx
   :page/init-expense-suppliers

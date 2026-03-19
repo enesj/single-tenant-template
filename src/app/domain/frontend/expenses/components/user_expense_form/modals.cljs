@@ -7,6 +7,7 @@
     [app.domain.frontend.expenses.components.user-expense-form.forms :as forms]
     [app.domain.frontend.expenses.components.user-expense-form.normalization :as norm]
     [app.domain.frontend.expenses.components.user-expense-form.specs :as specs]
+    [app.domain.frontend.expenses.ui.currencies :as currency-ui]
     [app.template.frontend.components.form.master-detail :refer [master-detail-form]]
     [clojure.string :as str]
     [re-frame.core :as rf]
@@ -102,20 +103,24 @@
         suppliers (or (use-subscribe [:user-expenses/suppliers]) [])
         payers (or (use-subscribe [:user-expenses/payers]) [])
         expense-categories (or (use-subscribe [:user-expenses/expense-categories]) [])
+        profile (or (use-subscribe [:profile/data]) {})
+        enabled-currencies (currency-ui/enabled-currency-options profile)
 
         ;; Memoize entity-spec
         entity-spec (use-memo
-                      #(specs/get-expense-form-spec suppliers payers {:expense-categories expense-categories})
-                      [suppliers payers expense-categories])
+                      #(specs/get-expense-form-spec suppliers payers
+                         {:expense-categories expense-categories
+                          :enabled-currencies enabled-currencies})
+                      [suppliers payers expense-categories enabled-currencies])
 
         ;; Default values for expense form
         ;; Memoized to keep identity stable across renders (prevents fork resets).
         default-values (use-memo
                          (fn []
-                           {:currency "BAM"
+                           {:currency (currency-ui/default-currency profile)
                             :purchased_at (current-datetime-local)
                             :items [(new-line-item)]})
-                         [])]
+                         [profile])]
 
     ;; Load dependencies (suppliers/payers)
     (use-effect
@@ -123,8 +128,10 @@
         (rf/dispatch [:user-expenses/fetch-suppliers {:limit 100 :offset 0}])
         (rf/dispatch [:user-expenses/fetch-payers {:limit 100 :offset 0}])
         (rf/dispatch [:user-expenses/fetch-expense-categories {:limit 500 :offset 0}])
+        (when-not (currency-ui/has-enabled-currencies? profile)
+          (rf/dispatch [:profile/fetch]))
         js/undefined)
-      [])
+      [profile])
 
     ($ master-detail-form
       {:mode :edit

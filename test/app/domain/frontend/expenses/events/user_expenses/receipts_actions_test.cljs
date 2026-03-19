@@ -199,16 +199,3 @@
         (is (= "/api/v1/expenses/receipts/rec-2/ocr" (sup/req-uri req3)))
         (is (nil? (sup/req-params req3)))))))
 
-(deftest update-settings-sends-json-params
-  (testing "update-settings sends JSON payload in :params (not :body)"
-    (sup/reset-db!)
-    (let [settings {:default-currency "EUR"
-                    :default-payer-id ""
-                    :notifications-enabled true
-                    :receipt-refine-enabled true}]
-      (rf/dispatch-sync [:user-expenses/update-settings settings])
-      (let [req (sup/last-http-request)]
-        (is (= :put (sup/req-method req)))
-        (is (= "/api/v1/expenses/settings" (sup/req-uri req)))
-        (is (= settings (sup/req-params req)))
-        (is (nil? (sup/req-body req)))))))

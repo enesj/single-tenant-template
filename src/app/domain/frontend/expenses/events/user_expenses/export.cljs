@@ -55,8 +55,7 @@
              (assoc-in [:user-expenses :export :error] nil))
        :http-xhrio (x/xhrio db
                      {:method :get
-                      :uri (str endpoints/list-endpoint "/export")
-
+                      :uri endpoints/profile-export-endpoint
                       :params request-params
                       :response-format response-format
                       :on-success [:user-expenses/export-success export-format]
@@ -100,8 +99,7 @@
              (assoc-in [:user-expenses :bulk :error] nil))
        :http-xhrio (x/xhrio db
                      {:method :delete
-                      :uri (str endpoints/list-endpoint "/all")
-
+                      :uri endpoints/profile-delete-all-endpoint
                       :params {:confirmation confirmation-token}
                       :on-success [:user-expenses/delete-all-success]
                       :on-failure [:user-expenses/delete-all-failure]})}

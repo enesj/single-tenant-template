@@ -27,7 +27,12 @@
 (def article-aliases-endpoint (api/versioned-endpoint "/expenses/article-aliases"))
 (def supplier-aliases-endpoint (api/versioned-endpoint "/expenses/supplier-aliases"))
 
-(def settings-endpoint (api/versioned-endpoint "/expenses/settings"))
+(def profile-endpoint (api/versioned-endpoint "/profile"))
+(def profile-defaults-endpoint (api/versioned-endpoint "/profile/defaults"))
+(def profile-export-endpoint (api/versioned-endpoint "/profile/export"))
+(def profile-delete-all-endpoint (api/versioned-endpoint "/profile/all"))
+(def tenant-settings-endpoint (api/versioned-endpoint "/tenant/settings"))
+(def tenant-name-endpoint (api/versioned-endpoint "/tenant/name"))
 (def upload-endpoint (api/versioned-endpoint "/expenses/upload"))
 
 (def receipts-endpoint (api/versioned-endpoint "/expenses/receipts"))

@@ -5,6 +5,7 @@
    Used by the expenses list page for adding new expenses."
   (:require
     [app.domain.frontend.expenses.components.manual-expense-form.search :as quick-add-search]
+    [app.domain.frontend.expenses.ui.currencies :as currency-ui]
     [app.template.frontend.components.button :refer [button]]
     [app.template.frontend.i18n :refer [use-t]]
     [app.shared.type-conversion :as type-conv]
@@ -146,11 +147,6 @@
       (assoc (vec items) blank-index (with-article (nth items blank-index)))
       (conj (vec items) (with-article (new-line-item))))))
 
-(def currency-options
-  [{:label "BAM" :value "BAM"}
-   {:label "EUR" :value "EUR"}
-   {:label "USD" :value "USD"}])
-
 (defui line-item-row [{:keys [item on-change on-remove]}]
   (let [t (use-t)
         {:keys [id raw_label qty unit_price line_total]} item]
@@ -267,6 +263,7 @@
 (defui standard-expense-form [{:keys [on-cancel on-success]}]
   (let [t (use-t)
         payers (or (use-subscribe [:user-expenses/payers]) [])
+        profile (or (use-subscribe [:profile/data]) {})
         loading? (boolean (use-subscribe [:user-expenses/form-loading?]))
         form-error (use-subscribe [:user-expenses/form-error])
         [context set-context!] (use-state {:supplier nil
@@ -278,14 +275,30 @@
         [currency set-currency!] (use-state "BAM")
         [notes set-notes!] (use-state "")
         [line-items set-line-items!] (use-state [(new-line-item)])
-        [validation-error set-validation-error!] (use-state nil)]
+        [validation-error set-validation-error!] (use-state nil)
+        currency-options (currency-ui/enabled-currency-options profile)]
 
     ;; Fetch payers on mount (previously done by page init event)
     (use-effect
       (fn []
         (rf/dispatch [:user-expenses/fetch-payers {:limit 100}])
+        (when-not (currency-ui/has-enabled-currencies? profile)
+          (rf/dispatch [:profile/fetch]))
         js/undefined)
-      [])
+      [profile])
+
+    (use-effect
+      (fn []
+        (let [allowed-values (set (map :value currency-options))
+              preferred (currency-ui/default-currency profile)
+              next-currency (if (contains? allowed-values preferred)
+                              preferred
+                              (some-> currency-options first :value))]
+          (when (and next-currency
+                  (not (contains? allowed-values currency)))
+            (set-currency! next-currency)))
+        js/undefined)
+      [currency-options profile currency])
 
     (use-effect
       (fn []

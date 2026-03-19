@@ -4,13 +4,9 @@
     [app.domain.frontend.expenses.components.form-fields.line-items :refer [line-items-input]]
     [app.domain.frontend.expenses.components.form-fields.total-amount :refer [total-amount-input totals-display]]
     [app.domain.frontend.expenses.components.user-expense-form.inline-supplier-select :refer [user-supplier-select-with-inline-create]]
+    [app.domain.frontend.expenses.ui.currencies :as currency-ui]
     [app.domain.frontend.expenses.ui.select-options :as select-options]
     [clojure.string :as str]))
-
-(def ^:private currency-options
-  [{:label "BAM" :value "BAM"}
-   {:label "EUR" :value "EUR"}
-   {:label "USD" :value "USD"}])
 
 (def ^:private line-item-columns
   [{:id :raw_label
@@ -53,9 +49,12 @@
   Optional opts support the receipt-approval UX."
   ([suppliers payers]
    (get-expense-form-spec suppliers payers nil))
-  ([suppliers payers {:keys [receipt-approval? supplier-guess receipt receipt-id exclude-line-items? expense-categories]}]
+  ([suppliers payers {:keys [receipt-approval? supplier-guess receipt receipt-id exclude-line-items? expense-categories enabled-currencies]}]
    (let [receipt-id* (or receipt-id (:id receipt))
          receipt-id-str (some-> receipt-id* str)
+         currency-options (if (seq enabled-currencies)
+                            enabled-currencies
+                            currency-ui/fallback-currency-options)
          receipt-supplier-guess (some-> (or (:supplier-guess receipt) supplier-guess)
                                   str
                                   str/trim

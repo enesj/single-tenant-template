@@ -5,23 +5,16 @@
     [app.domain.backend.expenses.services.stores :as stores]
     [app.domain.backend.expenses.services.supplier-aliases :as supplier-aliases]
     [app.domain.backend.expenses.services.suppliers :as suppliers]
-    [app.domain.backend.expenses.services.user-expense-settings :as user-expense-settings]
     [app.domain.backend.expenses.workers.receipt-ocr.markdown :as markdown]
     [clojure.string :as str]
     [taoensso.timbre :as log]))
 
 (defn resolve-user-region
-  [db {:keys [user_id] :as _receipt} {:keys [user-region places-cfg]}]
+  [_db _receipt {:keys [user-region places-cfg default-currency]}]
   (or user-region
     (:region-code places-cfg)
-    (when (and user_id (map? (:currency-region-map places-cfg)))
-      (try
-        (let [persisted (user-expense-settings/get-user-expense-settings db user_id)
-              effective (user-expense-settings/effective-settings persisted)
-              currency (:default-currency effective)]
-          (get (:currency-region-map places-cfg) currency))
-        (catch Exception _
-          nil)))))
+    (when (and (seq default-currency) (map? (:currency-region-map places-cfg)))
+      (get (:currency-region-map places-cfg) default-currency))))
 
 (defn- token-char-diff
   [a b]

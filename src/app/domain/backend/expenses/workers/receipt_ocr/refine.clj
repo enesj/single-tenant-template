@@ -6,7 +6,6 @@
     [app.domain.backend.expenses.integrations.llamaparse.receipt-markdown :as receipt-md]
     [app.domain.backend.expenses.services.receipts.queries :as receipt-queries]
     [app.domain.backend.expenses.services.receipts.status :as receipt-status]
-    [app.domain.backend.expenses.services.user-expense-settings :as user-expense-settings]
     [app.domain.backend.expenses.workers.receipt-ocr.common :as common]
     [app.domain.backend.expenses.workers.receipt-ocr.extraction :as extraction]
     [clojure.string :as str]
@@ -45,39 +44,16 @@
         (log/warn e "Failed to persist receipt refine context" {:receipt-id receipt-id})))
     ctx))
 
-;; Shared helper: load one boolean flag from effective user expense settings.
-;; Both refine and auto-post eligibility use the same lookup pattern; this keeps
-;; their fallback behaviour consistent.
-(defn- load-user-boolean-setting
-  [db receipt setting-key log-msg]
-  (try
-    (let [user-id (:user_id receipt)]
-      (when user-id
-        (let [persisted (user-expense-settings/get-user-expense-settings db user-id)
-              effective (user-expense-settings/effective-settings persisted)]
-          (true? (get effective setting-key)))))
-    (catch Exception e
-      (log/warn e log-msg
-        {:receipt-id (:id receipt)
-         :user-id (:user_id receipt)})
-      false)))
-
-(defn- user-allows-receipt-refine?
-  [db receipt]
-  (load-user-boolean-setting db receipt :receipt-refine-enabled
-    "Failed to load user expense settings; skipping receipt refine"))
-
-(defn user-allows-auto-post?
-  "Return true when the user has enabled auto-post-after-upload."
-  [db receipt]
-  (load-user-boolean-setting db receipt :auto-post-after-upload-enabled
-    "Failed to load user expense settings; skipping auto-post"))
+(defn- global-setting-enabled?
+  [opts setting-key]
+  (true? (get opts setting-key)))
 
 (defn receipt-eligible-for-refine?
-  "Return true when the receipt is eligible for Cerebras refinement."
-  [db receipt opts]
+  "Return true when the receipt is eligible for Cerebras refinement.
+   This now follows the global AI enhancement setting instead of a per-user flag."
+  [_db _receipt opts]
   (or (true? (:force-refine? opts))
-    (user-allows-receipt-refine? db receipt)))
+    (global-setting-enabled? opts :ai-receipt-enhancement?)))
 
 (defn- maybe-refine-with-cerebras
   [db receipt extract-result {:keys [cerebras-cfg] :as _opts}]

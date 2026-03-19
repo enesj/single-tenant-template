@@ -1,0 +1,15 @@
+({:action :drop-column,
+  :field-name :notifications-enabled,
+  :model-name :user_expense_settings}
+ {:action :drop-column,
+  :field-name :default-note,
+  :model-name :user_expense_settings}
+ {:action :drop-column,
+  :field-name :receipt-refine-enabled,
+  :model-name :user_expense_settings}
+ {:action :drop-column,
+  :field-name :default-currency,
+  :model-name :user_expense_settings}
+ {:action :drop-column,
+  :field-name :auto-post-after-upload-enabled,
+  :model-name :user_expense_settings})

@@ -1,7 +1,7 @@
 # Settings Hierarchy Implementation Plan
 
 **Spec**: `specs/allium/domain/expenses/settings-hierarchy.candidate.allium`
-**Status**: Phase 1 complete (1.2 deferred), Phase 2 complete (minor items deferred), Phase 3–6 not started
+**Status**: Phase 1–6 complete
 **Created**: 2026-03-19
 **Last updated**: 2026-03-19
 
@@ -19,7 +19,7 @@ Also introduces: multi-currency support (manual expenses), daily CBBH exchange r
 
 ---
 
-## Phase 1: Database & Backend Foundation  ✓ COMPLETE (1.2 deferred)
+## Phase 1: Database & Backend Foundation  ✓ COMPLETE
 
 ### 1.1 New DB tables + migrations  ✓
 - [x] Create `global_settings` table (singleton):
@@ -51,15 +51,12 @@ Also introduces: multi-currency support (manual expenses), daily CBBH exchange r
 - [x] Seed migration: create `tenant_settings` row for each existing tenant
 - [x] Apply migrations to dev + test DBs (0045_schema.edn + 0046_seed_settings_hierarchy.sql)
 
-### 1.2 Remove columns from user_expense_settings  ⏳ DEFERRED → Phase 5.3
-- [ ] Remove from `user_expense_settings`: `default_currency`, `default_note`,
+### 1.2 Remove columns from user_expense_settings  ✓ COMPLETE (finished in Phase 5.3)
+- [x] Remove from `user_expense_settings`: `default_currency`, `default_note`,
   `auto_post_after_upload_enabled`, `receipt_refine_enabled`, `notifications_enabled`
-- [ ] Keep: `user_id`, `tenant_id`, `default_payer_id`, `default_expense_category_id`,
+- [x] Keep: `user_id`, `tenant_id`, `default_payer_id`, `default_expense_category_id`,
   `receipt_ocr_provider` (internal, not user-facing)
-- [ ] Migration to drop columns (after data migration to new tables)
-
-**Note**: Phase 1.2 is deferred to Phase 5.3 because the old settings page and its backend
-still read these columns. Dropping them before Phase 3/5 completes would break running code.
+- [x] Migration to drop columns (0047_schema.edn, applied to dev + test DBs)
 
 ---
 
@@ -91,8 +88,7 @@ still read these columns. Dropping them before Phase 3/5 completes would break r
 ### 2.4 Update user_expense_settings service  ✓
 - [x] Modify: `src/app/domain/backend/expenses/services/user_expense_settings.clj`
   - Added: `per-user-defaults`, `effective-settings-with-global`, `update-user-default-category!`
-  - Marked `allowed-currencies` as `^:deprecated` (now in `enabled_currencies` table)
-  - Kept: all old functions for backward compat with legacy settings handler
+  - Later slimmed the service back down after Phase 5.3 dropped deprecated columns
   - `effective-settings-with-global` merges global + per-user settings
 
 ### 2.5 Expense creation — currency conversion  ✓ (receipt side deferred)
@@ -124,7 +120,7 @@ still read these columns. Dropping them before Phase 3/5 completes would break r
 - [x] Routes: `src/app/domain/backend/expenses/routes/global_settings.clj`
 - [x] Admin route splicing: `core.clj` uses `(into [...] (global-settings/routes db app-config))`
 
-### 2.8 User API routes — profile & tenant settings  ✓ (deprecation deferred)
+### 2.8 User API routes — profile & tenant settings  ✓ COMPLETE
 - [x] New user API routes:
   - GET `/api/v1/profile` (user info + effective settings + currencies + tenant settings for owner)
   - PUT `/api/v1/profile/defaults` (update default_expense_category_id)
@@ -134,10 +130,10 @@ still read these columns. Dropping them before Phase 3/5 completes would break r
 - [x] Profile routes mounted at template API level via `requiring-resolve` (avoids compile-time coupling)
 - [x] Tenant routes mounted in `src/app/template/backend/routes/tenant.clj` via `requiring-resolve`
 - [x] Tenant name: `update-tenant!` added to `services/tenant.clj`
-- [ ] Deprecate old routes (deferred → Phase 5.2):
-  - GET/PUT `/api/v1/expenses/settings`
-  - GET `/api/v1/expenses/export`
-  - DELETE `/api/v1/expenses/all`
+- [x] Deprecate old routes:
+  - GET/PUT `/api/v1/expenses/settings` removed
+  - GET `/api/v1/expenses/export` moved to GET `/api/v1/profile/export`
+  - DELETE `/api/v1/expenses/all` moved to DELETE `/api/v1/profile/all`
 
 ### 2.9 Tenant provisioning integration  ✓ (startup seed deferred)
 - [x] Modify `provision-tenant!` to create `tenant_settings` row (step 4c, ON CONFLICT DO NOTHING)
@@ -146,12 +142,10 @@ still read these columns. Dropping them before Phase 3/5 completes would break r
 
 ---
 
-## Phase 3: Frontend — User Profile Page  ◻ NOT STARTED
-
-**Next phase to implement.** All backend APIs are ready (Phase 2 complete).
+## Phase 3: Frontend — User Profile Page  ✓ COMPLETE
 
 ### 3.1 Profile page component
-- [ ] New file: `src/app/domain/frontend/expenses/pages/user/profile.cljs`
+- [x] New file: `src/app/domain/frontend/expenses/pages/user/profile.cljs`
   - Account info section (email, name — read-only)
   - Per-user defaults section:
     - Default payer (read-only display, sticky from last-used payer)
@@ -163,25 +157,25 @@ still read these columns. Dropping them before Phase 3/5 completes would break r
     - Delete all expenses (button → typed "DELETE" confirmation dialog)
 
 ### 3.2 Profile events & subscriptions
-- [ ] New file: `src/app/domain/frontend/expenses/events/user_expenses/profile.cljs`
+- [x] New file: `src/app/domain/frontend/expenses/events/user_expenses/profile.cljs`
   - `:profile/fetch` → GET `/api/v1/profile` (returns `{:data {:user ... :settings ... :enabled-currencies ... :tenant-settings ...}}`)
   - `:profile/update-defaults` → PUT `/api/v1/profile/defaults`
   - `:profile/update-tenant-settings` → PUT `/api/v1/tenant/settings`
   - `:profile/update-tenant-name` → PUT `/api/v1/tenant/name`
   - `:profile/export` → reuse existing `[:user-expenses/export {:format :csv :all true}]`
   - `:profile/delete-all` → reuse existing `[:user-expenses/delete-all "DELETE_ALL_EXPENSES"]`
-- [ ] Subscriptions: `:profile/data`, `:profile/loading?`, `:profile/saving?`
+- [x] Subscriptions: `:profile/data`, `:profile/loading?`, `:profile/saving?`
 
 ### 3.3 Profile route wiring (7 files to touch)
-- [ ] `src/app/domain/shared/routes/expenses_user.cljc` — add descriptor `{:id :user-profile :path "/profile" :spa-fallback? true}`
-- [ ] `src/app/domain/frontend/expenses/routes/user.cljs` — add `:user-profile` route options with `controllers/user-guarded-start :page/init-user-profile`
-- [ ] `src/app/domain/frontend/expenses/pages.cljs` — add `:user-profile profile-page` to pages map + require
-- [ ] `src/app/template/frontend/events/routing.cljs` — add `:page/init-user-profile` event (set page + dispatch `:profile/fetch`)
-- [ ] `src/app/template/frontend/components/settings/global_settings.cljs` — change "Expenses Settings" link to "Profile" → `/profile`
-- [ ] `src/app/template/frontend/i18n.cljs` — add `profile/*` BS/EN translations
+- [x] `src/app/domain/shared/routes/expenses_user.cljc` — add descriptor `{:id :user-profile :path "/profile" :spa-fallback? true}`
+- [x] `src/app/domain/frontend/expenses/routes/user.cljs` — add `:user-profile` route options with `controllers/user-guarded-start :page/init-user-profile`
+- [x] `src/app/domain/frontend/expenses/pages.cljs` — add `:user-profile profile-page` to pages map + require
+- [x] `src/app/template/frontend/events/routing.cljs` — add `:page/init-user-profile` event (set page + dispatch `:profile/fetch`)
+- [x] `src/app/template/frontend/components/settings/global_settings.cljs` — change "Expenses Settings" link to "Profile" → `/profile`
+- [x] `src/app/template/frontend/i18n.cljs` — add `profile/*` BS/EN translations
 
 ### 3.4 i18n translations
-- [ ] Add BS/EN translations for profile page labels under `profile/*` namespace
+- [x] Add BS/EN translations for profile page labels under `profile/*` namespace
 
 **Implementation notes (lessons learned)**:
 - Profile routes live at `/api/v1/profile` (template level, not under `/expenses`) — use `requiring-resolve` pattern
@@ -193,10 +187,10 @@ still read these columns. Dropping them before Phase 3/5 completes would break r
 
 ---
 
-## Phase 4: Frontend — Admin Global Settings  ◻ NOT STARTED
+## Phase 4: Frontend — Admin Global Settings  ✓ COMPLETE
 
 ### 4.1 Admin global settings panel
-- [ ] New admin page/section for global settings:
+- [x] New admin page/section for global settings:
   - Default currency (autocomplete from enabled list)
   - Default note (text area)
   - Auto-publish toggle
@@ -206,50 +200,48 @@ still read these columns. Dropping them before Phase 3/5 completes would break r
   - Rate fetch alerts (warning banner, acknowledge button)
 
 ### 4.2 Admin events & API integration
-- [ ] Events for: fetch/update global settings, manage currencies, view rates, acknowledge alerts
+- [x] Events for: fetch/update global settings, manage currencies, view rates, acknowledge alerts
 
 **Files to modify/create**:
-- Admin frontend components (new page or section in admin SPA)
-- Admin API integration events
+- Admin frontend components (new page or section in admin SPA) — complete
+- Admin API integration events — complete
 
 ---
 
-## Phase 5: Remove Old Settings Page  ◻ NOT STARTED
+## Phase 5: Remove Old Settings Page  ✓ COMPLETE
 
 **Prerequisite**: Phase 3 must be live (profile page replaces settings page).
 
 ### 5.1 Remove /expenses/settings frontend
-- [ ] Delete: `src/app/domain/frontend/expenses/pages/user/expense_settings.cljs`
-- [ ] Remove: settings events from `events/user_expenses/settings.cljs`
-- [ ] Remove: endpoint `settings-endpoint` from `events/user_expenses/endpoints.cljs`
-- [ ] Remove: `:expense-settings` route from `routes/user.cljs` and `routes/expenses_user.cljc`
-- [ ] Remove: page init event `:page/init-expense-settings` from `routing.cljs`
-- [ ] Remove: all `expense-settings/*` i18n keys from `i18n.cljs` (both `:bs` and `:en`)
-- [ ] Remove: `expense-settings-page` from `pages.cljs` require + pages map
+- [x] Delete: `src/app/domain/frontend/expenses/pages/user/expense_settings.cljs`
+- [x] Remove: settings events from `events/user_expenses/settings.cljs`
+- [x] Remove: endpoint `settings-endpoint` from `events/user_expenses/endpoints.cljs`
+- [x] Remove: `:expense-settings` route from `routes/user.cljs` and `routes/expenses_user.cljc`
+- [x] Remove: page init event `:page/init-expense-settings` from `routing.cljs`
+- [x] Remove: all `expense-settings/*` i18n keys from `i18n.cljs` (both `:bs` and `:en`)
+- [x] Remove: `expense-settings-page` from `pages.cljs` require + pages map
 
 ### 5.2 Remove old backend routes
-- [ ] Remove: GET/PUT `/api/v1/expenses/settings` handler + route registration
-- [ ] Remove or repurpose: `handlers/user_expenses/settings.clj`
-- [ ] Remove: `/expenses/export` and `/expenses/all` routes from `user_api.clj`
+- [x] Remove: GET/PUT `/api/v1/expenses/settings` handler + route registration
+- [x] Remove or repurpose: `handlers/user_expenses/settings.clj`
+- [x] Remove: `/expenses/export` and `/expenses/all` routes from `user_api.clj`
   (export/delete-all move to profile page, hitting same backend services)
 
 ### 5.3 Drop deprecated columns (was Phase 1.2)
-- [ ] Migration: drop `default_currency`, `default_note`, `notifications_enabled`,
+- [x] Migration: drop `default_currency`, `default_note`, `notifications_enabled`,
   `auto_post_after_upload_enabled`, `receipt_refine_enabled` from `user_expense_settings`
-- [ ] Clean up service code that referenced these columns
-- [ ] Remove `^:deprecated allowed-currencies` from `user_expense_settings.clj`
+- [x] Clean up service code that referenced these columns
+- [x] Remove `^:deprecated allowed-currencies` from `user_expense_settings.clj`
 
 ### 5.4 Clean up tests
-- [ ] Update: `test/app/domain/backend/expenses/handlers/user_expenses/settings_test.clj`
-  (rewrite for new endpoints or delete if covered by new tests)
-- [ ] Add tests for: global settings API, tenant settings API, profile API,
+- [x] Update: `test/app/domain/backend/expenses/handlers/user_expenses/settings_test.clj`
+  (deleted after removing the deprecated endpoint; replacement coverage added for the new handlers)
+- [x] Add tests for: global settings API, tenant settings API, profile API,
   exchange rate service, currency mismatch detection
 
 ---
 
-## Phase 6: Exchange Rate Integration  ◻ PARTIALLY DONE (backend complete, frontend not started)
-
-Phase 6 backend work was largely completed in Phase 2. What remains is frontend integration.
+## Phase 6: Exchange Rate Integration  ✓ COMPLETE
 
 ### 6.1 Serper API integration  ✓ (done in Phase 2.2)
 - [x] CBBH HTML direct fetch (primary source)
@@ -260,13 +252,13 @@ Phase 6 backend work was largely completed in Phase 2. What remains is frontend 
 ### 6.2 Manual expense currency conversion — backend  ✓ (done in Phase 2.5)
 - [x] Backend: validate currency, fetch rate via `ensure-daily-rates!`, calculate BAM amount
 - [x] `create-user-expense!` handles multi-arity for optional `app-config`
-- [ ] Frontend: currency dropdown in Smart Input (tied to Smart Input Phase 2, separate plan)
-- [ ] Expense detail view: show conversion breakdown for non-BAM expenses
+- [x] Frontend: currency dropdown in Smart Input and user expense forms now follows enabled currencies from profile/global settings
+- [x] Expense detail view: show conversion breakdown for non-BAM expenses
 
-### 6.3 Receipt currency mismatch  ✓ backend / ◻ frontend
+### 6.3 Receipt currency mismatch  ✓ COMPLETE
 - [x] Backend: detect non-BAM/KM currency in OCR extraction (done in Phase 2.6)
 - [x] Set receipt to `review_required` with clear error message
-- [ ] Frontend: show warning banner in receipt review UI when currency mismatch detected
+- [x] Frontend: shared receipt review modal surfaces the warning banner / error message for review-required receipts
 
 ---
 
@@ -274,19 +266,19 @@ Phase 6 backend work was largely completed in Phase 2. What remains is frontend 
 
 ```
 Phase 1 (DB) ──→ Phase 2 (Backend) ──→ Phase 3 (Profile FE) ──→ Phase 5 (Cleanup)
-       ✓                ✓                    NEXT                     │
+       ✓                ✓                    ✓                        │
                       │                                               ↑
                       └──→ Phase 4 (Admin FE) ────────────────────────┘
                       │
                       └──→ Phase 6 (FE only — backend done in Phase 2)
 ```
 
-- Phase 1: COMPLETE (1.2 deferred to 5.3)
-- Phase 2: COMPLETE (minor deferrals noted inline)
-- **Phase 3: NEXT** — all backend APIs ready, profile page is the critical path
-- Phase 4: can run in parallel with Phase 3 (different UI surface — admin vs user)
-- Phase 5: only after Phase 3 is live (old page replaced)
-- Phase 6: backend done; frontend items are independent of Phase 3/4
+- Phase 1: COMPLETE
+- Phase 2: COMPLETE
+- Phase 3: COMPLETE
+- Phase 4: COMPLETE
+- Phase 5: COMPLETE
+- Phase 6: COMPLETE
 
 ---
 
@@ -311,7 +303,7 @@ Phase 1 (DB) ──→ Phase 2 (Backend) ──→ Phase 3 (Profile FE) ──�
   low-level `create-expense!`. Only manual user-created expenses can have non-BAM currencies.
 - `app-config` threading: registry → routes/core.clj → handlers → services.
 
-### Frontend patterns (for Phase 3)
+### Frontend patterns
 - Settings panel (gear icon, top-right) is the only path to settings — no sidebar nav item.
   File: `src/app/template/frontend/components/settings/global_settings.cljs`
 - Route wiring requires touching 7 files (descriptor, route options, page mapping, init event,
@@ -328,7 +320,7 @@ Phase 1 (DB) ──→ Phase 2 (Backend) ──→ Phase 3 (Profile FE) ──�
 
 ## Key Files Reference
 
-### Created in Phase 1–2 (backend complete)
+### Created in Phase 1–5 (implemented)
 | File | Role | Status |
 |------|------|--------|
 | `resources/db/domain/models.edn` | DB schema (5 new tables + expense currency columns) | Modified |
@@ -340,33 +332,23 @@ Phase 1 (DB) ──→ Phase 2 (Backend) ──→ Phase 3 (Profile FE) ──�
 | `src/app/domain/backend/expenses/handlers/user_expenses/profile.clj` | Profile API handlers | **New** |
 | `src/app/domain/backend/expenses/routes/core.clj` | Admin route assembly (spliced global-settings) | Modified |
 | `src/app/domain/backend/registry.clj` | Passes app-config to admin routes | Modified |
-| `src/app/domain/backend/expenses/services/user_expense_settings.clj` | Added effective-settings merge | Modified |
+| `src/app/domain/backend/expenses/services/user_expense_settings.clj` | Slimmed per-user settings service | Modified |
 | `src/app/domain/backend/expenses/services/user_expenses.clj` | Currency conversion in create | Modified |
 | `src/app/domain/backend/expenses/services/expenses.clj` | Allowlist new columns | Modified |
 | `src/app/domain/backend/expenses/handlers/user_expenses/crud.clj` | Pass app-config | Modified |
-| `src/app/domain/backend/expenses/routes/user_api.clj` | Wire app-config to create handler | Modified |
+| `src/app/domain/backend/expenses/routes/user_api.clj` | Wire app-config to create handler; old export/delete routes removed | Modified |
 | `src/app/domain/backend/expenses/workers/receipt_ocr/extraction/review.clj` | Currency mismatch + payer-id fix | Modified |
+| `src/app/domain/backend/expenses/workers/receipt_ocr/refine.clj` | AI refine toggle now follows global settings | Modified |
+| `src/app/domain/backend/expenses/workers/receipt_ocr/runner.clj` | Global settings threaded into OCR worker opts | Modified |
 | `src/app/template/backend/routes/api.clj` | Profile routes via requiring-resolve | Modified |
 | `src/app/template/backend/routes/tenant.clj` | Tenant settings/name routes | Modified |
-| `src/app/template/backend/services/tenant.clj` | `update-tenant!` + provision tenant_settings | Modified |
+| `src/app/template/backend/services/tenant.clj` | `update-tenant!`, tenant_settings provisioning, slim user settings inserts | Modified |
+| `src/app/domain/frontend/expenses/pages/user/profile.cljs` | User profile page | **New** |
+| `src/app/domain/frontend/expenses/events/user_expenses/profile.cljs` | Profile events & subs | **New** |
+| `src/app/admin/frontend/pages/domain/expenses/global_settings.cljs` | Admin global settings UI | **New** |
+| `src/app/domain/frontend/expenses/events/admin_global_settings.cljs` | Admin global settings events | **New** |
 
-### To create in Phase 3 (frontend)
-| File | Role |
-|------|------|
-| `src/app/domain/frontend/expenses/pages/user/profile.cljs` | User profile page |
-| `src/app/domain/frontend/expenses/events/user_expenses/profile.cljs` | Profile events & subs |
-
-### To modify in Phase 3 (frontend wiring)
-| File | Change |
-|------|--------|
-| `src/app/domain/shared/routes/expenses_user.cljc` | Add `:user-profile` descriptor |
-| `src/app/domain/frontend/expenses/routes/user.cljs` | Add `:user-profile` route options |
-| `src/app/domain/frontend/expenses/pages.cljs` | Add `:user-profile` page mapping |
-| `src/app/template/frontend/events/routing.cljs` | Add `:page/init-user-profile` event |
-| `src/app/template/frontend/components/settings/global_settings.cljs` | Change settings link → `/profile` |
-| `src/app/template/frontend/i18n.cljs` | Add `profile/*` translations |
-
-### To delete in Phase 5
+### Removed in Phase 5
 | File | Role |
 |------|------|
 | `src/app/domain/frontend/expenses/pages/user/expense_settings.cljs` | Old settings page |

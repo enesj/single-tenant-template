@@ -16,7 +16,6 @@
     [app.domain.backend.expenses.handlers.user-expenses.expense-items :as user-expenses-expense-items]
     [app.domain.backend.expenses.handlers.user-expenses.reference-data :as user-expenses-reference-data]
     [app.domain.backend.expenses.handlers.user-expenses.reports :as user-expenses-reports]
-    [app.domain.backend.expenses.handlers.user-expenses.settings :as settings]
     [app.domain.backend.expenses.handlers.user-expenses.supplier-aliases :as user-expenses-supplier-aliases]
     [app.domain.backend.expenses.handlers.user-expenses.supplier-detail :as supplier-detail]
     [app.domain.backend.expenses.handlers.user-expenses.summary :as user-expenses-summary]
@@ -59,17 +58,6 @@
     ["/size-distribution" {:get {:handler (user-expenses-reports/expense-size-distribution-handler db)}}]
     ["/daily-heatmap" {:get {:handler (user-expenses-reports/daily-heatmap-handler db)}}]
     ["/filter-options" {:get {:handler (user-expenses-reports/filter-options-handler db)}}]]
-
-   ;; Settings endpoints (must come before /:id routes)
-   ["/settings"
-    {:get {:handler (settings/get-settings-handler db)}
-     :put {:handler (settings/update-settings-handler db)}}]
-
-   ;; Export endpoint
-   ["/export" {:get {:handler (settings/export-expenses-handler db)}}]
-
-   ;; Delete-all endpoint (danger zone, admin/owner only)
-   ["/all" {:delete {:handler (settings/delete-all-expenses-handler db)}}]
 
    ;; Reference data endpoints (suppliers, payers)
    ["/suppliers"

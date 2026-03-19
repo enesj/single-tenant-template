@@ -202,22 +202,6 @@
   (fn [db _]
     (get-in db [:user-expenses :receipts :detail-modal :entity-id])))
 
-;; Settings
-(rf/reg-sub
-  :user-expenses/settings
-  (fn [db _]
-    (get-in db [:user-expenses :settings :data])))
-
-(rf/reg-sub
-  :user-expenses/settings-loading?
-  (fn [db _]
-    (get-in db [:user-expenses :settings :loading?])))
-
-(rf/reg-sub
-  :user-expenses/settings-saving?
-  (fn [db _]
-    (get-in db [:user-expenses :settings :saving?])))
-
 (defn- reports-data
   [db report-key field]
   (get-in db [:user-expenses :reports report-key field]))

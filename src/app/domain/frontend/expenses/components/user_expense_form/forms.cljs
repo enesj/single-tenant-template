@@ -5,6 +5,7 @@
                                                                          new-line-item]]
     [app.domain.frontend.expenses.components.user-expense-form.normalization :as norm]
     [app.domain.frontend.expenses.components.user-expense-form.specs :as specs]
+    [app.domain.frontend.expenses.ui.currencies :as currency-ui]
     [app.template.frontend.components.form :refer [form-fields]]
     [app.template.frontend.components.form.base :as base]
     [re-frame.core :as rf]
@@ -36,6 +37,8 @@
   (let [suppliers (or (use-subscribe [:user-expenses/suppliers]) [])
         payers (or (use-subscribe [:user-expenses/payers]) [])
         expense-categories (or (use-subscribe [:user-expenses/expense-categories]) [])
+        profile (or (use-subscribe [:profile/data]) {})
+        enabled-currencies (currency-ui/enabled-currency-options profile)
         form-error (use-subscribe [:user-expenses/form-error])
         [validation-error set-validation-error!] (use-state nil)
 
@@ -46,8 +49,9 @@
                                :supplier-guess (some-> receipt :supplier-guess)
                                :receipt receipt
                                :receipt-id receipt-id
-                               :expense-categories expense-categories})
-                           [suppliers payers expense-categories receipt receipt-id])
+                               :expense-categories expense-categories
+                               :enabled-currencies enabled-currencies})
+                           [suppliers payers expense-categories enabled-currencies receipt receipt-id])
 
         ;; Spec without line items for split layout
         fields-only-spec (use-memo
@@ -57,8 +61,9 @@
                                :receipt receipt
                                :receipt-id receipt-id
                                :expense-categories expense-categories
+                               :enabled-currencies enabled-currencies
                                :exclude-line-items? true})
-                           [suppliers payers expense-categories receipt receipt-id])
+                           [suppliers payers expense-categories enabled-currencies receipt receipt-id])
 
         ;; Line items spec
         line-items-spec (use-memo
@@ -67,11 +72,11 @@
 
         form-initial-values (use-memo
                               (fn []
-                                (let [default-values {:currency "BAM"
+                                (let [default-values {:currency (currency-ui/default-currency profile)
                                                       :purchased_at (current-datetime-local)
                                                       :items [(new-line-item)]}]
                                   (merge default-values initial-data)))
-                              [initial-data])
+                              [initial-data profile])
 
         rid-str (or (some-> receipt-id str) "unknown")
         posted? (= "posted" (:status receipt))
@@ -85,8 +90,10 @@
         (rf/dispatch [:user-expenses/fetch-suppliers {:limit 100 :offset 0}])
         (rf/dispatch [:user-expenses/fetch-payers {:limit 100 :offset 0}])
         (rf/dispatch [:user-expenses/fetch-expense-categories {:limit 500 :offset 0}])
+        (when-not (currency-ui/has-enabled-currencies? profile)
+          (rf/dispatch [:profile/fetch]))
         js/undefined)
-      [])
+      [profile])
 
     ($ :div {:class "space-y-4"}
       (when (or validation-error form-error)

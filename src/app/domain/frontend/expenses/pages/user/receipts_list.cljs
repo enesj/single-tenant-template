@@ -195,7 +195,6 @@
         (rf/dispatch [::list-ui-state-events/set-refresh-event :receipts [:user-expenses/refresh-receipts-list]])
         (refresh!)
         (rf/dispatch [:user-expenses/fetch-payers {:limit 100 :offset 0}])
-        (rf/dispatch [:user-expenses/fetch-settings])
         js/undefined)
       [refresh!])
 
@@ -234,76 +233,76 @@
                 ($ :p {:class "text-sm text-base-content/70"}
                   (t :receipts/subtitle))))))
         ($ :main {:class "w-full px-4 py-6"}
-        ($ :div {:class "ds-card ds-bg-base-100 ds-shadow-xl"}
-          ($ :div {:class "ds-card-body p-0"}
-            (when error
-              ($ :div {:class "px-4 pt-4"}
-                ($ :div {:class "ds-alert ds-alert-error"}
-                  ($ :span (str error)))))
+          ($ :div {:class "ds-card ds-bg-base-100 ds-shadow-xl"}
+            ($ :div {:class "ds-card-body p-0"}
+              (when error
+                ($ :div {:class "px-4 pt-4"}
+                  ($ :div {:class "ds-alert ds-alert-error"}
+                    ($ :span (str error)))))
 
-            (when form-error
-              ($ :div {:class "px-4 pt-4"}
-                ($ :div {:class "ds-alert ds-alert-error flex items-center justify-between"}
-                  ($ :span (str form-error))
-                  ($ :button {:id "btn-clear-receipts-form-error"
-                              :type "button"
-                              :class "ds-btn ds-btn-ghost ds-btn-xs"
-                              :on-click (fn [e]
-                                          (.preventDefault e)
-                                          (rf/dispatch [:user-expenses/clear-form-error]))}
-                    "✕"))))
+              (when form-error
+                ($ :div {:class "px-4 pt-4"}
+                  ($ :div {:class "ds-alert ds-alert-error flex items-center justify-between"}
+                    ($ :span (str form-error))
+                    ($ :button {:id "btn-clear-receipts-form-error"
+                                :type "button"
+                                :class "ds-btn ds-btn-ghost ds-btn-xs"
+                                :on-click (fn [e]
+                                            (.preventDefault e)
+                                            (rf/dispatch [:user-expenses/clear-form-error]))}
+                      "✕"))))
 
             ;; Top bar: live processing indicator + batch actions
-            ($ :div {:class (str "flex items-center gap-2 px-4 pt-4 "
-                              (if processing? "justify-between" "justify-end"))}
-              (when processing?
-                ($ :div {:id "receipt-processing-banner"
-                         :class "flex items-center gap-2"}
-                  ($ :span {:class "ds-loading ds-loading-spinner ds-loading-xs"})
-                  ($ :span {:class "text-sm"}
-                    (str processing-label " " (t :receipts/receipts processing-total) "…"))
-                  (when-let [duration (format-duration processing-started-at last-checked)]
-                    ($ :span {:class "text-xs text-base-content/60"}
-                      (str (t :receipts/duration) ": " duration)))
-                  ($ :button {:id "btn-refresh-user-receipts"
-                              :class "ds-btn ds-btn-ghost ds-btn-xs"
+              ($ :div {:class (str "flex items-center gap-2 px-4 pt-4 "
+                                (if processing? "justify-between" "justify-end"))}
+                (when processing?
+                  ($ :div {:id "receipt-processing-banner"
+                           :class "flex items-center gap-2"}
+                    ($ :span {:class "ds-loading ds-loading-spinner ds-loading-xs"})
+                    ($ :span {:class "text-sm"}
+                      (str processing-label " " (t :receipts/receipts processing-total) "…"))
+                    (when-let [duration (format-duration processing-started-at last-checked)]
+                      ($ :span {:class "text-xs text-base-content/60"}
+                        (str (t :receipts/duration) ": " duration)))
+                    ($ :button {:id "btn-refresh-user-receipts"
+                                :class "ds-btn ds-btn-ghost ds-btn-xs"
+                                :type "button"
+                                :on-click (fn [e]
+                                            (.preventDefault e)
+                                            (refresh!))}
+                      (t :receipts/refresh))))
+
+                ($ :div {:class "flex items-center gap-2"}
+                  ($ :button {:id "btn-batch-parse-user-receipts"
+                              :class "ds-btn ds-btn-outline ds-btn-sm"
                               :type "button"
-                              :on-click (fn [e]
-                                          (.preventDefault e)
-                                          (refresh!))}
-                    (t :receipts/refresh))))
+                              :title (cond
+                                       (not can-ocr?) (t :receipts/tooltip-no-ocr)
+                                       (pos? selected-count) (t :receipts/tooltip-ocr-selected)
+                                       :else (t :receipts/tooltip-select-first))
+                              :disabled (or (not can-ocr?) action-loading? (zero? selected-count))
+                              :on-click parse-selected!}
+                    (str (t :receipts/parse-selected)
+                      (when (pos? selected-count)
+                        (str " (" selected-count ")"))))
+                  ($ :button {:id "btn-batch-post-user-receipts"
+                              :class "ds-btn ds-btn-primary ds-btn-sm"
+                              :type "button"
+                              :title (cond
+                                       (not can-ocr?) (t :receipts/tooltip-no-post)
+                                       (pos? selected-count) (t :receipts/tooltip-post-selected)
+                                       :else (t :receipts/tooltip-select-first-post))
+                              :disabled (or (not can-ocr?) action-loading? (zero? selected-count))
+                              :on-click post-selected!}
+                    (str (t :receipts/post-selected)
+                      (when (pos? selected-count)
+                        (str " (" selected-count ")"))))))
 
-              ($ :div {:class "flex items-center gap-2"}
-                ($ :button {:id "btn-batch-parse-user-receipts"
-                            :class "ds-btn ds-btn-outline ds-btn-sm"
-                            :type "button"
-                            :title (cond
-                                     (not can-ocr?) (t :receipts/tooltip-no-ocr)
-                                     (pos? selected-count) (t :receipts/tooltip-ocr-selected)
-                                     :else (t :receipts/tooltip-select-first))
-                            :disabled (or (not can-ocr?) action-loading? (zero? selected-count))
-                            :on-click parse-selected!}
-                  (str (t :receipts/parse-selected)
-                    (when (pos? selected-count)
-                      (str " (" selected-count ")"))))
-                ($ :button {:id "btn-batch-post-user-receipts"
-                            :class "ds-btn ds-btn-primary ds-btn-sm"
-                            :type "button"
-                            :title (cond
-                                     (not can-ocr?) (t :receipts/tooltip-no-post)
-                                     (pos? selected-count) (t :receipts/tooltip-post-selected)
-                                     :else (t :receipts/tooltip-select-first-post))
-                            :disabled (or (not can-ocr?) action-loading? (zero? selected-count))
-                            :on-click post-selected!}
-                  (str (t :receipts/post-selected)
-                    (when (pos? selected-count)
-                      (str " (" selected-count ")"))))))
-
-            ($ :div {:class "w-full pb-0 [&>div>table]:w-full"}
-              ($ list-view
-                {:entity-name :receipts
-                 :entity-spec (receipts-entity-spec t)
-                 :custom-actions (fn [receipt]
-                                   (receipt-actions t can-ocr? receipt))
-                 :on-add-click #(rf/dispatch [:navigate-to "/expenses/upload"])}))))))
+              ($ :div {:class "w-full pb-0 [&>div>table]:w-full"}
+                ($ list-view
+                  {:entity-name :receipts
+                   :entity-spec (receipts-entity-spec t)
+                   :custom-actions (fn [receipt]
+                                     (receipt-actions t can-ocr? receipt))
+                   :on-add-click #(rf/dispatch [:navigate-to "/expenses/upload"])}))))))
       ($ receipt-detail-modal))))

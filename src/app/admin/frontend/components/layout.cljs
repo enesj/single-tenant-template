@@ -70,6 +70,11 @@
                          :href "/admin/reports"
                          :icon ($ chart-bar {:class "w-6 h-6"})
                          :active? (= route-name :admin-reports)}
+                        {:id "admin-sidebar-expenses-settings"
+                         :label "Settings"
+                         :href "/admin/expenses-settings"
+                         :icon ($ settings-icon {:class "w-6 h-6"})
+                         :active? (= route-name :admin-expenses-settings)}
                         {:id "admin-sidebar-expenses-search"
                          :label "Search"
                          :href "/admin/search"

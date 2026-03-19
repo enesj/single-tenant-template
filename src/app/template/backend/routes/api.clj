@@ -291,11 +291,15 @@
      ;; User profile routes (Phase 2 — settings hierarchy)
      ;; Lazy-resolved from domain to avoid template→domain compile-time coupling
      (let [get-profile (requiring-resolve 'app.domain.backend.expenses.handlers.user-expenses.profile/get-profile-handler)
-           update-defaults (requiring-resolve 'app.domain.backend.expenses.handlers.user-expenses.profile/update-profile-defaults-handler)]
+           update-defaults (requiring-resolve 'app.domain.backend.expenses.handlers.user-expenses.profile/update-profile-defaults-handler)
+           export-expenses (requiring-resolve 'app.domain.backend.expenses.handlers.user-expenses.settings/export-expenses-handler)
+           delete-all-expenses (requiring-resolve 'app.domain.backend.expenses.handlers.user-expenses.settings/delete-all-expenses-handler)]
        ["/profile"
         {:middleware [user-middleware/wrap-user-authentication]}
         ["" {:get {:handler (get-profile db)}}]
-        ["/defaults" {:put {:handler (update-defaults db)}}]])
+        ["/defaults" {:put {:handler (update-defaults db)}}]
+        ["/export" {:get {:handler (export-expenses db)}}]
+        ["/all" {:delete {:handler (delete-all-expenses db)}}]])
 
      ;; Domain user API routes (from registry)
      ;; Each domain provides routes under its own path prefix (e.g., /expenses)

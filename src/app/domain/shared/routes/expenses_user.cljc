@@ -16,7 +16,7 @@
    {:id :receipts :path "/receipts" :spa-fallback? true}
    {:id :receipt-detail :path "/receipts/:receipt-id" :spa-fallback? true}
    {:id :expense-reports :path "/expenses/reports" :spa-fallback? true}
-   {:id :expense-settings :path "/expenses/settings" :spa-fallback? true}
+   {:id :user-profile :path "/profile" :spa-fallback? true}
    {:id :expense-suppliers :path "/suppliers" :spa-fallback? true}
    {:id :expense-payers :path "/payers" :spa-fallback? true}
    {:id :expense-stores :path "/stores" :spa-fallback? true}

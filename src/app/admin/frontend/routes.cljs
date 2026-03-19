@@ -8,6 +8,7 @@
     [app.admin.frontend.pages.domain.expenses.duplicates :as duplicates]
     [app.admin.frontend.pages.audit :as audit]
     [app.admin.frontend.pages.domain.expenses.articles :as articles]
+    [app.admin.frontend.pages.domain.expenses.global-settings :as global-settings]
     [app.admin.frontend.pages.domain.expenses.categories :as categories]
     [app.admin.frontend.pages.domain.expenses.cities :as cities]
     [app.admin.frontend.pages.domain.expenses.countries :as countries]
@@ -170,6 +171,11 @@
           {:name :admin-reports
            :view reports/admin-reports-page
            :controllers [(guarded-start [:admin/load-reports])]}]
+
+         ["/expenses-settings"
+          {:name :admin-expenses-settings
+           :view global-settings/admin-expenses-global-settings-page
+           :controllers [(guarded-start [:admin/expenses-settings-load])]}]
 
          ["/search"
           {:name :admin-search
