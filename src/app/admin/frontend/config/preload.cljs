@@ -27,17 +27,18 @@
                        registry-actions (:actions registry-entry)
                        registry-custom-actions (:custom-actions registry-entry)
                        registry-modals (:modals registry-entry)]
-                   [entity-key
-                    (cond-> cfg
-                      registry-init-fn (assoc :adapter-init-fn registry-init-fn)
-                      (or registry-actions registry-custom-actions registry-modals)
-                      (update :components
-                        (fn [components]
-                          (let [components (or components {})]
-                            (cond-> components
-                              registry-actions (assoc :actions registry-actions)
-                              registry-custom-actions (assoc :custom-actions registry-custom-actions)
-                              registry-modals (assoc :modals registry-modals))))))]))
+                   (let [registry-components (:components registry-entry)]
+                     [entity-key
+                      (cond-> cfg
+                        registry-init-fn (assoc :adapter-init-fn registry-init-fn)
+                        (or registry-actions registry-custom-actions registry-modals registry-components)
+                        (update :components
+                          (fn [components]
+                            (let [components (or components {})]
+                              (cond-> (merge components registry-components)
+                                registry-actions (assoc :actions registry-actions)
+                                registry-custom-actions (assoc :custom-actions registry-custom-actions)
+                                registry-modals (assoc :modals registry-modals))))))])))
             parsed))))))
 
 (when preloaded-entities

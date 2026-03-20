@@ -5,7 +5,8 @@
     [clj-http.client :as http]
     [clojure.string :as str]
     [taoensso.timbre :as log]
-    [app.domain.backend.expenses.integrations.llamaparse.config :as config]))
+    [app.domain.backend.expenses.integrations.llamaparse.config :as config]
+    [app.admin.backend.services.admin.audit :as audit]))
 
 (defn safe-body-snippet [s]
   (when (string? s)
@@ -81,11 +82,19 @@
                 {:attempt (inc attempt) :max-retries max-retries})
               (Thread/sleep (* retry-sleep-ms (inc attempt)))
               (recur (inc attempt)))
-            (throw (ex-info "LlamaParse request failed"
-                     {:type :llamaparse/exception
-                      :url url
-                      :method method}
-                     (:exception resp))))
+            (do
+              (when-let [db (:db _cfg)]
+                (audit/log-api-failure! db
+                  {:api-name :llamaparse :operation (str "request-" (name method))
+                   :error-message (or (.getMessage (:exception resp)) "Unknown exception")
+                   :error-type (some-> (:exception resp) class .getName)
+                   :request-url url :severity :critical
+                   :user-id (:user-id _cfg) :user-name (:user-name _cfg)}))
+              (throw (ex-info "LlamaParse request failed"
+                       {:type :llamaparse/exception
+                        :url url
+                        :method method}
+                       (:exception resp)))))
 
           (and (integer? (:status resp)) (<= 200 (:status resp) 299))
           resp
@@ -97,7 +106,15 @@
                 {:status (:status resp) :attempt (inc attempt) :max-retries max-retries})
               (Thread/sleep (* retry-sleep-ms (inc attempt)))
               (recur (inc attempt)))
-            (throw (response->ex "LlamaParse request failed" resp)))
+            (do
+              (when-let [db (:db _cfg)]
+                (audit/log-api-failure! db
+                  {:api-name :llamaparse :operation (str "request-" (name method))
+                   :http-status (:status resp)
+                   :error-message (or (safe-body-snippet (:body resp)) "Non-2xx response")
+                   :error-type "http-error" :request-url url :severity :critical
+                   :user-id (:user-id _cfg) :user-name (:user-name _cfg)}))
+              (throw (response->ex "LlamaParse request failed" resp))))
 
           :else
           (throw (response->ex "LlamaParse request failed" resp)))))))

@@ -34,6 +34,16 @@
 ;; ============================================================================
 
 (rf/reg-sub
+  :admin/audit-logs-loading?
+  (fn [db _]
+    (get-in db [:admin :audit :loading?] false)))
+
+(rf/reg-sub
+  :admin/audit-logs-error
+  (fn [db _]
+    (get-in db [:admin :audit :error])))
+
+(rf/reg-sub
   :admin/loading-audit-details?
   (fn [db _]
     (get-in db [:admin :audit :loading-details?] false)))
@@ -47,3 +57,12 @@
   :admin/deleting-audit?
   (fn [db _]
     (get-in db [:admin :audit :deleting?] false)))
+
+;; ============================================================================
+;; API Failure Badge
+;; ============================================================================
+
+(rf/reg-sub
+  :admin/unread-api-failure-count
+  (fn [db _]
+    (get-in db [:admin :audit :unread-api-failure-count] 0)))

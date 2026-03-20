@@ -5,7 +5,8 @@
     [cheshire.core :as json]
     [clj-http.client :as http]
     [clojure.string :as str]
-    [taoensso.timbre :as log]))
+    [taoensso.timbre :as log]
+    [app.admin.backend.services.admin.audit :as audit]))
 
 (def postmark-api-url "https://api.postmarkapp.com/email")
 
@@ -13,10 +14,10 @@
   "Create HTML email body for verification email"
   [user token base-url]
   (let
-    [verify-url (str base-url "/verify-email?token=" token)
-     full-name (some-> (:full_name user) str/trim not-empty)
-     user-name (if full-name full-name (:email user))
-     tenant-name "Your Organization"]
+   [verify-url (str base-url "/verify-email?token=" token)
+    full-name (some-> (:full_name user) str/trim not-empty)
+    user-name (if full-name full-name (:email user))
+    tenant-name "Your Organization"]
     {:text (str "Hi " user-name ",\n\n"
              "Welcome to " tenant-name "! Please verify your email address by clicking the link below:\n\n"
              verify-url "\n\n"
@@ -65,8 +66,8 @@
              "</body></html>")}))
 
 (defn send-postmark-email
-  "Send email via Postmark API"
-  [api-key from-email to-email subject text-body html-body]
+  "Send email via Postmark API. Optional `opts` map may include :db for audit logging."
+  [api-key from-email to-email subject text-body html-body & [opts]]
   (try
     (let [request-body {:From from-email
                         :To to-email
@@ -89,13 +90,25 @@
           {:success true :message-id (:MessageID response-data)})
         (let [error-data (json/parse-string (:body response) true)]
           (log/error "Failed to send email via Postmark. Status:" (:status response) "Error:" error-data)
+          (when-let [db (:db opts)]
+            (audit/log-api-failure! db
+              {:api-name :postmark :operation "send-email"
+               :http-status (:status response)
+               :error-message (str "Postmark API non-200: " (:status response))
+               :error-type "http-error" :request-url postmark-api-url :severity :error}))
           {:success false :error :postmark-api-error :details error-data})))
 
     (catch Exception e
       (log/error e "Exception occurred while sending email via Postmark")
+      (when-let [db (:db opts)]
+        (audit/log-api-failure! db
+          {:api-name :postmark :operation "send-email"
+           :error-message (.getMessage e)
+           :error-type (some-> e class .getName)
+           :request-url postmark-api-url :severity :error}))
       {:success false :error :postmark-exception :message (.getMessage e)})))
 
-(defrecord PostmarkEmailService [api-key from-email base-url]
+(defrecord PostmarkEmailService [api-key from-email base-url db]
   email-verification/EmailService
 
   (send-verification-email [_service user token]
@@ -104,7 +117,7 @@
           tenant-name "Your Organization"
           subject (str "Verify your email address for " tenant-name)]
 
-      (send-postmark-email api-key from-email (:email user) subject text html)))
+      (send-postmark-email api-key from-email (:email user) subject text html {:db db})))
 
   (send-verification-success-email [_service user]
     (log/info "Sending verification success email to" (:email user) "via Postmark")
@@ -112,11 +125,14 @@
           tenant-name "Your Organization"
           subject (str "Email verified successfully - " tenant-name)]
 
-      (send-postmark-email api-key from-email (:email user) subject text html))))
+      (send-postmark-email api-key from-email (:email user) subject text html {:db db}))))
 
 (defn create-postmark-email-service
-  "Create a Postmark email service with API key and from email"
-  [api-key from-email base-url]
-  (when (and api-key from-email)
-    (log/info "Creating Postmark email service with from email:" from-email "and base-url:" base-url)
-    (->PostmarkEmailService api-key from-email base-url)))
+  "Create a Postmark email service with API key and from email.
+   Optional `db` datasource enables audit logging of send failures."
+  ([api-key from-email base-url]
+   (create-postmark-email-service api-key from-email base-url nil))
+  ([api-key from-email base-url db]
+   (when (and api-key from-email)
+     (log/info "Creating Postmark email service with from email:" from-email "and base-url:" base-url)
+     (->PostmarkEmailService api-key from-email base-url db))))

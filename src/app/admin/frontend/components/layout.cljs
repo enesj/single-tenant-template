@@ -1,6 +1,7 @@
 (ns app.admin.frontend.components.layout
   (:require
     [app.admin.frontend.subs.auth]
+    [app.admin.frontend.subs.audit]
     [app.admin.frontend.subs.dashboard]
     [app.template.frontend.components.button :refer [button change-theme]]
     [app.template.frontend.components.sidebar :refer [sidebar]]
@@ -20,7 +21,7 @@
                                                     user-settings-icon
                                                     users-icon]]
     [re-frame.core :as rf]
-    [uix.core :refer [$ defui use-state]]
+    [uix.core :refer [$ defui use-effect use-state]]
     [uix.re-frame :refer [use-subscribe]]))
 
 (defui admin-sidebar [{:keys [open?]}]
@@ -28,6 +29,7 @@
         route-name (or (get-in current-route [:data :name]) (:name current-route))
         current-admin-role (use-subscribe [:admin/current-user-role])
         is-owner? (= current-admin-role :owner)
+        unread-api-failures (use-subscribe [:admin/unread-api-failure-count])
 
         system-admin-items (cond-> [{:id "admin-sidebar-dashboard"
                                      :label "Dashboard"
@@ -59,7 +61,8 @@
                              (into [{:label "Audit Logs"
                                      :href "/admin/audit"
                                      :icon ($ audit-icon {:class "w-6 h-6"})
-                                     :active? (= route-name :admin-audit)}
+                                     :active? (= route-name :admin-audit)
+                                     :badge unread-api-failures}
                                     {:label "Login Events"
                                      :href "/admin/login-events"
                                      :icon ($ login-events-icon {:class "w-6 h-6"})
@@ -256,6 +259,13 @@
   (let [authenticated? (use-subscribe [:admin/authenticated?])
         loading? (use-subscribe [:admin/loading?])
         [sidebar-open? set-sidebar-open!] (use-state true)]
+    ;; Fetch unread API failure count on mount and when auth state changes
+    (use-effect
+      (fn []
+        (when authenticated?
+          (rf/dispatch [:admin/fetch-unread-api-failures]))
+        js/undefined)
+      [authenticated?])
     (when ^boolean js/goog.DEBUG
       (js/console.log "admin-layout state"
         (clj->js {:authenticated? authenticated?

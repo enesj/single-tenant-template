@@ -72,6 +72,8 @@
       {:db (-> db
              (assoc-in (conj profile-path :data :settings :default-expense-category-id)
                (:default-expense-category-id result))
+             (assoc-in (conj profile-path :data :settings :default-payer-id)
+               (:default-payer-id result))
              (set-loading defaults-action-path false)
              (set-error defaults-action-path nil))
        :dispatch [:toast {:type :success :message "Profile defaults updated"}]})))

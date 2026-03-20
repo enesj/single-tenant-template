@@ -174,11 +174,16 @@
                                       (let [item-name (name-fn item)
                                             score (score-match q item-name)]
                                         (when score
-                                          {:id (:id item)
-                                           :label item-name
-                                           :entity-type entity-type
-                                           :score score
-                                           :entity item}))))
+                                          (cond-> {:id (:id item)
+                                                   :label item-name
+                                                   :entity-type entity-type
+                                                   :score score
+                                                   :entity item}
+                                            ;; Carry through last_price for articles
+                                            ;; so the price is available even before
+                                            ;; the backend search responds.
+                                            (or (:last_price item) (:last-price item))
+                                            (assoc :last_price (or (:last_price item) (:last-price item))))))))
                               (sort-by :score >)
                               (take 4))))
             ;; Filter stores by selected supplier if one is chosen

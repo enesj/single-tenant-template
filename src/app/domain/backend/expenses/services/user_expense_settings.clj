@@ -106,3 +106,33 @@
          category-id]
         {:builder-fn rs/as-unqualified-lower-maps})
     db-adapter/to-app))
+
+(defn update-user-defaults!
+  "Update per-user defaults (category and payer) in a single UPSERT.
+   Used by the profile page save-defaults action."
+  [db tenant-id user-id {:keys [default-expense-category-id default-payer-id]}]
+  (when-not (instance? UUID tenant-id)
+    (throw (ex-info "tenant-id must be a UUID" {:tenant-id tenant-id})))
+  (when-not (instance? UUID user-id)
+    (throw (ex-info "user-id must be a UUID" {:user-id user-id})))
+  (when-not (or (nil? default-expense-category-id) (instance? UUID default-expense-category-id))
+    (throw (ex-info "category-id must be UUID or nil" {:category-id default-expense-category-id})))
+  (when-not (or (nil? default-payer-id) (instance? UUID default-payer-id))
+    (throw (ex-info "payer-id must be UUID or nil" {:payer-id default-payer-id})))
+  (-> (jdbc/execute-one!
+        db
+        [(str
+           "INSERT INTO user_expense_settings (id, tenant_id, user_id, default_expense_category_id, default_payer_id) "
+           "VALUES (?, ?, ?, ?, ?) "
+           "ON CONFLICT (tenant_id, user_id) DO UPDATE SET "
+           "default_expense_category_id = EXCLUDED.default_expense_category_id, "
+           "default_payer_id = EXCLUDED.default_payer_id, "
+           "updated_at = now() "
+           "RETURNING default_payer_id, default_expense_category_id, receipt_ocr_provider")
+         (UUID/randomUUID)
+         tenant-id
+         user-id
+         default-expense-category-id
+         default-payer-id]
+        {:builder-fn rs/as-unqualified-lower-maps})
+    db-adapter/to-app))

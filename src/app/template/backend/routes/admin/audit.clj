@@ -60,10 +60,34 @@
                                      :deleted-count deleted-count})))))
     "Failed to bulk delete audit logs"))
 
+(defn get-unread-api-failures-handler
+  "Get the count of unacknowledged external API failure audit entries"
+  [db]
+  (utils/with-error-handling
+    (fn [request]
+      (let [admin (:admin request)
+            admin-id (:id admin)
+            count (audit-service/get-unread-api-failure-count db admin-id)]
+        (utils/json-response {:unread-count count})))
+    "Failed to get unread API failure count"))
+
+(defn acknowledge-api-failures-handler
+  "Acknowledge/dismiss the API failure notification badge"
+  [db]
+  (utils/with-error-handling
+    (fn [request]
+      (let [admin (:admin request)
+            admin-id (:id admin)]
+        (audit-service/acknowledge-api-failures! db admin-id)
+        (utils/success-response {:message "API failures acknowledged"})))
+    "Failed to acknowledge API failures"))
+
 ;; Route definitions
 (defn routes
   "Audit logging route definitions"
   [db]
   [""
    ["" {:get (get-audit-logs-handler db)}]
-   ["/batch" {:delete (bulk-delete-audit-logs-handler db)}]])
+   ["/batch" {:delete (bulk-delete-audit-logs-handler db)}]
+   ["/api-failures/unread" {:get (get-unread-api-failures-handler db)}]
+   ["/api-failures/acknowledge" {:post (acknowledge-api-failures-handler db)}]])

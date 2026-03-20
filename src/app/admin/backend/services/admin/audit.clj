@@ -139,6 +139,123 @@
       (throw e))))
 
 ;; ============================================================================
+;; External API Failure Logging
+;; ============================================================================
+
+(def api-failure-action "external_api_failure")
+(def api-failure-target-type "external_api")
+
+(defn log-api-failure!
+  "Log an external API call failure to the audit log.
+
+   Records failures from outgoing HTTP calls (Mistral, LlamaParse, Cerebras,
+   Google Places, Gmail, Postmark, OAuth, CBBH, Serper) as system-actor
+   audit entries. Only call this on final failures (after retries exhausted).
+
+   Options:
+   - :api-name       keyword  — which API failed (e.g. :mistral-ocr, :google-places)
+   - :operation      string   — what triggered the call (e.g. \"receipt-ocr\", \"exchange-rate-fetch\")
+   - :http-status    int?     — HTTP status code if available
+   - :error-message  string   — error description
+   - :error-type     string?  — exception type or error category
+   - :request-url    string?  — API endpoint (keys must be redacted)
+   - :severity       keyword  — :warning, :error, or :critical
+   - :duration-ms    int?     — how long the call took
+   - :user-id        uuid?    — triggering user if known
+   - :user-name      string?  — triggering user's name if known"
+  [db {:keys [api-name operation http-status error-message error-type
+              request-url severity duration-ms user-id user-name]}]
+  (try
+    (let [actor-id-uuid (maybe-uuid user-id)
+          metadata {:api-name (some-> api-name name)
+                    :operation operation
+                    :http-status http-status
+                    :error-message error-message
+                    :error-type error-type
+                    :request-url request-url
+                    :retry-attempted true
+                    :retry-succeeded false
+                    :triggering-user-id (some-> user-id str)
+                    :triggering-user-name user-name
+                    :severity (some-> (or severity :error) name)
+                    :duration-ms duration-ms}
+          safe-metadata (shared-db/convert-pg-objects metadata)
+          metadata-value [:cast (json/generate-string safe-metadata) :jsonb]
+          actor-type-db (tc/cast-for-database :audit-actor-type "system")]
+      (jdbc/execute-one! db
+        (hsql/format
+          {:insert-into :audit_logs
+           :values [{:id (UUID/randomUUID)
+                     :actor_type actor-type-db
+                     :actor_id actor-id-uuid
+                     :action api-failure-action
+                     :target_type api-failure-target-type
+                     :target_id nil
+                     :metadata metadata-value
+                     :ip nil
+                     :user_agent nil
+                     :created_at (time/instant)}]}))
+      (log/info "Logged API failure:" (name api-name) operation))
+    (catch Exception e
+      (log/error e "Failed to log API failure audit entry"
+        {:api-name api-name
+         :operation operation
+         :error (.getMessage e)}))))
+
+;; ============================================================================
+;; API Failure Notification (badge count + acknowledge)
+;; ============================================================================
+
+(defn count-unacknowledged-api-failures
+  "Count API failure audit entries created after the given timestamp.
+   If `since` is nil, counts all API failure entries."
+  [db since]
+  (let [base-where [:= :action api-failure-action]
+        where-clause (if since
+                       [:and base-where [:> :created_at since]]
+                       base-where)
+        sql (hsql/format
+              {:select [[[:count :*] :total]]
+               :from [:audit_logs]
+               :where where-clause})
+        row (jdbc/execute-one! db sql)]
+    (or (:total row) (some-> row vals first) 0)))
+
+(defn get-admin-last-acknowledged
+  "Get the last time an admin acknowledged API failure notifications.
+   Returns a timestamp or nil."
+  [db admin-id]
+  (let [admin-uuid (maybe-uuid admin-id)]
+    (when admin-uuid
+      (let [sql (hsql/format
+                  {:select [:created_at]
+                   :from [:audit_logs]
+                   :where [:and
+                           [:= :actor_type (tc/cast-for-database :audit-actor-type "admin")]
+                           [:= :actor_id admin-uuid]
+                           [:= :action "acknowledge_api_failures"]]
+                   :order-by [[:created_at :desc]]
+                   :limit 1})
+            row (jdbc/execute-one! db sql)]
+        (or (:audit_logs/created_at row)
+          (:created_at row))))))
+
+(defn acknowledge-api-failures!
+  "Record that an admin has acknowledged/dismissed the API failure badge.
+   Creates an audit entry so we can track when they last dismissed."
+  [db admin-id]
+  (log-audit! db {:admin_id admin-id
+                  :action "acknowledge_api_failures"
+                  :entity-type "admin_action"
+                  :changes {:acknowledged-at (str (time/instant))}}))
+
+(defn get-unread-api-failure-count
+  "Get the number of API failures an admin hasn't acknowledged yet."
+  [db admin-id]
+  (let [last-ack (get-admin-last-acknowledged db admin-id)]
+    (count-unacknowledged-api-failures db last-ack)))
+
+;; ============================================================================
 ;; Audit Log Retrieval
 ;; ============================================================================
 
@@ -249,9 +366,8 @@
 (defn count-audit-logs
   "Count audit logs using the same filters as `get-audit-logs`."
   [db opts]
-  (let [row (-> (build-audit-count-query opts)
-              hsql/format
-              (jdbc/execute-one! db))
+  (let [sql (hsql/format (build-audit-count-query opts))
+        row (jdbc/execute-one! db sql)
         total (or (:total row) (some-> row vals first) 0)]
     (long total)))
 
@@ -278,12 +394,22 @@
         (mapv (fn [log]
                 (try
                   (let [normalized (db-audit-log->app log)
+                        actor-type-str (some-> (:actor-type normalized) str)
+                        is-system? (= actor-type-str "system")
                         entity-type-str (some-> (:target-type normalized) str)
                         entity-id* (:target-id normalized)
-                        entity-name (when (and entity-type-str entity-id*)
-                                      (resolve-entity-name db entity-type-str entity-id*))]
+                        entity-name (when (and (not is-system?)
+                                            entity-type-str entity-id*)
+                                      (resolve-entity-name db entity-type-str entity-id*))
+                        ;; For system entries, extract display info from metadata
+                        metadata-map (:changes normalized)]
                     (cond-> normalized
-                      entity-name (assoc :entity-name entity-name)))
+                      entity-name (assoc :entity-name entity-name)
+                      ;; Enrich system entries with actor display info
+                      is-system? (assoc :actor-display-name "System"
+                                   :is-api-failure true)
+                      (and is-system? (:triggering-user-name metadata-map))
+                      (assoc :triggering-user-name (:triggering-user-name metadata-map))))
                   (catch Exception e
                     (log/error "❌ AUDIT BACKEND: Error processing log:" (.getMessage e))
                     ;; Return the log without computed fields

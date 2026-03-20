@@ -19,3 +19,14 @@
              (rf/dispatch [:user/check-auth-protected (when init-event [init-event])]))
     :stop  (fn [_]
              (rf/dispatch [:page/cleanup]))}])
+
+(defn power-user-guarded-start
+  "Creates a route controller that requires admin or owner role.
+   Chains: auth check → role check → page init.
+   Redirects to /dashboard if the user lacks power-user privileges."
+  [init-event]
+  [{:start (fn [_]
+             (rf/dispatch [:user/check-auth-protected
+                           [:user/check-power-user-then-init (when init-event [init-event])]]))
+    :stop  (fn [_]
+             (rf/dispatch [:page/cleanup]))}])

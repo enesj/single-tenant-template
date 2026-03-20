@@ -74,7 +74,7 @@
        (container/register-service!
          (container/create-simple-service
            :email-service
-           (fn [_] (factories/create-email-service config))))
+           (fn [_] (factories/create-email-service config db-connection))))
 
        (container/register-service!
          (container/create-simple-service

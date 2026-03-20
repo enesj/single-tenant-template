@@ -39,13 +39,13 @@
    :receipts
    {:name :receipts
     :view :receipts-list
-    :controllers (controllers/user-guarded-start :page/init-receipts-list)}
+    :controllers (controllers/power-user-guarded-start :page/init-receipts-list)}
 
    :receipt-detail
    {:name :receipt-detail
     :view :receipt-detail
     :parameters {:path {:receipt-id string?}}
-    :controllers (controllers/user-guarded-start :page/init-receipt-detail)}
+    :controllers (controllers/power-user-guarded-start :page/init-receipt-detail)}
 
    :expense-reports
    {:name :expense-reports

@@ -192,12 +192,6 @@
                                       :active? (active? #{:user-dashboard
                                                           :expenses-dashboard
                                                           :expenses-dashboard-alias})})
-                           (nav-item {:id "user-sidebar-receipts"
-                                      :label (t :nav/receipts)
-                                      :href (th "/receipts")
-                                      :route :receipts
-                                      :icon ($ receipts-icon {:class "w-6 h-6"})
-                                      :active? (active? #{:receipts :receipt-detail})})
                            (nav-item {:id "user-sidebar-expenses-list"
                                       :label (t :nav/expenses)
                                       :href (th "/expenses/list")
@@ -206,7 +200,13 @@
                                       :active? (active? #{:expenses-list
                                                           :expense-detail})})]
                           (when power-user?
-                            [(nav-item {:id "user-sidebar-expense-items"
+                            [(nav-item {:id "user-sidebar-receipts"
+                                        :label (t :nav/receipts)
+                                        :href (th "/receipts")
+                                        :route :receipts
+                                        :icon ($ receipts-icon {:class "w-6 h-6"})
+                                        :active? (active? #{:receipts :receipt-detail})})
+                             (nav-item {:id "user-sidebar-expense-items"
                                         :label (t :nav/expense-items)
                                         :href (th "/expense-items")
                                         :route :expense-items

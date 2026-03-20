@@ -22,8 +22,8 @@
                  (catch Exception e
                    (log/warn e "Failed to load global settings for receipt OCR worker")
                    nil))]
-    {:cerebras-cfg (cerebras/build-config app-config)
-     :places-cfg (places-api/build-config app-config)
+    {:cerebras-cfg (assoc (cerebras/build-config app-config) :db db)
+     :places-cfg (assoc (places-api/build-config app-config) :db db)
      :auto-post-after-upload? (:auto-post-after-upload? ocr-cfg)
      :global-auto-publish-after-upload? (boolean (:auto-publish-after-upload global))
      :ai-receipt-enhancement? (boolean (:ai-receipt-enhancement global))
@@ -136,7 +136,7 @@
   ([db app-config]
    (run-pending! db app-config nil))
   ([db app-config {:keys [max-receipts] :as opts}]
-   (let [ocr-cfg (ocr-provider/build-provider app-config)
+   (let [ocr-cfg (ocr-provider/build-provider app-config {:db db})
          deps (build-provider-deps db app-config ocr-cfg)
          opts (merge {:max-receipts 25
                       :lease-seconds 900
@@ -197,7 +197,7 @@
   ([db app-config receipt-ids]
    (run-by-ids! db app-config receipt-ids nil))
   ([db app-config receipt-ids {:keys [reset?] :or {reset? true} :as opts}]
-   (let [ocr-cfg (ocr-provider/build-provider app-config)
+   (let [ocr-cfg (ocr-provider/build-provider app-config {:db db})
          deps (build-provider-deps db app-config ocr-cfg)
          defer-refine? (if (contains? opts :defer-refine?)
                          (:defer-refine? opts)

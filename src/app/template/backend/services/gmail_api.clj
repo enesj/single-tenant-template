@@ -7,7 +7,8 @@
     [app.template.backend.services.gmail-smtp :as gmail-smtp]
     [cheshire.core :as json]
     [clj-http.client :as http]
-    [taoensso.timbre :as log]))
+    [taoensso.timbre :as log]
+    [app.admin.backend.services.admin.audit :as audit]))
 
 (defn- get-access-token
   "Exchange a refresh token for a short-lived OAuth2 access token."
@@ -77,9 +78,21 @@
         (do
           (log/error "Gmail API send failed"
             {:status (:status resp) :body (:body resp) :to to-email})
+          (when-let [db (:db api-config)]
+            (audit/log-api-failure! db
+              {:api-name :gmail :operation "send-email"
+               :http-status (:status resp)
+               :error-message (str "Gmail API non-200: " (:status resp))
+               :error-type "http-error" :request-url "https://gmail.googleapis.com" :severity :error}))
           {:success false :error :gmail-api-error :details (:body resp)})))
     (catch Exception e
       (log/error e "Exception while sending email via Gmail API" {:to to-email})
+      (when-let [db (:db api-config)]
+        (audit/log-api-failure! db
+          {:api-name :gmail :operation "send-email"
+           :error-message (.getMessage e)
+           :error-type (some-> e class .getName)
+           :request-url "https://gmail.googleapis.com" :severity :error}))
       {:success false :error :exception :message (.getMessage e)})))
 
 ;; ============================================================================
@@ -104,40 +117,45 @@
 ;; EmailService protocol implementation
 ;; ============================================================================
 
-(defrecord GmailAPIEmailService [gmail-api-config from-email base-url]
+(defrecord GmailAPIEmailService [gmail-api-config from-email base-url db]
   email-verification/EmailService
 
   (send-verification-email [_service user token]
     (log/info "Sending verification email via Gmail API" {:to (:email user)})
     (let [{:keys [text html]} (gmail-smtp/create-verification-email-body user token base-url)
-          subject             "Verify your email address for Your Organization"]
-      (send-gmail-api-email gmail-api-config from-email (:email user) subject text html)))
+          subject             "Verify your email address for Your Organization"
+          cfg                 (assoc gmail-api-config :db db)]
+      (send-gmail-api-email cfg from-email (:email user) subject text html)))
 
   (send-verification-success-email [_service user]
     (log/info "Sending verification success email via Gmail API" {:to (:email user)})
     (let [{:keys [text html]} (gmail-smtp/create-success-email-body user base-url)
-          subject             "Email verified successfully - Your Organization"]
-      (send-gmail-api-email gmail-api-config from-email (:email user) subject text html))))
+          subject             "Email verified successfully - Your Organization"
+          cfg                 (assoc gmail-api-config :db db)]
+      (send-gmail-api-email cfg from-email (:email user) subject text html))))
 
 (defn create-gmail-api-email-service
   "Create a Gmail API email service.
    Returns nil (logging the missing keys) when :client-id, :client-secret,
-   or :refresh-token are absent from `api-config`."
-  [api-config from-email base-url]
-  (if (and api-config from-email
-        (:client-id api-config)
-        (:client-secret api-config)
-        (:refresh-token api-config))
-    (do
-      (log/info "Creating Gmail API email service" {:from-email from-email :base-url base-url})
-      (->GmailAPIEmailService api-config from-email base-url))
-    (do
-      (log/error "Gmail API config incomplete — email sending will not work"
-        {:has-client-id     (boolean (:client-id api-config))
-         :has-client-secret (boolean (:client-secret api-config))
-         :has-refresh-token (boolean (:refresh-token api-config))
-         :has-from-email    (boolean from-email)})
-      nil)))
+   or :refresh-token are absent from `api-config`.
+   Optional `db` datasource enables audit logging of send failures."
+  ([api-config from-email base-url]
+   (create-gmail-api-email-service api-config from-email base-url nil))
+  ([api-config from-email base-url db]
+   (if (and api-config from-email
+         (:client-id api-config)
+         (:client-secret api-config)
+         (:refresh-token api-config))
+     (do
+       (log/info "Creating Gmail API email service" {:from-email from-email :base-url base-url})
+       (->GmailAPIEmailService api-config from-email base-url db))
+     (do
+       (log/error "Gmail API config incomplete — email sending will not work"
+         {:has-client-id     (boolean (:client-id api-config))
+          :has-client-secret (boolean (:client-secret api-config))
+          :has-refresh-token (boolean (:refresh-token api-config))
+          :has-from-email    (boolean from-email)})
+       nil))))
 
 (comment
   ;; Test token exchange (requires env vars set):

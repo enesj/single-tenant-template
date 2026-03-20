@@ -15,7 +15,8 @@
     [honey.sql :as sql]
     [next.jdbc :as jdbc]
     [next.jdbc.result-set :as rs]
-    [taoensso.timbre :as log])
+    [taoensso.timbre :as log]
+    [app.admin.backend.services.admin.audit :as audit])
   (:import
     [java.time LocalDate]
     [java.util UUID]))
@@ -197,7 +198,7 @@
 (defn- search-cbbh-rates-via-serper
   "Fallback: search Serper for CBBH exchange rates.
    Returns parsed rates or nil."
-  [{:keys [serper-api-key serper-timeout-ms]} ^LocalDate rate-date currency-codes]
+  [{:keys [serper-api-key serper-timeout-ms db]} ^LocalDate rate-date currency-codes]
   (when serper-api-key
     (try
       (let [query (str "CBBH kursna lista " rate-date)
@@ -213,7 +214,7 @@
                     :throw-exceptions false
                     :socket-timeout (int serper-timeout-ms)
                     :connection-timeout (int serper-timeout-ms)})]
-        (when (= 200 (:status resp))
+        (if (= 200 (:status resp))
           (let [results (json/parse-string (:body resp) true)
                 snippets (->> (concat (:organic results)
                                 (when-let [ab (:answerBox results)]
@@ -225,9 +226,25 @@
               (keep (fn [code]
                       (when-let [rate (parse-rate-from-snippet snippets code)]
                         {:currency-code code :rate rate})))
-              vec))))
+              vec))
+          (do
+            (log/warn "Serper API returned non-200:" (:status resp))
+            (when db
+              (audit/log-api-failure! db
+                {:api-name :serper :operation "search-cbbh-rates"
+                 :http-status (:status resp)
+                 :error-message (str "Serper API HTTP " (:status resp))
+                 :error-type "http-error"
+                 :request-url serper-endpoint :severity :warning}))
+            nil)))
       (catch Exception e
         (log/warn "Serper CBBH search failed:" (.getMessage e))
+        (when db
+          (audit/log-api-failure! db
+            {:api-name :serper :operation "search-cbbh-rates"
+             :error-message (or (.getMessage e) (str (class e)))
+             :error-type (some-> e class .getName)
+             :request-url serper-endpoint :severity :warning}))
         nil))))
 
 (defn- get-enabled-non-bam-codes
@@ -247,7 +264,12 @@
 
 (defn- apply-fallback-rates!
   "Copy the latest cached rates for today and create an admin alert."
-  [db ^LocalDate rate-date error-message]
+  [db ^LocalDate rate-date error-message & [{:keys [error-type severity]}]]
+  (audit/log-api-failure! db
+    {:api-name :cbbh-exchange-rates :operation "fetch-daily-rates"
+     :error-message error-message
+     :error-type (or error-type "fetch-failure")
+     :request-url cbbh-url :severity (or severity :warning)})
   (let [latest (get-latest-rates db)]
     (if (seq latest)
       (let [fallback-rates (mapv (fn [r] {:currency-code (:currency-code r) :rate (:rate r)})
@@ -286,7 +308,7 @@
                       rates
                       (do
                         (log/info "CBBH HTML fetch returned no rates, trying Serper fallback")
-                        (search-cbbh-rates-via-serper config rate-date currency-codes)))]
+                        (search-cbbh-rates-via-serper (assoc config :db db) rate-date currency-codes)))]
           (if (seq rates)
             (do
               (store-rates! db rate-date rates false)
@@ -295,7 +317,8 @@
             (apply-fallback-rates! db rate-date "Both CBBH HTML and Serper fetch returned no rates")))
         (catch Exception e
           (log/error e "Exchange rate fetch failed for" (str rate-date))
-          (apply-fallback-rates! db rate-date (str "Fetch exception: " (.getMessage e))))))))
+          (apply-fallback-rates! db rate-date (str "Fetch exception: " (.getMessage e))
+            {:error-type (some-> e class .getName) :severity :error}))))))
 
 (defn ensure-daily-rates!
   "Idempotent: fetch rates for today only if not already cached.

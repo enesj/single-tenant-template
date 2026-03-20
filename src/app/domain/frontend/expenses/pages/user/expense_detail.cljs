@@ -63,19 +63,12 @@
               ($ :th {:class "text-right"} (t :expense-detail/col-unit-price))
               ($ :th {:class "text-right"} (t :expense-detail/col-total))))
           ($ :tbody
-            (for [{:keys [id
-                          raw_label raw-label
-                          qty
-                          unit_price unit-price
-                          line_total line-total]} items]
-              (let [raw-label* (or raw-label raw_label)
-                    unit-price* (or unit-price unit_price)
-                    line-total* (or line-total line_total)]
-                ($ :tr {:key (str id)}
-                  ($ :td raw-label*)
-                  ($ :td {:class "text-right font-mono"} (or qty "—"))
-                  ($ :td {:class "text-right font-mono"} (when unit-price* (format-money unit-price* currency)))
-                  ($ :td {:class "text-right font-mono font-medium"} (format-money line-total* currency))))))))
+            (for [{:keys [id raw-label qty unit-price line-total]} items]
+              ($ :tr {:key (str id)}
+                ($ :td raw-label)
+                ($ :td {:class "text-right font-mono"} (or qty "—"))
+                ($ :td {:class "text-right font-mono"} (when unit-price (format-money unit-price currency)))
+                ($ :td {:class "text-right font-mono font-medium"} (format-money line-total currency)))))))
       ($ :p {:class "text-base-content/50 text-sm"} (t :expense-detail/no-items)))))
 
 (defui conversion-breakdown
@@ -132,29 +125,32 @@
         js/undefined)
       [expense-id])
 
-    (let [{:keys [supplier_display_name supplier-display-name
-                  payer_label payer-label
-                  total_amount total-amount
-                  original_amount original-amount
-                  bam_amount bam-amount
-                  exchange_rate exchange-rate
-                  rate_fetched_at rate-fetched-at
+    ;; Data is always normalized to kebab-case by convert-db-keys->app-keys.
+    ;; Avoid mixing snake_case + kebab-case symbols in :keys — they compile
+    ;; to the same JS identifier and shadow each other.
+    (let [{:keys [supplier-display-name
+                  payer-label
+                  total-amount
+                  original-amount
+                  bam-amount
+                  exchange-rate
+                  rate-fetched-at
                   currency
-                  purchased_at purchased-at
+                  purchased-at
                   notes
-                  is_posted is-posted
+                  is-posted
                   items
-                  created_at created-at]} expense
-          supplier-name (or supplier-display-name supplier_display_name)
-          payer-name (or payer-label payer_label)
-          total (or total-amount total_amount)
-          original-total (or original-amount original_amount)
-          bam-total (or bam-amount bam_amount)
-          current-rate (or exchange-rate exchange_rate)
-          rate-fetched (or rate-fetched-at rate_fetched_at)
-          purchased (or purchased-at purchased_at)
-          created (or created-at created_at)
-          posted? (true? (or is-posted is_posted))
+                  created-at]} expense
+          supplier-name supplier-display-name
+          payer-name payer-label
+          total total-amount
+          original-total original-amount
+          bam-total bam-amount
+          current-rate exchange-rate
+          rate-fetched rate-fetched-at
+          purchased purchased-at
+          created created-at
+          posted? (true? is-posted)
           show-conversion? (and (some? currency)
                              (not= "BAM" currency)
                              (or original-total bam-total current-rate))]

@@ -294,4 +294,5 @@
                             :on-select-change on-select-change})
        :recently-updated? recently-updated?
        :recently-created? recently-created?
-       :selected? selected?})))
+       :selected? selected?
+       :is-api-failure? (boolean (:is-api-failure item-clj))})))

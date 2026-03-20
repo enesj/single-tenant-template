@@ -59,8 +59,9 @@
 ;; ---------------------------------------------------------------------------
 
 (defn update-profile-defaults-handler
-  "Update per-user defaults. Currently supports:
-   - :default-expense-category-id (UUID or nil to clear)"
+  "Update per-user defaults. Supports:
+   - :default-expense-category-id (UUID or nil to clear)
+   - :default-payer-id (UUID or nil to clear)"
   [db]
   (fn [request]
     (if-let [user-id (h/get-user-id request)]
@@ -70,6 +71,7 @@
         (let [tenant-id (h/get-tenant-id request)]
           (try
             (let [body (h/read-body-params request)
+                  ;; Parse category ID
                   cat-id-raw (or (:default-expense-category-id body)
                                (:default_expense_category_id body)
                                (get body "default-expense-category-id")
@@ -78,15 +80,30 @@
                                 (nil? cat-id-raw) nil
                                 (= "" cat-id-raw) nil
                                 (instance? UUID cat-id-raw) cat-id-raw
-                                :else (h/try-parse-uuid cat-id-raw))]
-              ;; Validate: if a non-empty string was provided, it must parse to UUID
-              (when (and (some? cat-id-raw)
-                      (not= "" cat-id-raw)
-                      (nil? category-id))
+                                :else (h/try-parse-uuid cat-id-raw))
+                  ;; Parse payer ID
+                  payer-id-raw (or (:default-payer-id body)
+                                 (:default_payer_id body)
+                                 (get body "default-payer-id")
+                                 (get body "default_payer_id"))
+                  payer-id (cond
+                             (nil? payer-id-raw) nil
+                             (= "" payer-id-raw) nil
+                             (instance? UUID payer-id-raw) payer-id-raw
+                             :else (h/try-parse-uuid payer-id-raw))]
+              ;; Validate
+              (when (and (some? cat-id-raw) (not= "" cat-id-raw) (nil? category-id))
                 (throw (ex-info "default-expense-category-id must be a UUID or blank to clear"
                          {:status 400})))
-              (let [result (user-settings/update-user-default-category! db tenant-id user-id category-id)]
-                (log/info "Updated profile defaults" {:user-id user-id :category-id category-id})
+              (when (and (some? payer-id-raw) (not= "" payer-id-raw) (nil? payer-id))
+                (throw (ex-info "default-payer-id must be a UUID or blank to clear"
+                         {:status 400})))
+              (let [result (user-settings/update-user-defaults! db tenant-id user-id
+                             {:default-expense-category-id category-id
+                              :default-payer-id payer-id})]
+                (log/info "Updated profile defaults" {:user-id user-id
+                                                      :category-id category-id
+                                                      :payer-id payer-id})
                 (h/json-response {:data result})))
             (catch clojure.lang.ExceptionInfo e
               (let [status (or (:status (ex-data e)) 500)]

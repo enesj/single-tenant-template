@@ -4,7 +4,8 @@
     [cheshire.core :as json]
     [clj-http.client :as http]
     [clojure.string :as str]
-    [taoensso.timbre :as log]))
+    [taoensso.timbre :as log]
+    [app.admin.backend.services.admin.audit :as audit]))
 
 (def ^:private default-base-url "https://places.googleapis.com/v1/places:searchText")
 (def ^:private default-timeout-ms 3000)
@@ -241,8 +242,16 @@
                        :field-mask mask
                        :raw-body-snippet (safe-body-snippet (:body resp))}
                       (parsed-error-info data)))
-                  {:places []
-                   :error (response->error "Places API error" resp data)}))
+                  (do
+                    (when-let [db (:db cfg)]
+                      (audit/log-api-failure! db
+                        {:api-name :google-places :operation "search-text"
+                         :http-status status
+                         :error-message (or (safe-body-snippet (:body resp)) "Non-200 response")
+                         :error-type "http-error" :request-url (:base-url cfg) :severity :error
+                         :user-id (:user-id cfg) :user-name (:user-name cfg)}))
+                    {:places []
+                     :error (response->error "Places API error" resp data)})))
 
               :exception
               (if (< attempt max-retries)
@@ -263,6 +272,13 @@
                      :language-code language-code
                      :field-mask mask
                      :attempt attempt})
+                  (when-let [db (:db cfg)]
+                    (audit/log-api-failure! db
+                      {:api-name :google-places :operation "search-text"
+                       :error-message (or (.getMessage exception) (str (class exception)))
+                       :error-type (some-> exception class .getName)
+                       :request-url (:base-url cfg) :severity :error
+                       :user-id (:user-id cfg) :user-name (:user-name cfg)}))
                   {:places []
                    :error {:type :places/exception
                            :message (or (.getMessage exception) (str (class exception)))}})))))))))

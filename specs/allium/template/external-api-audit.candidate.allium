@@ -1,0 +1,282 @@
+-- allium: 2
+-- external-api-audit.candidate.allium
+--
+-- Scope: Logging failures from outgoing HTTP calls to external APIs
+--        into the existing audit_logs table, with admin UI visibility
+--        and notification badge.
+--
+-- Includes: Failure capture for all 10 external API integrations,
+--           inline display in existing audit table, admin notification badge.
+-- Excludes:
+--   - Success logging (only failures are recorded)
+--   - Alerting beyond the in-app badge (no email/SMS alerts)
+--   - External API health dashboards or reliability metrics
+--   - Retry logic itself (governed by each integration's own config)
+--
+-- Dependencies: Existing audit_logs table and admin audit UI
+
+------------------------------------------------------------
+-- External Entities
+------------------------------------------------------------
+
+external entity User {
+    id: String
+    full_name: String
+}
+
+external entity Admin {
+    id: String
+    full_name: String
+    email: String
+}
+
+------------------------------------------------------------
+-- Enumerations
+------------------------------------------------------------
+
+enum AuditActorType { user | admin | system }
+
+enum ExternalApi {
+    mistral_ocr
+    | llamaparse
+    | cerebras
+    | google_places
+    | gmail
+    | postmark
+    | google_oauth
+    | github_oauth
+    | cbbh_exchange
+    | serper
+}
+
+enum ApiFailureSeverity { warning | error | critical }
+
+------------------------------------------------------------
+-- Entities
+------------------------------------------------------------
+
+entity AuditLog {
+    id: String
+    actor_type: AuditActorType
+    actor_id: String?
+    action: String
+    target_type: String
+    target_id: String?
+    metadata: ApiFailureMetadata?
+    ip: String?
+    user_agent: String?
+    created_at: Timestamp
+
+    -- Derived
+    is_api_failure: action = "external_api_failure"
+    is_system_entry: actor_type = system
+}
+
+------------------------------------------------------------
+-- Value Types
+------------------------------------------------------------
+
+value ApiFailureMetadata {
+    api_name: ExternalApi
+    operation: String
+    http_status: Integer?
+    error_message: String
+    error_type: String?
+    request_url: String?
+    -- Derived: base URL only, API keys/tokens must be redacted before storage
+    retry_attempted: Boolean
+    retry_succeeded: Boolean
+    triggering_user_id: String?
+    triggering_user_name: String?
+    severity: ApiFailureSeverity
+    duration_ms: Integer?
+}
+
+value AdminNotificationState {
+    unread_api_failure_count: Integer
+    last_acknowledged_at: Timestamp?
+}
+
+------------------------------------------------------------
+-- Config
+------------------------------------------------------------
+
+config {
+    system_actor_display_name: String = "System"
+    api_failure_action_name: String = "external_api_failure"
+    notification_badge_entity_type: String = "external_api"
+}
+
+------------------------------------------------------------
+-- Rules
+------------------------------------------------------------
+
+-- Core logging rule: when an external API call fails, create an audit entry
+
+rule LogExternalApiFailure {
+    when: ExternalApiCallFailed(
+        api_name, operation, http_status?, error_message,
+        error_type?, request_url?, retry_attempted, retry_succeeded,
+        triggering_user?, severity, duration_ms?
+    )
+
+    ensures: AuditLog.created(
+        actor_type: system,
+        actor_id: if triggering_user != null: triggering_user.id else: null,
+        action: config.api_failure_action_name,
+        target_type: config.notification_badge_entity_type,
+        metadata: ApiFailureMetadata{
+            api_name: api_name,
+            operation: operation,
+            http_status: http_status,
+            error_message: error_message,
+            error_type: error_type,
+            request_url: request_url,
+            retry_attempted: retry_attempted,
+            retry_succeeded: retry_succeeded,
+            triggering_user_id: if triggering_user != null: triggering_user.id else: null,
+            triggering_user_name: if triggering_user != null: triggering_user.full_name else: null,
+            severity: severity,
+            duration_ms: duration_ms
+        }
+    )
+}
+
+-- Severity classification rules
+
+rule ClassifyCriticalFailure {
+    when: ExternalApiCallFailed(api_name, _, _, _, _, _, retry_attempted, retry_succeeded, _, _, _)
+    requires: retry_attempted and not retry_succeeded
+    requires: api_name in {mistral_ocr, llamaparse, cerebras}
+
+    ensures: ExternalApiCallFailed(
+        api_name: api_name,
+        severity: critical
+    )
+
+    @guidance
+        -- OCR/LLM failures after retry exhaustion are critical because
+        -- they block receipt processing entirely. The user is waiting
+        -- for a result that will not arrive.
+}
+
+rule ClassifyWarningForFallback {
+    when: ExternalApiCallFailed(api_name, _, _, _, _, _, _, _, _, _, _)
+    requires: api_name in {cbbh_exchange, serper}
+
+    ensures: ExternalApiCallFailed(
+        api_name: api_name,
+        severity: warning
+    )
+
+    @guidance
+        -- Exchange rate services have fallback chains (CBBH -> Serper -> cached).
+        -- Individual failures are warnings unless the entire chain fails,
+        -- which is handled by the exchange rate service itself.
+}
+
+-- Badge acknowledgment
+
+rule AdminAcknowledgesApiFailures {
+    when: AdminAcknowledgesNotifications(admin)
+
+    ensures: AdminNotificationState.created(
+        unread_api_failure_count: 0,
+        last_acknowledged_at: now
+    )
+}
+
+------------------------------------------------------------
+-- Invariants
+------------------------------------------------------------
+
+invariant SystemEntriesHaveAction {
+    for log in AuditLogs:
+        log.actor_type = system implies log.action = "external_api_failure"
+}
+
+invariant ApiFailureMetadataPresent {
+    for log in AuditLogs:
+        log.is_api_failure implies log.metadata != null
+}
+
+------------------------------------------------------------
+-- Actor Declarations
+------------------------------------------------------------
+
+actor PlatformAdmin {
+    identified_by: Admin
+}
+
+------------------------------------------------------------
+-- Surfaces
+------------------------------------------------------------
+
+surface AuditLogList {
+    facing viewer: PlatformAdmin
+
+    let api_failure_logs = AuditLogs where action = "external_api_failure"
+    let unread_count = api_failure_logs where created_at > viewer.last_acknowledged_at
+
+    exposes:
+        -- Existing audit log fields
+        for log in AuditLogs:
+            log.id
+            log.actor_type
+            log.action
+            log.target_type
+            log.created_at
+            log.metadata
+
+            -- For system entries, display name resolution
+            log.metadata.api_name when log.is_system_entry
+            log.metadata.triggering_user_name when log.is_system_entry
+            log.metadata.severity when log.is_system_entry
+            log.metadata.http_status when log.is_system_entry
+            log.metadata.error_message when log.is_system_entry
+
+        -- Notification badge count
+        unread_count
+
+    provides:
+        AdminAcknowledgesNotifications(viewer)
+        AdminFiltersAuditByApi(viewer, api_name?)
+
+    @guarantee RedStylingForApiFailures
+        -- Audit log rows where action = "external_api_failure" are rendered
+        -- with red/error styling (background tint or text color) to
+        -- visually distinguish them from normal admin/user audit entries.
+
+    @guarantee SystemActorDisplay
+        -- When actor_type = "system", the actor column displays
+        -- the config.system_actor_display_name ("System") rather than
+        -- attempting to resolve an admin or user name.
+        -- When triggering_user_name is present in metadata, it is shown
+        -- as secondary text: "System (triggered by User Name)".
+
+    @guarantee NotificationBadge
+        -- The sidebar "Audit" nav item displays a red badge with the count
+        -- of unacknowledged API failure entries. The badge requires an
+        -- explicit dismiss action from the admin (not implicit on page visit).
+
+    @guidance
+        -- The existing audit table, filters, and pagination should be reused.
+        -- API failure entries appear inline, sorted by created_at alongside
+        -- existing admin/user entries. An optional filter allows showing
+        -- only API failures or filtering by specific external API name.
+}
+
+------------------------------------------------------------
+-- Resolved Questions
+------------------------------------------------------------
+
+-- Q: Badge reset — implicit on page visit or explicit dismiss?
+-- A: Explicit dismiss. Admin must click a dismiss/acknowledge button.
+
+-- Q: Capture full request/response bodies or just status + message?
+-- A: Just status + error message. No full bodies — avoids sensitive data leakage.
+
+-- Q: Log intermediate retries that succeed, or only final failures?
+-- A: Only final failures. If a retry succeeds, no audit entry is created.
+--    This means Google Places API retry-with-simplified-field-mask that
+--    succeeds produces no log entry.

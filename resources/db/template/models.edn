@@ -22,7 +22,7 @@
                   [:created_at :timestamptz {:default [:now]}]
                   [:updated_at :timestamptz {:default [:now]}]]
          :types [[:user-status :enum {:choices ["active" "inactive" "suspended"]}]
-                 [:audit-actor-type :enum {:choices ["user" "admin"]}]
+                 [:audit-actor-type :enum {:choices ["user" "admin" "system"]}]
                  [:login-principal-type :enum {:choices ["user" "admin"]}]]
          :indexes [[:idx_users_email :btree {:fields [:email] :unique true}]
                    [:idx_users_status :btree {:fields [:status]}]
@@ -54,7 +54,7 @@
  :email_verification_tokens {:fields [[:id :uuid {:primary-key true}] [:user_id :uuid {:foreign-key :users/id :null false :on-delete :cascade}] [:token [:varchar 255] {:null false :unique true}] [:expires_at :timestamptz {:null false}] [:attempts :integer {:default 0}] [:last_attempted_at :timestamptz] [:used_at :timestamptz] [:created_at :timestamptz {:default [:now]}] [:updated_at :timestamptz {:default [:now]}]] :indexes [[:idx_email_tokens_user :btree {:fields [:user_id]}] [:idx_email_tokens_token :btree {:fields [:token] :unique true}] [:idx_email_tokens_expires :btree {:fields [:expires_at]}]]}
 
  ;; Audit logs for admin/user actions
- :audit_logs {:fields [[:id :uuid {:primary-key true}] [:actor_type [:enum :audit-actor-type] {:null false}] [:actor_id :uuid {:null false}] [:action :text {:null false}] [:target_type :text] [:target_id :uuid] [:metadata :jsonb] [:ip :text] [:user_agent :text] [:created_at :timestamptz {:default [:now]}] [:updated_at :timestamptz {:default [:now]}]] :indexes [[:idx_audit_logs_created_at :btree {:fields [:created_at]}] [:idx_audit_logs_actor :btree {:fields [:actor_type :actor_id]}]]}
+ :audit_logs {:fields [[:id :uuid {:primary-key true}] [:actor_type [:enum :audit-actor-type] {:null false}] [:actor_id :uuid] [:action :text {:null false}] [:target_type :text] [:target_id :uuid] [:metadata :jsonb] [:ip :text] [:user_agent :text] [:created_at :timestamptz {:default [:now]}] [:updated_at :timestamptz {:default [:now]}]] :indexes [[:idx_audit_logs_created_at :btree {:fields [:created_at]}] [:idx_audit_logs_actor :btree {:fields [:actor_type :actor_id]}]]}
 
  ;; Login events for authentication monitoring
  :login_events {:fields [[:id :uuid {:primary-key true}] [:principal_type [:enum :login-principal-type] {:null false}] [:principal_id :uuid {:null false}] [:success :boolean {:null false}] [:reason :text] [:ip :text] [:user_agent :text] [:created_at :timestamptz {:default [:now]}] [:updated_at :timestamptz {:default [:now]}]] :indexes [[:idx_login_events_created_at :btree {:fields [:created_at]}] [:idx_login_events_principal :btree {:fields [:principal_type :principal_id]}]]}

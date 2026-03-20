@@ -17,36 +17,42 @@
   "Build a send-email-fn for pwd-reset/request-password-reset! that dispatches
    to SMTP or Gmail API based on the email service record in use."
   [email-service]
-  (cond
-    (:smtp-config email-service)
-    (fn [to-email token reset-url full-name]
-      (gmail-smtp/send-password-reset-email
-        (:smtp-config email-service)
-        (:from-email email-service)
-        to-email token reset-url full-name))
+  (let [db   (:db email-service)
+        opts (when db {:db db})
+        api-cfg (cond-> (:gmail-api-config email-service) db (assoc :db db))]
+    (cond
+      (:smtp-config email-service)
+      (fn [to-email token reset-url full-name]
+        (gmail-smtp/send-password-reset-email
+          (:smtp-config email-service)
+          (:from-email email-service)
+          to-email token reset-url full-name opts))
 
-    (:gmail-api-config email-service)
-    (fn [to-email token reset-url full-name]
-      (gmail-api/send-password-reset-email
-        (:gmail-api-config email-service)
-        (:from-email email-service)
-        to-email token reset-url full-name))))
+      (:gmail-api-config email-service)
+      (fn [to-email token reset-url full-name]
+        (gmail-api/send-password-reset-email
+          api-cfg
+          (:from-email email-service)
+          to-email token reset-url full-name)))))
 
 (defn- send-password-changed!
   "Send a password-changed confirmation email via the appropriate transport."
   [email-service to-email full-name base-url]
-  (cond
-    (:smtp-config email-service)
-    (gmail-smtp/send-password-changed-email
+  (let [db   (:db email-service)
+        opts (when db {:db db})
+        api-cfg (cond-> (:gmail-api-config email-service) db (assoc :db db))]
+    (cond
       (:smtp-config email-service)
-      (:from-email email-service)
-      to-email full-name base-url)
+      (gmail-smtp/send-password-changed-email
+        (:smtp-config email-service)
+        (:from-email email-service)
+        to-email full-name base-url opts)
 
-    (:gmail-api-config email-service)
-    (gmail-api/send-password-changed-email
       (:gmail-api-config email-service)
-      (:from-email email-service)
-      to-email full-name base-url)))
+      (gmail-api/send-password-changed-email
+        api-cfg
+        (:from-email email-service)
+        to-email full-name base-url))))
 
 ;; ============================================================================
 ;; Request Handlers

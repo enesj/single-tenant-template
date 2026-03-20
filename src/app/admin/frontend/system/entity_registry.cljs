@@ -14,6 +14,7 @@
     [app.admin.frontend.components.user-details-modal :as user-details-modal]
     [app.admin.frontend.components.audit-actions :as audit-actions]
     [app.admin.frontend.components.audit-details-modal :as audit-details-modal]
+    [app.admin.frontend.components.audit-export-controls :as audit-export-controls]
     [app.admin.frontend.components.admin-actions :as admin-actions]
     ;; Domain registry - no direct domain imports
     [app.domain.frontend.registry :as domain-registry]))
@@ -34,6 +35,7 @@
      {:init-fn audit-adapter/init-audit-adapter!
       :actions enhanced-actions/enhanced-action-buttons
       :custom-actions audit-actions/admin-audit-actions
+      :components {:custom-header audit-export-controls/export-controls}
       :modals [audit-details-modal/audit-details-modal]}
 
      :login-events

@@ -1,7 +1,7 @@
 (ns app.template.frontend.components.sidebar
   (:require [uix.core :refer [$ defui]]))
 
-(defui sidebar-item [{:keys [id label href icon active? on-click className]}]
+(defui sidebar-item [{:keys [id label href icon active? on-click className badge]}]
   ($ :li {:class "mb-1"}
     ($ :a {:id id
            :href href
@@ -10,7 +10,10 @@
                     (when className (str " " className)))}
       (when icon
         icon)
-      label)))
+      ($ :span {:class "flex-1"} label)
+      (when (and badge (pos? badge))
+        ($ :span {:class "ds-badge ds-badge-sm ds-badge-error font-bold"}
+          badge)))))
 
 (defui sidebar-section [{:keys [title items subsections]}]
   ($ :<>

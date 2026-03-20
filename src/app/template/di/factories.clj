@@ -64,11 +64,14 @@
 
    IMPORTANT: `app.template.backend.email.service/create-email-service` expects a
    config map that includes both the email settings (e.g. `:type`, `:smtp`) and
-   enough app context to build links (e.g. `:webserver`/`:https`)."
-  [config]
-  (let [email-config (get config :email {:type :console})
-        ;; Merge app context so email links (verify/reset/etc.) use the correct
-        ;; host/port for the active profile (e.g. :test uses 8086).
-        effective-config (merge email-config
-                           (select-keys config [:webserver :https :base-url]))]
-    (email-service/create-email-service effective-config)))
+   enough app context to build links (e.g. `:webserver`/`:https`).
+   Optional `db` enables audit logging of email API failures."
+  ([config]
+   (create-email-service config nil))
+  ([config db]
+   (let [email-config (get config :email {:type :console})
+         ;; Merge app context so email links (verify/reset/etc.) use the correct
+         ;; host/port for the active profile (e.g. :test uses 8086).
+         effective-config (merge email-config
+                            (select-keys config [:webserver :https :base-url]))]
+     (email-service/create-email-service effective-config db))))

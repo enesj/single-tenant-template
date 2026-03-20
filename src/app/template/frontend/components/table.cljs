@@ -322,13 +322,17 @@
                       selected? (boolean
                                   (and (map? rendered-result)
                                     (:selected? rendered-result)))
+                      is-api-failure? (boolean
+                                        (and (map? rendered-result)
+                                          (:is-api-failure? rendered-result)))
                       ;; Apply different highlight classes based on status and if highlights are shown
-                      highlight-class (if show-highlights?
-                                        (cond
-                                          recently-updated? " bg-green-200/50"
-                                          recently-created? " bg-blue-200/50"
-                                          :else "")
-                                        "")
+                      ;; API failure rows are always highlighted red regardless of the highlight toggle
+                      highlight-class (cond
+                                        is-api-failure? " bg-red-100/70 hover:bg-red-200/70"
+                                        (not show-highlights?) ""
+                                        recently-updated? " bg-green-200/50"
+                                        recently-created? " bg-blue-200/50"
+                                        :else "")
                       selection-class (if selected? " bg-primary/5" "")
                       main-row ($ row
                                  {:key (str "row-" idx "-" row-id)

@@ -65,28 +65,33 @@
   - :api-key string?
   - :auto-post-after-upload? boolean
   - :parse! fn
-  - :extract! fn"
-  [app-config]
-  (case (selected-workflow)
-    :llamaparse
-    (to-runtime-config :llamaparse
-      "LlamaParse"
-      (llamaparse/build-config app-config)
-      llamaparse/ocr-parse!
-      llamaparse/ocr-extract!)
+  - :extract! fn
 
-    :mistral
-    (to-runtime-config :mistral
-      "Mistral OCR"
-      (mistral-ocr/build-config app-config)
-      mistral-ocr/ocr-parse!
-      mistral-ocr/ocr-extract!)
+  Optional `opts` map may include :db for audit logging of API failures."
+  ([app-config]
+   (build-provider app-config nil))
+  ([app-config {:keys [db] :as _opts}]
+   (let [inject-db (fn [cfg] (cond-> cfg db (assoc :db db)))]
+     (case (selected-workflow)
+       :llamaparse
+       (to-runtime-config :llamaparse
+         "LlamaParse"
+         (inject-db (llamaparse/build-config app-config))
+         llamaparse/ocr-parse!
+         llamaparse/ocr-extract!)
 
-    (to-runtime-config :mistral
-      "Mistral OCR"
-      (mistral-ocr/build-config app-config)
-      mistral-ocr/ocr-parse!
-      mistral-ocr/ocr-extract!)))
+       :mistral
+       (to-runtime-config :mistral
+         "Mistral OCR"
+         (inject-db (mistral-ocr/build-config app-config))
+         mistral-ocr/ocr-parse!
+         mistral-ocr/ocr-extract!)
+
+       (to-runtime-config :mistral
+         "Mistral OCR"
+         (inject-db (mistral-ocr/build-config app-config))
+         mistral-ocr/ocr-parse!
+         mistral-ocr/ocr-extract!)))))
 
 (defn disabled-message
   [{:keys [provider]}]

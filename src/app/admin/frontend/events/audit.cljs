@@ -127,7 +127,8 @@
              (assoc-in (conj metadata-path :error) nil)
              (assoc-in (paths/list-total-items :audit-logs) total-items))
        :dispatch-n [[::audit-adapter/sync-audit-logs-to-template raw-logs]
-                    [:admin/audit-logs-loaded]]})))
+                    [:admin/audit-logs-loaded]
+                    [:admin/fetch-unread-api-failures]]})))
 
 ;; HTTP failure handler
 (rf/reg-event-fx
@@ -368,6 +369,57 @@
     (-> db
       (assoc-in [:admin :audit :exporting?] false)
       (assoc-in [:admin :audit :error] "Failed to export audit logs"))))
+
+;; ============================================================================
+;; API Failure Notification Badge
+;; ============================================================================
+
+(rf/reg-event-fx
+  :admin/fetch-unread-api-failures
+  (fn [{:keys [db]} _]
+    (if (adapters.core/admin-token db)
+      {:http-xhrio (admin-http/admin-get
+                     {:uri "/admin/api/audit/api-failures/unread"
+                      :on-success [::unread-api-failures-loaded]
+                      :on-failure [::unread-api-failures-load-failed]})}
+      {})))
+
+(rf/reg-event-db
+  ::unread-api-failures-loaded
+  (fn [db [_ response]]
+    (let [response* (if (object? response) (js->clj response :keywordize-keys true) response)
+          cnt (or (:unread-count response*) 0)]
+      (assoc-in db [:admin :audit :unread-api-failure-count] cnt))))
+
+(rf/reg-event-db
+  ::unread-api-failures-load-failed
+  (fn [db [_ _error]]
+    (log/warn "Failed to fetch unread API failure count")
+    db))
+
+(rf/reg-event-fx
+  :admin/acknowledge-api-failures
+  (fn [{:keys [db]} _]
+    (if (adapters.core/admin-token db)
+      {:db (assoc-in db [:admin :audit :unread-api-failure-count] 0)
+       :http-xhrio (admin-http/admin-post
+                     {:uri "/admin/api/audit/api-failures/acknowledge"
+                      :on-success [::api-failures-acknowledged]
+                      :on-failure [::api-failures-acknowledge-failed]})}
+      {})))
+
+(rf/reg-event-db
+  ::api-failures-acknowledged
+  (fn [db _]
+    (log/info "API failures acknowledged")
+    db))
+
+(rf/reg-event-fx
+  ::api-failures-acknowledge-failed
+  (fn [{:keys [db]} [_ _error]]
+    (log/warn "Failed to acknowledge API failures")
+    {:db db
+     :dispatch [:admin/fetch-unread-api-failures]}))
 
 ;; ============================================================================
 ;; Pagination

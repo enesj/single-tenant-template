@@ -82,6 +82,22 @@
 
         ;; Search results: show immediate local matches while dedicated backend search loads.
         available-search-types (focused-search-types context article-mode?)
+        ;; Build a price map from related articles (supplier/store related data)
+        ;; so local search results can show prices even before the backend search responds.
+        related-article-prices (reduce
+                                 (fn [m a]
+                                   (if-let [p (:last_price a)]
+                                     (assoc m (str (:id a)) p)
+                                     m))
+                                 {}
+                                 (get-in quick-add-related [:related :articles]))
+        articles-with-prices (if (seq related-article-prices)
+                               (mapv (fn [a]
+                                       (if-let [p (get related-article-prices (str (:id a)))]
+                                         (assoc a :last_price p)
+                                         a))
+                                 articles)
+                               articles)
         local-search-results (when (and dropdown-open?
                                      (>= (count (str/trim input-text)) 2))
                                (-> (search/search-all-entities
@@ -89,7 +105,7 @@
                                      {:suppliers suppliers
                                       :stores stores
                                       :categories expense-categories
-                                      :articles articles}
+                                      :articles articles-with-prices}
                                      {:selected-supplier-id (some-> context :supplier :id)})
                                  (search/filter-results-by-entity-types available-search-types)))
         filtered-quick-search-results (search/filter-results-by-entity-types quick-search-results available-search-types)

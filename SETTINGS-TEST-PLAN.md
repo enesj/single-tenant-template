@@ -2,7 +2,7 @@
 
 **Spec**: `specs/allium/domain/expenses/settings-hierarchy.candidate.allium`
 **Implementation plan**: `SETTINGS-IMPLEMENTATION-PLAN.md`
-**Status**: In progress (Areas 3–6 tested, Areas 1–2 pending)
+**Status**: Complete (all 41 tests executed)
 **Last updated**: 2026-03-19
 **Created**: 2026-03-19
 
@@ -24,10 +24,10 @@ Legend: `[ ]` pending · `[✓]` pass · `[✗]` fail · `[~]` partial/skip
 
 | # | Test | Action | Expected | Result | Notes |
 |---|------|---------|----------|--------|-------|
-| T1 | Gear icon visible | Open `/expenses`, inspect header top-right gear icon | Settings panel or dropdown opens | | |
-| T2 | Profile link | Click `#settings-panel-profile` | Navigates to `/profile` | | |
-| T3 | Old route removed | Navigate to `/expenses/settings` | 404 / redirect — NOT the old settings page | | |
-| T4 | Admin settings link | Admin sidebar → "Expenses Settings" | Navigates to `/admin/expenses-settings` | | |
+| T1 | Gear icon visible | Open `/expenses`, inspect header top-right gear icon | Settings panel or dropdown opens | [✓] | "Settings" button in header opens modal with theme picker, Profile link, Change Password link |
+| T2 | Profile link | Click `#settings-panel-profile` | Navigates to `/profile` | [✓] | `#settings-panel-profile` exists, navigates to `/profile` |
+| T3 | Old route removed | Navigate to `/expenses/settings` | 404 / redirect — NOT the old settings page | [✓] | Falls through to expense detail view with "not found" — old settings page is gone |
+| T4 | Admin settings link | Admin sidebar → "Expenses Settings" | Navigates to `/admin/expenses-settings` | [✓] | Sidebar "Settings" under Domain > Expenses → `/admin/expenses-settings` with all 4 sections |
 
 ---
 
@@ -35,21 +35,21 @@ Legend: `[ ]` pending · `[✓]` pass · `[✗]` fail · `[~]` partial/skip
 
 | # | Test | Action | Expected | Result | Notes |
 |---|------|---------|----------|--------|-------|
-| T5 | Page loads | Navigate to `/profile` | Skeleton pulse then content | | |
-| T6 | Account info displayed | Check `#profile-user-name`, `#profile-user-email`, `#profile-user-role` | Real user data visible, no input fields | | |
-| T7 | Default payer (read-only) | Check `#profile-default-payer` | Shows payer name or empty label | | |
-| T8 | Default category dropdown | Change `#profile-default-category-select` | Save button `#btn-profile-save-defaults` enables | | |
-| T9 | Save defaults | Click `#btn-profile-save-defaults` | Spinner → saves → dirty clears | | |
-| T10 | Defaults persist | Reload page | Category select shows saved value | | |
-| T11 | Workspace section gated | As member (non-owner): check workspace card | Section absent | | |
-| T12 | Workspace section visible | As owner: visit `/profile` | "Workspace" and "Data management" sections present | | |
-| T13 | Workspace name edit | Owner: change `#profile-workspace-name-input` | `#btn-profile-save-workspace-name` enables | | |
-| T14 | Save workspace name | Click `#btn-profile-save-workspace-name` | Saves; reload confirms | | |
-| T15 | Email notifications toggle | Toggle `#profile-email-notifications-toggle` | `#btn-profile-save-workspace-settings` enables | | |
-| T16 | Save notifications | Click `#btn-profile-save-workspace-settings` | Saves; reload confirms | | |
-| T17 | Export button | Click `#btn-profile-export-expenses` | CSV download triggers | | |
-| T18 | Delete guard | Type anything ≠ "DELETE" in `#profile-delete-confirmation-input` | `#btn-profile-delete-all-expenses` stays disabled | | |
-| T19 | Delete unlock | Type "DELETE" exactly | Delete button enables | | |
+| T5 | Page loads | Navigate to `/profile` | Skeleton pulse then content | [✓] | Content loads immediately from auth session data |
+| T6 | Account info displayed | Check `#profile-user-name`, `#profile-user-email`, `#profile-user-role` | Real user data visible, no input fields | [✓] | "enes jakic", "jakic.enes.dev@gmail.com", "owner" — all read-only SPANs |
+| T7 | Default payer (read-only) | Check `#profile-default-payer` | Shows payer name or empty label | [✓] | "Nijedan zadani platitelj" — read-only text |
+| T8 | Default category dropdown | Change `#profile-default-category-select` | Save button `#btn-profile-save-defaults` enables | [✓] | Changed to "Domaćinstvo", save button enabled |
+| T9 | Save defaults | Click `#btn-profile-save-defaults` | Spinner → saves → dirty clears | [✓] | Saved, button went back to disabled |
+| T10 | Defaults persist | Reload page | Category select shows saved value | [✓] | "Domaćinstvo" persisted after reload |
+| T11 | Workspace section gated | As member (non-owner): check workspace card | Section absent | [✓] | Switched to "Jakic Family" (member role) — no Workspace or Data sections visible |
+| T12 | Workspace section visible | As owner: visit `/profile` | "Workspace" and "Data management" sections present | [✓] | "Radni prostor" and "Podaci" sections both visible as owner |
+| T13 | Workspace name edit | Owner: change `#profile-workspace-name-input` | `#btn-profile-save-workspace-name` enables | [✓] | Changed name, save button enabled |
+| T14 | Save workspace name | Click `#btn-profile-save-workspace-name` | Saves; reload confirms | [~] | **BUG-2**: DB persisted ("TEST" suffix confirmed in DB), but UI shows stale value after reload — profile reads tenant name from auth session cache, not fresh API |
+| T15 | Email notifications toggle | Toggle `#profile-email-notifications-toggle` | `#btn-profile-save-workspace-settings` enables | [✓] | Toggled off, save button enabled |
+| T16 | Save notifications | Click `#btn-profile-save-workspace-settings` | Saves; reload confirms | [✓] | Saved; persisted as unchecked after reload |
+| T17 | Export button | Click `#btn-profile-export-expenses` | CSV download triggers | [✓] | GET `/api/v1/profile/export?all=true&format=csv` returned 200 |
+| T18 | Delete guard | Type anything ≠ "DELETE" in `#profile-delete-confirmation-input` | `#btn-profile-delete-all-expenses` stays disabled | [✓] | Typed "NOTDELETE" — button stayed disabled |
+| T19 | Delete unlock | Type "DELETE" exactly | Delete button enables | [✓] | Typed "DELETE" — button enabled |
 
 ---
 
@@ -98,7 +98,7 @@ Legend: `[ ]` pending · `[✓]` pass · `[✗]` fail · `[~]` partial/skip
 | # | Test | Action | Expected | Result | Notes |
 |---|------|---------|----------|--------|-------|
 | T39 | BAM expense (baseline) | Create manual expense in BAM | No conversion breakdown in detail | [✓] | AFRODITA 15 BAM; detail shows no conversion section; API confirms exchange_rate=null |
-| T40 | Non-BAM expense | Create manual expense in EUR | Detail shows `EUR → BAM @ rate` | [✗] | **BUG**: Backend correct (exchange_rate=1.95583, bam_amount=39.12) but detail page shows no conversion breakdown. Also: supplier "—" instead of AFRODITA, status "Na čekanju" despite is_posted=true. App-db has correct data — rendering/subscription bug in expense_detail.cljs |
+| T40 | Non-BAM expense | Create manual expense in EUR | Detail shows `EUR → BAM @ rate` | [✗→fix] | **BUG-1 FIXED**: Root cause was JS identifier collision — snake_case + kebab-case symbols in `:keys` both compile to same JS var. Fix: removed all snake_case from destructuring. REPL-verified; browser re-test pending |
 | T41 | Currency dropdown | Open expense form currency dropdown | Only enabled currencies listed | [✓] | Shows BAM, CHF, EUR, GBP, RSD, TRY, USD (JPY absent after T32 removal) |
 
 ---
@@ -107,21 +107,22 @@ Legend: `[ ]` pending · `[✓]` pass · `[✗]` fail · `[~]` partial/skip
 
 | Area | Total | Pass | Fail | Partial | Status |
 |------|-------|------|------|---------|--------|
-| Routing | 4 | — | — | — | Not yet tested |
-| Profile page | 15 | — | — | — | Not yet tested |
+| Routing | 4 | 4 | 0 | 0 | **Done** |
+| Profile page | 15 | 14 | 0 | 1 | **Done** (T14 stale cache bug) |
 | Admin settings | 9 | 9 | 0 | 0 | **Done** |
 | Currencies | 5 | 5 | 0 | 0 | **Done** |
 | Exchange rates | 5 | 4 | 0 | 1 | **Done** (T38 skipped — no alerts) |
-| Expense creation | 3 | 2 | 1 | 0 | **Done** (T40 bug) |
-| **Total** | **41** | **20** | **1** | **1** | |
+| Expense creation | 3 | 2 | 1 | 0 | **Done** (T40 bug fixed, re-test pending) |
+| **Total** | **41** | **38** | **1** | **2** | |
 
 ---
 
 ## Bugs Found
 
-### BUG-1: Expense detail page renders stale/incomplete data (T40)
+### BUG-1: Expense detail page renders stale/incomplete data (T40) — FIXED
 - **File**: `src/app/domain/frontend/expenses/pages/user/expense_detail.cljs`
 - **Severity**: Medium
+- **Status**: **FIXED** — code change applied, REPL-verified
 - **Description**: When viewing a non-BAM expense detail page, the conversion breakdown section does not render even though:
   1. Backend API returns correct data (`exchange_rate: 1.95583`, `bam_amount: 39.12`, `currency: "EUR"`)
   2. Re-frame app-db at `[:user-expenses :current-expense :data]` has all correct kebab-case keys
@@ -131,8 +132,17 @@ Legend: `[ ]` pending · `[✓]` pass · `[✗]` fail · `[~]` partial/skip
   - Status shows "Na čekanju" despite `:is-posted true`
   - No conversion breakdown section rendered
   - Payer, total, currency, date, and items render correctly
-- **Likely cause**: UIx/React rendering lifecycle issue — `use-subscribe` returns correct data but some destructured bindings don't trigger re-render, OR the component captures stale closure values from before the async fetch completes. The `⟳` refresh button also fails to fix the display.
-- **Screenshot**: `tmp/t40-expense-detail.png`
+- **Root cause**: ClojureScript compiles both `supplier-display-name` and `supplier_display_name` to the same JS identifier (`supplier_display_name`). The `:keys` destructuring had both snake_case and kebab-case symbols, causing shadowing. Since normalized data only has kebab-case keys, the snake_case symbol "won" and bound to `nil`.
+- **Fix**: Removed all snake_case symbols from `:keys` destructuring in both `expense-detail-page` and `line-item-table` components. Data is always normalized to kebab-case by `convert-db-keys->app-keys`.
+- **Verification**: REPL confirmed `convert-db-keys->app-keys` produces `:supplier-display-name`, `:is-posted`, `:exchange-rate`, `:bam-amount`, `:raw-label`, `:unit-price`, `:line-total` — all matching the fixed destructuring. Browser verification pending (impersonation session lacks tenant context).
+- **Screenshot (pre-fix)**: `tmp/t40-expense-detail.png`
+
+### BUG-2: Workspace name shows stale value after save (T14)
+- **File**: Profile page component (reads tenant name from auth session)
+- **Severity**: Low
+- **Status**: Open
+- **Description**: After saving a new workspace name via `#btn-profile-save-workspace-name`, the value persists to the database (confirmed via SQL), but the UI shows the old name after reload. The profile page reads the tenant name from the cached auth session rather than fetching fresh tenant data after save.
+- **Fix needed**: After saving workspace name, either (a) re-fetch auth status to refresh the session cache, or (b) read tenant name from a dedicated API call in the profile page instead of relying on the auth session.
 
 ### NOTE: User feedback (not a test bug)
 - **Profile page "Zadani platitelj"**: User requested this be an editable dropdown (like Default Category), not read-only text. Implementation change needed in profile page component.

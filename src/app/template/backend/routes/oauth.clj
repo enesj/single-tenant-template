@@ -8,7 +8,8 @@
     [clojure.string :as str]
     [clojure.walk :as walk]
     [ring.util.response :as response]
-    [taoensso.timbre :as log]))
+    [taoensso.timbre :as log]
+    [app.admin.backend.services.admin.audit :as audit]))
 
 ;; OAuth Routes
 ;;
@@ -154,7 +155,7 @@
 
 (defn- exchange-code-for-token
   "Exchange OAuth authorization code for access token"
-  [oauth-configs provider code redirect-uri]
+  [oauth-configs provider code redirect-uri db]
   (let [config (get oauth-configs provider)
         token-request {:client_id (:client-id config)
                        :client_secret (:client-secret config)
@@ -176,9 +177,22 @@
           (do
             (log/error "Token exchange failed with status:" (:status response))
             (log/error "Response body:" (:body response))
+            (when db
+              (audit/log-api-failure! db
+                {:api-name (keyword (str (name provider) "-oauth")) :operation "token-exchange"
+                 :http-status (:status response)
+                 :error-message (str "OAuth token exchange non-200: " (:status response))
+                 :error-type "http-error"
+                 :request-url (:access-token-uri config) :severity :error}))
             nil)))
       (catch Exception e
         (log/error "Failed to exchange OAuth code for token:" (.getMessage e))
+        (when db
+          (audit/log-api-failure! db
+            {:api-name (keyword (str (name provider) "-oauth")) :operation "token-exchange"
+             :error-message (.getMessage e)
+             :error-type (some-> e class .getName)
+             :request-url (:access-token-uri config) :severity :error}))
         nil))))
 
 ;; Enhanced OAuth callback handler with tenant-aware authentication
@@ -213,7 +227,7 @@
         (if code
           (try
             ;; Exchange authorization code for access token
-            (if-let [token-response (exchange-code-for-token oauth-configs provider code redirect-uri)]
+            (if-let [token-response (exchange-code-for-token oauth-configs provider code redirect-uri db)]
               (if-let [access-token (:access_token token-response)]
                 (let [user-info (case provider
                                   :google (fetch-google-user-info access-token)
@@ -289,6 +303,13 @@
 
             (catch Exception e
               (log/error "OAuth callback processing failed:" (.getMessage e))
+              (when db
+                (audit/log-api-failure! db
+                  {:api-name (keyword (str (when provider (name provider)) "-oauth"))
+                   :operation "oauth-callback"
+                   :error-message (.getMessage e)
+                   :error-type (some-> e class .getName)
+                   :severity :error}))
               (html-error-response
                 "Authentication Error"
                 (str "An error occurred during authentication: " (.getMessage e)))))

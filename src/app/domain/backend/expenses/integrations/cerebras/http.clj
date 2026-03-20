@@ -5,7 +5,8 @@
     [clj-http.client :as http]
     [clojure.string :as str]
     [taoensso.timbre :as log]
-    [app.domain.backend.expenses.integrations.cerebras.config :as config]))
+    [app.domain.backend.expenses.integrations.cerebras.config :as config]
+    [app.admin.backend.services.admin.audit :as audit]))
 
 (defn safe-body-snippet [s]
   (when (string? s)
@@ -83,6 +84,13 @@
               (Thread/sleep (* retry-sleep-ms (inc attempt)))
               (recur (inc attempt)))
             (let [e (:exception resp)]
+              (when-let [db (:db _cfg)]
+                (audit/log-api-failure! db
+                  {:api-name :cerebras :operation "chat-completion"
+                   :error-message (or (.getMessage e) "Unknown exception")
+                   :error-type (some-> e class .getName)
+                   :request-url url :severity :critical
+                   :user-id (:user-id _cfg) :user-name (:user-name _cfg)}))
               (throw (ex-info "Cerebras request failed"
                        (merge
                          {:type :cerebras/exception
@@ -99,10 +107,26 @@
               (log/warn "Cerebras non-2xx; retrying" {:status (:status resp) :attempt (inc attempt) :max-retries max-retries})
               (Thread/sleep (* retry-sleep-ms (inc attempt)))
               (recur (inc attempt)))
-            (throw (response->ex "Cerebras request failed" resp)))
+            (do
+              (when-let [db (:db _cfg)]
+                (audit/log-api-failure! db
+                  {:api-name :cerebras :operation "chat-completion"
+                   :http-status (:status resp)
+                   :error-message (or (safe-body-snippet (:body resp)) "Non-2xx response")
+                   :error-type "http-error" :request-url url :severity :critical
+                   :user-id (:user-id _cfg) :user-name (:user-name _cfg)}))
+              (throw (response->ex "Cerebras request failed" resp))))
 
           :else
-          (throw (response->ex "Cerebras request failed" resp)))))))
+          (do
+            (when-let [db (:db _cfg)]
+              (audit/log-api-failure! db
+                {:api-name :cerebras :operation "chat-completion"
+                 :http-status (:status resp)
+                 :error-message (or (safe-body-snippet (:body resp)) "Non-2xx response")
+                 :error-type "http-error" :request-url url :severity :error
+                 :user-id (:user-id _cfg) :user-name (:user-name _cfg)}))
+            (throw (response->ex "Cerebras request failed" resp))))))))
 
 (defn chat-completions-url [{:keys [base-url]}]
   (let [base (or base-url (config/default-base-url-value))

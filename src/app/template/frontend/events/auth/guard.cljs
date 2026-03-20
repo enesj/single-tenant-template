@@ -65,3 +65,13 @@
                  (assoc-in [:session :loading?] false)
                  (assoc-in [:session :authenticated?] false))
      :dispatch [:navigate-to "/login"]}))
+
+(rf/reg-event-fx
+  :user/check-power-user-then-init
+  common-interceptors
+  (fn [{:keys [db]} [on-success-events]]
+    (let [role (or (get-in db [:session :membership-role]) "viewer")]
+      (if (contains? #{"admin" "owner"} role)
+        (let [events (normalize-events on-success-events)]
+          (if (seq events) {:dispatch-n events} {}))
+        {:dispatch [:navigate-to "/dashboard"]}))))

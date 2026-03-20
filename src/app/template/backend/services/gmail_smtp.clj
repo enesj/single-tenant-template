@@ -1,6 +1,7 @@
 (ns app.template.backend.services.gmail-smtp
   "Gmail SMTP email service implementation for development/testing"
   (:require
+    [app.admin.backend.services.admin.audit :as audit]
     [app.template.backend.auth.email-verification :as email-verification]
     [clojure.string :as str]
     [java-time.api :as time]
@@ -152,8 +153,9 @@
   "Send email via SMTP using postal library.
 
   When `smtp-config` includes `{:transport :in-memory}`, no email is sent.
-  Instead the message is appended to an in-memory outbox for test assertions."
-  [smtp-config from-email to-email subject text-body html-body]
+  Instead the message is appended to an in-memory outbox for test assertions.
+  Optional trailing `opts` map may include `:db` for audit logging."
+  [smtp-config from-email to-email subject text-body html-body & [opts]]
   (if (= :in-memory (:transport smtp-config))
     (let [captured {:from from-email
                     :to to-email
@@ -182,10 +184,22 @@
             {:success true :message-id (:id result)})
           (do
             (log/error "Failed to send email via SMTP. Error:" (:message result))
+            (when-let [db (:db opts)]
+              (audit/log-api-failure! db
+                {:api-name :gmail-smtp :operation "send-email"
+                 :error-message (str "SMTP send failed: " (:message result))
+                 :error-type "smtp-error"
+                 :severity :error}))
             {:success false :error :smtp-error :details result})))
 
       (catch Exception e
         (log/error e "Exception occurred while sending email via SMTP")
+        (when-let [db (:db opts)]
+          (audit/log-api-failure! db
+            {:api-name :gmail-smtp :operation "send-email"
+             :error-message (or (.getMessage e) (str (class e)))
+             :error-type (some-> e class .getName)
+             :severity :error}))
         {:success false :error :smtp-exception :message (.getMessage e)}))))
 
 ;; ============================================================================
@@ -194,21 +208,21 @@
 
 (defn send-password-reset-email
   "Send password reset email via SMTP"
-  [smtp-config from-email to-email _token reset-url full-name]
+  [smtp-config from-email to-email _token reset-url full-name & [opts]]
   (let [{:keys [text html]} (create-password-reset-email-body full-name reset-url)
         tenant-name "Your Organization"
         subject (str "Reset your password for " tenant-name)]
-    (send-smtp-email smtp-config from-email to-email subject text html)))
+    (send-smtp-email smtp-config from-email to-email subject text html opts)))
 
 (defn send-password-changed-email
   "Send password changed confirmation email via SMTP"
-  [smtp-config from-email to-email full-name base-url]
+  [smtp-config from-email to-email full-name base-url & [opts]]
   (let [{:keys [text html]} (create-password-changed-email-body full-name base-url)
         tenant-name "Your Organization"
         subject (str "Your password has been changed - " tenant-name)]
-    (send-smtp-email smtp-config from-email to-email subject text html)))
+    (send-smtp-email smtp-config from-email to-email subject text html opts)))
 
-(defrecord GmailSMTPEmailService [smtp-config from-email base-url]
+(defrecord GmailSMTPEmailService [smtp-config from-email base-url db]
   email-verification/EmailService
 
   (send-verification-email [_service user token]
@@ -217,7 +231,7 @@
           tenant-name "Your Organization"
           subject (str "Verify your email address for " tenant-name)]
 
-      (send-smtp-email smtp-config from-email (:email user) subject text html)))
+      (send-smtp-email smtp-config from-email (:email user) subject text html {:db db})))
 
   (send-verification-success-email [_service user]
     (log/info "Sending verification success email to" (:email user) "via Gmail SMTP")
@@ -225,11 +239,13 @@
           tenant-name "Your Organization"
           subject (str "Email verified successfully - " tenant-name)]
 
-      (send-smtp-email smtp-config from-email (:email user) subject text html))))
+      (send-smtp-email smtp-config from-email (:email user) subject text html {:db db}))))
 
 (defn create-gmail-smtp-email-service
   "Create a Gmail SMTP email service with SMTP configuration"
-  [smtp-config from-email base-url]
-  (when (and smtp-config from-email)
-    (log/info "Creating Gmail SMTP email service with from email:" from-email "and base-url:" base-url)
-    (->GmailSMTPEmailService smtp-config from-email base-url)))
+  ([smtp-config from-email base-url]
+   (create-gmail-smtp-email-service smtp-config from-email base-url nil))
+  ([smtp-config from-email base-url db]
+   (when (and smtp-config from-email)
+     (log/info "Creating Gmail SMTP email service with from email:" from-email "and base-url:" base-url)
+     (->GmailSMTPEmailService smtp-config from-email base-url db))))
