@@ -22,16 +22,16 @@
    "feature" "Feature"
    "refactoring" "Refactoring"
    "review" "Review"
-   "improvment" "Improvment"
-   "improvement" "Improvment"})
+   "improvment" "Improvement"
+   "improvement" "Improvement"})
 
 (def ^:private backlog-status-aliases
   {"waiting" "Waiting"
-   "in progres" "In progres"
-   "in progress" "In progres"
+   "in progres" "In progress"
+   "in progress" "In progress"
    "completed" "Completed"
-   "need improvments" "Need improvments"
-   "need improvements" "Need improvments"})
+   "need improvments" "Need improvements"
+   "need improvements" "Need improvements"})
 
 (defn- backlog-option-value
   [value]

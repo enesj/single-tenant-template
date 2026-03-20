@@ -708,21 +708,17 @@
    [:description :text {:null false}]
    [:status [:enum :backlog-status] {:null false, :default "Waiting"}]
    [:type [:enum :backlog-type] {:null false}]
-   [:priority
-    :integer
-    {:null false,
-     :default 1,
-     :check [:raw "priority BETWEEN 1 AND 5"]}]
    [:created_at :timestamptz {:default [:now]}]
    [:updated_at :timestamptz {:default [:now]}]],
   :types
   [[:backlog-status
     :enum
-    {:choices ["Waiting" "In progres" "Completed" "Need improvments"]}]
+    {:choices
+     ["Waiting" "In progress" "Completed" "Need improvements"]}]
    [:backlog-type
     :enum
     {:choices
-     ["Issue" "Feature" "Refactoring" "Review" "Improvment"]}]]},
+     ["Issue" "Feature" "Refactoring" "Review" "Improvement"]}]]},
  :tenants
  {:fields
   [[:id :uuid {:primary-key true}]

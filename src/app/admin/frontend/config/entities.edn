@@ -90,7 +90,7 @@
  :backlog
  {:entity-key :backlog
   :page-title "Backlog"
-  :page-description "Track backlog items with status, type, and priority"
+  :page-description "Track backlog items with status and type"
   :adapter-init-fn app.admin.frontend.adapters.backlog/init-backlog-adapter!
   :display-settings {:show-select? true
                      :show-edit? true

@@ -10,9 +10,9 @@
         (-> (list-fields/resolve-backlog-badge "backlog-status-badge" status)
           :variant))
       "Waiting" "ds-badge-ghost"
-      "In progres" "ds-badge-info"
+      "In progress" "ds-badge-info"
       "Completed" "ds-badge-success"
-      "Need improvments" "ds-badge-warning"))
+      "Need improvements" "ds-badge-warning"))
 
   (testing "falls back to outline for unknown status values"
     (is (= "ds-badge-outline"
@@ -34,29 +34,17 @@
       "Feature" "ds-badge-success"
       "Refactoring" "ds-badge-warning"
       "Review" "ds-badge-info"
-      "Improvment" "ds-badge-secondary"))
+      "Improvement" "ds-badge-secondary"))
 
   (testing "falls back to outline for unknown type values"
     (is (= "ds-badge-outline"
           (-> (list-fields/resolve-backlog-badge "backlog-type-badge" "Spike")
             :variant)))))
 
-(deftest resolve-backlog-priority-badge-test
-  (testing "maps priority values 1..5 (string/number) to variants"
-    (are [priority-value expected-variant]
-      (= expected-variant
-        (-> (list-fields/resolve-backlog-badge "backlog-priority-badge" priority-value)
-          :variant))
-      1 "ds-badge-error"
-      "2" "ds-badge-warning"
-      3 "ds-badge-info"
-      "4" "ds-badge-primary"
-      5 "ds-badge-ghost"))
-
-  (testing "falls back to outline + Unknown for invalid priorities"
-    (let [badge (list-fields/resolve-backlog-badge "backlog-priority-badge" "high")]
-      (is (= "ds-badge-outline" (:variant badge)))
-      (is (= "Unknown" (:label badge))))))
+(deftest resolve-backlog-priority-badge-removed-test
+  (testing "priority badge formatter returns nil after priority removal"
+    (is (nil? (list-fields/resolve-backlog-badge "backlog-priority-badge" 1)))
+    (is (nil? (list-fields/resolve-backlog-badge "backlog-priority-badge" "3")))))
 
 (deftest resolve-backlog-badge-ignores-non-backlog-formatters
   (testing "returns nil when formatter is not a backlog formatter"

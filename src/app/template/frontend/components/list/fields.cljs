@@ -137,19 +137,15 @@
   [formatter value]
   (let [formatter-id (normalize-formatter-id formatter)
         value-str (some-> value str str/trim)
-        value-lower (some-> value-str str/lower-case)
-        parse-priority (fn [v]
-                         (let [parsed (js/parseInt (str v) 10)]
-                           (when-not (js/isNaN parsed)
-                             parsed)))]
+        value-lower (some-> value-str str/lower-case)]
     (case formatter-id
       "backlog-status-badge"
       {:label (if (seq value-str) (titleize-status value-str) "Unknown")
        :variant (cond
                   (contains? #{"waiting"} value-lower) "ds-badge-ghost"
-                  (contains? #{"in progres" "in progress" "in-progress"} value-lower) "ds-badge-info"
+                  (contains? #{"in progress" "in progres" "in-progress"} value-lower) "ds-badge-info"
                   (contains? #{"completed"} value-lower) "ds-badge-success"
-                  (contains? #{"need improvments" "need improvements" "needs improvement" "needs improvements"} value-lower) "ds-badge-warning"
+                  (contains? #{"need improvements" "need improvments" "needs improvement" "needs improvements"} value-lower) "ds-badge-warning"
                   :else "ds-badge-outline")}
 
       "backlog-type-badge"
@@ -159,20 +155,8 @@
                   (contains? #{"feature"} value-lower) "ds-badge-success"
                   (contains? #{"refactoring"} value-lower) "ds-badge-warning"
                   (contains? #{"review"} value-lower) "ds-badge-info"
-                  (contains? #{"improvment" "improvement"} value-lower) "ds-badge-secondary"
+                  (contains? #{"improvement" "improvment"} value-lower) "ds-badge-secondary"
                   :else "ds-badge-outline")}
-
-      "backlog-priority-badge"
-      (let [priority (when (seq value-str)
-                       (parse-priority value-str))]
-        {:label (if (some? priority) (str priority) "Unknown")
-         :variant (case priority
-                    1 "ds-badge-error"
-                    2 "ds-badge-warning"
-                    3 "ds-badge-info"
-                    4 "ds-badge-primary"
-                    5 "ds-badge-ghost"
-                    "ds-badge-outline")})
 
       nil)))
 
@@ -209,18 +193,15 @@
          type-field-id? (or (= field-id :type)
                           (= field-id "type")
                           (= (name field-id) "type"))
-         priority-field-id? (or (= field-id :priority)
-                              (= field-id "priority")
-                              (= (name field-id) "priority"))
          backlog-badge-fallback (cond
                                   (and status-field-id?
                                     (contains? #{"waiting"
-                                                 "in progres"
                                                  "in progress"
+                                                 "in progres"
                                                  "in-progress"
                                                  "completed"
-                                                 "need improvments"
                                                  "need improvements"
+                                                 "need improvments"
                                                  "needs improvement"
                                                  "needs improvements"}
                                       value-lower))
@@ -231,14 +212,10 @@
                                                  "feature"
                                                  "refactoring"
                                                  "review"
-                                                 "improvment"
-                                                 "improvement"}
+                                                 "improvement"
+                                                 "improvment"}
                                       value-lower))
                                   (resolve-backlog-badge "backlog-type-badge" display-value)
-
-                                  (and priority-field-id?
-                                    (contains? #{"1" "2" "3" "4" "5"} (some-> display-value str str/trim)))
-                                  (resolve-backlog-badge "backlog-priority-badge" display-value)
 
                                   :else
                                   nil)

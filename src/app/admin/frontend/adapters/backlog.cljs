@@ -65,9 +65,9 @@
           ui-state-path (paths/list-ui-state :backlog)
           selected-ids-path (paths/entity-selected-ids :backlog)
           db* (db-utils/assoc-paths db
-                [[(conj metadata-path :sort) {:field :priority :direction :asc}]
+                [[(conj metadata-path :sort) {:field :status :direction :asc}]
                  [(conj metadata-path :filters) {}]
-                 [ui-state-path {:sort {:field :priority :direction :asc}
+                 [ui-state-path {:sort {:field :status :direction :asc}
                                  :pagination (merge {:current-page 1}
                                                (:pagination (get-in db ui-state-path)))}]
                  [selected-ids-path #{}]])

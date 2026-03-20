@@ -1,0 +1,205 @@
+-- allium: 2
+-- backlog-remove-priority.candidate.allium
+
+-- Scope: Remove the priority column from Backlog and correct enum typos
+-- Includes: Priority removal, enum spelling corrections, sort order change,
+--           backend/frontend cleanup across ~10 files
+-- Excludes: Other backlog enhancements
+
+------------------------------------------------------------
+-- Enumerations
+------------------------------------------------------------
+
+enum BacklogStatus { waiting | in_progress | completed | need_improvements }
+
+-- Sort weight determines default list ordering (lower = appears first)
+enum BacklogStatusWeight {
+    in_progress = 1,
+    waiting = 2,
+    need_improvements = 3,
+    completed = 4
+}
+
+enum BacklogType { issue | feature | refactoring | review | improvement }
+
+------------------------------------------------------------
+-- Entities and Variants
+------------------------------------------------------------
+
+entity BacklogItem {
+    number: Integer                     -- auto-increment primary key
+    description: String                 -- required, non-blank
+    status: BacklogStatus               -- defaults to waiting on create
+    type: BacklogType                   -- required on create
+    created_at: Timestamp
+    updated_at: Timestamp
+
+    -- Derived
+    status_weight: BacklogStatusWeight  -- maps status to sort weight
+}
+
+------------------------------------------------------------
+-- Rules
+------------------------------------------------------------
+
+-- Priority field removal
+rule RemovePriorityColumn {
+    when: SchemaChange
+
+    ensures:
+        -- DB: DROP COLUMN priority from backlog table
+        -- DB: remove CHECK constraint (priority BETWEEN 1 AND 5)
+        BacklogItem has no priority field
+
+    @guidance
+        -- Migration must be backward-compatible: drop column only,
+        -- no data transformation needed since priority values are discarded.
+}
+
+-- Enum spelling corrections (bundled in same migration)
+rule CorrectEnumTypos {
+    when: SchemaChange
+
+    ensures:
+        -- backlog_status enum:
+        --   'In progres'        → 'In progress'
+        --   'Need improvments'  → 'Need improvements'
+        -- backlog_type enum:
+        --   'Improvment'        → 'Improvement'
+        BacklogStatus values are correctly spelled
+        BacklogType values are correctly spelled
+
+    @guidance
+        -- PostgreSQL supports ALTER TYPE ... RENAME VALUE (PG 10+):
+        --   ALTER TYPE backlog_status RENAME VALUE 'In progres' TO 'In progress';
+        --   ALTER TYPE backlog_status RENAME VALUE 'Need improvments' TO 'Need improvements';
+        --   ALTER TYPE backlog_type RENAME VALUE 'Improvment' TO 'Improvement';
+        --
+        -- These are DDL statements — no data migration needed, existing rows
+        -- automatically use the new labels.
+        --
+        -- Files requiring string updates (10 files):
+        --
+        -- DB/Schema:
+        --   resources/db/template/models.edn
+        --   resources/db/models.edn
+        --
+        -- Backend:
+        --   src/app/template/backend/routes/admin/entities/backlog.clj
+        --     - backlog-status-options set
+        --     - backlog-type-options set
+        --     - backlog-status-aliases map (keys + values)
+        --     - backlog-type-aliases map (keys + values)
+        --
+        -- Frontend:
+        --   src/app/template/frontend/events/form.cljs
+        --   src/app/template/frontend/components/list/fields.cljs
+        --   src/app/admin/frontend/events/users/template/form_interceptors.cljs
+        --   src/app/admin/frontend/config/form-fields.edn
+        --
+        -- Tests:
+        --   test/app/template/frontend/components/list_fields_test.cljs
+        --   test/app/template/frontend/events/form_events_test.cljs
+}
+
+-- Default list ordering changes from priority-based to status-based
+rule DefaultListOrder {
+    when: ListBacklogItems
+
+    ensures:
+        -- Items ordered by status workflow position, then creation order
+        BacklogItems ordered_by {status_weight asc, number asc}
+
+    @guidance
+        -- Status weight mapping for SQL ORDER BY:
+        --   CASE status::text
+        --     WHEN 'In progress' THEN 1        (active work first)
+        --     WHEN 'Waiting' THEN 2             (next up)
+        --     WHEN 'Need improvements' THEN 3   (needs attention)
+        --     WHEN 'Completed' THEN 4           (done, at bottom)
+        --   END ASC, number ASC
+        --
+        -- The CASE expression lives in the backend query;
+        -- frontend default sort field changes from :priority to :status.
+}
+
+-- Create no longer accepts or defaults priority
+rule CreateBacklogItem {
+    when: AdminCreatesBacklogItem(description, type, status?)
+
+    requires:
+        description is present and non-blank
+        type in BacklogType
+
+    ensures:
+        BacklogItem.created(
+            description: description,
+            type: type,
+            status: status or waiting
+        )
+}
+
+-- Update no longer accepts priority
+rule UpdateBacklogItem {
+    when: AdminUpdatesBacklogItem(number, description?, status?, type?)
+
+    requires:
+        at least one field supplied
+        if description supplied: description is present and non-blank
+        if status supplied: status in BacklogStatus
+        if type supplied: type in BacklogType
+
+    ensures:
+        BacklogItem(number).updated(
+            description: description,
+            status: status,
+            type: type
+        )
+}
+
+------------------------------------------------------------
+-- Surfaces
+------------------------------------------------------------
+
+-- Backend changes
+surface BackendApi {
+    facing admin: Admin
+
+    exposes:
+        -- All SQL SELECT/INSERT/UPDATE/RETURNING: remove priority column
+        -- normalize-fetched-backlog-item: remove :priority key
+        -- normalize-backlog-create-payload: remove :priority handling + default
+        -- normalize-backlog-update-payload: remove :priority handling
+        -- parse-backlog-priority!: delete entirely
+        -- list-backlog-items: ORDER BY changes to CASE status ... ASC, number ASC
+        -- create-backlog-item!: remove priority from INSERT
+        -- update-backlog-item!: remove priority from UPDATE
+        -- All enum string literals updated to corrected spellings
+
+    @guidance
+        -- Delete the parse-backlog-priority! function entirely.
+        -- Update backlog-status-options, backlog-type-options,
+        -- backlog-status-aliases, and backlog-type-aliases with corrected spellings.
+        -- The alias maps should still accept old misspellings as input keys
+        -- but map them to the corrected canonical values.
+}
+
+-- Frontend changes
+surface AdminFrontend {
+    facing admin: Admin
+
+    exposes:
+        -- table-columns.edn :backlog: remove "priority" from all column lists,
+        --   remove :priority from :column-config
+        -- form-fields.edn :backlog: remove "priority" from :create-fields and :edit-fields,
+        --   remove :priority from :field-config, update enum :value strings
+        -- entities.edn :backlog: update :page-description to remove "priority" mention
+        -- adapters/backlog.cljs: change default sort from :priority to :status
+        -- form.cljs + form_interceptors.cljs: update alias maps with corrected spellings
+        -- list/fields.cljs: update badge matching sets with corrected spellings
+
+    @guidance
+        -- The backlog-priority-badge formatter in column-config can be removed.
+        -- No frontend component changes needed beyond config — the generic entity
+        -- page renders from config automatically.
+}

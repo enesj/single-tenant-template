@@ -82,8 +82,8 @@
                                        :type {:value "Improvement"}
                                        :status {:value "Need improvements"}}
                               :editing true}])
-          (is (= {:type "Improvment"
-                  :status "Need improvments"}
+          (is (= {:type "Improvement"
+                  :status "Need improvements"}
                 (:data @captured))
             "Should normalize option map payloads to canonical backlog enum values"))))))
 

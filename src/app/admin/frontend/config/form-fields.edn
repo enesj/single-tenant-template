@@ -145,8 +145,8 @@
    {:type "select", :options ["active" "inactive" "suspended"]}}}
 
  :backlog
- {:create-fields ["description" "status" "type" "priority"],
-  :edit-fields ["description" "status" "type" "priority"],
+ {:create-fields ["description" "status" "type"],
+  :edit-fields ["description" "status" "type"],
   :required-fields ["description" "type"],
   :field-config
   {:number {:type "number", :label "Number", :step 1},
@@ -157,9 +157,9 @@
     :default "Waiting",
     :options
     [{:value "Waiting", :label "Waiting", :color "#64748b"}
-     {:value "In progres", :label "In Progress", :color "#0ea5e9"}
+     {:value "In progress", :label "In Progress", :color "#0ea5e9"}
      {:value "Completed", :label "Completed", :color "#10b981"}
-     {:value "Need improvments",
+     {:value "Need improvements",
       :label "Need Improvements",
       :color "#f59e0b"}]},
    :type
@@ -170,11 +170,4 @@
      {:value "Feature", :label "Feature", :color "#22c55e"}
      {:value "Refactoring", :label "Refactoring", :color "#f59e0b"}
      {:value "Review", :label "Review", :color "#0ea5e9"}
-     {:value "Improvment", :label "Improvement", :color "#6366f1"}]},
-   :priority
-   {:type "number",
-    :label "Priority",
-    :default 1,
-    :min 1,
-    :max 5,
-    :step 1}}}}
+     {:value "Improvement", :label "Improvement", :color "#6366f1"}]}}}}

@@ -24,6 +24,8 @@
       (let [parsed (cond
                      (string? raw) (json/parse-string raw true)
                      (map? raw) raw
+                     (instance? org.postgresql.util.PGobject raw)
+                     (json/parse-string (.getValue ^org.postgresql.util.PGobject raw) true)
                      :else nil)
             items (get-in parsed [:extraction :items])]
         (when (seq items)

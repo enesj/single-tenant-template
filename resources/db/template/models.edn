@@ -95,7 +95,7 @@
                             :indexes [[:uniq_frontend_runtime_configs_scope_key :btree {:fields [:scope :config_key] :unique true}]]}
 
  ;; Backlog items
- :backlog {:fields [[:number :integer {:primary-key true}] [:description :text {:null false}] [:status [:enum :backlog-status] {:null false :default "Waiting"}] [:type [:enum :backlog-type] {:null false}] [:priority :integer {:null false :default 1 :check [:raw "priority BETWEEN 1 AND 5"]}] [:created_at :timestamptz {:default [:now]}] [:updated_at :timestamptz {:default [:now]}]] :types [[:backlog-status :enum {:choices ["Waiting" "In progres" "Completed" "Need improvments"]}] [:backlog-type :enum {:choices ["Issue" "Feature" "Refactoring" "Review" "Improvment"]}]]}
+ :backlog {:fields [[:number :integer {:primary-key true}] [:description :text {:null false}] [:status [:enum :backlog-status] {:null false :default "Waiting"}] [:type [:enum :backlog-type] {:null false}] [:created_at :timestamptz {:default [:now]}] [:updated_at :timestamptz {:default [:now]}]] :types [[:backlog-status :enum {:choices ["Waiting" "In progress" "Completed" "Need improvements"]}] [:backlog-type :enum {:choices ["Issue" "Feature" "Refactoring" "Review" "Improvement"]}]]}
 
  ;; ============================================================================
  ;; Multi-Tenancy Tables

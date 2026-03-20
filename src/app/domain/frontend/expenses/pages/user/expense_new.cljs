@@ -134,12 +134,13 @@
         label (:label selected)
         unit-price (some-> (:last_price selected) safe-parse-number format-decimal)
         with-article (fn [item]
-                       (cond-> item
-                         true (assoc :raw_label label)
-                         (str/blank? (str (:qty item))) (assoc :qty "1")
-                         true (assoc :article_id (:id selected))
-                         (and unit-price (str/blank? (str (:unit_price item))))
-                         (assoc :unit_price unit-price)))
+                       (-> (cond-> item
+                             true (assoc :raw_label label)
+                             (str/blank? (str (:qty item))) (assoc :qty "1")
+                             true (assoc :article_id (:id selected))
+                             (and unit-price (str/blank? (str (:unit_price item))))
+                             (assoc :unit_price unit-price))
+                         recalc-line-total-if-possible))
         blank-index (first (keep-indexed (fn [idx item]
                                            (when (blank-line-item? item) idx))
                              items))]

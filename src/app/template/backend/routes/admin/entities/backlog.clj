@@ -7,26 +7,26 @@
 ;; ── Enum constants ────────────────────────────────────────────────────────────
 
 (def ^:private backlog-status-options
-  #{"Waiting" "In progres" "Completed" "Need improvments"})
+  #{"Waiting" "In progress" "Completed" "Need improvements"})
 
 (def ^:private backlog-type-options
-  #{"Issue" "Feature" "Refactoring" "Review" "Improvment"})
+  #{"Issue" "Feature" "Refactoring" "Review" "Improvement"})
 
 (def ^:private backlog-status-aliases
   {"waiting" "Waiting"
-   "in progres" "In progres"
-   "in progress" "In progres"
+   "in progres" "In progress"
+   "in progress" "In progress"
    "completed" "Completed"
-   "need improvments" "Need improvments"
-   "need improvements" "Need improvments"})
+   "need improvments" "Need improvements"
+   "need improvements" "Need improvements"})
 
 (def ^:private backlog-type-aliases
   {"issue" "Issue"
    "feature" "Feature"
    "refactoring" "Refactoring"
    "review" "Review"
-   "improvment" "Improvment"
-   "improvement" "Improvment"})
+   "improvment" "Improvement"
+   "improvement" "Improvement"})
 
 ;; ── Private helpers ───────────────────────────────────────────────────────────
 
@@ -61,26 +61,7 @@
    :number (backlog-row-value row :number)
    :description (backlog-row-value row :description)
    :status (backlog-row-value row :status)
-   :type (backlog-row-value row :type)
-   :priority (backlog-row-value row :priority)})
-
-(defn- parse-backlog-priority!
-  [value]
-  (let [priority (try
-                   (Integer/parseInt (str value))
-                   (catch Exception _ nil))]
-    (when-not (some? priority)
-      (throw (ex-info "Backlog priority must be an integer"
-               {:status 400
-                :field :priority
-                :value value})))
-    (when-not (<= 1 priority 5)
-      (throw (ex-info "Backlog priority must be between 1 and 5"
-               {:status 400
-                :field :priority
-                :value value
-                :allowed [1 2 3 4 5]})))
-    priority))
+   :type (backlog-row-value row :type)})
 
 (defn- normalize-backlog-enum!
   [field allowed aliases value]
@@ -108,7 +89,7 @@
   [tx number]
   (next-jdbc/execute-one!
     tx
-    ["SELECT number AS id, number, description, status::text AS status, type::text AS type, priority
+    ["SELECT number AS id, number, description, status::text AS status, type::text AS type
       FROM backlog
       WHERE number = ?"
      number]))
@@ -132,18 +113,13 @@
 (defn normalize-backlog-create-payload
   "Validate and normalize a create payload map into canonical backlog fields."
   [payload]
-  (let [status-value (payload-value payload :status)
-        priority-value (payload-value payload :priority)]
+  (let [status-value (payload-value payload :status)]
     {:description (require-backlog-description! (payload-value payload :description))
      :status (if (or (nil? status-value)
                    (and (string? status-value) (str/blank? status-value)))
                "Waiting"
                (normalize-backlog-enum! :status backlog-status-options backlog-status-aliases status-value))
-     :type (normalize-backlog-enum! :type backlog-type-options backlog-type-aliases (payload-value payload :type))
-     :priority (if (or (nil? priority-value)
-                     (and (string? priority-value) (str/blank? priority-value)))
-                 1
-                 (parse-backlog-priority! priority-value))}))
+     :type (normalize-backlog-enum! :type backlog-type-options backlog-type-aliases (payload-value payload :type))}))
 
 (defn normalize-backlog-update-payload
   "Validate and normalize an update payload map into a partial backlog update.
@@ -154,7 +130,6 @@
                      (contains? payload (name k))))
         status-value (payload-value payload :status)
         type-value (payload-value payload :type)
-        priority-value (payload-value payload :priority)
         present-update-value? (fn [value]
                                 (not (or (nil? value)
                                        (and (string? value)
@@ -167,10 +142,7 @@
                   (assoc :status (normalize-backlog-enum! :status backlog-status-options backlog-status-aliases status-value))
 
                   (and (has-key? :type) (present-update-value? type-value))
-                  (assoc :type (normalize-backlog-enum! :type backlog-type-options backlog-type-aliases type-value))
-
-                  (and (has-key? :priority) (present-update-value? priority-value))
-                  (assoc :priority (parse-backlog-priority! priority-value)))]
+                  (assoc :type (normalize-backlog-enum! :type backlog-type-options backlog-type-aliases type-value)))]
     (when (empty? updates)
       (throw (ex-info "No backlog fields supplied for update"
                {:status 400
@@ -185,15 +157,21 @@
     (fetch-backlog-item tx number)))
 
 (defn list-backlog-items
-  "Return all backlog items ordered by priority then number."
+  "Return all backlog items ordered by status workflow position then number."
   [db]
   (next-jdbc/with-transaction [tx db]
     (next-jdbc/execute-one! tx ["SET LOCAL app.bypass_rls = true"])
     (next-jdbc/execute!
       tx
-      ["SELECT number AS id, number, description, status::text AS status, type::text AS type, priority
+      ["SELECT number AS id, number, description, status::text AS status, type::text AS type
         FROM backlog
-        ORDER BY priority ASC, number ASC"])))
+        ORDER BY CASE status::text
+                   WHEN 'In progress' THEN 1
+                   WHEN 'Waiting' THEN 2
+                   WHEN 'Need improvements' THEN 3
+                   WHEN 'Completed' THEN 4
+                   ELSE 5
+                 END ASC, number ASC"])))
 
 (defn create-backlog-item!
   "Insert a new backlog row from a pre-normalized data map."
@@ -202,13 +180,12 @@
     (next-jdbc/execute-one! tx ["SET LOCAL app.bypass_rls = true"])
     (next-jdbc/execute-one!
       tx
-      ["INSERT INTO backlog (description, status, type, priority)
-        VALUES (?, ?::backlog_status, ?::backlog_type, ?)
-        RETURNING number AS id, number, description, status::text AS status, type::text AS type, priority"
+      ["INSERT INTO backlog (description, status, type)
+        VALUES (?, ?::backlog_status, ?::backlog_type)
+        RETURNING number AS id, number, description, status::text AS status, type::text AS type"
        (:description data)
        (:status data)
-       (:type data)
-       (:priority data)])))
+       (:type data)])))
 
 (defn update-backlog-item!
   "Apply a partial update map to the backlog item identified by number.
@@ -224,14 +201,12 @@
           ["UPDATE backlog
             SET description = ?,
                 status = ?::backlog_status,
-                type = ?::backlog_type,
-                priority = ?
+                type = ?::backlog_type
             WHERE number = ?
-            RETURNING number AS id, number, description, status::text AS status, type::text AS type, priority"
+            RETURNING number AS id, number, description, status::text AS status, type::text AS type"
            (:description final-state)
            (:status final-state)
            (:type final-state)
-           (:priority final-state)
            number]))
       nil)))
 

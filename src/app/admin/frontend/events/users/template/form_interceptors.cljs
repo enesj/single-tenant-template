@@ -36,16 +36,16 @@
    "feature" "Feature"
    "refactoring" "Refactoring"
    "review" "Review"
-   "improvment" "Improvment"
-   "improvement" "Improvment"})
+   "improvment" "Improvement"
+   "improvement" "Improvement"})
 
 (def ^:private backlog-status-aliases
   {"waiting" "Waiting"
-   "in progres" "In progres"
-   "in progress" "In progres"
+   "in progres" "In progress"
+   "in progress" "In progress"
    "completed" "Completed"
-   "need improvments" "Need improvments"
-   "need improvements" "Need improvments"})
+   "need improvments" "Need improvements"
+   "need improvements" "Need improvements"})
 
 (defn- backlog-option-value
   [value]
@@ -142,8 +142,7 @@
                           :on-success [:app.template.frontend.events.form/create-success entity-name]
                           :on-failure [:app.template.frontend.events.form/create-failure entity-name]}))]
           {:db (assoc-in db (paths/form-submitting? entity-name) true)
-             :http-xhrio request}))))
-    )
+           :http-xhrio request})))))
 
 ;; Note: The separate :admin.template.form/submit-user-edit and :admin.template.form/submit-user-create
 ;; events are no longer needed since we now route through the bridge system.

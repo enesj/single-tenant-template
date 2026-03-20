@@ -27,7 +27,7 @@
       (is (nil? (:store result))))))
 
 (deftest add-article-line-item-fills-blank-row-first
-  (testing "selecting an article fills the first blank line item, sets qty to 1, and suggests last price"
+  (testing "selecting an article fills the first blank line item, sets qty to 1, suggests last price, and auto-calculates total"
     (let [items [(expense-new/new-line-item)]
           result (expense-new/add-article-line-item items {:id "article-1"
                                                            :label "Coffee"
@@ -37,7 +37,28 @@
       (is (= "Coffee" (:raw_label item)))
       (is (= "1" (:qty item)))
       (is (= "article-1" (:article_id item)))
-      (is (= "4.25" (:unit_price item))))))
+      (is (= "4.25" (:unit_price item)))
+      (is (= "4.25" (:line_total item))))))
+
+(deftest add-article-line-item-appends-after-partially-filled-row
+  (testing "selecting an article after a partially filled row appends a fresh row with an initial total"
+    (let [items [{:id "line-1"
+                  :raw_label ""
+                  :qty "2"
+                  :unit_price ""
+                  :line_total ""}]
+          result (expense-new/add-article-line-item items {:id "article-1"
+                                                           :label "Coffee"
+                                                           :last_price 4.25})
+          original-item (first result)
+          inserted-item (second result)]
+      (is (= 2 (count result)))
+      (is (= "2" (:qty original-item)))
+      (is (= "" (:raw_label original-item)))
+      (is (= "Coffee" (:raw_label inserted-item)))
+      (is (= "1" (:qty inserted-item)))
+      (is (= "4.25" (:unit_price inserted-item)))
+      (is (= "4.25" (:line_total inserted-item))))))
 
 (deftest add-article-line-item-appends-when-current-row-is-used
   (testing "selecting an article appends a new line item when existing rows are already filled"
