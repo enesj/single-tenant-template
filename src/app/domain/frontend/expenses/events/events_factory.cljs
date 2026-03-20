@@ -143,23 +143,53 @@
               fetch-limit (:fetch-limit params)
               fetch-offset (or (:fetch-offset params) 0)
               fetch-mode? (some? fetch-limit)
-              ;; In server mode, forward mapped column filters to the backend.
-              ;; Each entry in filter-key-map says which frontend filter field-id
-              ;; maps to which backend query param name.
+              ;; In server mode, forward filters to the backend.
+              ;; Text filters use filter-key-map for field→param mapping.
+              ;; Date/number range filters expand by shape regardless of config.
               server-mode? (= :server (get-in db (paths/list-pagination-mode entity-key)))
-              db-filters (when (and server-mode? (not fetch-mode?) (seq filter-key-map))
+              db-filters (when (and server-mode? (not fetch-mode?))
                            (let [raw-filters (get-in db (paths/list-filters entity-key) {})]
                              (when (seq raw-filters)
                                (reduce-kv
                                  (fn [acc field-id filter-value]
                                    (let [app-key (model-naming/ensure-app-keyword field-id)
-                                         backend-param (or (get filter-key-map field-id)
-                                                         (get filter-key-map app-key))]
-                                     (if (and backend-param
-                                           (string? filter-value)
-                                           (seq filter-value))
-                                       (assoc acc backend-param filter-value)
-                                       acc)))
+                                         field-name (name app-key)]
+                                     (cond
+                                       ;; Date range → <field>-from / <field>-to ISO strings
+                                       (and (map? filter-value)
+                                         (or (contains? filter-value :from)
+                                           (contains? filter-value :to)))
+                                       (let [->str (fn [v]
+                                                     (cond
+                                                       (instance? js/Date v) (.toISOString v)
+                                                       (some? v) (str v)
+                                                       :else nil))]
+                                         (cond-> acc
+                                           (:from filter-value)
+                                           (assoc (keyword (str field-name "-from")) (->str (:from filter-value)))
+                                           (:to filter-value)
+                                           (assoc (keyword (str field-name "-to")) (->str (:to filter-value)))))
+
+                                       ;; Number range → <field>-min / <field>-max
+                                       (and (map? filter-value)
+                                         (or (contains? filter-value :min)
+                                           (contains? filter-value :max)))
+                                       (cond-> acc
+                                         (:min filter-value)
+                                         (assoc (keyword (str field-name "-min")) (:min filter-value))
+                                         (:max filter-value)
+                                         (assoc (keyword (str field-name "-max")) (:max filter-value)))
+
+                                       ;; Text filter — use filter-key-map if available
+                                       (and (string? filter-value) (seq filter-value))
+                                       (let [backend-param (when (seq filter-key-map)
+                                                             (or (get filter-key-map field-id)
+                                                               (get filter-key-map app-key)))]
+                                         (if backend-param
+                                           (assoc acc backend-param filter-value)
+                                           acc))
+
+                                       :else acc)))
                                  {}
                                  raw-filters))))
               params (cond-> params

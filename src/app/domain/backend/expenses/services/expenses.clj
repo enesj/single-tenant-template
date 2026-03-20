@@ -323,7 +323,9 @@
    opts: :from, :to, :supplier-id, :payer-id, :is-posted?, :tenant-id, :limit, :offset."
   [db {:keys [from to supplier-id payer-id is-posted? tenant-id limit offset order-dir]
        :or {limit 50 offset 0 order-dir :desc}}]
-  (let [base-where (cond-> [:and]
+  (let [from (try (parse-instant! :from from) (catch Exception _ nil))
+        to (try (parse-instant! :to to) (catch Exception _ nil))
+        base-where (cond-> [:and]
                      tenant-id (conj [:= :e.tenant_id tenant-id])
                      from (conj [:>= :e.purchased_at from])
                      to (conj [:<= :e.purchased_at to])

@@ -84,7 +84,9 @@
    :has-count? true
    :has-search? true
    :custom-query-params search-query-params
-   :custom-count-params search-query-params})
+   :custom-count-params search-query-params
+   :date-range-columns {:created-at :created_at
+                        :updated-at :updated_at}})
 
 (def store-config
   {:entity-key :store
@@ -97,7 +99,9 @@
    :has-count? true
    :has-search? false
    :custom-query-params search-query-params
-   :custom-count-params search-query-params})
+   :custom-count-params search-query-params
+   :date-range-columns {:created-at :created_at
+                        :updated-at :updated_at}})
 
 (def city-config
   {:entity-key :city
@@ -180,7 +184,9 @@
    :has-count? true
    :has-search? true
    :custom-query-params article-query-params
-   :custom-count-params article-query-params})
+   :custom-count-params article-query-params
+   :date-range-columns {:created-at :created_at
+                        :updated-at :updated_at}})
 
 (def expense-config
   {:entity-key :expense

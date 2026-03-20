@@ -23,8 +23,15 @@
                                  [:supplier-display-name :store-display-name
                                   :expense-category-name :payer-label
                                   :currency :notes])
-                  opts (cond-> (merge {:from (h/get-param params :from)
-                                       :to (h/get-param params :to)
+                  ;; Support both legacy :from/:to and new :purchased-at-from/:purchased-at-to
+                  purchased-from (or (h/get-param params :purchased-at-from) (h/get-param params :from))
+                  purchased-to (or (h/get-param params :purchased-at-to) (h/get-param params :to))
+                  created-from (h/get-param params :created-at-from)
+                  created-to (h/get-param params :created-at-to)
+                  opts (cond-> (merge {:from purchased-from
+                                       :to purchased-to
+                                       :created-at-from created-from
+                                       :created-at-to created-to
                                        :supplier-id (h/try-parse-uuid (h/get-param params :supplier_id))
                                        :payer-id (h/try-parse-uuid (h/get-param params :payer_id))
                                        :is-posted? (h/parse-boolean-param params :is_posted)

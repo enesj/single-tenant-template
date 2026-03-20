@@ -13,6 +13,7 @@
     [clojure.walk :as walk]
     [taoensso.timbre :as log])
   (:import
+    [java.time Instant LocalDate OffsetDateTime]
     [java.util UUID]))
 
 ;; =============================================================================
@@ -197,25 +198,71 @@
     (number? result) result
     :else nil))
 
+(defn- parse-instant-param
+  "Lenient parse of a date/time string into java.time.Instant.
+   Returns nil for nil, blank, or unparseable input."
+  [raw]
+  (when-not (str/blank? (str (or raw "")))
+    (or (when (instance? Instant raw) raw)
+      (try (Instant/parse (str raw)) (catch Exception _ nil))
+      (try (-> (OffsetDateTime/parse (str raw)) .toInstant) (catch Exception _ nil))
+      (try (-> (LocalDate/parse (str raw)) (.atStartOfDay java.time.ZoneOffset/UTC) .toInstant) (catch Exception _ nil)))))
+
+(defn- extract-date-range-filters
+  "Extract date range filters from query params using an allowlist.
+
+  `date-range-columns` is a map of {app-keyword sql-column}, e.g.:
+    {:created-at :created_at, :purchased-at :e.purchased_at}
+
+  Detects params matching `<field>-from` / `<field>-to` and returns a vector
+  of HoneySQL WHERE clauses like [[:>= :created_at #inst \"2026-03-01T...\"]].
+
+  Values are parsed to java.time.Instant so JDBC binds them as timestamptz.
+  Params must match allowlisted column names — arbitrary columns are rejected."
+  [qp date-range-columns]
+  (when (seq date-range-columns)
+    (reduce-kv
+      (fn [acc field-key sql-col]
+        (let [field-name (name field-key)
+              from-val (parse-instant-param
+                         (or (get qp (keyword (str field-name "-from")))
+                           (get qp (str field-name "-from"))))
+              to-val (parse-instant-param
+                       (or (get qp (keyword (str field-name "-to")))
+                         (get qp (str field-name "-to"))))]
+          (cond-> acc
+            (some? from-val) (conj [:>= sql-col from-val])
+            (some? to-val) (conj [:<= sql-col to-val]))))
+      []
+      date-range-columns)))
+
 (defn build-list-handler
   "Builds a generic list handler for an entity.
 
   When the entity config includes :has-count? true, the handler also calls the
   count function with the same filter params and includes :total in the response.
   This enables server-side pagination by letting the frontend know the total
-  number of matching records."
+  number of matching records.
+
+  Optional :date-range-columns — a map of {app-keyword sql-column} that enables
+  date range filtering via `<field>-from` / `<field>-to` query params."
   [{:keys [service _entity-key entity-plural default-limit default-order-by
-           has-count? custom-query-params custom-count-params transform-response]}]
+           has-count? custom-query-params custom-count-params transform-response
+           date-range-columns]}]
   (fn [db]
     (utils/with-error-handling
       (fn [request]
         (let [qp (or (normalize-map-keys->app (:query-params request)) {})
+              date-filters (extract-date-range-filters qp date-range-columns)
               custom-params (when custom-query-params (custom-query-params qp))
-              query-params (merge {:limit (utils/parse-int-param qp :limit default-limit)
-                                   :offset (utils/parse-int-param qp :offset 0)
-                                   :order-by (order-by->app (get-param qp :order-by) default-order-by)
-                                   :order-dir (keyword (or (get-param qp :order-dir) "asc"))}
-                             custom-params)
+              query-params (cond-> (merge {:limit (utils/parse-int-param qp :limit default-limit)
+                                           :offset (utils/parse-int-param qp :offset 0)
+                                           :order-by (order-by->app (get-param qp :order-by) default-order-by)
+                                           :order-dir (keyword (or (get-param qp :order-dir) "asc"))}
+                                     custom-params)
+                             (seq date-filters)
+                             (update :extra-filters (fn [existing]
+                                                      (into (vec (or existing [])) date-filters))))
               list-fn (resolve-service-op-fn service
                         (symbol (str "list-" (name entity-plural)))
                         :list)
@@ -227,7 +274,12 @@
               ;; Inline total count for server-side pagination
               total (when has-count?
                       (try
-                        (let [count-params (if custom-count-params (custom-count-params qp) {})
+                        (let [base-count-params (if custom-count-params (custom-count-params qp) {})
+                              count-params (if (seq date-filters)
+                                             (update base-count-params :extra-filters
+                                               (fn [existing]
+                                                 (into (vec (or existing [])) date-filters)))
+                                             base-count-params)
                               count-fn (resolve-service-op-fn service
                                          (symbol (str "count-" (name entity-plural)))
                                          :count)]

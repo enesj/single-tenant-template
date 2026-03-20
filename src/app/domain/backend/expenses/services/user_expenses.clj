@@ -12,7 +12,7 @@
     [next.jdbc.result-set :as rs]
     [taoensso.timbre :as log])
   (:import
-    [java.time Instant LocalDate]
+    [java.time Instant LocalDate OffsetDateTime]
     [java.util UUID]))
 
 ;; ============================================================================
@@ -27,6 +27,17 @@
     (nil? v) nil
     (instance? UUID v) v
     :else (UUID/fromString (str v))))
+
+(defn- parse-instant-param
+  "Lenient parse of a date/time string into java.time.Instant.
+   Accepts ISO 8601 instants, offset date-times, or plain dates.
+   Returns nil for nil, blank, or unparseable input."
+  [raw]
+  (when-not (clojure.string/blank? (str (or raw "")))
+    (or (when (instance? Instant raw) raw)
+      (try (Instant/parse (str raw)) (catch Exception _ nil))
+      (try (-> (OffsetDateTime/parse (str raw)) .toInstant) (catch Exception _ nil))
+      (try (-> (LocalDate/parse (str raw)) (.atStartOfDay java.time.ZoneOffset/UTC) .toInstant) (catch Exception _ nil)))))
 
 (defn create-user-expense!
   "Create an expense for a specific user. Returns expense with :items.
@@ -287,13 +298,18 @@
   - :order-dir (:asc/:desc)
 
   `tenant-id` scopes the query to a specific tenant."
-  [db tenant-id user-id {:keys [from to supplier-id payer-id is-posted?
+  [db tenant-id user-id {:keys [from to created-at-from created-at-to
+                                supplier-id payer-id is-posted?
                                 supplier-display-name store-display-name
                                 expense-category-name payer-label currency notes
                                 limit offset order-by order-dir]
                          :or {limit 50 offset 0 order-dir :desc}}]
   (let [user-id (ensure-uuid user-id)
         tenant-id (ensure-uuid tenant-id)
+        from (parse-instant-param from)
+        to (parse-instant-param to)
+        created-at-from (parse-instant-param created-at-from)
+        created-at-to (parse-instant-param created-at-to)
         order-by* (model-naming/ensure-app-keyword order-by)
         order-col (get allowed-user-expenses-order-by order-by* :e.purchased_at)
         order-dir* (shared-qb/normalize-order-direction order-dir {:default :desc})]
@@ -302,6 +318,8 @@
                        tenant-id (conj [:= :e.tenant_id tenant-id])
                        from (conj [:>= :e.purchased_at from])
                        to (conj [:<= :e.purchased_at to])
+                       created-at-from (conj [:>= :e.created_at created-at-from])
+                       created-at-to (conj [:<= :e.created_at created-at-to])
                        supplier-id (conj [:= :e.supplier_id supplier-id])
                        payer-id (conj [:= :e.payer_id payer-id])
                        (some? is-posted?) (conj [:= :e.is_posted (boolean is-posted?)]))
@@ -340,11 +358,16 @@
    When user-id is nil, counts all tenant expenses.
    `tenant-id` scopes the count to a specific tenant.
    Text filters (supplier-display-name, etc.) require LEFT JOINs."
-  [db tenant-id user-id {:keys [from to supplier-id payer-id is-posted?
+  [db tenant-id user-id {:keys [from to created-at-from created-at-to
+                                supplier-id payer-id is-posted?
                                 supplier-display-name store-display-name
                                 expense-category-name payer-label currency notes]}]
   (let [user-id (ensure-uuid user-id)
         tenant-id (ensure-uuid tenant-id)
+        from (parse-instant-param from)
+        to (parse-instant-param to)
+        created-at-from (parse-instant-param created-at-from)
+        created-at-to (parse-instant-param created-at-to)
         text-filters {:supplier-display-name supplier-display-name
                       :store-display-name store-display-name
                       :expense-category-name expense-category-name
@@ -358,6 +381,8 @@
                        tenant-id (conj [:= (if has-text-filters? :e.tenant_id :tenant_id) tenant-id])
                        from (conj [:>= (if has-text-filters? :e.purchased_at :purchased_at) from])
                        to (conj [:<= (if has-text-filters? :e.purchased_at :purchased_at) to])
+                       created-at-from (conj [:>= (if has-text-filters? :e.created_at :created_at) created-at-from])
+                       created-at-to (conj [:<= (if has-text-filters? :e.created_at :created_at) created-at-to])
                        supplier-id (conj [:= (if has-text-filters? :e.supplier_id :supplier_id) supplier-id])
                        payer-id (conj [:= (if has-text-filters? :e.payer_id :payer_id) payer-id])
                        (some? is-posted?) (conj [:= (if has-text-filters? :e.is_posted :is_posted) (boolean is-posted?)]))
@@ -445,7 +470,9 @@
    `tenant-id` scopes the query to a specific tenant."
   [db tenant-id user-id {:keys [from to limit] :or {limit 10}}]
   (let [user-id (ensure-uuid user-id)
-        tenant-id (ensure-uuid tenant-id)]
+        tenant-id (ensure-uuid tenant-id)
+        from (parse-instant-param from)
+        to (parse-instant-param to)]
     (let [base-where (cond-> [:and
                               [:= :e.is_posted true]
                               [:is-not :e.supplier_id nil]]
