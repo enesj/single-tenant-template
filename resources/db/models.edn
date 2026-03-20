@@ -502,7 +502,7 @@
  {:fields
   [[:id :uuid {:primary-key true}]
    [:actor_type [:enum :audit-actor-type] {:null false}]
-   [:actor_id :uuid {:null false}]
+   [:actor_id :uuid]
    [:action :text {:null false}]
    [:target_type :text]
    [:target_id :uuid]
@@ -530,6 +530,7 @@
    [:qty [:decimal 10 3]]
    [:unit_price [:decimal 12 2]]
    [:line_total [:decimal 12 2] {:null false}]
+   [:price_modified :boolean {:null false, :default false}]
    [:created_at :timestamptz {:default [:now]}]
    [:updated_at :timestamptz {:default [:now]}]],
   :indexes
@@ -794,7 +795,7 @@
    [:updated_at :timestamptz {:default [:now]}]],
   :types
   [[:user-status :enum {:choices ["active" "inactive" "suspended"]}]
-   [:audit-actor-type :enum {:choices ["user" "admin"]}]
+   [:audit-actor-type :enum {:choices ["user" "admin" "system"]}]
    [:login-principal-type :enum {:choices ["user" "admin"]}]],
   :indexes
   [[:idx_users_email :btree {:fields [:email], :unique true}]

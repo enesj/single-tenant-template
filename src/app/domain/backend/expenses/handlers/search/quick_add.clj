@@ -88,7 +88,9 @@
                             :left-join [[:suppliers :sup] [:= :sup.id :e.supplier_id]]
                             :where (cond-> [:and
                                             [:= :e.tenant_id tenant-id]
-                                            [:in :aa.article_id article-ids]]
+                                            [:in :aa.article_id article-ids]
+                                            [:is-not :e.receipt_id nil]
+                                            [:= :ei.price_modified false]]
                                      supplier-id (conj [:= :e.supplier_id supplier-id]))}
                            :recent_article_prices]]
                    :where [:= :rn 1]})

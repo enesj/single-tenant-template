@@ -467,14 +467,15 @@
                                               :resolved_article_id resolved-article-id)))
                                     items*)
                    tenant-id (:tenant_id expense)
-                   item-rows (mapv (fn [{:keys [resolved_alias_id qty unit_price line_total]}]
+                   item-rows (mapv (fn [{:keys [resolved_alias_id qty unit_price line_total price_modified]}]
                                      (cond-> {:id (UUID/randomUUID)
                                               :expense_id expense-id
                                               :alias_id resolved_alias_id
                                               :qty qty
                                               :unit_price unit_price
                                               :line_total line_total}
-                                       tenant-id (assoc :tenant_id tenant-id)))
+                                       tenant-id (assoc :tenant_id tenant-id)
+                                       (some? price_modified) (assoc :price_modified price_modified)))
                                resolved-items)]
                (jdbc/execute!
                  tx

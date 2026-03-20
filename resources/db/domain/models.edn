@@ -284,6 +284,7 @@
                           [:qty [:decimal 10 3]]
                           [:unit_price [:decimal 12 2]]
                           [:line_total [:decimal 12 2] {:null false}]
+                          [:price_modified :boolean {:null false :default false}]
                           [:created_at :timestamptz {:default [:now]}]
                           [:updated_at :timestamptz {:default [:now]}]]
                  :indexes [[:idx_expense_items_tenant :btree {:fields [:tenant_id]}]

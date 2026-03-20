@@ -8,11 +8,54 @@
     [app.domain.backend.expenses.services.receipts.storage :as storage]
     [app.domain.backend.expenses.services.supplier-aliases :as supplier-aliases]
     [app.domain.backend.expenses.services.suppliers :as suppliers]
+    [cheshire.core :as json]
     [clojure.string :as str]
     [honey.sql :as sql]
     [next.jdbc :as jdbc]
     [next.jdbc.result-set :as rs]
     [taoensso.timbre :as log]))
+
+(defn- extract-ocr-item-prices
+  "Parse OCR extraction items from a receipt's raw_extract_json.
+   Returns a vector of unit prices (BigDecimal or nil) indexed by position."
+  [receipt]
+  (try
+    (when-let [raw (:raw_extract_json receipt)]
+      (let [parsed (cond
+                     (string? raw) (json/parse-string raw true)
+                     (map? raw) raw
+                     :else nil)
+            items (get-in parsed [:extraction :items])]
+        (when (seq items)
+          (mapv (fn [item]
+                  (some-> (or (:unit_price item) (:unit-price item))
+                    bigdec))
+            items))))
+    (catch Exception e
+      (log/warn e "Failed to parse OCR item prices from receipt"
+        {:receipt-id (:id receipt)})
+      nil)))
+
+(defn- mark-price-modified
+  "Compare approved items against OCR-extracted prices by position.
+   Returns items with :price_modified flag added to each."
+  [approved-items ocr-prices]
+  (if (seq ocr-prices)
+    (vec
+      (map-indexed
+        (fn [idx item]
+          (let [ocr-price (get ocr-prices idx)
+                approved-price (some-> (or (:unit_price item) (:unit-price item))
+                                 bigdec)
+                modified (or (nil? ocr-price)
+                           (nil? approved-price)
+                           (not= (.compareTo ^java.math.BigDecimal approved-price
+                                   ^java.math.BigDecimal ocr-price)
+                             0))]
+            (assoc item :price_modified modified)))
+        approved-items))
+    ;; No OCR prices to compare — treat all as unmodified (auto-post path)
+    (mapv #(assoc % :price_modified false) approved-items)))
 
 (defn save-review!
   "Persist reviewed receipt values without posting an expense.
@@ -118,19 +161,21 @@
         (throw (ex-info "Receipt not in approvable status"
                  {:status 409 :id receipt-id :current-status (:status receipt)})))
 
-      (let [context   (queries/get-receipt-refine-context tx receipt-id)
-            store-id  (:store_id context)
-            tenant-id (:tenant_id receipt)
-            base      (cond-> {:receipt_id receipt-id
-                               :created_by (:user_id receipt)
-                               :currency   (or (:currency review-data) (:currency_guess receipt) "BAM")}
-                        store-id  (assoc :store_id store-id)
-                        tenant-id (assoc :tenant_id tenant-id))
-            expense   (expenses/create-expense!
-                        tx
-                        (merge base review-data)
-                        (:items review-data))
-            extra     {:expense_id (:id expense)}]
+      (let [context    (queries/get-receipt-refine-context tx receipt-id)
+            store-id   (:store_id context)
+            tenant-id  (:tenant_id receipt)
+            ocr-prices (extract-ocr-item-prices receipt)
+            items      (mark-price-modified (:items review-data) ocr-prices)
+            base       (cond-> {:receipt_id receipt-id
+                                :created_by (:user_id receipt)
+                                :currency   (or (:currency review-data) (:currency_guess receipt) "BAM")}
+                         store-id  (assoc :store_id store-id)
+                         tenant-id (assoc :tenant_id tenant-id))
+            expense    (expenses/create-expense!
+                         tx
+                         (merge base review-data)
+                         items)
+            extra      {:expense_id (:id expense)}]
         (status/update-status! tx receipt-id "posted" extra)
         expense))))
 
@@ -160,6 +205,8 @@
       (let [context      (queries/get-receipt-refine-context tx receipt-id)
             store-id     (:store_id context)
             receipt-tid  (:tenant_id receipt)
+            ocr-prices   (extract-ocr-item-prices receipt)
+            items        (mark-price-modified (:items review-data) ocr-prices)
             base         (cond-> {:receipt_id receipt-id
                                   :user_id    user-id
                                   :created_by user-id
@@ -169,7 +216,7 @@
             expense      (expenses/create-expense!
                            tx
                            (merge base review-data)
-                           (:items review-data))
+                           items)
             claim?       (nil? (:user_id receipt))
             extra        (cond-> {:expense_id (:id expense)}
                            claim? (assoc :user_id user-id))]
@@ -202,6 +249,8 @@
       (let [context      (queries/get-receipt-refine-context tx receipt-id)
             store-id     (:store_id context)
             receipt-tid  (:tenant_id receipt)
+            ocr-prices   (extract-ocr-item-prices receipt)
+            items        (mark-price-modified (:items review-data) ocr-prices)
             base         (cond-> {:receipt_id receipt-id
                                   :user_id    user-id
                                   :created_by user-id
@@ -211,7 +260,7 @@
             expense      (expenses/create-expense!
                            tx
                            (merge base review-data)
-                           (:items review-data))
+                           items)
             claim?       (nil? (:user_id receipt))
             extra        (cond-> {:expense_id (:id expense)}
                            claim? (assoc :user_id user-id))]
