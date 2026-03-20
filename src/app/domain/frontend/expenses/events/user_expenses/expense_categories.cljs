@@ -29,10 +29,21 @@
 (defn- current-expense-categories-page-params
   [db]
   (let [entity-key :expense-categories
-        per-page (paths/resolved-list-per-page db entity-key 10)
-        current-page (paths/resolved-list-current-page db entity-key)]
-    {:limit per-page
-     :offset (* (max 0 (dec current-page)) per-page)}))
+        per-page (paths/resolved-list-per-page db entity-key 100)
+        current-page (paths/resolved-list-current-page db entity-key)
+        sort-config (or (get-in db [:ui :lists entity-key :sort]) {})
+        order-dir (let [direction (:direction sort-config)]
+                    (when (contains? #{:asc :desc "asc" "desc"} direction)
+                      (name (keyword direction))))
+        order-field (when-let [f (:field sort-config)] (name f))
+        filters (some-> (get-in db [:ui :lists entity-key :filters])
+                  (select-keys [:name])
+                  not-empty)]
+    (cond-> (merge {:limit per-page
+                    :offset (* (max 0 (dec current-page)) per-page)}
+              filters)
+      (some? order-dir) (assoc :order-dir order-dir)
+      (some? order-field) (assoc :order-by order-field))))
 
 ;; ---------------------------------------------------------------------------
 ;; Expense Categories
@@ -41,17 +52,15 @@
 (rf/reg-event-fx
   :user-expenses/refresh-expense-categories-list
   common-interceptors
-  (fn [{:keys [db]} _]
-    (let [params (if (= :server (get-in db (paths/list-pagination-mode :expense-categories)))
-                   (current-expense-categories-page-params db)
-                   {:limit 500 :offset 0})]
-      {:dispatch [:user-expenses/fetch-expense-categories params]})))
+  (fn [{:keys [db]} [opts]]
+    {:dispatch [:user-expenses/fetch-expense-categories (merge (current-expense-categories-page-params db)
+                                                          (when (map? opts) opts))]}))
 
 (rf/reg-event-fx
   :user-expenses/fetch-expense-categories
   common-interceptors
   (fn [{:keys [db]} [params]]
-    (let [request-params (merge {:limit 500 :offset 0} (when (map? params) params))]
+    (let [request-params (merge {:limit 100 :offset 0} (when (map? params) params))]
       {:db (begin-entity-load db :expense-categories)
        :http-xhrio (x/xhrio db
                      {:method :get
@@ -65,13 +74,16 @@
   common-interceptors
   (fn [{:keys [db]} [response]]
     (let [expense-categories (vec (or (:data response) []))
-          total (or (:total response) (count expense-categories))]
-      {:db (-> db
-             (finish-entity-load :expense-categories nil)
-             (assoc-in (paths/list-total-items :expense-categories) total)
-             (assoc-in [:user-expenses :expense-categories :items] expense-categories)
-             (assoc-in [:user-expenses :expense-categories :loading?] false)
-             (assoc-in [:user-expenses :expense-categories :error] nil))
+          total (or (:total response) (count expense-categories))
+          date-highlights (:date-highlights response)]
+      {:db (cond-> (-> db
+                     (finish-entity-load :expense-categories nil)
+                     (assoc-in (paths/list-total-items :expense-categories) total)
+                     (assoc-in [:user-expenses :expense-categories :items] expense-categories)
+                     (assoc-in [:user-expenses :expense-categories :loading?] false)
+                     (assoc-in [:user-expenses :expense-categories :error] nil))
+             (map? date-highlights)
+             (assoc-in (conj (paths/list-ui-state :expense-categories) :date-highlights) date-highlights))
        :dispatch [::expenses-sync/sync-expense-categories expense-categories]})))
 
 (rf/reg-event-db

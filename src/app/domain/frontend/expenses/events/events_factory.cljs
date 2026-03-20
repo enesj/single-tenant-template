@@ -221,6 +221,7 @@
       (keyword event-ns "list-loaded")
       (fn [{:keys [db]} [_ pagination response]]
         (let [total (:total response)
+              date-highlights (:date-highlights response)
               db* (-> db
                     (finish-load entity-key base-path nil)
                     (assoc-in (conj base-path :items)
@@ -228,6 +229,9 @@
               ;; Store total for server-mode pagination UI
               db* (if (some? total)
                     (assoc-in db* (paths/list-total-items entity-key) total)
+                    db*)
+              db* (if (map? date-highlights)
+                    (assoc-in db* (conj (paths/list-ui-state entity-key) :date-highlights) date-highlights)
                     db*)
               db* (if pagination
                     (update-pagination-state db* entity-key pagination)

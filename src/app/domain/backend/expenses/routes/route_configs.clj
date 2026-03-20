@@ -100,8 +100,9 @@
    :has-search? false
    :custom-query-params search-query-params
    :custom-count-params search-query-params
-   :date-range-columns {:created-at :created_at
-                        :updated-at :updated_at}})
+   ;; Table-qualified: store query JOINs cities + suppliers (alias :st)
+   :date-range-columns {:created-at :st.created_at
+                        :updated-at :st.updated_at}})
 
 (def city-config
   {:entity-key :city
@@ -185,8 +186,9 @@
    :has-search? true
    :custom-query-params article-query-params
    :custom-count-params article-query-params
-   :date-range-columns {:created-at :created_at
-                        :updated-at :updated_at}})
+   ;; Table-qualified: article query JOINs manufacturers/subcategories/categories (alias :a)
+   :date-range-columns {:created-at :a.created_at
+                        :updated-at :a.updated_at}})
 
 (def expense-config
   {:entity-key :expense

@@ -61,12 +61,12 @@
         entity-spec (use-subscribe [(keyword "entity-specs" (name entity-name))])
         refresh-list (use-callback
                        (fn []
-                         (rf/dispatch-sync [::ui-state/set-pagination-mode entity-name :client])
+                         (rf/dispatch-sync [::ui-state/set-pagination-mode entity-name :server])
+                         (rf/dispatch-sync [::ui-state/set-refresh-event entity-name [::app.domain.frontend.expenses.events.subcategories/load-list]])
                          ;; Categories: reference data for category_id FK select (fetch-mode, no pagination state)
                          (rf/dispatch [:app.domain.frontend.expenses.events.categories/load-list
                                        {:fetch-limit 200 :fetch-offset 0}])
-                         (rf/dispatch [:app.domain.frontend.expenses.events.subcategories/load-list
-                                       {:fetch-limit 500 :fetch-offset 0}]))
+                         (rf/dispatch [:app.domain.frontend.expenses.events.subcategories/load-list]))
                        [])]
     (use-effect
       (fn []

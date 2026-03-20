@@ -219,22 +219,36 @@
 
   Values are parsed to java.time.Instant so JDBC binds them as timestamptz.
   Params must match allowlisted column names — arbitrary columns are rejected."
+  ([qp date-range-columns]
+   (extract-date-range-filters qp date-range-columns nil))
+  ([qp date-range-columns exclude-field]
+   (when (seq date-range-columns)
+     (reduce-kv
+       (fn [acc field-key sql-col]
+         (if (= field-key exclude-field)
+           acc
+           (let [field-name (name field-key)
+                 from-val (parse-instant-param
+                            (or (get qp (keyword (str field-name "-from")))
+                              (get qp (str field-name "-from"))))
+                 to-val (parse-instant-param
+                          (or (get qp (keyword (str field-name "-to")))
+                            (get qp (str field-name "-to"))))]
+             (cond-> acc
+               (some? from-val) (conj [:>= sql-col from-val])
+               (some? to-val) (conj [:<= sql-col to-val])))))
+       []
+       date-range-columns))))
+
+(defn- extract-highlight-request
   [qp date-range-columns]
-  (when (seq date-range-columns)
-    (reduce-kv
-      (fn [acc field-key sql-col]
-        (let [field-name (name field-key)
-              from-val (parse-instant-param
-                         (or (get qp (keyword (str field-name "-from")))
-                           (get qp (str field-name "-from"))))
-              to-val (parse-instant-param
-                       (or (get qp (keyword (str field-name "-to")))
-                         (get qp (str field-name "-to"))))]
-          (cond-> acc
-            (some? from-val) (conj [:>= sql-col from-val])
-            (some? to-val) (conj [:<= sql-col to-val]))))
-      []
-      date-range-columns)))
+  (let [field-key (some-> (get-param qp :highlight-date-field) model-naming/ensure-app-keyword)
+        timezone (some-> (get-param qp :highlight-timezone) str str/trim not-empty)
+        sql-column (get date-range-columns field-key)]
+    (when (and field-key timezone sql-column)
+      {:field field-key
+       :timezone timezone
+       :sql-column sql-column})))
 
 (defn build-list-handler
   "Builds a generic list handler for an entity.
@@ -253,7 +267,9 @@
     (utils/with-error-handling
       (fn [request]
         (let [qp (or (normalize-map-keys->app (:query-params request)) {})
+              highlight-request (extract-highlight-request qp date-range-columns)
               date-filters (extract-date-range-filters qp date-range-columns)
+              highlight-date-filters (extract-date-range-filters qp date-range-columns (:field highlight-request))
               custom-params (when custom-query-params (custom-query-params qp))
               query-params (cond-> (merge {:limit (utils/parse-int-param qp :limit default-limit)
                                            :offset (utils/parse-int-param qp :offset 0)
@@ -271,7 +287,6 @@
               response-data (if (:transform transform-response)
                               ((:transform transform-response) results)
                               (to-app results))
-              ;; Inline total count for server-side pagination
               total (when has-count?
                       (try
                         (let [base-count-params (if custom-count-params (custom-count-params qp) {})
@@ -287,8 +302,25 @@
                         (catch Exception e
                           (log/warn e "Failed to get count for" (name entity-plural))
                           nil)))
+              date-highlights (when highlight-request
+                                (try
+                                  (let [highlight-fn (resolve-service-op-fn service
+                                                       (symbol (str "list-" (name entity-plural) "-highlight-days"))
+                                                       :highlight-days)
+                                        highlight-params (cond-> (merge custom-params
+                                                                   {:highlight-column (:sql-column highlight-request)
+                                                                    :highlight-timezone (:timezone highlight-request)})
+                                                           (seq highlight-date-filters)
+                                                           (update :extra-filters (fn [existing]
+                                                                                    (into (vec (or existing [])) highlight-date-filters))))]
+                                    {(:field highlight-request)
+                                     (vec (or (highlight-fn db highlight-params) []))})
+                                  (catch Exception e
+                                    (log/warn e "Failed to get date highlights for" (name entity-plural))
+                                    nil)))
               response (cond-> {response-key response-data}
-                         (some? total) (assoc :total total))]
+                         (some? total) (assoc :total total)
+                         (map? date-highlights) (assoc :date-highlights date-highlights))]
           (utils/success-response response)))
       (str "Failed to list " (name entity-plural)))))
 

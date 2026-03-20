@@ -78,26 +78,30 @@
 (rf/reg-event-fx
   :user-expenses/refresh-articles-list
   common-interceptors
-  (fn [{:keys [db]} _]
-    {:dispatch [:user-expenses/fetch-articles (current-list-page-params db :articles 200)]}))
+  (fn [{:keys [db]} [opts]]
+    {:dispatch [:user-expenses/fetch-articles (merge (current-list-page-params db :articles 200)
+                                                (when (map? opts) opts))]}))
 
 (rf/reg-event-fx
   :user-expenses/refresh-expense-items-list
   common-interceptors
-  (fn [{:keys [db]} _]
-    {:dispatch [:user-expenses/fetch-expense-items (current-list-page-params db :expense-items 200)]}))
+  (fn [{:keys [db]} [opts]]
+    {:dispatch [:user-expenses/fetch-expense-items (merge (current-list-page-params db :expense-items 200)
+                                                     (when (map? opts) opts))]}))
 
 (rf/reg-event-fx
   :user-expenses/refresh-article-aliases-list
   common-interceptors
-  (fn [{:keys [db]} _]
-    {:dispatch [:user-expenses/fetch-article-aliases (current-list-page-params db :article-aliases 200)]}))
+  (fn [{:keys [db]} [opts]]
+    {:dispatch [:user-expenses/fetch-article-aliases (merge (current-list-page-params db :article-aliases 200)
+                                                       (when (map? opts) opts))]}))
 
 (rf/reg-event-fx
   :user-expenses/refresh-supplier-aliases-list
   common-interceptors
-  (fn [{:keys [db]} _]
-    {:dispatch [:user-expenses/fetch-supplier-aliases (current-list-page-params db :supplier-aliases 200)]}))
+  (fn [{:keys [db]} [opts]]
+    {:dispatch [:user-expenses/fetch-supplier-aliases (merge (current-list-page-params db :supplier-aliases 200)
+                                                        (when (map? opts) opts))]}))
 
 ;; ---------------------------------------------------------------------------
 ;; Articles (power-user only)
@@ -122,9 +126,12 @@
   common-interceptors
   (fn [{:keys [db]} [response]]
     (let [articles (vec (or (:data response) []))
-          total (or (:total response) (count articles))]
-      {:db (-> (finish-entity-load db :articles nil)
-             (assoc-in (paths/list-total-items :articles) total))
+          total (or (:total response) (count articles))
+          date-highlights (:date-highlights response)]
+      {:db (cond-> (-> (finish-entity-load db :articles nil)
+                     (assoc-in (paths/list-total-items :articles) total))
+             (map? date-highlights)
+             (assoc-in (conj (paths/list-ui-state :articles) :date-highlights) date-highlights))
        :dispatch [::expenses-sync/sync-articles articles]})))
 
 (rf/reg-event-db
@@ -259,9 +266,12 @@
   common-interceptors
   (fn [{:keys [db]} [response]]
     (let [items (vec (or (:data response) []))
-          total (or (:total response) (count items))]
-      {:db (-> (finish-entity-load db :expense-items nil)
-             (assoc-in (paths/list-total-items :expense-items) total))
+          total (or (:total response) (count items))
+          date-highlights (:date-highlights response)]
+      {:db (cond-> (-> (finish-entity-load db :expense-items nil)
+                     (assoc-in (paths/list-total-items :expense-items) total))
+             (map? date-highlights)
+             (assoc-in (conj (paths/list-ui-state :expense-items) :date-highlights) date-highlights))
        :dispatch [::expenses-sync/sync-expense-items items]})))
 
 (rf/reg-event-db
@@ -360,9 +370,12 @@
   common-interceptors
   (fn [{:keys [db]} [response]]
     (let [aliases (vec (or (:data response) []))
-          total (or (:total response) (count aliases))]
-      {:db (-> (finish-entity-load db :article-aliases nil)
-             (assoc-in (paths/list-total-items :article-aliases) total))
+          total (or (:total response) (count aliases))
+          date-highlights (:date-highlights response)]
+      {:db (cond-> (-> (finish-entity-load db :article-aliases nil)
+                     (assoc-in (paths/list-total-items :article-aliases) total))
+             (map? date-highlights)
+             (assoc-in (conj (paths/list-ui-state :article-aliases) :date-highlights) date-highlights))
        :dispatch [::expenses-sync/sync-article-aliases aliases]})))
 
 (rf/reg-event-db
@@ -468,9 +481,12 @@
   common-interceptors
   (fn [{:keys [db]} [response]]
     (let [aliases (vec (or (:data response) []))
-          total (or (:total response) (count aliases))]
-      {:db (-> (finish-entity-load db :supplier-aliases nil)
-             (assoc-in (paths/list-total-items :supplier-aliases) total))
+          total (or (:total response) (count aliases))
+          date-highlights (:date-highlights response)]
+      {:db (cond-> (-> (finish-entity-load db :supplier-aliases nil)
+                     (assoc-in (paths/list-total-items :supplier-aliases) total))
+             (map? date-highlights)
+             (assoc-in (conj (paths/list-ui-state :supplier-aliases) :date-highlights) date-highlights))
        :dispatch [::expenses-sync/sync-supplier-aliases aliases]})))
 
 (rf/reg-event-db

@@ -130,8 +130,9 @@
 (rf/reg-event-fx
   :user-expenses/refresh-expenses-list
   common-interceptors
-  (fn [{:keys [db]} _]
-    {:dispatch [:user-expenses/fetch-expenses (current-expenses-page-params db)]}))
+  (fn [{:keys [db]} [opts]]
+    {:dispatch [:user-expenses/fetch-expenses (merge (current-expenses-page-params db)
+                                                (when (map? opts) opts))]}))
 
 (rf/reg-event-fx
   :user-expenses/fetch-expenses
@@ -151,9 +152,12 @@
   common-interceptors
   (fn [{:keys [db]} [response]]
     (let [expenses (vec (or (:data response) []))
-          total (or (:total response) (count expenses))]
-      {:db (-> (finish-entity-load db :expenses nil)
-             (assoc-in (paths/list-total-items :expenses) total))
+          total (or (:total response) (count expenses))
+          date-highlights (:date-highlights response)]
+      {:db (cond-> (-> (finish-entity-load db :expenses nil)
+                     (assoc-in (paths/list-total-items :expenses) total))
+             (map? date-highlights)
+             (assoc-in (conj (paths/list-ui-state :expenses) :date-highlights) date-highlights))
        :dispatch [::expenses-sync/sync-expenses expenses]})))
 
 (rf/reg-event-db

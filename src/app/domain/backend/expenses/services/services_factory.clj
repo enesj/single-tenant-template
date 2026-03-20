@@ -2,10 +2,12 @@
   "Generic service factory for expenses domain entities."
   (:require
     [app.shared.query-builders :as shared-qb]
+    [clojure.string :as str]
     [honey.sql :as sql]
     [next.jdbc :as jdbc]
     [next.jdbc.result-set :as rs])
   (:import
+    [java.time ZoneId]
     [java.util UUID]))
 
 (defn- apply-hook
@@ -311,6 +313,64 @@
         (jdbc/execute! db (sql/format query)
           {:builder-fn rs/as-unqualified-lower-maps})))))
 
+(defn- sql-ident->str
+  [ident]
+  (cond
+    (keyword? ident)
+    (if-let [ns-part (namespace ident)]
+      (str ns-part "." (name ident))
+      (name ident))
+
+    (string? ident)
+    ident
+
+    :else
+    (str ident)))
+
+(defn- safe-timezone-id
+  [timezone]
+  (when-not (str/blank? (str (or timezone "")))
+    (try
+      (.getId (ZoneId/of (str timezone)))
+      (catch Exception _
+        nil))))
+
+(defn- local-day-expression
+  [timezone sql-column]
+  (let [tz-id (safe-timezone-id timezone)
+        sql-col (sql-ident->str sql-column)]
+    (when (and tz-id (not (str/blank? sql-col)))
+      (str "to_char(timezone('"
+        (str/replace tz-id "'" "''")
+        "', "
+        sql-col
+        ")::date, 'YYYY-MM-DD')"))))
+
+(defn build-highlight-days-function
+  "Build a generic function that returns distinct local-day keys for a timestamp column.
+   The caller provides :highlight-column and :highlight-timezone in opts."
+  [{:keys [table-name search-fields joins table-alias base-filters]
+    :as config}]
+  (fn highlight-days
+    [db {:keys [search tenant-id extra-filters highlight-column highlight-timezone]}]
+    (when-let [day-expr (local-day-expression highlight-timezone highlight-column)]
+      (let [effective-filters (into (vec (inject-tenant-filter config tenant-id base-filters))
+                                (or extra-filters []))
+            where (build-where-clause effective-filters)
+            base-query (cond-> {:select [[[:raw day-expr] :day]]
+                                :from (if table-alias
+                                        [[(keyword table-name) table-alias]]
+                                        [(keyword table-name)])}
+                         joins (assoc :left-join joins)
+                         where (assoc :where where))
+            final-query (cond-> (apply-search-filter base-query search-fields search)
+                          true (assoc :group-by [[:raw day-expr]])
+                          true (assoc :order-by [[[:raw day-expr] :asc]]))]
+        (->> (jdbc/execute! db (sql/format final-query)
+               {:builder-fn rs/as-unqualified-lower-maps})
+          (keep :day)
+          vec)))))
+
 ;; ============================================================================
 ;; Service Builder
 ;; ============================================================================
@@ -323,7 +383,8 @@
                      :create! (build-create-function config)
                      :update! (build-update-function config)
                      :delete! (build-delete-function config)
-                     :count (build-count-function config)}]
+                     :count (build-count-function config)
+                     :highlight-days (build-highlight-days-function config)}]
 
     ;; Add search function if search fields specified
     (if (:search-fields config)

@@ -1,7 +1,6 @@
 (ns app.template.frontend.components.filter.utils
   (:require
     [app.shared.date :as date-utils]
-    [app.template.frontend.utils.timestamp :as timestamp]
     [clojure.string :as str]))
 
 ;; Filter value formatting utilities
@@ -21,20 +20,35 @@
 
     :else (str filter-value)))
 
+(defn parse-date-value
+  "Parse a date value that can be Date object or ISO string"
+  [date-value]
+  (cond
+    (instance? js/Date date-value) date-value
+    (string? date-value) (try (js/Date. date-value) (catch :default _ nil))
+    :else date-value))
+
+(defn format-local-date
+  "Format a date-like value as a local calendar date."
+  [date-value]
+  (some-> date-value
+    parse-date-value
+    date-utils/format-iso-date))
+
 (defn format-date-range
   "Format a date range filter value for display"
   [filter-value]
   (cond
     (and (map? filter-value) (:from filter-value) (:to filter-value))
-    (str (timestamp/format-timestamp-string (:from filter-value))
+    (str (format-local-date (:from filter-value))
       " - "
-      (timestamp/format-timestamp-string (:to filter-value)))
+      (format-local-date (:to filter-value)))
 
     (and (map? filter-value) (:from filter-value))
-    (str "From " (timestamp/format-timestamp-string (:from filter-value)))
+    (str "From " (format-local-date (:from filter-value)))
 
     (and (map? filter-value) (:to filter-value))
-    (str "Until " (timestamp/format-timestamp-string (:to filter-value)))
+    (str "Until " (format-local-date (:to filter-value)))
 
     :else (str filter-value)))
 
@@ -115,16 +129,6 @@
 
     ;; Default fallback
     :else (str filter-value)))
-
-;; Date utilities
-
-(defn parse-date-value
-  "Parse a date value that can be Date object or ISO string"
-  [date-value]
-  (cond
-    (instance? js/Date date-value) date-value
-    (string? date-value) (try (js/Date. date-value) (catch :default _ nil))
-    :else date-value))
 
 (defn date-to-input-value
   "Convert a date to the format expected by HTML date input"

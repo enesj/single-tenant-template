@@ -66,10 +66,11 @@
   ::visible-items
   (fn [[_ entity-type]]
     [(rf/subscribe [::filtered-items entity-type])
+     (rf/subscribe [::items entity-type])
      (rf/subscribe [::entity-ui-state entity-type])])
-  (fn [[filtered-items ui-state] [_ _]]
+  (fn [[filtered-items items ui-state] [_ _]]
     (if (server-pagination? ui-state)
-      filtered-items
+      items
       (let [sort-config (:sort ui-state)
             sort-field (when sort-config (keyword (:field sort-config)))
             sort-dir (:direction sort-config :asc)
@@ -125,9 +126,11 @@
   ::filtered-items
   (fn [[_ entity-type] _]
     [(rf/subscribe [::items entity-type])
+     (rf/subscribe [::entity-ui-state entity-type])
      (rf/subscribe [::active-filters entity-type])])
-  (fn [[items filters] [_ _]]
-    (if (empty? filters)
+  (fn [[items ui-state filters] [_ _]]
+    (if (or (server-pagination? ui-state)
+          (empty? filters))
       items
       (let [filtered (filter (fn [item]
                                (every? (fn [[field-id filter-value]]

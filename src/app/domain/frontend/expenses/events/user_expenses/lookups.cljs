@@ -63,8 +63,9 @@
 (rf/reg-event-fx
   :user-expenses/refresh-suppliers-list
   common-interceptors
-  (fn [{:keys [db]} _]
-    {:dispatch [:user-expenses/fetch-suppliers (current-list-page-params db :suppliers pagination/default-page-size)]}))
+  (fn [{:keys [db]} [opts]]
+    {:dispatch [:user-expenses/fetch-suppliers (merge (current-list-page-params db :suppliers pagination/default-page-size)
+                                                 (when (map? opts) opts))]}))
 
 (rf/reg-event-fx
   :user-expenses/refresh-payers-list
@@ -109,13 +110,16 @@
   common-interceptors
   (fn [{:keys [db]} [response]]
     (let [suppliers (vec (or (:data response) []))
-          total (or (:total response) (count suppliers))]
-      {:db (-> db
-             (assoc-in [:user-expenses :suppliers :data] suppliers)
-             (assoc-in [:user-expenses :suppliers :items] suppliers)
-             (assoc-in [:user-expenses :suppliers :loading?] false)
-             (assoc-in [:user-expenses :suppliers :error] nil)
-             (assoc-in (paths/list-total-items :suppliers) total))
+          total (or (:total response) (count suppliers))
+          date-highlights (:date-highlights response)]
+      {:db (cond-> (-> db
+                     (assoc-in [:user-expenses :suppliers :data] suppliers)
+                     (assoc-in [:user-expenses :suppliers :items] suppliers)
+                     (assoc-in [:user-expenses :suppliers :loading?] false)
+                     (assoc-in [:user-expenses :suppliers :error] nil)
+                     (assoc-in (paths/list-total-items :suppliers) total))
+             (map? date-highlights)
+             (assoc-in (conj (paths/list-ui-state :suppliers) :date-highlights) date-highlights))
        :dispatch [::expenses-sync/sync-suppliers suppliers]})))
 
 (rf/reg-event-db

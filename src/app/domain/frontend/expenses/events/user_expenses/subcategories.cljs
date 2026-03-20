@@ -78,11 +78,9 @@
 (rf/reg-event-fx
   :user-expenses/refresh-subcategories-list
   common-interceptors
-  (fn [{:keys [db]} _]
-    (let [params (if (= :server (get-in db (paths/list-pagination-mode :subcategories)))
-                   (current-list-page-params db :subcategories 500)
-                   {:limit 500 :offset 0})]
-      {:dispatch [:user-expenses/fetch-subcategories params]})))
+  (fn [{:keys [db]} [opts]]
+    {:dispatch [:user-expenses/fetch-subcategories (merge (current-list-page-params db :subcategories 100)
+                                                     (when (map? opts) opts))]}))
 
 ;; ---------------------------------------------------------------------------
 ;; Subcategories
@@ -92,7 +90,7 @@
   :user-expenses/fetch-subcategories
   common-interceptors
   (fn [{:keys [db]} [params]]
-    (let [request-params (merge {:limit 500 :offset 0} (when (map? params) params))]
+    (let [request-params (merge {:limit 100 :offset 0} (when (map? params) params))]
       {:db (begin-entity-load db :subcategories)
        :http-xhrio (x/xhrio db
                      {:method :get
@@ -106,9 +104,12 @@
   common-interceptors
   (fn [{:keys [db]} [response]]
     (let [subcategories (vec (or (:data response) []))
-          total (or (:total response) (count subcategories))]
-      {:db (-> (finish-entity-load db :subcategories nil)
-             (assoc-in (paths/list-total-items :subcategories) total))
+          total (or (:total response) (count subcategories))
+          date-highlights (:date-highlights response)]
+      {:db (cond-> (-> (finish-entity-load db :subcategories nil)
+                     (assoc-in (paths/list-total-items :subcategories) total))
+             (map? date-highlights)
+             (assoc-in (conj (paths/list-ui-state :subcategories) :date-highlights) date-highlights))
        :dispatch [::expenses-sync/sync-subcategories subcategories]})))
 
 (rf/reg-event-db

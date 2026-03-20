@@ -50,8 +50,8 @@
     (is (= [1 2]
           (map :id @(rf/subscribe [::entity-subs/sorted-entities :expenses]))))))
 
-(deftest paginated-entities-server-mode-applies-local-filters-test
-  (testing "paginated-entities applies active filters to loaded rows in :server mode"
+(deftest paginated-entities-server-mode-uses-loaded-rows-test
+  (testing "paginated-entities skips local filtering/sorting/pagination in :server mode"
     (reset-db!
       {:entities {:expenses {:data {1 {:id 1 :description "Alpha" :amount 100}
                                     2 {:id 2 :description "Beta" :amount 300}
@@ -64,9 +64,9 @@
                                :per-page 1
                                :pagination {:current-page 2 :per-page 1}}}}})
 
-    (is (= [1]
+    (is (= [1 2 3]
           (map :id @(rf/subscribe [::entity-subs/paginated-entities :expenses])))
-      "Server mode should keep loaded rows unsliced but still honor active filters")))
+      "Server mode should return loaded rows unsliced and unfiltered")))
 
 (deftest paginated-entities-client-mode-remains-paginated-test
   (testing "paginated-entities still applies client-side sort/pagination in :client mode"

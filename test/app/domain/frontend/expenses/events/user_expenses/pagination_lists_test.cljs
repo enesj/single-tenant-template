@@ -274,9 +274,8 @@
             pagination)))))
 
 (deftest cities-refresh-list-uses-template-pagination-state
-  (testing "server mode: cities refresh wrapper derives limit/offset from template list state"
+  (testing "cities refresh wrapper derives limit/offset from template list state"
     (sup/reset-db!)
-    (rf/dispatch-sync [::list-ui-state-events/set-pagination-mode :cities :server])
     (swap! rf-db/app-db assoc-in (paths/list-per-page :cities) 30)
     (swap! rf-db/app-db assoc-in (paths/list-current-page :cities) 4)
     (let [dispatches (atom [])]
@@ -288,24 +287,6 @@
           (is (= :user-expenses/fetch-cities event-id))
           (is (= {:limit 30 :offset 90}
                 (select-keys params [:limit :offset]))))
-        (finally
-          (rf/reg-fx :dispatch rf/dispatch)))))
-
-  (testing "client mode: cities refresh fetches all records"
-    (sup/reset-db!)
-    (rf/dispatch-sync [::list-ui-state-events/set-pagination-mode :cities :client])
-    (swap! rf-db/app-db assoc-in (paths/list-per-page :cities) 30)
-    (swap! rf-db/app-db assoc-in (paths/list-current-page :cities) 4)
-    (let [dispatches (atom [])]
-      (rf/reg-fx :dispatch (fn [event]
-                             (swap! dispatches conj event)))
-      (try
-        (rf/dispatch-sync [:user-expenses/refresh-cities-list])
-        (let [[event-id params] (first @dispatches)]
-          (is (= :user-expenses/fetch-cities event-id))
-          (is (= {:limit 500 :offset 0}
-                (select-keys params [:limit :offset]))
-            "Client mode should fetch all records regardless of per-page/current-page"))
         (finally
           (rf/reg-fx :dispatch rf/dispatch))))))
 
@@ -327,9 +308,8 @@
     (is (= 3 (get-in @rf-db/app-db (paths/list-total-items :cities))))))
 
 (deftest expense-categories-refresh-list-uses-template-pagination-state
-  (testing "server mode: expense categories refresh derives limit/offset from template list state"
+  (testing "expense categories refresh derives limit/offset from template list state"
     (sup/reset-db!)
-    (rf/dispatch-sync [::list-ui-state-events/set-pagination-mode :expense-categories :server])
     (swap! rf-db/app-db assoc-in (paths/list-per-page :expense-categories) 12)
     (swap! rf-db/app-db assoc-in (paths/list-current-page :expense-categories) 5)
     (let [dispatches (atom [])]
@@ -341,24 +321,6 @@
           (is (= :user-expenses/fetch-expense-categories event-id))
           (is (= {:limit 12 :offset 48}
                 (select-keys params [:limit :offset]))))
-        (finally
-          (rf/reg-fx :dispatch rf/dispatch)))))
-
-  (testing "client mode: expense categories refresh fetches all records"
-    (sup/reset-db!)
-    (rf/dispatch-sync [::list-ui-state-events/set-pagination-mode :expense-categories :client])
-    (swap! rf-db/app-db assoc-in (paths/list-per-page :expense-categories) 12)
-    (swap! rf-db/app-db assoc-in (paths/list-current-page :expense-categories) 5)
-    (let [dispatches (atom [])]
-      (rf/reg-fx :dispatch (fn [event]
-                             (swap! dispatches conj event)))
-      (try
-        (rf/dispatch-sync [:user-expenses/refresh-expense-categories-list])
-        (let [[event-id params] (first @dispatches)]
-          (is (= :user-expenses/fetch-expense-categories event-id))
-          (is (= {:limit 500 :offset 0}
-                (select-keys params [:limit :offset]))
-            "Client mode should fetch all records regardless of per-page/current-page"))
         (finally
           (rf/reg-fx :dispatch rf/dispatch))))))
 
@@ -395,3 +357,82 @@
       (is (= "2026-02-16T10:30:00Z" (:purchased-at item)))
       (is (= "Konzum" (:supplier-display-name item)))
       (is (= "Groceries" (:expense-category-name item))))))
+
+(deftest expenses-refresh-list-forwards-highlight-request-params
+  (testing "expenses refresh wrapper merges server highlight request params into the fetch event"
+    (sup/reset-db!)
+    (swap! rf-db/app-db assoc-in (paths/list-per-page :expenses) 25)
+    (swap! rf-db/app-db assoc-in (paths/list-current-page :expenses) 2)
+    (let [dispatches (atom [])]
+      (rf/reg-fx :dispatch (fn [event]
+                             (swap! dispatches conj event)))
+      (try
+        (rf/dispatch-sync [:user-expenses/refresh-expenses-list
+                           {:highlight-date-field "purchased-at"
+                            :highlight-timezone "Europe/Sarajevo"}])
+        (let [[event-id params] (first @dispatches)]
+          (is (= :user-expenses/fetch-expenses event-id))
+          (is (= {:limit 25
+                  :offset 25
+                  :highlight-date-field "purchased-at"
+                  :highlight-timezone "Europe/Sarajevo"}
+                (select-keys params [:limit :offset :highlight-date-field :highlight-timezone]))))
+        (finally
+          (rf/reg-fx :dispatch rf/dispatch))))))
+
+(deftest fetch-expenses-success-stores-server-date-highlights
+  (testing "expenses fetch success persists returned date highlight metadata"
+    (sup/reset-db!)
+    (rf/dispatch-sync
+      [:user-expenses/fetch-expenses-success
+       {:data [{:id "exp-1"}]
+        :total 1
+        :date-highlights {:purchased-at ["2026-03-10" "2026-03-11"]}}])
+    (is (= {:purchased-at ["2026-03-10" "2026-03-11"]}
+          (get-in @rf-db/app-db (conj (paths/list-ui-state :expenses) :date-highlights))))))
+
+(deftest stores-refresh-list-forwards-highlight-request-params
+  (testing "stores refresh wrapper merges server highlight request params into the fetch event"
+    (sup/reset-db!)
+    (swap! rf-db/app-db assoc-in (paths/list-per-page :stores) 40)
+    (swap! rf-db/app-db assoc-in (paths/list-current-page :stores) 3)
+    (let [dispatches (atom [])]
+      (rf/reg-fx :dispatch (fn [event]
+                             (swap! dispatches conj event)))
+      (try
+        (rf/dispatch-sync [:user-expenses/refresh-stores-list
+                           {:highlight-date-field "created-at"
+                            :highlight-timezone "UTC"}])
+        (let [[event-id params] (first @dispatches)]
+          (is (= :user-expenses/fetch-stores event-id))
+          (is (= {:limit 40
+                  :offset 80
+                  :highlight-date-field "created-at"
+                  :highlight-timezone "UTC"}
+                (select-keys params [:limit :offset :highlight-date-field :highlight-timezone]))))
+        (finally
+          (rf/reg-fx :dispatch rf/dispatch))))))
+
+(deftest fetch-stores-success-stores-server-date-highlights
+  (testing "stores fetch success persists returned date highlight metadata"
+    (sup/reset-db!)
+    (rf/dispatch-sync
+      [:user-expenses/fetch-stores-success
+       {:data [{:id "store-1"}]
+        :total 1
+        :date-highlights {:created-at ["2026-03-07"]}}])
+    (is (= {:created-at ["2026-03-07"]}
+          (get-in @rf-db/app-db (conj (paths/list-ui-state :stores) :date-highlights))))))
+
+(deftest fetch-receipts-success-stores-server-date-highlights
+  (testing "receipts fetch success persists returned date highlight metadata"
+    (sup/reset-db!)
+    (rf/dispatch-sync
+      [:user-expenses/fetch-receipts-success
+       {:data [{:id "rec-1"}]
+        :total 1
+        :limit 10
+        :offset 0
+        :date-highlights {:uploaded-at ["2026-03-08"]}}])
+    (is (= {:uploaded-at ["2026-03-08"]}
+          (get-in @rf-db/app-db (conj (paths/list-ui-state :receipts) :date-highlights))))))

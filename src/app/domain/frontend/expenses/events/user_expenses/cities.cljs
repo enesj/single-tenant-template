@@ -29,10 +29,21 @@
 (defn- current-cities-page-params
   [db]
   (let [entity-key :cities
-        per-page (paths/resolved-list-per-page db entity-key 10)
-        current-page (paths/resolved-list-current-page db entity-key)]
-    {:limit per-page
-     :offset (* (max 0 (dec current-page)) per-page)}))
+        per-page (paths/resolved-list-per-page db entity-key 100)
+        current-page (paths/resolved-list-current-page db entity-key)
+        sort-config (or (get-in db [:ui :lists entity-key :sort]) {})
+        order-dir (let [direction (:direction sort-config)]
+                    (when (contains? #{:asc :desc "asc" "desc"} direction)
+                      (name (keyword direction))))
+        order-field (when-let [f (:field sort-config)] (name f))
+        filters (some-> (get-in db [:ui :lists entity-key :filters])
+                  (select-keys [:name])
+                  not-empty)]
+    (cond-> (merge {:limit per-page
+                    :offset (* (max 0 (dec current-page)) per-page)}
+              filters)
+      (some? order-dir) (assoc :order-dir order-dir)
+      (some? order-field) (assoc :order-by order-field))))
 
 ;; ---------------------------------------------------------------------------
 ;; Cities
@@ -41,17 +52,15 @@
 (rf/reg-event-fx
   :user-expenses/refresh-cities-list
   common-interceptors
-  (fn [{:keys [db]} _]
-    (let [params (if (= :server (get-in db (paths/list-pagination-mode :cities)))
-                   (current-cities-page-params db)
-                   {:limit 500 :offset 0})]
-      {:dispatch [:user-expenses/fetch-cities params]})))
+  (fn [{:keys [db]} [opts]]
+    {:dispatch [:user-expenses/fetch-cities (merge (current-cities-page-params db)
+                                              (when (map? opts) opts))]}))
 
 (rf/reg-event-fx
   :user-expenses/fetch-cities
   common-interceptors
   (fn [{:keys [db]} [params]]
-    (let [request-params (merge {:limit 500 :offset 0} (when (map? params) params))]
+    (let [request-params (merge {:limit 100 :offset 0} (when (map? params) params))]
       {:db (begin-entity-load db :cities)
        :http-xhrio (x/xhrio db
                      {:method :get
@@ -65,9 +74,12 @@
   common-interceptors
   (fn [{:keys [db]} [response]]
     (let [cities (vec (or (:data response) []))
-          total (or (:total response) (count cities))]
-      {:db (-> (finish-entity-load db :cities nil)
-             (assoc-in (paths/list-total-items :cities) total))
+          total (or (:total response) (count cities))
+          date-highlights (:date-highlights response)]
+      {:db (cond-> (-> (finish-entity-load db :cities nil)
+                     (assoc-in (paths/list-total-items :cities) total))
+             (map? date-highlights)
+             (assoc-in (conj (paths/list-ui-state :cities) :date-highlights) date-highlights))
        :dispatch [::expenses-sync/sync-cities cities]})))
 
 (rf/reg-event-db

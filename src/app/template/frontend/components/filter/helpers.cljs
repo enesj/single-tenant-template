@@ -108,6 +108,40 @@
                 v))
         item))))
 
+(defn get-item-field-value
+  "Return a field value using the same tolerant resolution as filter matching."
+  [item field-id]
+  (resolve-field-value item field-id))
+
+(defn local-start-of-day
+  "Normalize a date-like value to the local start of day."
+  [value]
+  (when-let [date (parse-field-value {:value value :field-type :date-range})]
+    (js/Date. (.getFullYear date) (.getMonth date) (.getDate date) 0 0 0 0)))
+
+(defn local-end-of-day
+  "Normalize a date-like value to the local end of day."
+  [value]
+  (when-let [date (parse-field-value {:value value :field-type :date-range})]
+    (js/Date. (.getFullYear date) (.getMonth date) (.getDate date) 23 59 59 999)))
+
+(defn same-local-day?
+  [left right]
+  (let [left-start (local-start-of-day left)
+        right-start (local-start-of-day right)]
+    (and left-start
+      right-start
+      (= (.getTime left-start) (.getTime right-start)))))
+
+(defn local-day-key
+  [value]
+  (when-let [date (local-start-of-day value)]
+    (let [year (.getFullYear date)
+          month (inc (.getMonth date))
+          day (.getDate date)
+          pad2 (fn [n] (.padStart (str n) 2 "0"))]
+      (str year "-" (pad2 month) "-" (pad2 day)))))
+
 (defn matches-filter?
   "Checks if an item matches a filter value based on field type.
   Uses tolerant field resolution so it works with namespaced entity maps

@@ -81,14 +81,16 @@
 (rf/reg-event-fx
   :user-expenses/refresh-stores-list
   common-interceptors
-  (fn [{:keys [db]} _]
-    {:dispatch [:user-expenses/fetch-stores (current-list-page-params db :stores 200)]}))
+  (fn [{:keys [db]} [opts]]
+    {:dispatch [:user-expenses/fetch-stores (merge (current-list-page-params db :stores 200)
+                                              (when (map? opts) opts))]}))
 
 (rf/reg-event-fx
   :user-expenses/refresh-store-aliases-list
   common-interceptors
-  (fn [{:keys [db]} _]
-    {:dispatch [:user-expenses/fetch-store-aliases (current-list-page-params db :store-aliases 200)]}))
+  (fn [{:keys [db]} [opts]]
+    {:dispatch [:user-expenses/fetch-store-aliases (merge (current-list-page-params db :store-aliases 200)
+                                                     (when (map? opts) opts))]}))
 
 ;; ---------------------------------------------------------------------------
 ;; Stores
@@ -112,10 +114,13 @@
   common-interceptors
   (fn [{:keys [db]} [response]]
     (let [stores (vec (or (:data response) []))
-          total (or (:total response) (count stores))]
-      {:db (-> (finish-entity-load db :stores nil)
-             (assoc-in (paths/list-total-items :stores) total))
-       :dispatch [::expenses-sync/sync-stores stores]})))
+          total (or (:total response) (count stores))
+          date-highlights (:date-highlights response)]
+      {:db (cond-> (-> (finish-entity-load db :stores nil)
+                     (assoc-in (paths/list-total-items :stores) total))
+             (map? date-highlights)
+             (assoc-in (conj (paths/list-ui-state :stores) :date-highlights) date-highlights))
+       :dispatch [::expenses-sync/sync-stores stores]}))),{}
 
 (rf/reg-event-db
   :user-expenses/fetch-stores-failure
@@ -258,9 +263,12 @@
   common-interceptors
   (fn [{:keys [db]} [response]]
     (let [aliases (vec (or (:data response) []))
-          total (or (:total response) (count aliases))]
-      {:db (-> (finish-entity-load db :store-aliases nil)
-             (assoc-in (paths/list-total-items :store-aliases) total))
+          total (or (:total response) (count aliases))
+          date-highlights (:date-highlights response)]
+      {:db (cond-> (-> (finish-entity-load db :store-aliases nil)
+                     (assoc-in (paths/list-total-items :store-aliases) total))
+             (map? date-highlights)
+             (assoc-in (conj (paths/list-ui-state :store-aliases) :date-highlights) date-highlights))
        :dispatch [::expenses-sync/sync-store-aliases aliases]})))
 
 (rf/reg-event-db

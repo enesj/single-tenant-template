@@ -173,8 +173,9 @@
 (rf/reg-event-fx
   :user-expenses/refresh-receipts-list
   common-interceptors
-  (fn [{:keys [db]} _]
-    {:dispatch [:user-expenses/fetch-receipts (current-receipts-page-params db)]}))
+  (fn [{:keys [db]} [opts]]
+    {:dispatch [:user-expenses/fetch-receipts (merge (current-receipts-page-params db)
+                                                (when (map? opts) opts))]}))
 
 (rf/reg-event-fx
   :user-expenses/check-receipts-processing-complete
@@ -252,19 +253,22 @@
     (let [rows (apply-refining-status (:data response))
           total (or (:total response) (count rows))
           limit (or (:limit response) (get-in db (conj base-path :limit)))
-          offset (or (:offset response) (get-in db (conj base-path :offset)))]
-      {:db (-> db
-             (assoc-in (paths/entity-loading? :receipts) false)
-             (assoc-in (paths/entity-error :receipts) nil)
-             (assoc-in (conj base-path :loading?) false)
-             (assoc-in (conj base-path :error) nil)
-             (assoc-in (conj base-path :processing-check :loading?) false)
-             (assoc-in (conj base-path :processing-check :refresh-pending?) false)
-             (assoc-in (conj base-path :items) rows)
-             (assoc-in (conj base-path :total) total)
-             (assoc-in (conj base-path :limit) limit)
-             (assoc-in (conj base-path :offset) offset)
-             (assoc-in (paths/list-total-items :receipts) total))
+          offset (or (:offset response) (get-in db (conj base-path :offset)))
+          date-highlights (:date-highlights response)]
+      {:db (cond-> (-> db
+                     (assoc-in (paths/entity-loading? :receipts) false)
+                     (assoc-in (paths/entity-error :receipts) nil)
+                     (assoc-in (conj base-path :loading?) false)
+                     (assoc-in (conj base-path :error) nil)
+                     (assoc-in (conj base-path :processing-check :loading?) false)
+                     (assoc-in (conj base-path :processing-check :refresh-pending?) false)
+                     (assoc-in (conj base-path :items) rows)
+                     (assoc-in (conj base-path :total) total)
+                     (assoc-in (conj base-path :limit) limit)
+                     (assoc-in (conj base-path :offset) offset)
+                     (assoc-in (paths/list-total-items :receipts) total))
+             (map? date-highlights)
+             (assoc-in (conj (paths/list-ui-state :receipts) :date-highlights) date-highlights))
        :dispatch [::expenses-sync/sync-receipts rows]})))
 
 (rf/reg-event-db

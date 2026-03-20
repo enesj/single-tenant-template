@@ -1,0 +1,236 @@
+-- allium: 2
+-- list-view-date-range-picker.candidate.allium
+--
+-- Scope: Custom date-range picker behavior inside the shared list-view filter component.
+-- Includes:
+-- - Selecting both start and end dates from one picker
+-- - Immediate filter application after each click
+-- - Highlighting days that have matching records after non-date filters are applied
+-- - Partial selection, clear, restart, overflow-day, and future-day behavior
+-- Excludes:
+-- - Backend query implementation details
+-- - Styling tokens and CSS implementation
+-- - Non-date filter semantics (see list-view-filtering.candidate.allium)
+--
+-- Dependencies:
+-- - list-view-filtering.candidate.allium for general list filter apply/clear semantics
+-- - shared/list-filter-pagination-reset.allium for page reset on filter change
+
+external entity User { id: String }
+external entity FieldKey { name: String }
+external entity Timezone { name: String }
+
+value LocalDay {
+    key: String
+    starts_at: Timestamp
+    ends_at: Timestamp
+    is_future: Boolean
+}
+
+value CalendarMonth {
+    year: Integer
+    month: Integer
+}
+
+entity DateRangePickerState {
+    field: FieldKey
+    timezone: Timezone
+    today: LocalDay
+    visible_month: CalendarMonth
+
+    current_month_days: Set<LocalDay>
+    overflow_days: Set<LocalDay>
+    highlighted_days: Set<LocalDay>
+
+    selected_anchor: LocalDay?
+    selected_from: LocalDay?
+    selected_to: LocalDay?
+    selection_state: empty | partial | complete
+
+    has_active_range: selected_from != null and selected_to != null
+}
+
+rule NonDateFiltersRecomputeHighlightedDays {
+    when: NonDateFiltersChanged(picker, matching_days)
+
+    ensures: picker.highlighted_days = matching_days
+    ensures: picker.selected_anchor = picker.selected_anchor
+    ensures: picker.selected_from = picker.selected_from
+    ensures: picker.selected_to = picker.selected_to
+    ensures: picker.selection_state = picker.selection_state
+
+    @guidance
+        -- `matching_days` is computed from records that remain after all active
+        -- non-date filters are applied.
+        -- The currently selected date range does NOT narrow this highlight set.
+}
+
+rule FirstSelectionStartsPartialRange {
+    when: ViewerSelectsDay(viewer, picker, day)
+    requires: picker.selection_state = empty
+    requires: not day.is_future
+
+    ensures: picker.selected_anchor = day
+    ensures: picker.selected_from = day
+    ensures: picker.selected_to = picker.today
+    ensures: picker.selection_state = partial
+
+    @guidance
+        -- The filter applies immediately after the first click.
+        -- The active range becomes day.starts_at .. picker.today.ends_at.
+}
+
+rule ClickingPartialAnchorClearsRange {
+    when: ViewerSelectsDay(viewer, picker, day)
+    requires: picker.selection_state = partial
+    requires: picker.selected_anchor != null
+    requires: day.key = picker.selected_anchor.key
+
+    ensures: picker.selected_anchor = null
+    ensures: picker.selected_from = null
+    ensures: picker.selected_to = null
+    ensures: picker.selection_state = empty
+}
+
+rule SecondSelectionCompletesRangeForward {
+    when: ViewerSelectsDay(viewer, picker, day)
+    requires: picker.selection_state = partial
+    requires: picker.selected_anchor != null
+    requires: day.key != picker.selected_anchor.key
+    requires: day.starts_at >= picker.selected_anchor.starts_at
+
+    ensures: picker.selected_anchor = picker.selected_anchor
+    ensures: picker.selected_from = picker.selected_anchor
+    ensures: picker.selected_to = day
+    ensures: picker.selection_state = complete
+}
+
+rule SecondSelectionCompletesRangeReordered {
+    when: ViewerSelectsDay(viewer, picker, day)
+    requires: picker.selection_state = partial
+    requires: picker.selected_anchor != null
+    requires: day.key != picker.selected_anchor.key
+    requires: day.ends_at < picker.selected_anchor.starts_at
+
+    ensures: picker.selected_anchor = picker.selected_anchor
+    ensures: picker.selected_from = day
+    ensures: picker.selected_to = picker.selected_anchor
+    ensures: picker.selection_state = complete
+}
+
+rule ClickingCompletedRangeClearsFilter {
+    when: ViewerSelectsDay(viewer, picker, day)
+    requires: picker.selection_state = complete
+    requires: picker.selected_from != null
+    requires: picker.selected_to != null
+    requires: day.starts_at >= picker.selected_from.starts_at
+    requires: day.ends_at <= picker.selected_to.ends_at
+
+    ensures: picker.selected_anchor = null
+    ensures: picker.selected_from = null
+    ensures: picker.selected_to = null
+    ensures: picker.selection_state = empty
+}
+
+rule ClickingOutsideCompletedRangeStartsNewPartialRange {
+    when: ViewerSelectsDay(viewer, picker, day)
+    requires: picker.selection_state = complete
+    requires: picker.selected_from != null
+    requires: picker.selected_to != null
+    requires: not day.is_future
+    requires:
+        day.ends_at < picker.selected_from.starts_at
+        or day.starts_at > picker.selected_to.ends_at
+
+    ensures: picker.selected_anchor = day
+    ensures: picker.selected_from = day
+    ensures: picker.selected_to = picker.today
+    ensures: picker.selection_state = partial
+}
+
+rule MonthNavigationPreservesPartialSelection {
+    when: ViewerNavigatesMonth(viewer, picker, month)
+    requires: picker.selection_state = partial
+
+    ensures: picker.visible_month = month
+    ensures: picker.selected_anchor = picker.selected_anchor
+    ensures: picker.selected_from = picker.selected_from
+    ensures: picker.selected_to = picker.selected_to
+}
+
+rule MonthNavigationPreservesCompletedSelection {
+    when: ViewerNavigatesMonth(viewer, picker, month)
+    requires: picker.selection_state = complete
+
+    ensures: picker.visible_month = month
+    ensures: picker.selected_from = picker.selected_from
+    ensures: picker.selected_to = picker.selected_to
+}
+
+invariant SelectedDaysAreNeverFuture {
+    for picker in DateRangePickerState:
+        (picker.selected_from = null or not picker.selected_from.is_future)
+        and (picker.selected_to = null or not picker.selected_to.is_future)
+}
+
+invariant CompletedRangesAreOrdered {
+    for picker in DateRangePickerState:
+        picker.selection_state = complete implies picker.selected_from.starts_at <= picker.selected_to.starts_at
+}
+
+invariant PartialRangesAlwaysExtendToToday {
+    for picker in DateRangePickerState:
+        picker.selection_state = partial implies picker.selected_to.key = picker.today.key
+}
+
+surface ListDateRangePicker {
+    facing viewer: User
+
+    context picker: DateRangePickerState
+
+    exposes:
+        picker.visible_month
+        picker.current_month_days
+        picker.overflow_days
+        picker.highlighted_days
+        picker.selected_anchor
+        picker.selected_from
+        picker.selected_to
+        picker.selection_state
+
+    provides:
+        ViewerSelectsDay(viewer, picker, day)
+            when not day.is_future
+        ViewerNavigatesMonth(viewer, picker, month)
+
+    @guarantee SinglePickerOwnsBothBoundaries
+        -- The user chooses both start and end dates from one picker surface.
+        -- Separate `from` and `to` controls are not required.
+
+    @guarantee ImmediateApplication
+        -- Every click applies immediately:
+        -- first click => day .. today
+        -- second click => completed inclusive range
+        -- repeated click on the active selection => cleared filter
+
+    @guarantee PartialSelectionPresentation
+        -- After the first click, only the selected start day is visually marked.
+        -- The full visual range appears only after the second click completes it.
+
+    @guarantee InclusiveWholeDayFiltering
+        -- Selected boundaries are inclusive.
+        -- `selected_from.starts_at` is the local start of day.
+        -- `selected_to.ends_at` is the local end of day.
+
+    @guarantee InformationalHighlightsOnly
+        -- Highlighted days communicate record availability only.
+        -- Days without matching records remain selectable.
+
+    @guarantee HighlightingIgnoresCurrentDateRange
+        -- Highlighted days come from the dataset after non-date filters are applied.
+        -- The currently selected date range does not shrink the highlight map.
+
+    @guarantee OverflowDaysFollowTheSameRules
+        -- Days shown from adjacent months use the same highlight behavior
+        -- and the same future-date selectability rules as current-month days.
+}

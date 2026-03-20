@@ -25,6 +25,7 @@
         all-entities (use-subscribe [::entity-subs/entities entity-type])
         items (use-subscribe [::entity-subs/entities entity-type])
         active-filters (use-subscribe [::list-subs/active-filters entity-type])
+        list-ui-state (use-subscribe [::list-subs/entity-ui-state entity-type])
 
         ;; Calculate filter configuration
         filter-type (filter-helpers/get-filter-type {:field-spec field-spec})
@@ -112,13 +113,8 @@
        :field-id field-id
        :on-apply on-apply})
 
-    (filter-logic/use-date-range-auto-apply
-      {:filter-type filter-type
-       :filter-from-date filter-from-date
-       :filter-to-date filter-to-date
-       :entity-type entity-type
-       :field-id field-id
-       :on-apply on-apply})
+    ;; Date-range filtering now applies directly from the calendar interaction so
+    ;; partial selection metadata is preserved across re-renders.
 
     ;; Render the complete filter form layout
     (filter-rendering/render-filter-form-layout
@@ -142,4 +138,7 @@
        :matching-count matching-count
        :entity-type entity-type
        :field-type-str field-type-str
-       :active-filters active-filters})))
+       :active-filters active-filters
+       :items items
+       :initial-value initial-value
+       :list-ui-state list-ui-state})))

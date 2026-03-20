@@ -79,11 +79,9 @@
 (rf/reg-event-fx
   :user-expenses/refresh-manufacturers-list
   common-interceptors
-  (fn [{:keys [db]} _]
-    (let [params (if (= :server (get-in db (paths/list-pagination-mode :manufacturers)))
-                   (current-list-page-params db :manufacturers 200)
-                   {:limit 500 :offset 0})]
-      {:dispatch [:user-expenses/fetch-manufacturers params]})))
+  (fn [{:keys [db]} [opts]]
+    {:dispatch [:user-expenses/fetch-manufacturers (merge (current-list-page-params db :manufacturers 100)
+                                                     (when (map? opts) opts))]}))
 
 ;; ---------------------------------------------------------------------------
 ;; Manufacturers
@@ -93,7 +91,7 @@
   :user-expenses/fetch-manufacturers
   common-interceptors
   (fn [{:keys [db]} [params]]
-    (let [request-params (merge {:limit 200 :offset 0} (when (map? params) params))]
+    (let [request-params (merge {:limit 100 :offset 0} (when (map? params) params))]
       {:db (begin-entity-load db :manufacturers)
        :http-xhrio (x/xhrio db
                      {:method :get
@@ -107,9 +105,12 @@
   common-interceptors
   (fn [{:keys [db]} [response]]
     (let [manufacturers (vec (or (:data response) []))
-          total (or (:total response) (count manufacturers))]
-      {:db (-> (finish-entity-load db :manufacturers nil)
-             (assoc-in (paths/list-total-items :manufacturers) total))
+          total (or (:total response) (count manufacturers))
+          date-highlights (:date-highlights response)]
+      {:db (cond-> (-> (finish-entity-load db :manufacturers nil)
+                     (assoc-in (paths/list-total-items :manufacturers) total))
+             (map? date-highlights)
+             (assoc-in (conj (paths/list-ui-state :manufacturers) :date-highlights) date-highlights))
        :dispatch [::expenses-sync/sync-manufacturers manufacturers]})))
 
 (rf/reg-event-db

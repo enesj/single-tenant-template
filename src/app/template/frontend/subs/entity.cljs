@@ -60,9 +60,11 @@
   ::filtered-entities
   (fn [[_ entity-type]]
     [(rf/subscribe [::entities entity-type])
+     (rf/subscribe [::list-subs/entity-ui-state entity-type])
      (rf/subscribe [::list-subs/active-filters entity-type])])
-  (fn [[entities active-filters] [_ _entity-type]]
-    (if (empty? active-filters)
+  (fn [[entities ui-state active-filters] [_ _entity-type]]
+    (if (or (list-subs/server-pagination? ui-state)
+          (empty? active-filters))
       entities
       (let [filtered (filter (fn [item]
                                (every? (fn [[field-id filter-value]]

@@ -103,13 +103,25 @@
     (update :where shared-qb/merge-where-and
       [:ilike :m.display_name (str "%" manufacturer-display-name "%")])))
 
+(defn- apply-extra-filters
+  "Apply a seq of HoneySQL WHERE clauses (e.g. date-range filters from the
+  routes factory) to a query map."
+  [query extra-filters]
+  (reduce (fn [q clause]
+            (update q :where shared-qb/merge-where-and clause))
+    query
+    (or extra-filters [])))
+
 (defn list-articles
   "List articles with optional search/pagination and per-column filters.
 
   Sorting is allowlisted via `allowed-articles-order-by` to prevent ordering by
-  arbitrary columns."
+  arbitrary columns.
+
+  Accepts :extra-filters — a seq of HoneySQL WHERE clauses injected by the
+  routes factory (e.g. date-range filters)."
   [db {:keys [search category-name subcategory-name manufacturer-display-name
-              limit offset order-by order-dir]
+              extra-filters limit offset order-by order-dir]
        :or {limit 50 offset 0 order-by :canonical_name order-dir :asc}}]
   (let [order-by* (model-naming/ensure-app-keyword order-by)
         order-col (get allowed-articles-order-by order-by* :a/canonical_name)
@@ -126,11 +138,13 @@
                          [:a.id :asc]]
               :limit limit
               :offset offset}
-        query (apply-column-filters base
-                {:search search
-                 :category-name category-name
-                 :subcategory-name subcategory-name
-                 :manufacturer-display-name manufacturer-display-name})]
+        query (-> base
+                (apply-column-filters
+                  {:search search
+                   :category-name category-name
+                   :subcategory-name subcategory-name
+                   :manufacturer-display-name manufacturer-display-name})
+                (apply-extra-filters extra-filters))]
     (jdbc/execute! db (sql/format query) {:builder-fn rs/as-unqualified-lower-maps})))
 
 (defn update-article!
@@ -173,18 +187,23 @@
   "Count total articles, with the same column filters as list-articles.
 
   JOINs are included so that category/subcategory/manufacturer ILIKE filters
-  work identically to the list query. All JOINs are 1:1, so the count is correct."
-  [db {:keys [search category-name subcategory-name manufacturer-display-name]}]
+  work identically to the list query. All JOINs are 1:1, so the count is correct.
+
+  Accepts :extra-filters — a seq of HoneySQL WHERE clauses (e.g. date-range)."
+  [db {:keys [search category-name subcategory-name manufacturer-display-name
+              extra-filters]}]
   (let [base-query {:select [[[:count :*] :total]]
                     :from [[:articles :a]]
                     :left-join [[:manufacturers :m] [:= :m.id :a.manufacturer_id]
                                 [:subcategories :s] [:= :s.id :a.subcategory_id]
                                 [:categories :c] [:= :c.id :s.category_id]]}
-        final-query (apply-column-filters base-query
-                      {:search search
-                       :category-name category-name
-                       :subcategory-name subcategory-name
-                       :manufacturer-display-name manufacturer-display-name})]
+        final-query (-> base-query
+                      (apply-column-filters
+                        {:search search
+                         :category-name category-name
+                         :subcategory-name subcategory-name
+                         :manufacturer-display-name manufacturer-display-name})
+                      (apply-extra-filters extra-filters))]
     {:total (or (:total (jdbc/execute-one! db (sql/format final-query)
                           {:builder-fn rs/as-unqualified-lower-maps}))
               0)}))

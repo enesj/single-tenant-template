@@ -1,6 +1,7 @@
 (ns app.template.frontend.components.filter.ui
   (:require
     [app.template.frontend.components.filter.components :as filter-components]
+    [app.template.frontend.components.filter.date-range-picker :as date-range-picker]
     [app.template.frontend.components.filter.hooks :as filter-hooks]
     [app.template.frontend.components.filter.utils :as filter-utils]
     [app.template.frontend.events.list.filters :as filter-events]
@@ -69,11 +70,15 @@
 (defui filter-actions
   [{:keys [entity-type field-id _filter-text set-filter-text _field-type on-close] :as props}]
   (let [;; Extract the date filter handlers if they exist
-        set-filter-from (get props :set-filter-from)
-        set-filter-to (get props :set-filter-to)
+        ;; Support both :set-filter-from/:set-filter-to and :set-filter-from-date/:set-filter-to-date
+        set-filter-from (or (get props :set-filter-from) (get props :set-filter-from-date))
+        set-filter-to (or (get props :set-filter-to) (get props :set-filter-to-date))
         handle-date-clear (get props :handle-date-clear)
         ;; Extract the select filter setter if it exists
         set-selected-options (get props :set-selected-options)
+        ;; Extract number range setters
+        set-filter-min (get props :set-filter-min)
+        set-filter-max (get props :set-filter-max)
 
         ;; Clear handler
         handle-clear (fn []
@@ -91,6 +96,8 @@
                            (when set-filter-text (set-filter-text ""))
                            (when set-filter-from (set-filter-from nil))
                            (when set-filter-to (set-filter-to nil))
+                           (when set-filter-min (set-filter-min nil))
+                           (when set-filter-max (set-filter-max nil))
                            (when set-selected-options (set-selected-options [])))))]
 
     ($ filter-components/filter-action-bar
@@ -98,43 +105,17 @@
        :on-close on-close})))
 
 (defui date-range-filter
-  [{:keys [field-id filter-from filter-to matching-count entity-type]}]
-  (let [{:keys [local-from local-to handle-from-change handle-to-change has-values]}
-        (filter-hooks/use-date-range-filter entity-type field-id filter-from filter-to)
-
-        ;; Convert date change handlers to work with input events
-        handle-from-input-change (fn [e]
-                                   (let [value (.. e -target -value)]
-                                     (if (seq value)
-                                       (handle-from-change (js/Date. value))
-                                       (handle-from-change nil))))
-
-        handle-to-input-change (fn [e]
-                                 (let [value (.. e -target -value)]
-                                   (if (seq value)
-                                     (handle-to-change (js/Date. value))
-                                     (handle-to-change nil))))]
-
-    ($ :div
-      ($ :div {:class "p-4 space-y-3"}
-        ($ :div
-          ($ filter-components/date-input
-            {:id "filter-from-date"
-             :value (filter-utils/date-to-input-value local-from)
-             :on-change handle-from-input-change
-             :placeholder "From Date"}))
-
-        ($ :div
-          ($ filter-components/date-input
-            {:id "filter-to-date"
-             :value (filter-utils/date-to-input-value local-to)
-             :on-change handle-to-input-change
-             :placeholder "To Date"}))
-
-        ;; Status indicator
-        ($ filter-components/filter-status-indicator
-          {:has-filter? has-values
-           :matching-count matching-count})))))
+  [{:keys [field-id filter-from filter-to matching-count entity-type active-filters items
+           list-ui-state set-filter-from-date set-filter-to-date]}]
+  ($ date-range-picker/date-range-picker
+    {:field-id field-id
+     :entity-type entity-type
+     :active-filters active-filters
+     :items items
+     :list-ui-state list-ui-state
+     :matching-count matching-count
+     :set-filter-from-date set-filter-from-date
+     :set-filter-to-date set-filter-to-date}))
 
 ;; Component to display active filters as text
 (defui active-filters-display
