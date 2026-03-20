@@ -228,10 +228,15 @@
         request-signature (str entity-type "|" (name field-key) "|" timezone "|" (pr-str (dissoc active-filters field-key)))
         last-request-signature (use-ref nil)
         modifier-class-names (clj->js {:highlighted "bg-emerald-100 text-emerald-900 rounded-md"
+                                       :has_data "has-data-day"
                                        :selected "bg-primary text-primary-content"
                                        :range_start "bg-primary text-primary-content rounded-l-md"
-                                       :range_middle "bg-primary/15 text-base-content"
+                                       :range_middle "bg-primary/10 text-base-content"
                                        :range_end "bg-primary text-primary-content rounded-r-md"})
+        modifier-styles #js {:selected #js {:transform "scale(1)"}
+                             :has_data #js {:boxShadow "inset 0 -0.42rem 0 0 rgba(16, 185, 129, 0.95), inset 0 0 0 2px rgba(16, 185, 129, 0.72)"}}
+        handle-select (fn [_range _trigger-day _modifiers _event]
+                        nil)
         handle-day-click (fn [day]
                            (let [next-value (next-filter-value {:current-filter filter-value
                                                                 :clicked-day day
@@ -266,6 +271,7 @@
           #js {:mode mode
                :month visible-month
                :selected nil
+               :onSelect handle-select
                :onMonthChange set-visible-month
                :onDayClick handle-day-click
                :showOutsideDays true
@@ -273,10 +279,11 @@
                :captionLayout "buttons"
                :disabled #js {:after disabled-after}
                :className "ds-react-day-picker ds-filter-date-range-day-picker"
-               :modifiers (clj->js (merge {:highlighted shaded-days}
+               :modifiers (clj->js (merge {:highlighted shaded-days
+                                           :has_data shaded-days}
                                      selection-matchers))
                :modifiersClassNames modifier-class-names
-               :modifiersStyles #js {:selected #js {:transform "scale(1)"}}}))
+               :modifiersStyles modifier-styles}))
       (when matching-count
         ($ :div {:class "text-sm text-gray-600"}
           (str "Found " matching-count " matching "
