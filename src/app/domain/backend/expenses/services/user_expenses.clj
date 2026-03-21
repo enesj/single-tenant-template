@@ -401,6 +401,82 @@
       (:total (jdbc/execute-one! db (sql/format query)
                 {:builder-fn rs/as-unqualified-lower-maps})))))
 
+(def highlight-date-columns
+  "Date columns available for highlight queries.
+   Keys are app keywords from the frontend; values are SQL column refs."
+  {:purchased-at :e.purchased_at
+   :created-at :e.created_at
+   :updated-at :e.updated_at})
+
+(defn- safe-timezone-id
+  "Validate and return a canonical IANA timezone ID, or nil."
+  [timezone]
+  (when-not (clojure.string/blank? (str (or timezone "")))
+    (try
+      (.getId (java.time.ZoneId/of (str timezone)))
+      (catch Exception _ nil))))
+
+(defn highlight-user-expense-days
+  "Return distinct local-date strings for a given timestamp column,
+   respecting the same filters as list/count but excluding the
+   date-range filter on the highlighted column itself.
+
+   Returns e.g. [\"2026-03-08\" \"2026-03-14\" \"2026-03-20\"]."
+  [db tenant-id user-id {:keys [from to created-at-from created-at-to
+                                supplier-id payer-id is-posted?
+                                supplier-display-name store-display-name
+                                expense-category-name payer-label currency notes
+                                highlight-column highlight-timezone
+                                highlight-field]}]
+  (let [tz-id (safe-timezone-id highlight-timezone)
+        sql-col (when (keyword? highlight-column)
+                  (let [ns-part (namespace highlight-column)
+                        n (name highlight-column)]
+                    (if ns-part (str ns-part "." n) n)))]
+    (when (and tz-id (seq sql-col))
+      (let [user-id (ensure-uuid user-id)
+            tenant-id (ensure-uuid tenant-id)
+            ;; Exclude the highlighted field's own date-range filter
+            exclude-purchased? (= highlight-field :purchased-at)
+            exclude-created? (= highlight-field :created-at)
+            from (when-not exclude-purchased? (parse-instant-param from))
+            to (when-not exclude-purchased? (parse-instant-param to))
+            created-at-from (when-not exclude-created? (parse-instant-param created-at-from))
+            created-at-to (when-not exclude-created? (parse-instant-param created-at-to))
+            day-expr (str "to_char(timezone('"
+                       (clojure.string/replace tz-id "'" "''")
+                       "', " sql-col ")::date, 'YYYY-MM-DD')")
+            base-where (cond-> [:and]
+                         user-id (conj [:= :e.user_id user-id])
+                         tenant-id (conj [:= :e.tenant_id tenant-id])
+                         from (conj [:>= :e.purchased_at from])
+                         to (conj [:<= :e.purchased_at to])
+                         created-at-from (conj [:>= :e.created_at created-at-from])
+                         created-at-to (conj [:<= :e.created_at created-at-to])
+                         supplier-id (conj [:= :e.supplier_id (ensure-uuid supplier-id)])
+                         payer-id (conj [:= :e.payer_id (ensure-uuid payer-id)])
+                         (some? is-posted?) (conj [:= :e.is_posted (boolean is-posted?)]))
+            query (-> {:select [[[:raw day-expr] :day]]
+                       :from [[:expenses :e]]
+                       :left-join [[:suppliers :s] [:= :s.id :e.supplier_id]
+                                   [:stores :st] [:= :st.id :e.store_id]
+                                   [:payers :p] [:= :p.id :e.payer_id]
+                                   [:expense_categories :ec] [:= :ec.id :e.expense_category_id]]
+                       :where base-where
+                       :group-by [[:raw day-expr]]
+                       :order-by [[[:raw day-expr] :asc]]}
+                    (shared-qb/apply-text-filters expense-text-filter-columns
+                      {:supplier-display-name supplier-display-name
+                       :store-display-name store-display-name
+                       :expense-category-name expense-category-name
+                       :payer-label payer-label
+                       :currency currency
+                       :notes notes}))]
+        (->> (jdbc/execute! db (sql/format query)
+               {:builder-fn rs/as-unqualified-lower-maps})
+          (keep :day)
+          vec)))))
+
 ;; ============================================================================
 ;; User Dashboard Aggregations
 ;; ============================================================================

@@ -4,6 +4,7 @@
     [app.domain.backend.expenses.handlers.user-expenses.helpers :as h]
     [app.domain.backend.expenses.services.user-expense-settings :as user-settings]
     [app.domain.backend.expenses.services.user-expenses :as user-expenses]
+    [app.shared.model-naming :as model-naming]
     [cheshire.core :as json]
     [taoensso.timbre :as log]))
 
@@ -28,6 +29,12 @@
                   purchased-to (or (h/get-param params :purchased-at-to) (h/get-param params :to))
                   created-from (h/get-param params :created-at-from)
                   created-to (h/get-param params :created-at-to)
+                  ;; Date highlight support
+                  highlight-field-raw (h/get-param params :highlight-date-field)
+                  highlight-field (some-> highlight-field-raw model-naming/ensure-app-keyword)
+                  highlight-timezone (h/get-param params :highlight-timezone)
+                  highlight-column (when highlight-field
+                                     (get user-expenses/highlight-date-columns highlight-field))
                   opts (cond-> (merge {:from purchased-from
                                        :to purchased-to
                                        :created-at-from created-from
@@ -42,11 +49,25 @@
                          order-dir (assoc :order-dir order-dir))
                   uid (when-not (h/tenant-elevated? request) user-id)
                   expenses (user-expenses/list-user-expenses db tenant-id uid opts)
-                  total (user-expenses/count-user-expenses db tenant-id uid opts)]
-              (h/json-response {:data expenses
-                                :total total
-                                :limit (:limit opts)
-                                :offset (:offset opts)}))
+                  total (user-expenses/count-user-expenses db tenant-id uid opts)
+                  date-highlights (when (and highlight-column highlight-timezone)
+                                    (try
+                                      {highlight-field
+                                       (user-expenses/highlight-user-expense-days
+                                         db tenant-id uid
+                                         (assoc opts
+                                           :highlight-column highlight-column
+                                           :highlight-timezone highlight-timezone
+                                           :highlight-field highlight-field))}
+                                      (catch Exception e
+                                        (log/warn e "Failed to get date highlights for expenses")
+                                        nil)))]
+              (h/json-response (cond-> {:data expenses
+                                        :total total
+                                        :limit (:limit opts)
+                                        :offset (:offset opts)}
+                                 (map? date-highlights)
+                                 (assoc :date-highlights date-highlights))))
             (catch Exception e
               (log/error e "Error listing user expenses"
                 {:user-id user-id

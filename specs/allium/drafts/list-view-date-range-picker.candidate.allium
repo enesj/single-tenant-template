@@ -80,23 +80,15 @@ rule FirstSelectionStartsPartialRange {
         -- The active range becomes day.starts_at .. picker.today.ends_at.
 }
 
-rule ClickingPartialAnchorClearsRange {
+rule SecondSelectionCompletesRange {
+    -- Clicking any non-future day while in partial state completes the range.
+    -- When the clicked day is the same as the anchor, this produces a single-day
+    -- range (from = to = anchor day). The clear gesture for a completed range
+    -- (including single-day) is clicking inside it — see ClickingCompletedRangeClearsFilter.
     when: ViewerSelectsDay(viewer, picker, day)
     requires: picker.selection_state = partial
     requires: picker.selected_anchor != null
-    requires: day.key = picker.selected_anchor.key
-
-    ensures: picker.selected_anchor = null
-    ensures: picker.selected_from = null
-    ensures: picker.selected_to = null
-    ensures: picker.selection_state = empty
-}
-
-rule SecondSelectionCompletesRangeForward {
-    when: ViewerSelectsDay(viewer, picker, day)
-    requires: picker.selection_state = partial
-    requires: picker.selected_anchor != null
-    requires: day.key != picker.selected_anchor.key
+    requires: not day.is_future
     requires: day.starts_at >= picker.selected_anchor.starts_at
 
     ensures: picker.selected_anchor = picker.selected_anchor
@@ -106,10 +98,11 @@ rule SecondSelectionCompletesRangeForward {
 }
 
 rule SecondSelectionCompletesRangeReordered {
+    -- When the clicked day is before the anchor, the range is reordered
+    -- so that `from` is always the earlier day.
     when: ViewerSelectsDay(viewer, picker, day)
     requires: picker.selection_state = partial
     requires: picker.selected_anchor != null
-    requires: day.key != picker.selected_anchor.key
     requires: day.ends_at < picker.selected_anchor.starts_at
 
     ensures: picker.selected_anchor = picker.selected_anchor
@@ -209,9 +202,9 @@ surface ListDateRangePicker {
 
     @guarantee ImmediateApplication
         -- Every click applies immediately:
-        -- first click => day .. today
-        -- second click => completed inclusive range
-        -- repeated click on the active selection => cleared filter
+        -- first click => day .. today (partial range)
+        -- second click => completed inclusive range (same day = single-day range)
+        -- click inside a completed range => cleared filter
 
     @guarantee PartialSelectionPresentation
         -- After the first click, only the selected start day is visually marked.
