@@ -38,4 +38,25 @@
     sunset;
 }
 
+/* react-day-picker base styles */
+@import "react-day-picker/src/style.css";
+
 /* Custom styles can go here */
+
+/* ── Date Range Picker in filter panel ─────────────────────────── */
+.ds-filter-date-range-day-picker {
+  --rdp-accent-color: oklch(var(--p));
+  --rdp-accent-background-color: oklch(var(--p) / 0.1);
+  font-size: 0.875rem;
+}
+
+.ds-filter-date-range-day-picker .rdp-month_caption {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+/* Days with data get a subtle green underline via modifiersStyles;
+   this class adds a rounded look for highlighted range endpoints. */
+.ds-filter-date-range-day-picker .has-data-day {
+  border-radius: 0.375rem;
+}

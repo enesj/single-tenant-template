@@ -66,17 +66,19 @@
         [filter-to-date, set-filter-to-date] (use-state (:filter-to-date initial-state))
         [filter-selected-options, set-filter-selected-options] (use-state (:filter-selected-options initial-state))
 
-        ;; Calculate matching count for all filter types
-        matching-count (filter-logic/calculate-matching-count
-                         {:filter-type filter-type
-                          :items items
-                          :field-id field-id
-                          :filter-text filter-text
-                          :filter-min filter-min
-                          :filter-max filter-max
-                          :filter-from-date filter-from-date
-                          :filter-to-date filter-to-date
-                          :filter-selected-options filter-selected-options})]
+        ;; Calculate matching count — suppress in server-pagination mode because
+        ;; items only contains the current page, not the full dataset
+        matching-count (when-not server-pagination?
+                         (filter-logic/calculate-matching-count
+                           {:filter-type filter-type
+                            :items items
+                            :field-id field-id
+                            :filter-text filter-text
+                            :filter-min filter-min
+                            :filter-max filter-max
+                            :filter-from-date filter-from-date
+                            :filter-to-date filter-to-date
+                            :filter-selected-options filter-selected-options}))]
 
     ;; Set up effect hooks for entity fetching and auto-apply functionality
     (filter-logic/use-entity-fetching entity-type

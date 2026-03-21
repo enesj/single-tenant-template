@@ -1,0 +1,601 @@
+-- allium: 2
+-- list-view-filter-form.candidate.allium
+--
+-- Scope: Inline filter form component behavior — the panel that opens when a
+-- user clicks a column filter icon in the list view.
+--
+-- Includes:
+--   - Filter type determination from field specification
+--   - Filter form state initialization from existing filter values
+--   - Option sources for select-type filters (foreign key, enum, dynamic)
+--   - Auto-apply: filters apply automatically as the user edits
+--   - Live matching count feedback during editing
+--   - Lazy entity fetching when the form references absent data
+--   - Active filter chip display with per-filter and bulk clear
+--
+-- Excludes:
+--   - Filter apply/clear state management (see list-view-filtering.candidate.allium)
+--   - Pagination reset on filter change (see list-filter-pagination-reset.allium)
+--   - Date-range picker click-selection behavior (see list-view-date-range-picker.candidate.allium)
+--   - Sorting semantics (see list-view-sort.candidate.allium)
+--   - CSS/styling implementation
+--   - Server-side query parameter forwarding
+--
+-- Dependencies:
+--   - list-view-filtering.candidate.allium  (FilterApplied, FilterCleared, ColumnFilter variants)
+--   - list-view-date-range-picker.candidate.allium  (DateRangePickerState)
+--   - shared/list-filter-pagination-reset.allium  (page reset semantics)
+
+------------------------------------------------------------
+-- External Entities
+------------------------------------------------------------
+
+external entity User { id: String }
+external entity EntityType { name: String }
+external entity ColumnId { name: String }
+
+------------------------------------------------------------
+-- Enumerations
+------------------------------------------------------------
+
+enum FilterKind { text | number_range | date_range | select }
+
+enum OptionSource { foreign_key | enum_options | dynamic }
+
+------------------------------------------------------------
+-- Value Types
+------------------------------------------------------------
+
+value FieldSpec {
+    id: ColumnId
+    label: String?
+    input_type: String?
+    options: FieldOptions?
+
+    -- Derived
+    effective_label: label or id.name
+}
+
+value FieldOptions {
+    -- Polymorphic: either a foreign key reference or a list of enum choices.
+    -- Foreign key format: [entity_type, display_field]
+    -- Enum format: list of {value, label} pairs
+    is_foreign_key: Boolean
+    foreign_key_entity: EntityType?
+    foreign_key_display_field: ColumnId?
+    enum_choices: List<SelectOption>?
+}
+
+value SelectOption {
+    value: String
+    label: String
+}
+
+value NumberRange {
+    min: Decimal?
+    max: Decimal?
+}
+
+value DateRange {
+    from: Timestamp?
+    to: Timestamp?
+}
+
+value FieldStatistics {
+    -- Server-provided statistics for a numeric field, used to initialize
+    -- number-range filter defaults in server-pagination mode where loading
+    -- all entities client-side is not feasible.
+    field_id: ColumnId
+    min: Decimal?
+    max: Decimal?
+}
+
+------------------------------------------------------------
+-- Entities and Variants
+------------------------------------------------------------
+
+entity FilterForm {
+    entity_type: EntityType
+    field_spec: FieldSpec
+    filter_kind: FilterKind
+    initial_value: FilterFormValue?
+
+    -- Current editing state
+    text_value: String
+    number_min: Decimal?
+    number_max: Decimal?
+    date_from: Timestamp?
+    date_to: Timestamp?
+    selected_options: List<SelectOption>
+
+    -- Computed option list (for select filters only)
+    available_options: List<SelectOption>
+    option_source: OptionSource?
+
+    -- Live feedback
+    matching_count: Integer?
+
+    -- Data availability
+    entities_loaded: Boolean
+    foreign_entities_loaded: Boolean
+    server_pagination: Boolean
+    field_statistics: FieldStatistics?
+
+    -- Derived
+    has_active_input: filter_kind = text and text_value != ""
+        or filter_kind = number_range and (number_min != null or number_max != null)
+        or filter_kind = date_range and (date_from != null or date_to != null)
+        or filter_kind = select and selected_options.count > 0
+}
+
+value FilterFormValue {
+    -- Union of possible initial/applied filter values.
+    -- Concrete shape determined by filter_kind.
+}
+
+entity ActiveFilterChip {
+    entity_type: EntityType
+    field_id: ColumnId
+    display_label: String
+    display_value: String
+}
+
+------------------------------------------------------------
+-- Rules
+------------------------------------------------------------
+
+-- =============================================
+-- Filter Kind Determination
+-- =============================================
+
+rule DetermineFilterKindFromFieldSpec {
+    -- The filter kind is derived from the field specification, not chosen by the user.
+    -- This determines which input control is rendered.
+    when: FilterFormOpened(form)
+
+    ensures:
+        if form.field_spec.options != null:
+            form.filter_kind = select
+    ensures:
+        if form.field_spec.input_type in {"number", "decimal", "integer", "numeric"}:
+            form.filter_kind = number_range
+    ensures:
+        if form.field_spec.input_type in {"date", "datetime", "datetime-local", "timestamp", "timestamptz"}:
+            form.filter_kind = date_range
+    ensures:
+        if form.field_spec.options = null
+            and form.field_spec.input_type not in {"number", "decimal", "integer", "numeric", "date", "datetime", "datetime-local", "timestamp", "timestamptz"}:
+            form.filter_kind = text
+
+    @guidance
+        -- Priority: options presence wins over input_type. A field with
+        -- options is always a select filter, even if input_type says "text".
+        -- This matches the code: has-options? is checked first in the cond.
+}
+
+-- =============================================
+-- State Initialization
+-- =============================================
+
+rule InitializeFormFromExistingFilter {
+    -- When a filter form opens with an existing filter value, the form inputs
+    -- are pre-populated so the user sees their current filter.
+    when: FilterFormOpened(form)
+    requires: form.initial_value != null
+
+    ensures:
+        if form.filter_kind = text:
+            form.text_value = form.initial_value
+    ensures:
+        if form.filter_kind = number_range:
+            form.number_min = form.initial_value.min
+            form.number_max = form.initial_value.max
+    ensures:
+        if form.filter_kind = date_range:
+            form.date_from = form.initial_value.from
+            form.date_to = form.initial_value.to
+    ensures:
+        if form.filter_kind = select:
+            form.selected_options = form.initial_value
+}
+
+rule InitializeNumberRangeDefaultsFromData {
+    -- When no existing filter value exists for a number-range field,
+    -- min/max default to the actual min/max values found in the dataset.
+    when: FilterFormOpened(form)
+    requires: form.filter_kind = number_range
+    requires: form.initial_value = null
+    requires: form.entities_loaded
+
+    ensures: form.number_min = min(entity_values)
+    ensures: form.number_max = max(entity_values)
+
+    @guidance
+        -- entity_values = all non-nil numeric values of this field across
+        -- loaded entities. If no numeric values exist, both remain null.
+}
+
+rule InitializeNumberRangeDefaultsFromServer {
+    -- In server-pagination mode, entities are not bulk-loaded client-side.
+    -- The server provides field statistics (min/max) so the filter form
+    -- can still show meaningful default bounds.
+    when: FilterFormOpened(form)
+    requires: form.filter_kind = number_range
+    requires: form.initial_value = null
+    requires: form.server_pagination
+
+    ensures: FieldStatisticsFetchDispatched(form.entity_type, form.field_spec.id)
+
+    @guidance
+        -- The server endpoint returns {min, max} for the requested field
+        -- across all records matching current non-number-range filters.
+        -- When the response arrives, form.number_min and form.number_max
+        -- are populated from form.field_statistics.
+}
+
+rule ApplyFieldStatisticsToForm {
+    -- When server-provided field statistics arrive, populate the form defaults.
+    when: form: FilterForm.field_statistics becomes not null
+    requires: form.filter_kind = number_range
+    requires: form.initial_value = null
+
+    ensures: form.number_min = form.field_statistics.min
+    ensures: form.number_max = form.field_statistics.max
+}
+
+rule InitializeFormBlankWhenNoExistingFilter {
+    when: FilterFormOpened(form)
+    requires: form.initial_value = null
+    requires: form.filter_kind != number_range
+
+    ensures: form.text_value = ""
+    ensures: form.selected_options = []
+}
+
+-- =============================================
+-- Option Calculation (select filters)
+-- =============================================
+
+rule CalculateOptionsFromForeignKey {
+    -- When the field spec references a foreign entity, options come from
+    -- that entity's loaded records.
+    when: FilterFormOpened(form)
+    requires: form.filter_kind = select
+    requires: form.field_spec.options.is_foreign_key
+    requires: form.foreign_entities_loaded
+
+    ensures: form.option_source = foreign_key
+    ensures: form.available_options = ForeignKeyOptionsComputed(form)
+
+    @guidance
+        -- Options are sorted by the display field of the foreign entity.
+        -- Each option has value = entity.id, label = entity[display_field].
+}
+
+rule CalculateOptionsFromEnumChoices {
+    -- When the field spec has inline enum choices, those become the options.
+    when: FilterFormOpened(form)
+    requires: form.filter_kind = select
+    requires: not form.field_spec.options.is_foreign_key
+    requires: form.field_spec.options.enum_choices != null
+
+    ensures: form.option_source = enum_options
+    ensures: form.available_options = form.field_spec.options.enum_choices
+}
+
+rule CalculateOptionsDynamicallyFromData {
+    -- When no predefined options exist, extract unique field values from
+    -- the current entity dataset.
+    when: FilterFormOpened(form)
+    requires: form.filter_kind = select
+    requires: form.field_spec.options = null
+    requires: form.entities_loaded
+
+    ensures: form.option_source = dynamic
+    ensures: form.available_options = DynamicOptionsComputed(form)
+
+    @guidance
+        -- Unique values are extracted from the field across all loaded entities,
+        -- sorted, and converted to {value, label} pairs where label = str(value).
+}
+
+-- =============================================
+-- Auto-Apply
+-- =============================================
+
+rule TextFilterAutoApplies {
+    -- Text filter values are applied automatically after input stabilizes.
+    -- Empty input clears the filter.
+    when: ViewerEditsTextFilter(form, new_text)
+
+    ensures: form.text_value = new_text
+    ensures: FilterAutoApplied(form, new_text)
+
+    @guidance
+        -- Debounced: the apply fires after input is stable for ~250ms.
+        -- Blank text clears the filter (dispatches with nil value).
+}
+
+rule NumberRangeFilterAutoApplies {
+    -- Number range values are applied automatically after input stabilizes.
+    when: ViewerEditsNumberRange(form, min, max)
+
+    ensures: form.number_min = min
+    ensures: form.number_max = max
+    ensures: FilterAutoApplied(form, {min: min, max: max})
+
+    @guidance
+        -- Debounced: the apply fires after input is stable for ~300ms.
+        -- Clearing both min and max clears the filter.
+}
+
+rule SelectFilterAppliesImmediately {
+    -- Select filter toggles apply immediately (no debounce).
+    when: ViewerTogglesSelectOption(form, option)
+
+    let current_set = set(form.selected_options.value)
+    let new_set =
+        if option.value in current_set:
+            current_set without option.value
+        else:
+            current_set with option.value
+    let new_options = form.available_options where value in new_set
+
+    ensures: form.selected_options = new_options
+    ensures: FilterAutoApplied(form, new_options)
+}
+
+rule SelectAllOptions {
+    when: ViewerSelectsAllOptions(form)
+    ensures: form.selected_options = form.available_options
+    ensures: FilterAutoApplied(form, form.available_options)
+}
+
+rule ClearAllSelectedOptions {
+    when: ViewerClearsAllOptions(form)
+    ensures: form.selected_options = []
+    ensures: FilterAutoApplied(form, null)
+}
+
+-- =============================================
+-- Live Matching Count
+-- =============================================
+
+rule MatchingCountUpdatedInClientMode {
+    -- While the user edits a filter, a count of matching items is shown.
+    -- This count reflects the current form state, not the committed filter.
+    -- Only shown in client-pagination mode where all entities are loaded.
+    when: FilterFormInputChanged(form)
+    requires: form.has_active_input
+    requires: not form.server_pagination
+
+    ensures: form.matching_count = CountMatchingItems(form)
+}
+
+rule MatchingCountSuppressedInServerMode {
+    -- In server-pagination mode, the matching count is hidden because only
+    -- a single page of data is cached locally — showing a partial count
+    -- would be misleading (e.g. "Found 2 matching items" when the server
+    -- has 500 matches).
+    when: FilterFormInputChanged(form)
+    requires: form.server_pagination
+
+    ensures: form.matching_count = null
+}
+
+rule MatchingCountClearedWhenNoInput {
+    when: FilterFormInputChanged(form)
+    requires: not form.has_active_input
+
+    ensures: form.matching_count = null
+}
+
+-- =============================================
+-- Lazy Entity Fetching
+-- =============================================
+
+rule FetchEntitiesWhenAbsentAndClientMode {
+    -- When the filter form opens and entities are not yet loaded,
+    -- fetch them — but only in client-pagination mode.
+    when: FilterFormOpened(form)
+    requires: not form.entities_loaded
+    requires: not form.server_pagination
+
+    ensures: EntityFetchDispatched(form.entity_type)
+}
+
+rule FetchForeignKeyEntitiesWhenAbsent {
+    -- When the field references a foreign key entity that isn't loaded,
+    -- fetch those entities so options can be calculated.
+    when: FilterFormOpened(form)
+    requires: form.field_spec.options.is_foreign_key
+    requires: not form.foreign_entities_loaded
+
+    ensures: EntityFetchDispatched(form.field_spec.options.foreign_key_entity)
+}
+
+rule SkipFetchInServerPaginationMode {
+    -- Server-paginated lists should not trigger a bulk entity fetch
+    -- just because the filter form opened — the dataset may be large.
+    when: FilterFormOpened(form)
+    requires: form.server_pagination
+    requires: not form.entities_loaded
+
+    ensures: form.entities_loaded = form.entities_loaded
+
+    @guidance
+        -- In server mode the filter form works with the locally cached
+        -- page of data for matching count, but does not fetch the full dataset.
+}
+
+-- =============================================
+-- Filter Form Clear
+-- =============================================
+
+rule ClearFilterFromForm {
+    -- The user can clear the current filter from within the filter form.
+    when: ViewerClearsFilterFromForm(form)
+
+    ensures: form.text_value = ""
+    ensures: form.number_min = null
+    ensures: form.number_max = null
+    ensures: form.date_from = null
+    ensures: form.date_to = null
+    ensures: form.selected_options = []
+    ensures: FilterCleared(form.entity_type, form.field_spec.id)
+}
+
+-- =============================================
+-- Active Filter Chips
+-- =============================================
+
+rule ActiveFilterChipsReflectState {
+    -- Active filter chips are derived from the list's active filter map.
+    -- Each chip shows the field label and a formatted filter value summary.
+    when: ActiveFiltersChanged(entity_type, filters)
+
+    for filter in filters:
+        ensures: ActiveFilterChip.created(
+            entity_type: entity_type,
+            field_id: filter.field_id,
+            display_label: FieldLabelResolved(entity_type, filter.field_id),
+            display_value: FilterValueFormatted(filter)
+        )
+}
+
+rule RemoveFilterViaChip {
+    -- Clicking the remove button on a chip clears that specific filter.
+    when: ViewerRemovesFilterChip(chip)
+    ensures: FilterCleared(chip.entity_type, chip.field_id)
+}
+
+rule ClearAllFiltersViaChipBar {
+    -- When more than one filter is active, a "Clear All" action is available.
+    when: ViewerClearsAllFilterChips(entity_type)
+    ensures: FilterCleared(entity_type, null)
+}
+
+------------------------------------------------------------
+-- Invariants
+------------------------------------------------------------
+
+invariant FilterKindMatchesFieldSpec {
+    -- The filter kind is always consistent with the field specification.
+    -- A field with options is always select; a numeric field is always number_range.
+    for form in FilterForm:
+        (form.field_spec.options != null implies form.filter_kind = select)
+        and (form.field_spec.input_type in {"number", "decimal", "integer", "numeric"}
+             and form.field_spec.options = null
+             implies form.filter_kind = number_range)
+}
+
+invariant AvailableOptionsOnlyForSelectFilters {
+    for form in FilterForm:
+        form.filter_kind != select implies form.available_options.count = 0
+}
+
+invariant MatchingCountNullWhenNoInputOrServerMode {
+    for form in FilterForm:
+        (not form.has_active_input or form.server_pagination) implies form.matching_count = null
+}
+
+------------------------------------------------------------
+-- Deferred Specifications
+------------------------------------------------------------
+
+deferred ForeignKeyOptionsComputed
+deferred DynamicOptionsComputed
+deferred CountMatchingItems
+deferred EntityFetchDispatched
+deferred FieldStatisticsFetchDispatched
+deferred FilterAutoApplied
+deferred FilterCleared
+deferred FieldLabelResolved
+deferred FilterValueFormatted
+
+------------------------------------------------------------
+-- Actor Declarations
+------------------------------------------------------------
+
+actor Viewer : User
+
+------------------------------------------------------------
+-- Surfaces
+------------------------------------------------------------
+
+surface InlineFilterForm {
+    facing viewer: Viewer
+
+    context form: FilterForm
+
+    exposes:
+        form.filter_kind
+        form.text_value
+        form.number_min
+        form.number_max
+        form.date_from
+        form.date_to
+        form.selected_options
+        form.available_options
+        form.matching_count
+        form.has_active_input
+
+    provides:
+        ViewerEditsTextFilter(form, new_text)
+        ViewerEditsNumberRange(form, min, max)
+        ViewerTogglesSelectOption(form, option)
+        ViewerSelectsAllOptions(form)
+        ViewerClearsAllOptions(form)
+        ViewerClearsFilterFromForm(form)
+
+    @guarantee AutoApplyOnEdit
+        -- All filter types auto-apply after the user edits input.
+        -- Text and number-range are debounced; select applies immediately on toggle.
+        -- The user never needs to press an explicit "Apply" button.
+
+    @guarantee LiveFeedbackInClientMode
+        -- In client-pagination mode, the form shows a count of matching
+        -- items from the locally loaded dataset while the user edits.
+        -- In server-pagination mode the count is hidden — only a cached
+        -- page is available, and showing a partial count would mislead.
+
+    @guarantee PrePopulatedFromExistingFilter
+        -- When opened with an existing filter, the form inputs reflect
+        -- the current filter value so the user can adjust rather than re-enter.
+
+    @guarantee FilterKindDerivedFromSpec
+        -- The filter input type is determined automatically from the field spec.
+        -- The user does not choose which kind of filter to use.
+}
+
+surface ActiveFilterChipBar {
+    facing viewer: Viewer
+
+    exposes:
+        active_chips: List<ActiveFilterChip>
+
+    provides:
+        ViewerRemovesFilterChip(chip)
+        ViewerClearsAllFilterChips(entity_type)
+
+    @guarantee ChipsReflectActiveFilters
+        -- Each active filter has a corresponding chip showing a human-readable
+        -- summary. Removing a chip clears that filter. "Clear All" removes all filters.
+
+    @guarantee ClearAllOnlyWhenMultipleFilters
+        -- The "Clear All" action is only shown when more than one filter is active.
+}
+
+------------------------------------------------------------
+-- Resolved Questions
+------------------------------------------------------------
+
+-- RESOLVED (2026-03-21): Matching count is hidden in server-pagination mode.
+-- Only a cached page is available client-side; showing a partial count would
+-- mislead the user. See MatchingCountSuppressedInServerMode rule.
+
+-- RESOLVED (2026-03-21): The server provides field statistics (min/max) for
+-- number-range filter initialization in server-pagination mode. The form
+-- requests stats via FieldStatisticsFetchDispatched and populates defaults
+-- from the response. See InitializeNumberRangeDefaultsFromServer and
+-- ApplyFieldStatisticsToForm rules.

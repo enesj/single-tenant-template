@@ -537,13 +537,21 @@
                                        (when use-modal-forms?
                                          handle-add-click))})
 
-                    ($ :div {:id (str "selected-count-" (kw/ensure-name entity-name))
-                             :class "flex items-center gap-2 mb-2 text-sm text-base-content/70"}
-                      ($ :span {:class "font-semibold"}
-                        (str selected-count " selected"))
-                      (when (pos? hidden-selected-count)
-                        ($ :span
-                          (str "(" hidden-selected-count " hidden by current list view)"))))
+                    (let [server-mode? (list-subs/server-pagination? ui-state)
+                          total-records (when server-mode?
+                                          (or (:total-items ui-state)
+                                            (:total ui-state)))
+                          record-count (or total-records (count visible-items))]
+                      ($ :div {:id (str "selected-count-" (kw/ensure-name entity-name))
+                               :class "flex items-center gap-2 mb-2 text-sm text-base-content/70"}
+                        ($ :span {:class "font-semibold"}
+                          (str record-count " " (if (= record-count 1) "record" "records")))
+                        (when (pos? selected-count)
+                          ($ :span
+                            (str "(" selected-count " selected"
+                              (when (pos? hidden-selected-count)
+                                (str ", " hidden-selected-count " hidden"))
+                              ")")))))
 
                     ($ :div {:class "ds-divider"})                    ;; Divider after header
                     ($ table

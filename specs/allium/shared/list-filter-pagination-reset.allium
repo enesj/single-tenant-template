@@ -151,4 +151,6 @@ surface ListFilterPanel {
 -- Filter storage remains in snake_case (matches column field IDs from entity specs).
 -- Implementation: src/app/domain/frontend/expenses/events/events_factory.cljs
 
-open question "Client-side 'Found N matching items' count: in server mode, this counts matches from locally-cached page data only, which may be misleading. Should this count be hidden in server mode, or should the server return a filtered total?"
+-- RESOLVED (2026-03-21): Matching count is hidden in server-pagination mode.
+-- Only cached page data is available; showing a partial count would mislead.
+-- See list-view-filter-form.candidate.allium, MatchingCountSuppressedInServerMode rule.
