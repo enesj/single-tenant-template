@@ -1,0 +1,1 @@
+{:output-dir ".cljs_node_repl", :target :nodejs, :output-to "tmp/filter-logic-compile.js", :optimizations :none, :main app.template.frontend.components.filter, :aot-cache true}

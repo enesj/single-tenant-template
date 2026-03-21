@@ -378,6 +378,21 @@
       (is (= [{:value "active" :label "Active"}] (:filter-selected-options initial-state))
         "Should initialize select options correctly"))))
 
+(deftest entity-fetching-guard-test
+  (testing "server-paginated lists do not trigger a generic current-entity fetch when empty"
+    (is (false? (filter-logic/should-fetch-current-entity?
+                  {:entity-type :articles
+                   :have-entities? false
+                   :server-pagination? true})))
+    (is (true? (filter-logic/should-fetch-current-entity?
+                 {:entity-type :articles
+                  :have-entities? false
+                  :server-pagination? false})))
+    (is (false? (filter-logic/should-fetch-current-entity?
+                  {:entity-type :articles
+                   :have-entities? true
+                   :server-pagination? false})))))
+
 (defn run-all-tests []
   (helpers/log-test-start "Filter Integration Tests")
   (run-tests))
