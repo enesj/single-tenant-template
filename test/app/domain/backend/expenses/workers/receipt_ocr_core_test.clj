@@ -221,8 +221,8 @@
                  (binding [*out* w
                            *err* w]
                    (clojure.core/with-redefs-fn
-                     {#'refine/user-allows-receipt-refine?
-                      (fn [_db _receipt]
+                     {#'refine/receipt-eligible-for-refine?
+                      (fn [_db _receipt _opts]
                         true)
                       #'refine/maybe-refine-review-required
                       (fn [_db _receipt _extract-result persist-result _opts]
@@ -244,9 +244,9 @@
                  (binding [*out* w
                            *err* w]
                    (clojure.core/with-redefs-fn
-                     {#'refine/user-allows-receipt-refine?
-                      (fn [_db _receipt]
-                        false)
+                     {#'refine/receipt-eligible-for-refine?
+                      (fn [_db _receipt refine-opts]
+                        (true? (:force-refine? refine-opts)))
                       #'refine/maybe-refine-review-required
                       (fn [_db _receipt _extract-result persist-result _opts]
                         (assoc persist-result :extract-result {:llm_refine {:model "test"}}))}
@@ -262,7 +262,7 @@
         captured-opts (atom nil)]
     (clojure.core/with-redefs-fn
       {#'ocr-provider/build-provider
-       (fn [_]
+       (fn [_app-config _context]
          {:provider :llamaparse
           :enabled? true
           :api-key "k"

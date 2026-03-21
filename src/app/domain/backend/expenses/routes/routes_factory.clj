@@ -250,94 +250,144 @@
        :timezone timezone
        :sql-column sql-column})))
 
+(defn- coerce-filter-value
+  "Coerce a raw query-param value according to its declared type."
+  [qp param-key type]
+  (let [raw (get qp param-key)]
+    (case type
+      :uuid (utils/parse-uuid-custom raw)
+      :boolean (utils/parse-boolean-param qp param-key)
+      :keyword (some-> raw keyword)
+      :int (utils/parse-int-param qp param-key nil)
+      ;; :string (default) — pass through
+      raw)))
+
+(defn- build-filter-params-fn
+  "Generate a query-param extraction function from a declarative filter-params spec.
+
+  Accepts either:
+  - A vector of keywords: each is extracted as a string (passthrough).
+    e.g. [:search :category-name]
+  - A map of {param-key type}: type is :string, :uuid, :boolean, :keyword, :int.
+    e.g. {:search :string, :supplier-id :uuid, :unmapped-only :boolean}"
+  [filter-params]
+  (cond
+    (vector? filter-params)
+    (fn [qp]
+      (reduce (fn [acc k] (assoc acc k (get qp k))) {} filter-params))
+
+    (map? filter-params)
+    (fn [qp]
+      (reduce-kv
+        (fn [acc param-key type]
+          (let [type (or type :string)]
+            (assoc acc param-key (coerce-filter-value qp param-key type))))
+        {}
+        filter-params))
+
+    :else nil))
+
+(defn- resolve-query-params-fn
+  "Resolve the effective query-params extraction function from config.
+
+  Priority: explicit :custom-query-params > generated from :filter-params > nil."
+  [{:keys [custom-query-params filter-params]}]
+  (or custom-query-params
+    (build-filter-params-fn filter-params)))
+
 (defn build-list-handler
   "Builds a generic list handler for an entity.
 
-  When the entity config includes :has-count? true, the handler also calls the
-  count function with the same filter params and includes :total in the response.
-  This enables server-side pagination by letting the frontend know the total
-  number of matching records.
+  The handler includes :total in the response by default (server-side pagination).
+  Set :has-count? false explicitly to disable.
+
+  Filters can be specified declaratively via :filter-params (a vector of keywords
+  or a map of {param type}) instead of writing a :custom-query-params function.
 
   Optional :date-range-columns — a map of {app-keyword sql-column} that enables
   date range filtering via `<field>-from` / `<field>-to` query params."
   [{:keys [service _entity-key entity-plural default-limit default-order-by
-           has-count? custom-query-params custom-count-params transform-response
-           date-range-columns]}]
-  (fn [db]
-    (utils/with-error-handling
-      (fn [request]
-        (let [qp (or (normalize-map-keys->app (:query-params request)) {})
-              highlight-request (extract-highlight-request qp date-range-columns)
-              date-filters (extract-date-range-filters qp date-range-columns)
-              highlight-date-filters (extract-date-range-filters qp date-range-columns (:field highlight-request))
-              custom-params (when custom-query-params (custom-query-params qp))
-              query-params (cond-> (merge {:limit (utils/parse-int-param qp :limit default-limit)
-                                           :offset (utils/parse-int-param qp :offset 0)
-                                           :order-by (order-by->app (get-param qp :order-by) default-order-by)
-                                           :order-dir (keyword (or (get-param qp :order-dir) "asc"))}
-                                     custom-params)
-                             (seq date-filters)
-                             (update :extra-filters (fn [existing]
-                                                      (into (vec (or existing [])) date-filters))))
-              list-fn (resolve-service-op-fn service
-                        (symbol (str "list-" (name entity-plural)))
-                        :list)
-              results (list-fn db query-params)
-              response-key (or (:response-key transform-response) entity-plural)
-              response-data (if (:transform transform-response)
-                              ((:transform transform-response) results)
-                              (to-app results))
-              total (when has-count?
-                      (try
-                        (let [base-count-params (if custom-count-params (custom-count-params qp) {})
-                              count-params (if (seq date-filters)
-                                             (update base-count-params :extra-filters
-                                               (fn [existing]
-                                                 (into (vec (or existing [])) date-filters)))
-                                             base-count-params)
-                              count-fn (resolve-service-op-fn service
-                                         (symbol (str "count-" (name entity-plural)))
-                                         :count)]
-                          (normalize-count-result (count-fn db count-params)))
-                        (catch Exception e
-                          (log/warn e "Failed to get count for" (name entity-plural))
-                          nil)))
-              date-highlights (when highlight-request
-                                (try
-                                  (let [highlight-fn (resolve-service-op-fn service
-                                                       (symbol (str "list-" (name entity-plural) "-highlight-days"))
-                                                       :highlight-days)
-                                        highlight-params (cond-> (merge custom-params
-                                                                   {:highlight-column (:sql-column highlight-request)
-                                                                    :highlight-timezone (:timezone highlight-request)})
-                                                           (seq highlight-date-filters)
-                                                           (update :extra-filters (fn [existing]
-                                                                                    (into (vec (or existing [])) highlight-date-filters))))]
-                                    {(:field highlight-request)
-                                     (vec (or (highlight-fn db highlight-params) []))})
-                                  (catch Exception e
-                                    (log/warn e "Failed to get date highlights for" (name entity-plural))
-                                    nil)))
-              response (cond-> {response-key response-data}
-                         (some? total) (assoc :total total)
-                         (map? date-highlights) (assoc :date-highlights date-highlights))]
-          (utils/success-response response)))
-      (str "Failed to list " (name entity-plural)))))
+           custom-count-params transform-response
+           date-range-columns] :as config}]
+  (let [has-count? (get config :has-count? true)
+        query-params-fn (resolve-query-params-fn config)
+        count-params-fn (or custom-count-params query-params-fn)]
+    (fn [db]
+      (utils/with-error-handling
+        (fn [request]
+          (let [qp (or (normalize-map-keys->app (:query-params request)) {})
+                highlight-request (extract-highlight-request qp date-range-columns)
+                date-filters (extract-date-range-filters qp date-range-columns)
+                highlight-date-filters (extract-date-range-filters qp date-range-columns (:field highlight-request))
+                custom-params (when query-params-fn (query-params-fn qp))
+                query-params (cond-> (merge {:limit (utils/parse-int-param qp :limit default-limit)
+                                             :offset (utils/parse-int-param qp :offset 0)
+                                             :order-by (order-by->app (get-param qp :order-by) default-order-by)
+                                             :order-dir (keyword (or (get-param qp :order-dir) "asc"))}
+                                       custom-params)
+                               (seq date-filters)
+                               (update :extra-filters (fn [existing]
+                                                        (into (vec (or existing [])) date-filters))))
+                list-fn (resolve-service-op-fn service
+                          (symbol (str "list-" (name entity-plural)))
+                          :list)
+                results (list-fn db query-params)
+                response-key (or (:response-key transform-response) entity-plural)
+                response-data (if (:transform transform-response)
+                                ((:transform transform-response) results)
+                                (to-app results))
+                total (when has-count?
+                        (try
+                          (let [base-count-params (if count-params-fn (count-params-fn qp) {})
+                                count-params (if (seq date-filters)
+                                               (update base-count-params :extra-filters
+                                                 (fn [existing]
+                                                   (into (vec (or existing [])) date-filters)))
+                                               base-count-params)
+                                count-fn (resolve-service-op-fn service
+                                           (symbol (str "count-" (name entity-plural)))
+                                           :count)]
+                            (normalize-count-result (count-fn db count-params)))
+                          (catch Exception e
+                            (log/warn e "Failed to get count for" (name entity-plural))
+                            nil)))
+                date-highlights (when highlight-request
+                                  (try
+                                    (let [highlight-fn (resolve-service-op-fn service
+                                                         (symbol (str "list-" (name entity-plural) "-highlight-days"))
+                                                         :highlight-days)
+                                          highlight-params (cond-> (merge custom-params
+                                                                     {:highlight-column (:sql-column highlight-request)
+                                                                      :highlight-timezone (:timezone highlight-request)})
+                                                             (seq highlight-date-filters)
+                                                             (update :extra-filters (fn [existing]
+                                                                                      (into (vec (or existing [])) highlight-date-filters))))]
+                                      {(:field highlight-request)
+                                       (vec (or (highlight-fn db highlight-params) []))})
+                                    (catch Exception e
+                                      (log/warn e "Failed to get date highlights for" (name entity-plural))
+                                      nil)))
+                response (cond-> {response-key response-data}
+                           (some? total) (assoc :total total)
+                           (map? date-highlights) (assoc :date-highlights date-highlights))]
+            (utils/success-response response)))
+        (str "Failed to list " (name entity-plural))))))
 
 (defn build-count-handler
   "Builds a generic count handler for an entity."
-  [{:keys [service entity-plural custom-count-params]}]
-  (fn [db]
-    (utils/with-error-handling
-      (fn [request]
-        (let [qp (or (normalize-map-keys->app (:query-params request)) {})
-              params (if custom-count-params (custom-count-params qp) {})
-              count-fn (resolve-service-op-fn service
-                         (symbol (str "count-" (name entity-plural)))
-                         :count)
-              {:keys [total]} (count-fn db params)]
-          (utils/success-response {:total (or total 0)})))
-      (str "Failed to count " (name entity-plural)))))
+  [{:keys [service entity-plural custom-count-params] :as config}]
+  (let [count-params-fn (or custom-count-params (resolve-query-params-fn config))]
+    (fn [db]
+      (utils/with-error-handling
+        (fn [request]
+          (let [qp (or (normalize-map-keys->app (:query-params request)) {})
+                params (if count-params-fn (count-params-fn qp) {})
+                count-fn (resolve-service-op-fn service
+                           (symbol (str "count-" (name entity-plural)))
+                           :count)
+                {:keys [total]} (count-fn db params)]
+            (utils/success-response {:total (or total 0)})))
+        (str "Failed to count " (name entity-plural))))))
 
 (defn build-create-handler
   "Builds a generic create handler for an entity."
@@ -548,10 +598,12 @@
    - :default-limit - default pagination limit
    - :default-order-by - default sort field
    - :custom-validation - function for custom validation logic
-   - :custom-query-params - function to transform query parameters
+   - :filter-params - declarative filter spec: vector of keywords (all string) or
+     map of {param-key type} where type is :string, :uuid, :boolean, :keyword, :int
+   - :custom-query-params - function to transform query parameters (overrides :filter-params)
    - :custom-handlers - map of custom handler functions
    - :additional-routes - vector of additional route definitions
-   - :has-count? - whether to include count endpoint (default: false)
+   - :has-count? - whether to include count endpoint (default: true)
    - :has-search? - whether to include search endpoint (default: false)
    - :route-middleware - vector of reitit-compatible middleware fns applied at the route root"
   [config]
@@ -564,8 +616,9 @@
     (throw (ex-info "service is required" config)))
 
   ;; Build standard handlers - resolve-fn uses requiring-resolve for lazy loading
-  (let [handlers {:list (build-list-handler config)
-                  :count (when (:has-count? config)
+  (let [has-count? (get config :has-count? true)
+        handlers {:list (build-list-handler config)
+                  :count (when has-count?
                            (build-count-handler config))
                   :create (build-create-handler config)
                   :get (build-get-handler config)

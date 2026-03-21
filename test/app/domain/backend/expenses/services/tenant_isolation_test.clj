@@ -191,10 +191,14 @@
     (let [db fixtures/*test-db*
           create-supplier! (:create! @(requiring-resolve 'app.domain.backend.expenses.services.suppliers/service))
           list-suppliers @(requiring-resolve 'app.domain.backend.expenses.services.suppliers/list-suppliers)
-          supplier (create-supplier! db {:display_name (str "Global Supplier " (UUID/randomUUID))})
-          ;; List suppliers without any tenant filter
-          all-suppliers (list-suppliers db {:limit 100 :offset 0})
-          supplier-ids (set (map :id all-suppliers))]
+          supplier-name (str "Global Supplier " (UUID/randomUUID))
+          supplier (create-supplier! db {:display_name supplier-name})
+          ;; Search for the exact supplier name so the assertion stays stable
+          ;; even when the shared global catalog grows during the suite.
+          matching-suppliers (list-suppliers db {:search supplier-name
+                                                 :limit 100
+                                                 :offset 0})
+          supplier-ids (set (map :id matching-suppliers))]
       (is (some? (:id supplier))
         "Supplier should be created successfully")
       (is (contains? supplier-ids (:id supplier))

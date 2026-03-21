@@ -110,7 +110,10 @@
       (partial-filter-value clicked-day today)
 
       (partial-filter? current-filter)
-      (complete-filter-value anchor clicked-day)
+      (if (and anchor
+            (= (.getTime anchor) (.getTime clicked-start)))
+        nil
+        (complete-filter-value anchor clicked-day))
 
       (and (complete-filter? current-filter)
         (day-in-range? clicked-day (:from current-filter) (:to current-filter)))

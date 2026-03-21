@@ -76,7 +76,8 @@
    :base-path [:admin :expenses :expense-items]
    :api-endpoint "/admin/api/expenses/expense-items"
    :detail-response-key :expense-item
-   :has-forms? false})
+   :has-forms? false
+   :server-search-keys #{:raw-label}})
 
 (def article-aliases-config
   {:entity-key :article-aliases
@@ -97,7 +98,8 @@
    :base-path [:admin :expenses :stores]
    :api-endpoint "/admin/api/expenses/stores"
    :detail-response-key :store
-   :has-forms? false})
+   :has-forms? false
+   :server-search-keys #{:display-name}})
 
 (def store-aliases-config
   {:entity-key :store-aliases
@@ -115,21 +117,24 @@
    :base-path [:admin :expenses :categories]
    :api-endpoint "/admin/api/expenses/categories"
    :detail-response-key :category
-   :has-forms? false})
+   :has-forms? false
+   :server-search-keys #{:name}})
 
 (def expense-categories-config
   {:entity-key :expense-categories
    :base-path [:admin :expenses :expense-categories]
    :api-endpoint "/admin/api/expenses/expense-categories"
    :detail-response-key :expense-category
-   :has-forms? false})
+   :has-forms? false
+   :server-search-keys #{:name}})
 
 (def cities-config
   {:entity-key :cities
    :base-path [:admin :expenses :cities]
    :api-endpoint "/admin/api/expenses/cities"
    :detail-response-key :city
-   :has-forms? false})
+   :has-forms? false
+   :server-search-keys #{:name}})
 
 (def countries-config
   {:entity-key :countries
@@ -143,4 +148,5 @@
    :base-path [:admin :expenses :subcategories]
    :api-endpoint "/admin/api/expenses/subcategories"
    :detail-response-key :subcategory
-   :has-forms? false})
+   :has-forms? false
+   :server-search-keys #{:name}})

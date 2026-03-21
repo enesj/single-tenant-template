@@ -20,19 +20,10 @@
 ;; Shared Query-Param Helpers
 ;; =============================================================================
 
-(defn- search-query-params
-  "Standard query-param extractor for entities that support a :search filter."
-  [qp]
-  {:search (:search qp)})
+;; Most entities now use declarative :filter-params instead of custom functions.
+;; See routes-factory/build-filter-params-fn for the supported spec formats.
 
-(defn- article-query-params
-  "Extract search and per-column filter params for articles.
-  Each key maps to a column filter applied as ILIKE in the list/count queries."
-  [qp]
-  {:search                     (:search qp)
-   :category-name              (:category-name qp)
-   :subcategory-name           (:subcategory-name qp)
-   :manufacturer-display-name  (:manufacturer-display-name qp)})
+;; article-query-params removed — now declared as :filter-params in article-config
 
 (def category-config
   {:entity-key :category
@@ -42,10 +33,8 @@
    :default-limit 100
    :default-order-by "name"
    :required-fields [:name]
-   :has-count? true
    :has-search? true
-   :custom-query-params search-query-params
-   :custom-count-params search-query-params})
+   :filter-params [:search]})
 
 (def expense-category-config
   {:entity-key :expense-category
@@ -55,10 +44,8 @@
    :default-limit 100
    :default-order-by "name"
    :required-fields [:name]
-   :has-count? true
    :has-search? true
-   :custom-query-params search-query-params
-   :custom-count-params search-query-params})
+   :filter-params [:search]})
 
 (def subcategory-config
   {:entity-key :subcategory
@@ -68,10 +55,8 @@
    :default-limit 100
    :default-order-by "name"
    :required-fields [:category-id :name]
-   :has-count? true
    :has-search? true
-   :custom-query-params search-query-params
-   :custom-count-params search-query-params})
+   :filter-params [:search]})
 
 (def supplier-config
   {:entity-key :supplier
@@ -81,10 +66,8 @@
    :default-limit 100
    :default-order-by "display_name"
    :required-fields [:display-name]
-   :has-count? true
    :has-search? true
-   :custom-query-params search-query-params
-   :custom-count-params search-query-params
+   :filter-params [:search]
    :date-range-columns {:created-at :created_at
                         :updated-at :updated_at}})
 
@@ -96,10 +79,8 @@
    :default-limit 100
    :default-order-by "display_name"
    :required-fields [:supplier-id :display-name]
-   :has-count? true
    :has-search? false
-   :custom-query-params search-query-params
-   :custom-count-params search-query-params
+   :filter-params [:search]
    ;; Table-qualified: store query JOINs cities + suppliers (alias :st)
    :date-range-columns {:created-at :st.created_at
                         :updated-at :st.updated_at}})
@@ -112,10 +93,8 @@
    :default-limit 100
    :default-order-by "name"
    :required-fields [:name]
-   :has-count? true
    :has-search? true
-   :custom-query-params search-query-params
-   :custom-count-params search-query-params})
+   :filter-params [:search]})
 
 (def country-config
   {:entity-key :country
@@ -125,7 +104,6 @@
    :default-limit 500
    :default-order-by "country"
    :required-fields [:country :code]
-   :has-count? true
    :parse-id (fn [v]
                (let [s (some-> v str str/trim)]
                  (if (seq s)
@@ -141,10 +119,8 @@
    :default-limit 100
    :default-order-by "display_name"
    :required-fields [:display-name]
-   :has-count? true
    :has-search? true
-   :custom-query-params search-query-params
-   :custom-count-params search-query-params})
+   :filter-params [:search]})
 
 (def payer-config
   {:entity-key :payer
@@ -154,10 +130,8 @@
    :default-limit 100
    :default-order-by "label"
    :required-fields [:payer-type-id :label]
-   :has-count? true
    :has-search? false
-   :route-middleware [(fn [handler] (impersonation-mw/wrap-require-impersonation handler))]
-   :custom-query-params (fn [_qp] {})})
+   :route-middleware [(fn [handler] (impersonation-mw/wrap-require-impersonation handler))]})
 
 (def payer-type-config
   {:entity-key :payer-type
@@ -167,12 +141,10 @@
    :default-limit 100
    :default-order-by "label"
    :required-fields [:label]
-   :has-count? true
    :has-search? false
    ;; Impersonation required + at least :admin role
    :route-middleware [(fn [handler] (impersonation-mw/wrap-require-impersonation handler))
-                      (fn [handler] (admin-mw/wrap-admin-role handler :admin))]
-   :custom-query-params (fn [_qp] {})})
+                      (fn [handler] (admin-mw/wrap-admin-role handler :admin))]})
 
 (def article-config
   {:entity-key :article
@@ -182,10 +154,8 @@
    :default-limit 50
    :default-order-by "canonical_name"
    :required-fields [:canonical-name]
-   :has-count? true
    :has-search? true
-   :custom-query-params article-query-params
-   :custom-count-params article-query-params
+   :filter-params [:search :category-name :subcategory-name :manufacturer-display-name]
    ;; Table-qualified: article query JOINs manufacturers/subcategories/categories (alias :a)
    :date-range-columns {:created-at :a.created_at
                         :updated-at :a.updated_at}})
@@ -219,10 +189,9 @@
    ;; NOTE: raw_label is resolved server-side into expense_items.alias_id.
    ;; Keeping :required-fields minimal avoids rejecting requests that only send raw_label.
    :required-fields [:expense-id :line-total]
-   :has-count? true
    :has-search? true
    :route-middleware [(fn [handler] (impersonation-mw/wrap-require-impersonation handler))]
-   :custom-query-params search-query-params})
+   :filter-params [:search]})
 
 (def article-alias-config
   {:entity-key :article-alias
@@ -232,13 +201,11 @@
    :default-limit 50
    :default-order-by "raw_label"
    :required-fields [:supplier-id :raw-label :raw-label-normalized]
-   :has-count? true
    :has-search? false
    :route-middleware [(fn [handler] (impersonation-mw/wrap-require-impersonation handler))]
-   :custom-query-params (fn [qp]
-                          {:supplier-id (utils/parse-uuid-custom (:supplier-id qp))
-                           :raw-label (:raw-label qp)
-                           :article-id (utils/parse-uuid-custom (:article-id qp))})
+   :filter-params {:supplier-id :uuid
+                   :raw-label :string
+                   :article-id :uuid}
 
    ;; Admin edit forms can send numeric fields as strings (HTML inputs always
    ;; emit strings). Coerce them at the boundary so Postgres doesn't reject the
@@ -256,13 +223,11 @@
    :default-limit 50
    :default-order-by "raw_label"
    :required-fields [:raw-label :raw-label-normalized]
-   :has-count? true
    :has-search? false
    :route-middleware [(fn [handler] (impersonation-mw/wrap-require-impersonation handler))]
-   :custom-query-params (fn [qp]
-                          {:supplier-id (utils/parse-uuid-custom (:supplier-id qp))
-                           :unmapped-only (utils/parse-boolean-param qp :unmapped-only)
-                           :search (:search qp)})
+   :filter-params {:supplier-id :uuid
+                   :unmapped-only :boolean
+                   :search :string}
 
    ;; Allow clients to omit raw-label-normalized; compute it server-side.
    ;; Also coerce numeric fields (e.g. confidence) since form submissions are strings.
@@ -285,10 +250,9 @@
    :default-limit 50
    :default-order-by "raw_label"
    :required-fields [:raw-label :raw-label-normalized]
-   :has-count? true
    :has-search? false
    :route-middleware [(fn [handler] (impersonation-mw/wrap-require-impersonation handler))]
-   :custom-query-params search-query-params
+   :filter-params [:search]
 
    ;; Allow clients to omit raw-label-normalized; compute it server-side.
    ;; Also coerce numeric fields (e.g. confidence) since form submissions are strings.

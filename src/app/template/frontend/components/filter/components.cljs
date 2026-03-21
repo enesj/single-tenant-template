@@ -88,7 +88,7 @@
   [{:keys [on-click class]}]
   ($ button
     {:btn-type :secondary
-     :class (str "flex-1 mr-2 " (or class ""))
+     :class (str "ds-btn-sm " (or class ""))
      :id "filter-clear-button"
      :on-click (fn [e]
                  (.stopPropagation e)
@@ -100,7 +100,7 @@
   [{:keys [on-click class]}]
   ($ button
     {:btn-type :primary
-     :class (str "flex-1 " (or class ""))
+     :class (str "ds-btn-sm " (or class ""))
      :id "filter-close-button"
      :on-click (fn [e]
                  (.stopPropagation e)
@@ -110,7 +110,7 @@
 (defui filter-action-bar
   "Action bar with clear and close buttons"
   [{:keys [on-clear on-close]}]
-  ($ :div {:class "flex justify-between p-3 border-t bg-base-200"}
+  ($ :div {:class "flex justify-end gap-2 px-3 py-2 border-t border-base-300"}
     ($ clear-filter-button {:on-click on-clear})
     ($ close-filter-button {:on-click on-close})))
 

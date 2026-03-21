@@ -12,6 +12,19 @@
    [:= :ei.article_id article-id]
    [:= :aa.article_id article-id]])
 
+(defn- distinct-by
+  [key-fn records]
+  (->> records
+    (reduce (fn [{:keys [seen records] :as acc} record]
+              (let [k (key-fn record)]
+                (if (contains? seen k)
+                  acc
+                  {:seen (conj seen k)
+                   :records (conj records record)})))
+      {:seen #{}
+       :records []})
+    :records))
+
 (defn- list-related-expenses
   [db article-id limit]
   (jdbc/execute!
@@ -94,11 +107,15 @@
     {:builder-fn rs/as-unqualified-lower-maps}))
 
 (defn- list-related-receipts
-  "List receipts where this article actually appears in expense items.
-  Intentionally excludes the broad alias-linked query (which over-counts by
-  including all receipts from any supplier that sells this article)."
+  "List receipts related to an article through either expense-item matches
+  or alias/supplier/store links."
   [db article-id limit]
-  (list-related-receipts-expense-linked db article-id limit))
+  (->> (concat (list-related-receipts-expense-linked db article-id limit)
+         (list-related-receipts-alias-linked db article-id limit))
+    (sort-by (juxt :created_at :id) #(compare %2 %1))
+    (distinct-by :id)
+    (take limit)
+    vec))
 
 (defn- list-related-providers
   [db article-id limit]
@@ -172,11 +189,15 @@
     {:builder-fn rs/as-unqualified-lower-maps}))
 
 (defn- list-related-stores
-  "List stores where this article actually appears in expenses.
-  Intentionally excludes the broad alias-linked query (which over-counts by
-  including all stores of a supplier that sells this article)."
+  "List stores related to an article through either expense-item matches
+  or alias/supplier links."
   [db article-id limit]
-  (list-related-stores-expense-linked db article-id limit))
+  (->> (concat (list-related-stores-expense-linked db article-id limit)
+         (list-related-stores-alias-linked db article-id limit))
+    (sort-by (juxt :display_name :id))
+    (distinct-by :id)
+    (take limit)
+    vec))
 
 (defn- list-related-manufacturers
   [db article-id limit]
@@ -248,18 +269,8 @@
           {:builder-fn rs/as-unqualified-lower-maps})))
 
 (defn- count-related-receipts
-  "Count receipts where this article actually appears in expense items.
-  Intentionally excludes the broad alias-linked query (which over-counts by
-  including all receipts from any supplier that sells this article)."
   [db article-id]
-  (:cnt (jdbc/execute-one! db
-          (sql/format {:select [[[:raw "COUNT(DISTINCT r.id)"] :cnt]]
-                       :from [[:expense_items :ei]]
-                       :join [[:expenses :e] [:= :e.id :ei.expense_id]
-                              [:receipts :r] [:= :r.id :e.receipt_id]]
-                       :left-join [[:article_aliases :aa] [:= :aa.id :ei.alias_id]]
-                       :where (article-item-linkage-where article-id)})
-          {:builder-fn rs/as-unqualified-lower-maps})))
+  (count (list-related-receipts db article-id Integer/MAX_VALUE)))
 
 (defn- count-related-providers [db article-id]
   (:cnt (jdbc/execute-one! db
@@ -280,18 +291,8 @@
           {:builder-fn rs/as-unqualified-lower-maps})))
 
 (defn- count-related-stores
-  "Count stores where this article actually appears in expenses.
-  Excludes broad alias-linked stores (all stores of a supplier that sells
-  this article) to avoid over-counting."
   [db article-id]
-  (:cnt (jdbc/execute-one! db
-          (sql/format {:select [[[:raw "COUNT(DISTINCT st.id)"] :cnt]]
-                       :from [[:expense_items :ei]]
-                       :join [[:expenses :e] [:= :e.id :ei.expense_id]
-                              [:stores :st] [:= :st.id :e.store_id]]
-                       :left-join [[:article_aliases :aa] [:= :aa.id :ei.alias_id]]
-                       :where (article-item-linkage-where article-id)})
-          {:builder-fn rs/as-unqualified-lower-maps})))
+  (count (list-related-stores db article-id Integer/MAX_VALUE)))
 
 (defn- count-related-manufacturers [db article-id]
   (:cnt (jdbc/execute-one! db

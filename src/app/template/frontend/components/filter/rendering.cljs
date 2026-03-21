@@ -73,13 +73,13 @@
   "Render filter header with title and close button"
   [{:keys [field-label _on-close] :as props}]
   ($ :div
-    {:class "flex justify-between items-center mb-2"}
+    {:class "flex justify-between items-center"}
     ($ :h3
-      {:class "text-lg font-medium"}
+      {:class "text-sm font-semibold text-base-content"}
       (str "Filter by " field-label))
     ($ button
       {:btn-type :ghost
-       :class "ds-btn-sm"
+       :class "ds-btn-xs"
        :on-click (:on-close props)}
       "×")))
 
@@ -99,15 +99,18 @@
 
 (defn render-filter-form-layout
   "Render the complete filter form layout"
-  [{:keys [_field-label _on-close] :as props}]
-  ($ :div
-    {:class "bg-base-100 border border-base-300 rounded-lg p-3 mb-3 shadow-sm"}
+  [{:keys [_field-label _on-close filter-type] :as props}]
+  (let [width-class (if (= filter-type :text)
+                      "w-96"
+                      "w-fit min-w-64 max-w-sm")]
+    ($ :div
+      {:class (str "bg-base-100 border border-base-300 rounded-lg p-3 mb-3 shadow-md " width-class)}
 
-    ;; Filter header with close button
-    (render-filter-header props)
+      ;; Filter header with close button
+      (render-filter-header props)
 
-    ;; Filter input based on field type
-    (render-filter-content props)
+      ;; Filter input based on field type
+      (render-filter-content props)
 
-    ;; Active filters display
-    (render-active-filters-display props)))
+      ;; Active filters display
+      (render-active-filters-display props))))
