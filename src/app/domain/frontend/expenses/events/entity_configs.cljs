@@ -84,14 +84,20 @@
    :base-path [:admin :expenses :article-aliases]
    :api-endpoint "/admin/api/expenses/article-aliases"
    :detail-response-key :article-alias
-   :has-forms? false})
+   :has-forms? false
+   :server-filter-keys {:raw-label   :raw-label
+                        :supplier-id :supplier-id
+                        :article-id  :article-id}})
 
 (def supplier-aliases-config
   {:entity-key :supplier-aliases
    :base-path [:admin :expenses :supplier-aliases]
    :api-endpoint "/admin/api/expenses/supplier-aliases"
    :detail-response-key :supplier-alias
-   :has-forms? false})
+   :has-forms? false
+   :server-filter-keys {:raw-label     :search
+                        :supplier-id   :supplier-id
+                        :unmapped-only :unmapped-only}})
 
 (def stores-config
   {:entity-key :stores
@@ -106,7 +112,8 @@
    :base-path [:admin :expenses :store-aliases]
    :api-endpoint "/admin/api/expenses/store-aliases"
    :detail-response-key :store-alias
-   :has-forms? false})
+   :has-forms? false
+   :server-search-keys #{:raw-label}})
 
 ;; =============================================================================
 ;; Configuration Registry

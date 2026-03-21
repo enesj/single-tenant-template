@@ -167,17 +167,16 @@
    :service 'app.domain.backend.expenses.services.expenses
    :default-limit 50
    :default-order-by "created_at"
+   :default-order-dir "desc"
    :required-fields []
    :has-count? false
    :has-search? false
    :route-middleware [(fn [handler] (impersonation-mw/wrap-require-impersonation handler))]
-   :custom-query-params (fn [qp]
-                          {:from (:from qp)
-                           :to (:to qp)
-                           :supplier-id (utils/parse-uuid-custom (:supplier-id qp))
-                           :payer-id (utils/parse-uuid-custom (:payer-id qp))
-                           :is-posted? (utils/parse-boolean-param qp :is-posted)
-                           :order-dir (keyword (or (:order-dir qp) "desc"))})})
+   :filter-params {:from :string
+                   :to :string
+                   :supplier-id :uuid
+                   :payer-id :uuid
+                   :is-posted [:boolean :is-posted?]}})
 
 (def expense-item-config
   {:entity-key :expense-item

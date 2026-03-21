@@ -268,8 +268,10 @@
   Accepts either:
   - A vector of keywords: each is extracted as a string (passthrough).
     e.g. [:search :category-name]
-  - A map of {param-key type}: type is :string, :uuid, :boolean, :keyword, :int.
-    e.g. {:search :string, :supplier-id :uuid, :unmapped-only :boolean}"
+  - A map of {param-key type-or-spec}: where the value is either a type keyword
+    (:string, :uuid, :boolean, :keyword, :int) or a vector [type output-key]
+    for renaming the param in the result map.
+    e.g. {:search :string, :supplier-id :uuid, :is-posted [:boolean :is-posted?]}"
   [filter-params]
   (cond
     (vector? filter-params)
@@ -279,9 +281,12 @@
     (map? filter-params)
     (fn [qp]
       (reduce-kv
-        (fn [acc param-key type]
-          (let [type (or type :string)]
-            (assoc acc param-key (coerce-filter-value qp param-key type))))
+        (fn [acc param-key type-spec]
+          (let [[type output-key] (if (vector? type-spec)
+                                    type-spec
+                                    [type-spec param-key])
+                type (or type :string)]
+            (assoc acc output-key (coerce-filter-value qp param-key type))))
         {}
         filter-params))
 
@@ -302,16 +307,20 @@
   Set :has-count? false explicitly to disable.
 
   Filters can be specified declaratively via :filter-params (a vector of keywords
-  or a map of {param type}) instead of writing a :custom-query-params function.
+  or a map of {param type-or-spec}) instead of writing a :custom-query-params function.
+  Map values can be a type keyword or [type output-key] for param renaming.
+
+  Optional :default-order-dir — default sort direction (:asc or :desc). Defaults to :asc.
 
   Optional :date-range-columns — a map of {app-keyword sql-column} that enables
   date range filtering via `<field>-from` / `<field>-to` query params."
   [{:keys [service _entity-key entity-plural default-limit default-order-by
-           custom-count-params transform-response
+           default-order-dir custom-count-params transform-response
            date-range-columns] :as config}]
   (let [has-count? (get config :has-count? true)
         query-params-fn (resolve-query-params-fn config)
-        count-params-fn (or custom-count-params query-params-fn)]
+        count-params-fn (or custom-count-params query-params-fn)
+        default-dir (or default-order-dir "asc")]
     (fn [db]
       (utils/with-error-handling
         (fn [request]
@@ -323,7 +332,7 @@
                 query-params (cond-> (merge {:limit (utils/parse-int-param qp :limit default-limit)
                                              :offset (utils/parse-int-param qp :offset 0)
                                              :order-by (order-by->app (get-param qp :order-by) default-order-by)
-                                             :order-dir (keyword (or (get-param qp :order-dir) "asc"))}
+                                             :order-dir (keyword (or (get-param qp :order-dir) default-dir))}
                                        custom-params)
                                (seq date-filters)
                                (update :extra-filters (fn [existing]
@@ -597,9 +606,11 @@
    - :required-fields - vector of required fields for creation
    - :default-limit - default pagination limit
    - :default-order-by - default sort field
+   - :default-order-dir - default sort direction (:asc or :desc, default :asc)
    - :custom-validation - function for custom validation logic
    - :filter-params - declarative filter spec: vector of keywords (all string) or
-     map of {param-key type} where type is :string, :uuid, :boolean, :keyword, :int
+     map of {param-key type-or-spec} where type is :string, :uuid, :boolean,
+     :keyword, :int; or [type output-key] for param renaming
    - :custom-query-params - function to transform query parameters (overrides :filter-params)
    - :custom-handlers - map of custom handler functions
    - :additional-routes - vector of additional route definitions
