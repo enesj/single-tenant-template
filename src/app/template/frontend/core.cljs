@@ -150,16 +150,25 @@
         is-admin-route? (and route-name (str/starts-with? (name route-name) "admin"))
         ;; Get view keyword for domain page lookup
         view-key (get-in effective-route [:data :view])
-        auth-view? (contains? #{:login
-                                :register
-                                :verify-email
-                                :verify-email-success
-                                :email-verified
-                                :forgot-password
-                                :reset-password
-                                :tenant-select
-                                :invitation-accept}
-                     view-key)
+        standalone-views #{:home
+                           :login
+                           :register
+                           :verify-email
+                           :verify-email-success
+                           :email-verified
+                           :forgot-password
+                           :reset-password
+                           :tenant-select
+                           :invitation-accept}
+        ;; Check both the resolved view-key and the current URL path
+        ;; (URL check handles the case where current-route is nil on initial load)
+        current-path (.-pathname js/window.location)
+        auth-view? (or (contains? standalone-views view-key)
+                     (contains? #{"/" "/home" "/login" "/register"
+                                  "/forgot-password" "/reset-password"
+                                  "/tenant-select" "/invitation/accept"
+                                  "/verify-email" "/email-verified"}
+                       current-path))
         page-el (if is-admin-route?
                   ;; For admin routes, render the view when it's a function; otherwise fallback by route-name
                   (if (fn? route-view)
@@ -175,7 +184,7 @@
                     ($ domain-page-component)
                     ;; Template pages (core infrastructure)
                     (case view-key
-                      :home ($ :div {:class "ds-container p-4"} ($ home-page))
+                      :home ($ home-page)
                       :about ($ :div {:class "ds-container p-4"} ($ about-page))
                       :login ($ login-page)
                       :register ($ registration-page)
