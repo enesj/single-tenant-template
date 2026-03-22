@@ -2,6 +2,7 @@
   "Tenant member management — role changes, ownership transfer, removal."
   (:require
     [app.shared.adapters.database :refer [convert-pg-objects]]
+    [app.template.backend.services.onboarding.core :as onboarding]
     [honey.sql :as sql]
     [next.jdbc :as jdbc]
     [next.jdbc.result-set :as rs]
@@ -20,6 +21,10 @@
 (defn- membership-status [membership]
   (or (:status membership)
     (:tenant_memberships/status membership)))
+
+(defn- membership-user-id [membership]
+  (or (:user_id membership)
+    (:tenant_memberships/user_id membership)))
 
 (defn- active-membership?
   [membership]
@@ -83,14 +88,23 @@
               :errors {:role ["Cannot change the owner's role directly"]}})))
 
   (let [target-id (membership-id target-membership)
-        now       (java.time.LocalDateTime/now)]
-    (convert-pg-objects
-      (jdbc/execute-one! db
-        (sql/format {:update [:tenant_memberships]
-                     :set    {:role       [:cast new-role :membership_role]
-                              :updated_at now}
-                     :where  [:= :id target-id]
-                     :returning [:*]})))))
+        user-id   (membership-user-id target-membership)
+        now       (java.time.LocalDateTime/now)
+        result    (convert-pg-objects
+                    (jdbc/execute-one! db
+                      (sql/format {:update [:tenant_memberships]
+                                   :set    {:role       [:cast new-role :membership_role]
+                                            :updated_at now}
+                                   :where  [:= :id target-id]
+                                   :returning [:*]})))]
+    ;; Initialise delta onboarding for the new role (pre-marks completed steps)
+    (when user-id
+      (try
+        (onboarding/initialise-delta-onboarding! db user-id new-role)
+        (catch Exception e
+          (log/warn e "Failed to initialise onboarding on role change"
+            {:user-id user-id :new-role new-role}))))
+    result))
 
 (defn superpower-change-role!
   "Platform-admin role change that still preserves tenant ownership invariants."

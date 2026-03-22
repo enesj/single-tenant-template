@@ -188,29 +188,33 @@
     (not no-tenant)))
 
 (defn- build-auth-status-body
-  [auth-session]
-  (let [user     (:user auth-session)
-        provider (or (:provider auth-session)
-                   (:auth_provider user)
-                   (:auth-provider user))
-        safe-user (dissoc user :password_hash :password-hash :users/password_hash)]
-    (cond-> {:authenticated true
-             :session-valid (not (shared-date/session-expired? auth-session))
-             :user safe-user
-             :tenant (:tenant auth-session)
-             :permissions (shared-auth/get-user-permissions user)}
-      provider
-      (assoc :provider (if (keyword? provider) (name provider) (str provider)))
+  ([auth-session] (build-auth-status-body auth-session nil))
+  ([auth-session {:keys [onboarding]}]
+   (let [user     (:user auth-session)
+         provider (or (:provider auth-session)
+                    (:auth_provider user)
+                    (:auth-provider user))
+         safe-user (dissoc user :password_hash :password-hash :users/password_hash)]
+     (cond-> {:authenticated true
+              :session-valid (not (shared-date/session-expired? auth-session))
+              :user safe-user
+              :tenant (:tenant auth-session)
+              :permissions (shared-auth/get-user-permissions user)}
+       provider
+       (assoc :provider (if (keyword? provider) (name provider) (str provider)))
 
-      (:membership auth-session)
-      (assoc :membership-role (get-in auth-session [:membership :role]))
+       (:membership auth-session)
+       (assoc :membership-role (get-in auth-session [:membership :role]))
 
-      (:tenant-selection-required auth-session)
-      (assoc :tenant-selection-required true
-        :available-tenants (:available-tenants auth-session))
+       (:tenant-selection-required auth-session)
+       (assoc :tenant-selection-required true
+         :available-tenants (:available-tenants auth-session))
 
-      (:no-tenant auth-session)
-      (assoc :no-tenant true))))
+       (:no-tenant auth-session)
+       (assoc :no-tenant true)
+
+       onboarding
+       (assoc :onboarding onboarding)))))
 
 (defn- repair-incomplete-auth-session
   [req db auth-session]
@@ -429,12 +433,26 @@
                           (get-in effective-auth-session [:user :users/id]))
                :tenant-id (or (get-in effective-auth-session [:tenant :id])
                             (get-in effective-auth-session [:tenant :tenants/id]))}))
-          (cond-> {:status 200
-                   :headers {"Content-Type" "application/json"}
-                   :body (json/generate-string
-                           (build-auth-status-body effective-auth-session))}
-            (= :repair (:action repair-result))
-            (assoc :session (assoc (or (:session req) {}) :auth-session effective-auth-session))))
+          ;; Fetch lightweight onboarding summary (safe — nil if no progress exists)
+          (let [onboarding-summary
+                (when-let [eff-user (:user effective-auth-session)]
+                  (let [role (or (get-in effective-auth-session [:membership :role])
+                               (:membership-role effective-auth-session))]
+                    (when (and db role)
+                      (try
+                        (let [get-summary (requiring-resolve
+                                            'app.template.backend.services.onboarding.core/get-progress-summary)]
+                          (get-summary db (:id eff-user) role))
+                        (catch Exception e
+                          (log/debug "Onboarding summary skipped" {:error (.getMessage e)})
+                          nil)))))]
+            (cond-> {:status 200
+                     :headers {"Content-Type" "application/json"}
+                     :body (json/generate-string
+                             (build-auth-status-body effective-auth-session
+                               {:onboarding onboarding-summary}))}
+              (= :repair (:action repair-result))
+              (assoc :session (assoc (or (:session req) {}) :auth-session effective-auth-session)))))
 
         ;; Not authenticated
         :else

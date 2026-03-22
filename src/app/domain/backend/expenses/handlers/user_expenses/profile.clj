@@ -101,6 +101,13 @@
               (let [result (user-settings/update-user-defaults! db tenant-id user-id
                              {:default-expense-category-id category-id
                               :default-payer-id payer-id})]
+                ;; Auto-complete setup_profile step for all active onboarding records
+                (try
+                  (let [complete-all! (requiring-resolve
+                                        'app.template.backend.services.onboarding.core/complete-step-for-all-roles!)]
+                    (complete-all! db user-id "setup_profile"))
+                  (catch Exception e
+                    (log/debug "Onboarding setup_profile completion skipped" {:error (.getMessage e)})))
                 (log/info "Updated profile defaults" {:user-id user-id
                                                       :category-id category-id
                                                       :payer-id payer-id})

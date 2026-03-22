@@ -52,11 +52,18 @@
      :fx [[:dispatch [:app.template.frontend.events.impersonation/fetch-grants]]]}))
 
 (rf/reg-event-fx
+  :page/init-onboarding
+  common-interceptors
+  (fn [{:keys [db]} _]
+    {:db (assoc-in db (paths/current-page) :onboarding)
+     :fx [[:dispatch [:app.template.frontend.events.onboarding/fetch-progress]]]}))
+
+(rf/reg-event-fx
   :page/init-expenses-dashboard
   common-interceptors
   (fn [{:keys [db]} _]
     {:db (assoc-in db (paths/current-page) :expenses-dashboard)
-     :dispatch [:user-expenses/init-dashboard]}))
+     :dispatch [:workspace-dashboard/init]}))
 
 (rf/reg-event-fx
   :page/init-expenses-list

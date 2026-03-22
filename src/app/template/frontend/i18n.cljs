@@ -188,7 +188,7 @@
     :nav/expense-items       "Stavke troškova"
     :nav/upload              "Učitaj"
     :nav/reports             "Izvještaji"
-    :nav/unmapped-aliases    "Neizmapirana pravila"
+    :nav/unmapped-aliases    "Nemapirani aliasi"
     :nav/suppliers           "Dobavljači"
     :nav/payers              "Platitelji"
     :nav/payer-types         "Vrste platitelja"
@@ -418,32 +418,94 @@
     :impersonation/confirm-revoke  "Potvrdi"
     :impersonation/revoke          "Opozovi"
 
+    ;; Onboarding page
+    :onboarding/welcome             "Dobrodošli u vaš radni prostor"
+    :onboarding/workspace-intro     (fn [{:keys [name]}] (str "Postavite " name " u nekoliko koraka"))
+    :onboarding/mark-done           "Gotovo"
+    :onboarding/skip                "Preskoči"
+    :onboarding/skip-all            "Preskoči sve"
+    :onboarding/finish              "Završi postavljanje"
+    :onboarding/continue-later      "Nastavi kasnije"
+    :onboarding/workspace-differences "Razlike u ovom radnom prostoru"
+    ;; Step titles
+    :onboarding/step-name_workspace       "Imenujte radni prostor"
+    :onboarding/step-setup_profile        "Postavite profil"
+    :onboarding/step-configure_categories "Konfigurirajte kategorije"
+    :onboarding/step-review_payer_types   "Pregledajte tipove platioca"
+    :onboarding/step-invite_members       "Pozovite članove"
+    :onboarding/step-management_intro     "Upoznajte se s upravljanjem"
+    :onboarding/step-upload_first_receipt "Učitajte prvi račun"
+    :onboarding/step-browse_intro         "Upoznajte se s pregledom"
+    ;; Step descriptions
+    :onboarding/step-name_workspace-desc       "Dajte radnom prostoru ime koje ga opisuje"
+    :onboarding/step-setup_profile-desc        "Dodajte svoje ime da vas tim prepozna"
+    :onboarding/step-configure_categories-desc "Prilagodite kategorije troškova"
+    :onboarding/step-review_payer_types-desc   "Pregledajte i prilagodite tipove platioca"
+    :onboarding/step-invite_members-desc       "Pozovite kolege u radni prostor"
+    :onboarding/step-management_intro-desc     "Saznajte više o upravljačkim alatima"
+    :onboarding/step-upload_first_receipt-desc "Učitajte svoj prvi račun"
+    :onboarding/step-browse_intro-desc         "Saznajte kako pregledati troškove"
+    ;; Differences
+    :onboarding/diff-workspace_name  "Radni prostor"
+    :onboarding/diff-team_size       "Veličina tima"
+    :onboarding/diff-category_count  "Kategorije"
+    :onboarding/diff-read_only       "Samo za čitanje"
+    ;; Sidebar / banner
+    :onboarding/sidebar-label        "Postavljanje"
+    :onboarding/banner-title         "Nastavite s postavljanjem"
+    :onboarding/banner-dismiss       "Odbaci"
+
     ;; Expense dashboard page
-    :dashboard/greeting            (fn [name] (str "Zdravo, " name "!"))
-    :dashboard/subtitle            "Pregled vaših troškova"
-    :dashboard/upload-receipt      "📷 Učitaj račun"
-    :dashboard/view-all            "Prikaži sve"
-    :dashboard/load-error          "Nije moguće učitati podatke o troškovima."
-    :dashboard/this-month          "Ovaj mjesec"
-    :dashboard/posted-expenses     "objavljeni troškovi"
-    :dashboard/total               "Ukupno"
-    :dashboard/all-time            "sve vrijeme"
-    :dashboard/last-30-days        "Zadnjih 30 dana"
-    :dashboard/expenses-created    "troškova kreirano"
-    :dashboard/avg-per-expense     "Prosjek po trošku"
-    :dashboard/currency-label      (fn [c] (str "valuta " c))
-    :dashboard/recent-expenses     "Nedavni troškovi"
-    :dashboard/view-all-link       "Prikaži sve →"
-    :dashboard/no-expenses         "Još nema troškova. Pokušajte dodati jedan!"
-    :dashboard/quick-actions       "Brze radnje"
-    :dashboard/upload-receipt-desc "Skenirajte ili učitajte račun"
-    :dashboard/add-expense         "Dodajte trošak"
-    :dashboard/add-expense-desc    "Ručni unos troška"
-    :dashboard/view-reports        "Pregledajte izvještaje"
-    :dashboard/view-reports-desc   "Mjesečni sažeci"
-    :dashboard/unmapped-aliases    "Neizmapirana pravila"
-    :dashboard/unmapped-aliases-desc "Masovno mapirajte pravila na artikle"
-    :dashboard/vs-last-month       "u odnosu na prošli mjesec"
+    :dashboard/greeting              (fn [name] (str "Zdravo, " name "!"))
+    :dashboard/subtitle              "Pregled radnog prostora"
+    :dashboard/upload-receipt        "📷 Učitaj račun"
+    :dashboard/view-all              "Prikaži sve"
+    :dashboard/load-error            "Nije moguće učitati podatke o troškovima."
+    :dashboard/no-expenses           "Još nema troškova. Pokušajte dodati jedan!"
+    ;; Summary cards
+    :dashboard/last-30-days          "Zadnjih 30 dana"
+    :dashboard/last-6-months         "Zadnjih 6 mjeseci"
+    :dashboard/expenses-count        (fn [n] (str n " troškova"))
+    :dashboard/avg-prefix            "Prosjek:"
+    :dashboard/per-day               "/ dan"
+    :dashboard/per-week              "/ sedmica"
+    ;; Monthly trend
+    :dashboard/monthly-trend         "Mjesečni trend"
+    ;; Top 3 rankings
+    :dashboard/top-suppliers         "Top dobavljači"
+    :dashboard/top-stores            "Top trgovine"
+    :dashboard/top-articles          "Top artikli"
+    :dashboard/no-suppliers          "Nema podataka o dobavljačima"
+    :dashboard/no-stores             "Nema podataka o trgovinama"
+    :dashboard/no-articles           "Nema podataka o artiklima"
+    :dashboard/no-data               "Nema podataka"
+    :dashboard/times-purchased       (fn [n] (str n "x kupljeno"))
+    ;; Price changes
+    :dashboard/price-changes         "Najveće promjene cijena"
+    :dashboard/no-price-data         "Nedovoljno podataka za analizu cijena"
+    ;; Category breakdown
+    :dashboard/category-breakdown    "Potrošnja po kategorijama"
+    :dashboard/no-category-data      "Nema podataka o kategorijama"
+    ;; Biggest expense
+    :dashboard/biggest-expense       "Najveći trošak ovog mjeseca"
+    :dashboard/no-expenses-this-month "Nema troškova ovog mjeseca"
+    ;; Averages
+    :dashboard/spending-averages     "Prosjeci potrošnje"
+    :dashboard/daily-30d             "Dnevno (30d)"
+    :dashboard/weekly-30d            "Sedmično (30d)"
+    :dashboard/monthly-6m            "Mjesečno (6m)"
+    ;; Team & admin
+    :dashboard/team                  "Tim"
+    :dashboard/manage-team           "Upravljaj timom"
+    :dashboard/members               "članova"
+    :dashboard/admin-alerts          "Obavještenja"
+    :dashboard/pending-expenses      "Troškovi na čekanju"
+    :dashboard/unmapped-aliases      "Nemapirani aliasi"
+    ;; Shortcuts
+    :dashboard/shortcuts             "Prečice"
+    :dashboard/upload-receipt-short  "Učitaj račun"
+    :dashboard/add-expense           "Dodaj trošak"
+    :dashboard/view-reports          "Izvještaji"
 
     ;; Expense new page
     :expense-new/breadcrumb-expenses  "Troškovi"
@@ -1242,32 +1304,94 @@
     :impersonation/confirm-revoke  "Confirm"
     :impersonation/revoke          "Revoke"
 
+    ;; Onboarding page
+    :onboarding/welcome             "Welcome to your workspace"
+    :onboarding/workspace-intro     (fn [{:keys [name]}] (str "Set up " name " in a few steps"))
+    :onboarding/mark-done           "Done"
+    :onboarding/skip                "Skip"
+    :onboarding/skip-all            "Skip all"
+    :onboarding/finish              "Finish setup"
+    :onboarding/continue-later      "Continue later"
+    :onboarding/workspace-differences "Differences in this workspace"
+    ;; Step titles
+    :onboarding/step-name_workspace       "Name your workspace"
+    :onboarding/step-setup_profile        "Set up your profile"
+    :onboarding/step-configure_categories "Configure categories"
+    :onboarding/step-review_payer_types   "Review payer types"
+    :onboarding/step-invite_members       "Invite members"
+    :onboarding/step-management_intro     "Explore management tools"
+    :onboarding/step-upload_first_receipt "Upload your first receipt"
+    :onboarding/step-browse_intro         "Explore browsing"
+    ;; Step descriptions
+    :onboarding/step-name_workspace-desc       "Give your workspace a descriptive name"
+    :onboarding/step-setup_profile-desc        "Add your name so your team can recognise you"
+    :onboarding/step-configure_categories-desc "Customise your expense categories"
+    :onboarding/step-review_payer_types-desc   "Review and adjust payer types"
+    :onboarding/step-invite_members-desc       "Invite colleagues to your workspace"
+    :onboarding/step-management_intro-desc     "Learn about the management tools available"
+    :onboarding/step-upload_first_receipt-desc "Upload your first receipt"
+    :onboarding/step-browse_intro-desc         "Learn how to browse expenses"
+    ;; Differences
+    :onboarding/diff-workspace_name  "Workspace"
+    :onboarding/diff-team_size       "Team size"
+    :onboarding/diff-category_count  "Categories"
+    :onboarding/diff-read_only       "Read-only"
+    ;; Sidebar / banner
+    :onboarding/sidebar-label        "Setup"
+    :onboarding/banner-title         "Continue setup"
+    :onboarding/banner-dismiss       "Dismiss"
+
     ;; Expense dashboard page
-    :dashboard/greeting            (fn [name] (str "Hello, " name "!"))
-    :dashboard/subtitle            "Here's your expense overview"
-    :dashboard/upload-receipt      "📷 Upload Receipt"
-    :dashboard/view-all            "View All"
-    :dashboard/load-error          "Unable to load expense data."
-    :dashboard/this-month          "This Month"
-    :dashboard/posted-expenses     "posted expenses"
-    :dashboard/total               "Total"
-    :dashboard/all-time            "all time"
-    :dashboard/last-30-days        "Last 30 days"
-    :dashboard/expenses-created    "expenses created"
-    :dashboard/avg-per-expense     "Avg per expense"
-    :dashboard/currency-label      (fn [c] (str "currency " c))
-    :dashboard/recent-expenses     "Recent Expenses"
-    :dashboard/view-all-link       "View all →"
-    :dashboard/no-expenses         "No expenses yet. Try adding one!"
-    :dashboard/quick-actions       "Quick Actions"
-    :dashboard/upload-receipt-desc "Scan or upload a receipt"
-    :dashboard/add-expense         "Add Expense"
-    :dashboard/add-expense-desc    "Manual expense entry"
-    :dashboard/view-reports        "View Reports"
-    :dashboard/view-reports-desc   "Monthly summaries"
-    :dashboard/unmapped-aliases    "Unmapped Aliases"
-    :dashboard/unmapped-aliases-desc "Bulk-map aliases to articles"
-    :dashboard/vs-last-month       "vs last month"
+    :dashboard/greeting              (fn [name] (str "Hello, " name "!"))
+    :dashboard/subtitle              "Workspace overview"
+    :dashboard/upload-receipt        "📷 Upload Receipt"
+    :dashboard/view-all              "View All"
+    :dashboard/load-error            "Unable to load expense data."
+    :dashboard/no-expenses           "No expenses yet. Try adding one!"
+    ;; Summary cards
+    :dashboard/last-30-days          "Last 30 days"
+    :dashboard/last-6-months         "Last 6 months"
+    :dashboard/expenses-count        (fn [n] (str n " expenses"))
+    :dashboard/avg-prefix            "Avg:"
+    :dashboard/per-day               "/ day"
+    :dashboard/per-week              "/ week"
+    ;; Monthly trend
+    :dashboard/monthly-trend         "Monthly trend"
+    ;; Top 3 rankings
+    :dashboard/top-suppliers         "Top suppliers"
+    :dashboard/top-stores            "Top stores"
+    :dashboard/top-articles          "Top articles"
+    :dashboard/no-suppliers          "No supplier data"
+    :dashboard/no-stores             "No store data"
+    :dashboard/no-articles           "No article data"
+    :dashboard/no-data               "No data"
+    :dashboard/times-purchased       (fn [n] (str n "x purchased"))
+    ;; Price changes
+    :dashboard/price-changes         "Biggest price changes"
+    :dashboard/no-price-data         "Not enough data for price analysis"
+    ;; Category breakdown
+    :dashboard/category-breakdown    "Spending by category"
+    :dashboard/no-category-data      "No category data"
+    ;; Biggest expense
+    :dashboard/biggest-expense       "Biggest expense this month"
+    :dashboard/no-expenses-this-month "No expenses this month"
+    ;; Averages
+    :dashboard/spending-averages     "Spending averages"
+    :dashboard/daily-30d             "Daily (30d)"
+    :dashboard/weekly-30d            "Weekly (30d)"
+    :dashboard/monthly-6m            "Monthly (6m)"
+    ;; Team & admin
+    :dashboard/team                  "Team"
+    :dashboard/manage-team           "Manage team"
+    :dashboard/members               "members"
+    :dashboard/admin-alerts          "Alerts"
+    :dashboard/pending-expenses      "Pending expenses"
+    :dashboard/unmapped-aliases      "Unmapped aliases"
+    ;; Shortcuts
+    :dashboard/shortcuts             "Shortcuts"
+    :dashboard/upload-receipt-short  "Upload receipt"
+    :dashboard/add-expense           "Add Expense"
+    :dashboard/view-reports          "Reports"
 
     ;; Expense new page
     :expense-new/breadcrumb-expenses  "Expenses"

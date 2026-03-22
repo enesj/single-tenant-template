@@ -270,8 +270,20 @@
                                           :icon ($ suppliers-icon {:class "w-6 h-6"})
                                           :active? (active? #{:expense-stores})})])))
 
+        onboarding-active? (use-subscribe [:onboarding/active?])
+        onboarding-summary (use-subscribe [:onboarding/summary])
+
         workspace-items (vec
                           (concat
+                            (when onboarding-active?
+                              [(nav-item {:id "user-sidebar-onboarding"
+                                          :label (t :onboarding/sidebar-label)
+                                          :href (th "/onboarding")
+                                          :route :onboarding
+                                          :icon ($ chart-bar {:class "w-6 h-6"})
+                                          :active? (active? #{:onboarding})
+                                          :badge (str (:completed onboarding-summary 0)
+                                                   "/" (:total onboarding-summary 0))})])
                             (when power-user?
                               [(nav-item {:id "user-sidebar-members"
                                           :label (t :nav/members)

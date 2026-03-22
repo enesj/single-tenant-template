@@ -10,6 +10,7 @@
     [app.template.backend.email.service :as email-svc]
     [app.template.backend.middleware.user :as user-middleware]
     [app.template.backend.routes.entities :as entities]
+    [app.template.backend.routes.onboarding :as onboarding-routes]
     [app.template.backend.routes.tenant :as tenant-routes]
     [app.admin.backend.services.admin.dashboard :as admin-dashboard]
     [app.template.backend.services.monitoring.login-events :as login-monitoring]
@@ -287,6 +288,10 @@
        (get service-container :email-service)
        (email-svc/create-base-url app-config)
        app-config)
+
+     ;; Onboarding routes (progress, step completion, skip, dismiss)
+     (onboarding-routes/onboarding-routes
+       db user-middleware/wrap-user-authentication)
 
      ;; User profile routes (Phase 2 — settings hierarchy)
      ;; Lazy-resolved from domain to avoid template→domain compile-time coupling

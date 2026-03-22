@@ -28,7 +28,8 @@
     app.domain.frontend.expenses.events.user-expenses.search
     app.domain.frontend.expenses.events.user-expenses.stores
     app.domain.frontend.expenses.events.user-expenses.subcategories
-    app.domain.frontend.expenses.events.user-expenses.summary))
+    app.domain.frontend.expenses.events.user-expenses.summary
+    app.domain.frontend.expenses.events.user-expenses.workspace-dashboard))
 
 ;; This namespace exists purely to aggregate requires.
 ;; All events are registered in the sub-namespaces.

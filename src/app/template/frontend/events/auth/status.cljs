@@ -48,6 +48,8 @@
           membership-role (get response :membership-role)
           tenant-selection-required (get response :tenant-selection-required)
           available-tenants (get response :available-tenants)
+          ;; Onboarding summary (lightweight, from auth-status)
+          onboarding (get response :onboarding)
           current-page (get-in db (paths/current-page))
           user-role membership-role]
 
@@ -90,6 +92,9 @@
                          ;; Store no-tenant state
                          (assoc-in [:session :no-tenant?] no-tenant?)
 
+                         ;; Store onboarding summary
+                         (assoc-in [:session :onboarding] onboarding)
+
                          ;; Clear any previous errors
                          (update :session dissoc :error))
             ;; Check for a `return` URL parameter (e.g. from invitation accept flow)
@@ -101,7 +106,8 @@
                             {:return-url return-url
                              :no-tenant? no-tenant?
                              :tenant-selection-required tenant-selection-required
-                             :membership-role user-role})
+                             :membership-role user-role
+                             :onboarding onboarding})
             base-effects (cond-> {:db updated-db}
                            (and authenticated? (= current-page :login))
                            (assoc :redirect redirect-path))]

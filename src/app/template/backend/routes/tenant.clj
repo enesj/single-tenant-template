@@ -8,6 +8,7 @@
     [app.template.backend.services.invitation :as invitation-svc]
     [app.template.backend.services.invitation-email :as invitation-email]
     [app.template.backend.services.member :as member-svc]
+    [app.template.backend.services.onboarding.core :as onboarding]
     [app.template.backend.services.tenant :as tenant-svc]
     [clojure.walk :as walk]
     [ring.util.response :as response]
@@ -169,6 +170,9 @@
                 (catch Exception e
                   (log/warn "Failed to send invitation email:" (.getMessage e))))))
           (log/warn "Email service not configured — invitation email NOT sent" {:to-email email}))
+        ;; Auto-complete invite_members onboarding step for the inviter
+        (let [actor-role (or (:role actor-m) (:tenant_memberships/role actor-m))]
+          (onboarding/try-complete-step! db (:id user) actor-role "invite_members"))
         (response/response {:success true :invitation (sanitize invitation)})))))
 
 (defn- list-invitations-handler
@@ -438,6 +442,8 @@
                      {:type :validation-error
                       :errors {:name ["Workspace name cannot be blank"]}})))
           (let [updated (tenant-svc/update-tenant! db tenant-id {:name new-name})]
+            ;; Auto-complete name_workspace onboarding step
+            (onboarding/try-complete-step! db (:id user) "owner" "name_workspace")
             (log/info "Updated tenant name" {:tenant-id tenant-id :name new-name})
             (response/response {:success true :tenant (sanitize updated)})))))))
 

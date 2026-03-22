@@ -7,6 +7,7 @@
   (:require
     [app.shared.adapters.database :refer [convert-pg-objects]]
     [app.template.backend.auth.service :as auth-service]
+    [app.template.backend.services.onboarding.core :as onboarding]
     [clojure.string :as str]
     [honey.sql :as sql]
     [next.jdbc :as jdbc]
@@ -189,7 +190,10 @@
                          :on-conflict [:tenant_id]
                          :do-nothing true}))
 
-          ;; 5) Seed expense_categories
+          ;; 5) Initialise onboarding for owner role
+          (onboarding/initialise-onboarding! tx (user-id user) "owner")
+
+          ;; 6) Seed expense_categories
           (doseq [cat (:expense-categories defaults)]
             (jdbc/execute-one! tx
               (sql/format {:insert-into [:expense_categories]

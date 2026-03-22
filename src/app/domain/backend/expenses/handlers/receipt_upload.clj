@@ -197,6 +197,17 @@
       (try
         (let [{:keys [receipt duplicate?]} (create-receipt-from-upload! db request)
               duplicate? (boolean duplicate?)]
+          ;; Auto-complete upload_first_receipt onboarding step (no-op if already done)
+          (when-not duplicate?
+            (try
+              (let [try-complete! (requiring-resolve
+                                    'app.template.backend.services.onboarding.core/try-complete-step!)
+                    user-id (h/get-user-id request)
+                    role (h/get-user-role request)]
+                (when (and user-id role)
+                  (try-complete! db user-id role "upload_first_receipt")))
+              (catch Exception e
+                (log/debug "Onboarding upload_first_receipt skipped" {:error (.getMessage e)}))))
           (-> (response/response (json/generate-string {:data (to-app receipt)
                                                         :duplicate? duplicate?}))
             (response/content-type "application/json")

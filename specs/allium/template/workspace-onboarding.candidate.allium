@@ -1,0 +1,724 @@
+-- allium: 2
+-- workspace-onboarding.candidate.allium
+
+-- Scope: First-run onboarding experience for users entering a workspace
+-- Includes: Per-role step definitions, progress tracking, skip/dismiss,
+--           guided first upload, persistent checklist, completion model,
+--           role-difference notices for subsequent workspaces
+-- Excludes:
+--   - Authentication flow (see authentication.allium)
+--   - Tenant provisioning mechanics (see multi-tenancy.candidate.allium)
+--   - Invitation acceptance mechanics (see admin-invitation.candidate.allium)
+--   - Dashboard widget rendering (see workspace-dashboard.candidate.allium)
+--   - Receipt OCR processing (see receipt-ocr.candidate.allium)
+-- Dependencies: User, Tenant, TenantMembership from authentication/multi-tenancy specs
+
+------------------------------------------------------------
+-- External Entities
+------------------------------------------------------------
+
+external entity User {
+    email: String
+    full_name: String?
+}
+
+external entity Tenant {
+    id: String
+    name: String
+    slug: String
+}
+
+external entity TenantMembership {
+    tenant: Tenant
+    user: User
+    role: owner | admin | member | viewer
+    status: active | suspended
+}
+
+external entity ExpenseCategory {
+    id: String
+    name: String
+    tenant_id: String
+}
+
+external entity PayerType {
+    id: String
+    label: String
+    tenant_id: String
+    is_system: Boolean
+}
+
+------------------------------------------------------------
+-- Enumerations
+------------------------------------------------------------
+
+enum MembershipRole { owner | admin | member | viewer }
+
+enum OnboardingStepKind {
+    name_workspace
+    | setup_profile
+    | configure_categories
+    | review_payer_types
+    | invite_members
+    | management_intro
+    | upload_first_receipt
+    | browse_intro
+}
+
+enum StepStatus { pending | completed | skipped }
+
+------------------------------------------------------------
+-- Value Types
+------------------------------------------------------------
+
+value StepDefinition {
+    kind: OnboardingStepKind
+    order: Integer                   -- display order within the flow
+    title: String                    -- user-facing step label
+    description: String              -- brief explanation of what this step accomplishes
+}
+
+value RoleDifference {
+    capability: String               -- human-readable description of a capability
+    available: Boolean               -- true = this role has it, false = it does not
+}
+
+------------------------------------------------------------
+-- Entities
+------------------------------------------------------------
+
+entity OnboardingProgress {
+    -- Keyed on user + role, NOT per membership.
+    -- A user who is "owner" in two workspaces onboards once for the owner role.
+    -- A user who is "owner" in one and "viewer" in another has two progress records.
+
+    user: User
+    role: MembershipRole             -- the role this onboarding covers
+    dismissed: Boolean               -- user manually dismissed the checklist
+    created_at: Timestamp
+
+    steps: OnboardingStep with progress = this
+
+    -- Derived
+    completed_steps: steps where status = completed
+    total_steps: steps.count
+    completed_count: completed_steps.count
+    is_fully_complete: completed_count = total_steps
+    is_visible: not dismissed and not is_fully_complete
+}
+
+entity OnboardingStep {
+    progress: OnboardingProgress
+    kind: OnboardingStepKind
+    order: Integer
+    status: StepStatus
+    completed_at: Timestamp?
+}
+
+------------------------------------------------------------
+-- Config
+------------------------------------------------------------
+
+config {
+    -- Per-role step definitions. Each role has an ordered list of steps.
+    -- Steps are created from these definitions when onboarding begins.
+
+    owner_steps: List<StepDefinition> = [
+        StepDefinition(kind: name_workspace,       order: 1, title: "Imenujte radni prostor",         description: "Dajte svom radnom prostoru prepoznatljivo ime"),
+        StepDefinition(kind: setup_profile,         order: 2, title: "Postavite profil",               description: "Dodajte svoje ime i postavke"),
+        StepDefinition(kind: configure_categories,  order: 3, title: "Konfigurisite kategorije",       description: "Pregledajte i prilagodite kategorije troskova"),
+        StepDefinition(kind: review_payer_types,    order: 4, title: "Pregledajte tipove platilaca",   description: "Potvrdite ili prilagodite ko placa troskove"),
+        StepDefinition(kind: invite_members,        order: 5, title: "Pozovite clanove tima",          description: "Dodajte kolege u radni prostor"),
+        StepDefinition(kind: management_intro,      order: 6, title: "Upoznajte upravljacke alate",   description: "Kratki pregled admin funkcija"),
+        StepDefinition(kind: upload_first_receipt,   order: 7, title: "Ucitajte prvi racun",            description: "Isprobajte unos racuna uz vodene upute")
+    ]
+
+    admin_steps: List<StepDefinition> = [
+        StepDefinition(kind: setup_profile,         order: 1, title: "Postavite profil",               description: "Dodajte svoje ime i postavke"),
+        StepDefinition(kind: management_intro,      order: 2, title: "Upoznajte upravljacke alate",   description: "Kratki pregled admin funkcija"),
+        StepDefinition(kind: upload_first_receipt,   order: 3, title: "Ucitajte prvi racun",            description: "Isprobajte unos racuna uz vodene upute")
+    ]
+
+    member_steps: List<StepDefinition> = [
+        StepDefinition(kind: setup_profile,         order: 1, title: "Postavite profil",               description: "Dodajte svoje ime i postavke"),
+        StepDefinition(kind: upload_first_receipt,   order: 2, title: "Ucitajte prvi racun",            description: "Isprobajte unos racuna uz vodene upute")
+    ]
+
+    viewer_steps: List<StepDefinition> = [
+        StepDefinition(kind: setup_profile,         order: 1, title: "Postavite profil",               description: "Dodajte svoje ime i postavke"),
+        StepDefinition(kind: browse_intro,          order: 2, title: "Pregledajte troskove",           description: "Naucite kako pregledati troskove i izvjestaje")
+    ]
+}
+
+------------------------------------------------------------
+-- Rules
+------------------------------------------------------------
+
+-- Onboarding initialisation
+
+rule InitialiseOnboardingFirstRole {
+    -- Triggered when a user first enters a workspace and has never
+    -- onboarded for this role before. Creates the full onboarding flow.
+
+    when: MembershipActivated(membership)
+
+    requires: membership.status = active
+    requires: not exists OnboardingProgress{user: membership.user, role: membership.role}
+
+    let step_defs =
+        if membership.role = owner: config.owner_steps
+        else if membership.role = admin: config.admin_steps
+        else if membership.role = member: config.member_steps
+        else: config.viewer_steps
+
+    ensures:
+        let progress = OnboardingProgress.created(
+            user: membership.user,
+            role: membership.role,
+            dismissed: false,
+            created_at: now
+        )
+        for def in step_defs:
+            OnboardingStep.created(
+                progress: progress,
+                kind: def.kind,
+                order: def.order,
+                status: pending,
+                completed_at: null
+            )
+}
+
+rule ShowRoleDifferenceNotice {
+    -- When a user enters a new workspace but has already onboarded
+    -- for this role, no new onboarding is created. Instead, if the
+    -- workspace has role-specific differences (e.g. different categories,
+    -- different team), a brief notice highlights what is different.
+    --
+    -- If the roles differ between workspaces, the user gets a full
+    -- onboarding for the new role (handled by InitialiseOnboardingFirstRole).
+
+    when: MembershipActivated(membership)
+
+    requires: membership.status = active
+    requires: exists OnboardingProgress{user: membership.user, role: membership.role}
+
+    ensures: RoleDifferenceNoticeShown(
+        membership: membership,
+        differences: compute_role_differences(
+            considering: {
+                membership.role,
+                membership.tenant
+            }
+        )
+    )
+
+    @guidance
+        -- The notice is a one-time dismissable card, not a full onboarding flow.
+        -- Examples of differences to highlight:
+        --   - "This workspace has 8 expense categories (your other has 12)"
+        --   - "This workspace has 3 team members"
+        --   - "You are a viewer here — you can browse but not upload"
+        -- If there are no meaningful differences, skip the notice entirely.
+}
+
+-- Step completion
+
+rule CompleteOnboardingStep {
+    when: UserCompletesOnboardingStep(user, role, step_kind)
+
+    let progress = OnboardingProgress{user, role}
+    let step = OnboardingStep{progress, kind: step_kind}
+
+    requires: exists progress
+    requires: not progress.dismissed
+    requires: exists step
+    requires: step.status = pending
+
+    ensures: step.status = completed
+    ensures: step.completed_at = now
+    ensures:
+        if progress.is_fully_complete:
+            OnboardingFullyCompleted(user: user, role: role)
+}
+
+-- Skip a step
+
+rule SkipOnboardingStep {
+    -- Marks a step as skipped. Skipped steps remain visible in the
+    -- checklist with a "skipped" indicator so the user can return later.
+
+    when: UserSkipsOnboardingStep(user, role, step_kind)
+
+    let progress = OnboardingProgress{user, role}
+    let step = OnboardingStep{progress, kind: step_kind}
+
+    requires: exists progress
+    requires: not progress.dismissed
+    requires: exists step
+    requires: step.status = pending
+
+    ensures: step.status = skipped
+
+    @guidance
+        -- Skipped steps should remain actionable in the checklist.
+        -- When a user returns to a skipped step and completes it,
+        -- use CompleteOnboardingStep (status transitions skipped -> completed
+        -- are permitted by ResumeSkippedStep).
+}
+
+rule ResumeSkippedStep {
+    -- A user can return to a previously skipped step and complete it.
+
+    when: UserCompletesOnboardingStep(user, role, step_kind)
+
+    let progress = OnboardingProgress{user, role}
+    let step = OnboardingStep{progress, kind: step_kind}
+
+    requires: exists progress
+    requires: not progress.dismissed
+    requires: exists step
+    requires: step.status = skipped
+
+    ensures: step.status = completed
+    ensures: step.completed_at = now
+    ensures:
+        if progress.is_fully_complete:
+            OnboardingFullyCompleted(user: user, role: role)
+}
+
+-- Dismiss onboarding
+
+rule DismissOnboarding {
+    -- User explicitly hides the onboarding checklist.
+    -- This is independent of step completion — they can dismiss
+    -- with 0 steps done or with all but one done.
+
+    when: UserDismissesOnboarding(user, role)
+
+    let progress = OnboardingProgress{user, role}
+
+    requires: exists progress
+    requires: not progress.dismissed
+    requires: not progress.is_fully_complete
+
+    ensures: progress.dismissed = true
+}
+
+-- Skip entire onboarding flow
+
+rule SkipEntireOnboarding {
+    -- During the initial onboarding page, user can skip straight
+    -- to the dashboard. All steps are marked skipped and the
+    -- checklist remains visible on the dashboard for later.
+
+    when: UserSkipsEntireOnboarding(user, role)
+
+    let progress = OnboardingProgress{user, role}
+
+    requires: exists progress
+    requires: not progress.dismissed
+
+    ensures:
+        for step in progress.steps where status = pending:
+            step.status = skipped
+}
+
+-- Role change: delta onboarding
+
+rule OnboardAfterRolePromotion {
+    -- When a user's role changes (e.g. member -> admin), they may gain
+    -- capabilities they haven't been onboarded for. Rather than creating
+    -- a full onboarding for the new role, only the delta steps are added.
+    --
+    -- Example: member promoted to admin already has setup_profile and
+    -- upload_first_receipt from member onboarding. They only need
+    -- management_intro (the new capability).
+    --
+    -- Steps already completed in a lower role are pre-marked as completed.
+
+    when: membership: TenantMembership.role transitions_to new_role
+
+    requires: membership.status = active
+
+    let existing = OnboardingProgress{user: membership.user, role: new_role}
+
+    requires: not exists existing
+
+    let new_step_defs =
+        if new_role = owner: config.owner_steps
+        else if new_role = admin: config.admin_steps
+        else if new_role = member: config.member_steps
+        else: config.viewer_steps
+
+    -- Collect step kinds already completed across any prior role onboarding
+    let completed_kinds = OnboardingStep where
+        progress.user = membership.user
+        and status = completed
+        -> kind
+
+    ensures:
+        let progress = OnboardingProgress.created(
+            user: membership.user,
+            role: new_role,
+            dismissed: false,
+            created_at: now
+        )
+        for def in new_step_defs:
+            OnboardingStep.created(
+                progress: progress,
+                kind: def.kind,
+                order: def.order,
+                status: if def.kind in completed_kinds: completed else: pending,
+                completed_at: if def.kind in completed_kinds: now else: null
+            )
+
+    @guidance
+        -- If all steps in the new role are already completed from prior
+        -- onboarding, the new progress record is immediately fully complete
+        -- and no onboarding UI is shown. This handles the common case
+        -- where an admin is promoted to owner and has already done everything
+        -- except name_workspace and review_payer_types.
+}
+
+------------------------------------------------------------
+-- Step-specific rules
+------------------------------------------------------------
+
+-- These rules define what "completing" each step means at the domain level.
+-- The actual UI for each step is a surface concern.
+
+rule CompleteNameWorkspace {
+    -- Workspace names are not unique across the platform.
+    -- The slug (already unique) is the system identifier.
+    -- The name is purely a display label.
+
+    when: UserRenamesWorkspace(membership, new_name)
+
+    requires: membership.role = owner
+    requires: length(new_name) > 0
+
+    ensures: membership.tenant.name = new_name
+    ensures: UserCompletesOnboardingStep(user: membership.user, role: membership.role, step_kind: name_workspace)
+
+    @guidance
+        -- Slug is not updated on rename — it remains the original
+        -- auto-generated value from provisioning. This avoids breaking
+        -- existing URLs or bookmarks.
+}
+
+rule CompleteSetupProfile {
+    -- Profile is "set up" when the user has provided a full_name.
+    -- Additional profile fields (avatar_url, locale, notification settings)
+    -- may be shown in the step UI but are not required for completion.
+    -- The step is satisfied by providing a non-empty full_name.
+
+    when: UserUpdatesProfile(user, full_name)
+
+    requires: length(full_name) > 0
+
+    ensures: user.full_name = full_name
+    ensures:
+        -- Profile setup applies across all active onboarding progress records
+        -- since it is user-level, not role-level.
+        for p in OnboardingProgress where user = user and not dismissed:
+            let step = OnboardingStep{progress: p, kind: setup_profile}
+            if exists step and step.status != completed:
+                UserCompletesOnboardingStep(user: user, role: p.role, step_kind: setup_profile)
+}
+
+rule CompleteCategoryConfiguration {
+    -- Acknowledging/reviewing the categories is sufficient.
+    -- The user does not have to change anything.
+
+    when: UserReviewsCategories(membership)
+
+    requires: membership.role in {owner, admin}
+
+    ensures: UserCompletesOnboardingStep(user: membership.user, role: membership.role, step_kind: configure_categories)
+}
+
+rule CompletePayerTypeReview {
+    -- Acknowledging/reviewing payer types is sufficient.
+
+    when: UserReviewsPayerTypes(membership)
+
+    requires: membership.role = owner
+
+    ensures: UserCompletesOnboardingStep(user: membership.user, role: membership.role, step_kind: review_payer_types)
+}
+
+rule CompleteInviteMembers {
+    -- Completing this step requires sending at least one invitation,
+    -- OR explicitly acknowledging "I'll do this later" (which triggers skip).
+    -- This rule handles the invitation path.
+
+    when: InvitationSent(membership, invitee_email)
+
+    requires: membership.role = owner
+
+    ensures: UserCompletesOnboardingStep(user: membership.user, role: membership.role, step_kind: invite_members)
+}
+
+rule CompleteManagementIntro {
+    -- The user has viewed the management features introduction.
+    -- This is a read-through step — completion means they reached the end.
+
+    when: UserCompletesManagementIntro(membership)
+
+    requires: membership.role in {owner, admin}
+
+    ensures: UserCompletesOnboardingStep(user: membership.user, role: membership.role, step_kind: management_intro)
+}
+
+rule CompleteFirstUpload {
+    -- The user successfully uploads their first receipt in this workspace.
+    -- This is a real upload that creates actual data, presented with
+    -- additional contextual guidance.
+
+    when: ReceiptUploaded(membership, receipt)
+
+    let progress = OnboardingProgress{user: membership.user, role: membership.role}
+    let step = OnboardingStep{progress, kind: upload_first_receipt}
+
+    requires: exists progress
+    requires: exists step
+    requires: step.status != completed
+
+    ensures: UserCompletesOnboardingStep(user: membership.user, role: membership.role, step_kind: upload_first_receipt)
+}
+
+rule CompleteBrowseIntro {
+    -- Viewer-only step: user has navigated through the browse/reporting intro.
+
+    when: UserCompletesBrowseIntro(membership)
+
+    requires: membership.role = viewer
+
+    ensures: UserCompletesOnboardingStep(user: membership.user, role: membership.role, step_kind: browse_intro)
+}
+
+------------------------------------------------------------
+-- Invariants
+------------------------------------------------------------
+
+invariant OneProgressPerUserRole {
+    -- Each (user, role) pair has at most one onboarding progress record.
+    -- A user who is "owner" in two workspaces shares one progress record.
+    -- A user who is "owner" in one and "viewer" in another has two records.
+}
+
+invariant StepOrderMatchesRole {
+    -- The steps created for a progress record match the step definitions
+    -- for that progress record's role. No extra steps, no missing steps.
+}
+
+invariant SkippedStepsRemainActionable {
+    -- A step with status = skipped can transition to completed.
+    -- It cannot transition back to pending.
+    -- Valid transitions: pending -> completed, pending -> skipped, skipped -> completed.
+}
+
+invariant DismissalIsIndependentOfCompletion {
+    -- dismissed = true does not change any step statuses.
+    -- is_fully_complete = true does not set dismissed.
+    -- These are independent paths to hiding the onboarding UI.
+}
+
+invariant DismissalIsFinal {
+    -- Once dismissed, onboarding cannot be restarted for that (user, role) pair.
+    -- There is no "re-onboard" option. The user can still discover features
+    -- through normal navigation and the sidebar.
+}
+
+invariant ProfileStepSharedAcrossRoles {
+    -- The setup_profile step, when completed for one role, is also
+    -- marked completed for all other active onboarding progress records
+    -- for the same user. Profile is a user-level concern, not role-level.
+}
+
+------------------------------------------------------------
+-- Surfaces
+------------------------------------------------------------
+
+surface OnboardingFlow {
+    -- The initial onboarding experience shown instead of the dashboard
+    -- on first workspace entry. A step-by-step guided flow.
+
+    provides:
+        RenderOnboardingPage(progress: OnboardingProgress)
+        UserCompletesOnboardingStep(user, role, step_kind)
+        UserSkipsOnboardingStep(user, role, step_kind)
+        UserSkipsEntireOnboarding(user, role)
+        UserDismissesOnboarding(user, role)
+
+    @guarantee FirstVisitRedirect
+        -- When a user navigates to the dashboard and their onboarding
+        -- progress (for the current membership role) has zero completed
+        -- steps (fresh onboarding), they are redirected to the onboarding
+        -- page instead.
+        -- After completing or skipping at least one step, or after
+        -- using SkipEntireOnboarding, the dashboard loads normally
+        -- with the checklist overlay.
+
+    @guarantee StepNavigation
+        -- Users can navigate between steps freely. They are not forced
+        -- to complete steps in order. The order field determines display
+        -- order, not enforcement order.
+
+    @guarantee SkipAlwaysAvailable
+        -- Every step has a visible "skip" / "preskoci" option.
+        -- The entire onboarding has a "skip all" / "preskoci sve" option.
+
+    @guidance
+        -- Each step renders as a focused card/page with:
+        --   1. Step title and description
+        --   2. The relevant form or interactive content
+        --   3. A "complete" / "next" action
+        --   4. A "skip" action
+        --   5. Progress indicator showing current step of total
+}
+
+surface OnboardingChecklist {
+    -- Persistent checklist visible after the initial onboarding flow.
+    -- Shows on dashboard as a banner and in sidebar as an indicator.
+
+    provides:
+        RenderDashboardBanner(progress: OnboardingProgress)
+        RenderSidebarIndicator(progress: OnboardingProgress)
+        NavigateToStep(step: OnboardingStep)
+        UserDismissesOnboarding(user, role)
+
+    @guarantee DashboardBannerPlacement
+        -- The checklist banner renders at the top of the dashboard page,
+        -- above all dashboard widgets. It shows completed/total count,
+        -- a progress bar, and links to incomplete steps.
+
+    @guarantee SidebarIndicator
+        -- A small progress indicator in the sidebar (e.g. a badge or
+        -- progress ring) is visible on all pages while onboarding is
+        -- active. Clicking it navigates to the relevant onboarding step
+        -- or to the dashboard banner.
+
+    @guarantee HiddenWhenComplete
+        -- Both banner and sidebar indicator are hidden when
+        -- is_fully_complete = true OR dismissed = true.
+
+    @guidance
+        -- The banner should be welcoming, not intrusive. Use a soft
+        -- background colour and keep it compact — one line of progress
+        -- plus expandable step list.
+        -- The sidebar indicator should be subtle — a small dot or
+        -- fraction (e.g. "2/7") next to a "Getting started" label.
+}
+
+surface GuidedFirstUpload {
+    -- The receipt upload flow when triggered from onboarding.
+    -- Same real upload mechanics, with additional contextual hints.
+
+    provides:
+        RenderGuidedUpload(membership)
+        ReceiptUploaded(membership, receipt)
+
+    @guarantee RealData
+        -- The guided upload creates a real receipt and expense.
+        -- No demo data, no cleanup needed.
+
+    @guarantee ContextualHints
+        -- Additional UI hints are shown during the first upload:
+        --   - Where to position the receipt for best OCR results
+        --   - What happens after upload (OCR processing, review)
+        --   - How to find the uploaded receipt afterwards
+        -- These hints are shown only during the onboarding upload,
+        -- not on subsequent uploads.
+
+    @guidance
+        -- Consider using dismissable tooltip overlays or a side panel
+        -- with step-by-step guidance alongside the standard upload form.
+        -- Do not alter the upload form itself — it should match the
+        -- normal upload experience so the user learns the real interface.
+}
+
+surface ManagementIntro {
+    -- Brief walkthrough of admin/owner management capabilities.
+    -- Content is dynamic, reflecting actual workspace state.
+
+    provides:
+        RenderManagementIntro(membership)
+        UserCompletesManagementIntro(membership)
+
+    @guarantee RoleAppropriateContent
+        -- Content shown matches the user's actual capabilities:
+        --   Owner: member management, role changes, workspace settings,
+        --          expense categories, payer types, supplier/store management,
+        --          unmapped alias resolution
+        --   Admin: member management (limited), expense categories,
+        --          supplier/store management, unmapped alias resolution
+        -- Viewer/member roles never see this surface.
+
+    @guarantee DynamicContent
+        -- The intro reflects actual workspace state, not static text.
+        -- Examples:
+        --   - "Imate 12 kategorija troskova" (not "Configure categories")
+        --   - "Vas tim ima 3 clana" (not "Manage your team")
+        --   - "56 nemapiranih aliasa ceka na obradu" (if applicable)
+        -- This makes the intro immediately relevant and actionable.
+
+    @guidance
+        -- A scrollable card or carousel showing 3-5 feature highlights
+        -- with brief descriptions, live counts from workspace state,
+        -- and links to the relevant pages.
+        -- Not a full tutorial — just enough to know what exists
+        -- and where to find it.
+}
+
+surface BrowseIntro {
+    -- Viewer-only walkthrough of read-only capabilities.
+
+    provides:
+        RenderBrowseIntro(membership)
+        UserCompletesBrowseIntro(membership)
+
+    @guarantee ViewerOnly
+        -- This surface is only shown to users with viewer role.
+        -- It highlights browsing expenses, viewing reports, and
+        -- understanding the dashboard — no write operations.
+
+    @guidance
+        -- Similar format to ManagementIntro but focused on:
+        --   - Dashboard overview and what each widget means
+        --   - Browsing the expense list (filters, search)
+        --   - Viewing expense reports
+        -- Keep it brief — viewers have limited capabilities.
+}
+
+surface RoleDifferenceNotice {
+    -- One-time dismissable notice shown when a user enters a new
+    -- workspace but has already onboarded for this role.
+
+    provides:
+        RenderRoleDifferenceNotice(membership, differences: List<RoleDifference>)
+        DismissRoleDifferenceNotice(membership)
+
+    @guarantee OneTimeOnly
+        -- The notice is shown once per workspace entry. After dismissal,
+        -- it is not shown again for that membership.
+
+    @guarantee BriefAndActionable
+        -- The notice is a compact card, not a multi-step flow.
+        -- It highlights 2-3 key differences between this workspace
+        -- and the user's previously-onboarded workspace of the same role.
+        -- If there are no meaningful differences, the notice is skipped.
+
+    @guidance
+        -- Render as a dismissable banner at the top of the dashboard,
+        -- similar in style to the onboarding checklist banner but
+        -- simpler — just a few bullet points and a dismiss button.
+        -- Example: "Dobrodosli u [Workspace Name]! Evo sta je drugacije:"
+        -- followed by a short list of differences.
+}
+
+------------------------------------------------------------
+-- Open Questions
+------------------------------------------------------------
+
+-- (all resolved)

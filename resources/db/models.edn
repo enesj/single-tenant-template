@@ -17,6 +17,36 @@
   [[:uniq_frontend_runtime_configs_scope_key
     :btree
     {:fields [:scope :config_key], :unique true}]]},
+ :onboarding_progress
+ {:fields
+  [[:id :uuid {:primary-key true}]
+   [:user_id
+    :uuid
+    {:foreign-key :users/id, :null false, :on-delete :cascade}]
+   [:role [:enum :membership-role] {:null false}]
+   [:dismissed :boolean {:null false, :default false}]
+   [:created_at :timestamptz {:default [:now]}]
+   [:updated_at :timestamptz {:default [:now]}]],
+  :types
+  [[:onboarding-step-kind
+    :enum
+    {:choices
+     ["name_workspace"
+      "setup_profile"
+      "configure_categories"
+      "review_payer_types"
+      "invite_members"
+      "management_intro"
+      "upload_first_receipt"
+      "browse_intro"]}]
+   [:onboarding-step-status
+    :enum
+    {:choices ["pending" "completed" "skipped"]}]],
+  :indexes
+  [[:uniq_onboarding_progress_user_role
+    :btree
+    {:fields [:user_id :role], :unique true}]
+   [:idx_onboarding_progress_user :btree {:fields [:user_id]}]]},
  :exchange_rate_fetch_alerts
  {:fields
   [[:id :uuid {:primary-key true}]
@@ -200,6 +230,28 @@
     {:fields [:expense_category_id]}]
    [:idx_expenses_purchased_at :btree {:fields [:purchased_at]}]
    [:idx_expenses_is_posted :btree {:fields [:is_posted]}]]},
+ :onboarding_steps
+ {:fields
+  [[:id :uuid {:primary-key true}]
+   [:progress_id
+    :uuid
+    {:foreign-key :onboarding_progress/id,
+     :null false,
+     :on-delete :cascade}]
+   [:kind [:enum :onboarding-step-kind] {:null false}]
+   [:step_order :integer {:null false}]
+   [:status
+    [:enum :onboarding-step-status]
+    {:null false, :default "pending"}]
+   [:completed_at :timestamptz]
+   [:created_at :timestamptz {:default [:now]}]
+   [:updated_at :timestamptz {:default [:now]}]],
+  :indexes
+  [[:uniq_onboarding_steps_progress_kind
+    :btree
+    {:fields [:progress_id :kind], :unique true}]
+   [:idx_onboarding_steps_progress :btree {:fields [:progress_id]}]
+   [:idx_onboarding_steps_status :btree {:fields [:status]}]]},
  :password_reset_tokens
  {:fields
   [[:id :uuid {:primary-key true}]

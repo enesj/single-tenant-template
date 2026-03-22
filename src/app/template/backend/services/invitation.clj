@@ -3,6 +3,7 @@
   (:require
     [app.shared.adapters.database :refer [convert-pg-objects]]
     [app.template.backend.auth.service :as auth-service]
+    [app.template.backend.services.onboarding.core :as onboarding]
     [app.template.backend.services.tenant :as tenant-svc]
     [honey.sql :as sql]
     [java-time.api :as time]
@@ -186,6 +187,14 @@
           (catch Exception e
             (log/warn e "Failed to provision user payer on invitation accept"
               {:tenant-id tenant-id :user-id user-id})))
+
+        ;; Initialise onboarding for the invited role (delta-aware: pre-marks
+        ;; steps already completed in prior roles)
+        (try
+          (onboarding/initialise-delta-onboarding! tx user-id (name role))
+          (catch Exception e
+            (log/warn e "Failed to initialise onboarding on invitation accept"
+              {:user-id user-id :role role})))
 
         (log/info "Invitation accepted — user" (or (:email user) (:users/email user)) "joined tenant" tenant-id "as" role)
         membership))))

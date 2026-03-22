@@ -3,6 +3,7 @@
   (:require
     [app.template.frontend.api :as api]))
 
+(def dashboard-endpoint (api/versioned-endpoint "/expenses/dashboard"))
 (def summary-endpoint (api/versioned-endpoint "/expenses/summary"))
 (def list-endpoint (api/versioned-endpoint "/expenses"))
 (def by-month-endpoint (api/versioned-endpoint "/expenses/by-month"))

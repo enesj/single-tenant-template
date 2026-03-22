@@ -5,11 +5,14 @@
     [re-frame.core :as rf]))
 
 (defn post-auth-redirect
-  [{:keys [return-url no-tenant? tenant-selection-required membership-role]}]
+  [{:keys [return-url no-tenant? tenant-selection-required membership-role
+           onboarding]}]
   (cond
     (seq return-url) return-url
     no-tenant? "/tenant-select"
     tenant-selection-required "/tenant-select"
+    ;; Redirect to onboarding if the user hasn't started any steps yet
+    (:redirect-to-onboarding? onboarding) "/onboarding"
     (contains? #{"member" "admin" "owner"} membership-role) "/dashboard"
     :else "/dashboard"))
 

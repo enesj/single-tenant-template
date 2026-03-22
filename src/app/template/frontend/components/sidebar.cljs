@@ -11,8 +11,8 @@
       (when icon
         icon)
       ($ :span {:class "flex-1"} label)
-      (when (and badge (pos? badge))
-        ($ :span {:class "ds-badge ds-badge-sm ds-badge-error font-bold"}
+      (when (and badge (if (number? badge) (pos? badge) (seq (str badge))))
+        ($ :span {:class "ds-badge ds-badge-sm ds-badge-primary font-bold"}
           badge)))))
 
 (defui sidebar-section [{:keys [title items subsections]}]
