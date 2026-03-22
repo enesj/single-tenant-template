@@ -126,3 +126,31 @@
                   :e.currency]
        :order-by [[[:raw "to_char(e.purchased_at, 'YYYY-MM-DD')"] :asc]
                   [:e.currency :asc]]})))
+
+(defn by-category
+  "Spending breakdown by article category and subcategory.
+  Joins expense_items → article_aliases → articles → subcategories → categories."
+  [db user-id opts]
+  (let [user-id (shared/ensure-uuid user-id)
+        item-joins [[:expenses :e] [:= :e.id :ei.expense_id]]
+        item-left-joins [[:article_aliases :aa] [:= :aa.id :ei.alias_id]
+                         [:articles :a] [:= :a.id :aa.article_id]
+                         [:subcategories :sc] [:= :sc.id :a.subcategory_id]
+                         [:categories :c] [:= :c.id :sc.category_id]]
+        rows (shared/query-many
+               db
+               {:select [[:c.id :category_id]
+                         [[:coalesce :c.name [:inline "Nekategorizirano"]] :category_name]
+                         [:sc.id :subcategory_id]
+                         [[:coalesce :sc.name [:inline "Nekategorizirano"]] :subcategory_name]
+                         :e.currency
+                         [[:sum :ei.line_total] :total_amount]
+                         [[:count [:distinct :ei.id]] :item_count]]
+                :from [[:expense_items :ei]]
+                :join item-joins
+                :left-join item-left-joins
+                :where (shared/item-base-where user-id opts)
+                :group-by [:c.id :c.name :sc.id :sc.name :e.currency]
+                :order-by [[:e.currency :asc]
+                           [[:sum :ei.line_total] :desc]]})]
+    (shared/allocation-with-percentages rows)))

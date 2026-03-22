@@ -117,4 +117,58 @@
     (pos? ratio) "bg-primary/10 text-base-content"
     :else "bg-base-100 text-base-content/30 hover:bg-base-200 transition-colors"))
 
+(defn aggregate-by-category
+  "Group flat by-category rows into a nested structure:
+  [{:category_id ... :category_name ... :total_amount ... :allocation_pct ...
+    :subcategories [{:subcategory_id ... :subcategory_name ... :total_amount ... :item_count ...}]}]
+  Sorted by total_amount descending."
+  [rows]
+  (let [;; Sum across currencies per category+subcategory
+        by-cat-sub (->> (or rows [])
+                     (reduce
+                       (fn [acc row]
+                         (let [cat-id (or (:category_id row) "uncategorized")
+                               cat-name (or (:category_name row) "Nekategorizirano")
+                               sub-id (or (:subcategory_id row) "uncategorized")
+                               sub-name (or (:subcategory_name row) "Nekategorizirano")
+                               k [cat-id sub-id]
+                               base (get acc k {:category_id cat-id
+                                                :category_name cat-name
+                                                :subcategory_id sub-id
+                                                :subcategory_name sub-name
+                                                :total_amount 0
+                                                :item_count 0
+                                                :allocation_pct 0})]
+                           (assoc acc k
+                             (-> base
+                               (update :total_amount + (or (->number (:total_amount row)) 0))
+                               (update :item_count + (or (->number (:item_count row)) 0))
+                               (update :allocation_pct + (or (->number (:allocation_pct row)) 0))))))
+                       {})
+                     vals)
+        ;; Group by category
+        grouped (group-by :category_id by-cat-sub)
+        grand-total (reduce + 0 (map :total_amount by-cat-sub))
+        categories (->> grouped
+                     (map (fn [[cat-id subs]]
+                            (let [cat-total (reduce + 0 (map :total_amount subs))
+                                  cat-items (reduce + 0 (map :item_count subs))
+                                  cat-pct (if (pos? grand-total) (* 100.0 (/ cat-total grand-total)) 0)
+                                  sorted-subs (->> subs
+                                                (sort-by :total_amount >)
+                                                (mapv (fn [s]
+                                                        (assoc s :sub_pct
+                                                          (if (pos? cat-total)
+                                                            (* 100.0 (/ (:total_amount s) cat-total))
+                                                            0)))))]
+                              {:category_id cat-id
+                               :category_name (:category_name (first subs))
+                               :total_amount cat-total
+                               :item_count cat-items
+                               :allocation_pct cat-pct
+                               :subcategories sorted-subs})))
+                     (sort-by :total_amount >)
+                     vec)]
+    categories))
+
 

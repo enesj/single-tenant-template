@@ -14,6 +14,8 @@
 (def reports-day-of-week-endpoint (str reports-endpoint "/day-of-week"))
 (def reports-size-distribution-endpoint (str reports-endpoint "/size-distribution"))
 (def reports-daily-heatmap-endpoint (str reports-endpoint "/daily-heatmap"))
+(def reports-by-category-endpoint (str reports-endpoint "/by-category"))
+
 (def reports-filter-options-endpoint (str reports-endpoint "/filter-options"))
 
 (def suppliers-endpoint (api/versioned-endpoint "/expenses/suppliers"))

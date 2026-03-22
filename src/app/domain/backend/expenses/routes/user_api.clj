@@ -61,6 +61,7 @@
     ["/day-of-week" {:get {:handler (user-expenses-reports/day-of-week-spending-handler db)}}]
     ["/size-distribution" {:get {:handler (user-expenses-reports/expense-size-distribution-handler db)}}]
     ["/daily-heatmap" {:get {:handler (user-expenses-reports/daily-heatmap-handler db)}}]
+    ["/by-category" {:get {:handler (user-expenses-reports/by-category-handler db)}}]
     ["/filter-options" {:get {:handler (user-expenses-reports/filter-options-handler db)}}]]
 
    ;; Reference data endpoints (suppliers, payers)

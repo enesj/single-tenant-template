@@ -270,6 +270,22 @@
   (fn [db _]
     (reports-data db :daily-heatmap :error)))
 
+;; By-category report
+(rf/reg-sub
+  :user-expenses/report-by-category
+  (fn [db _]
+    (or (reports-data db :by-category :data) [])))
+
+(rf/reg-sub
+  :user-expenses/report-by-category-loading?
+  (fn [db _]
+    (boolean (reports-data db :by-category :loading?))))
+
+(rf/reg-sub
+  :user-expenses/report-by-category-error
+  (fn [db _]
+    (reports-data db :by-category :error)))
+
 ;; Stores and articles (synced to admin entity store by fetch events)
 (rf/reg-sub
   :user-expenses/stores

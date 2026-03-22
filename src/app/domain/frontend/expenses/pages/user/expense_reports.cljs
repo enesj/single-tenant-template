@@ -6,10 +6,12 @@
   - Summary stat cards
   - Day-of-week spending pattern
   - Expense size distribution
-  - Daily calendar heatmap"
+  - Daily calendar heatmap
+  - Category/subcategory breakdown"
   (:require
     [app.domain.frontend.expenses.pages.user.expense-reports.components :refer [report-multi-select
                                                                                 stat-card]]
+    [app.domain.frontend.expenses.pages.user.expense-reports.sections.categories :refer [categories-tab]]
     [app.domain.frontend.expenses.pages.user.expense-reports.sections.expenses :refer [expenses-tab]]
     [app.domain.frontend.expenses.pages.user.expense-reports.utils :as report-utils]
     [app.template.frontend.components.button :refer [button]]
@@ -92,6 +94,10 @@
         daily-heatmap-loading? (boolean (use-subscribe [:user-expenses/report-daily-heatmap-loading?]))
         daily-heatmap-error (use-subscribe [:user-expenses/report-daily-heatmap-error])
 
+        by-category-data (or (use-subscribe [:user-expenses/report-by-category]) [])
+        by-category-loading? (boolean (use-subscribe [:user-expenses/report-by-category-loading?]))
+        by-category-error (use-subscribe [:user-expenses/report-by-category-error])
+
         report-filter-options (use-subscribe [:user-expenses/report-filter-options])
         report-filter-options-loading? (boolean (use-subscribe [:user-expenses/report-filter-options-loading?]))
         filter-options-ready? (and (not report-filter-options-loading?) (some? report-filter-options))
@@ -138,6 +144,8 @@
         heatmap-visible (->> heatmap-rows (take-last 84) vec)
         heatmap-max (apply max (cons 0 (map #(or (report-utils/->number (:total_amount %)) 0) heatmap-visible)))
         selected-heatmap-day (first (filter #(= selected-day (:day %)) heatmap-visible))
+
+        category-data (report-utils/aggregate-by-category by-category-data)
 
         currency-totals (or (:currency-totals summary) {})
         primary-currency-key (or
@@ -264,4 +272,9 @@
                          :heatmap-visible heatmap-visible
                          :heatmap-max heatmap-max
                          :selected-day selected-day
-                         :selected-heatmap-day selected-heatmap-day})))))
+                         :selected-heatmap-day selected-heatmap-day})
+
+        ($ categories-tab {:by-category-loading? by-category-loading?
+                           :by-category-error by-category-error
+                           :category-data category-data
+                           :primary-currency primary-currency})))))

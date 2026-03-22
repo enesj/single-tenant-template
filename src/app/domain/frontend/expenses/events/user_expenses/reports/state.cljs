@@ -45,7 +45,8 @@
                     [:user-expenses/fetch-report-filter-options]
                     [:user-expenses/fetch-report-day-of-week]
                     [:user-expenses/fetch-report-size-distribution]
-                    [:user-expenses/fetch-report-daily-heatmap]]})))
+                    [:user-expenses/fetch-report-daily-heatmap]
+                    [:user-expenses/fetch-report-by-category]]})))
 
 (rf/reg-event-fx
   :user-expenses/reports-set-filter

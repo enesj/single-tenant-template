@@ -151,3 +151,31 @@
   (fn [db [error]]
     (log/warn "Failed to fetch daily-heatmap report" {:error error})
     (finish-failure db :daily-heatmap error)))
+
+;; ---------------------------------------------------------------------------
+;; By category
+;; ---------------------------------------------------------------------------
+
+(rf/reg-event-fx
+  :user-expenses/fetch-report-by-category
+  common-interceptors
+  (fn [{:keys [db]} _]
+    (fetch-fx db
+      :by-category
+      endpoints/reports-by-category-endpoint
+      (h/common-report-params db)
+      [:user-expenses/fetch-report-by-category-success]
+      [:user-expenses/fetch-report-by-category-failure])))
+
+(rf/reg-event-db
+  :user-expenses/fetch-report-by-category-success
+  common-interceptors
+  (fn [db [response]]
+    (finish-success db :by-category (vec (or (:data response) [])))))
+
+(rf/reg-event-db
+  :user-expenses/fetch-report-by-category-failure
+  common-interceptors
+  (fn [db [error]]
+    (log/warn "Failed to fetch by-category report" {:error error})
+    (finish-failure db :by-category error)))

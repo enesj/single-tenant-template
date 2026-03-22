@@ -166,6 +166,29 @@
 ;; Filter options (utility — populates filter dropdowns)
 ;; ---------------------------------------------------------------------------
 
+;; ---------------------------------------------------------------------------
+;; By category
+;; ---------------------------------------------------------------------------
+
+(defn by-category-handler
+  [db]
+  (fn [request]
+    (with-user-report-access
+      request
+      (fn [user-id tenant-id]
+        (try
+          (let [params (:query-params request)
+                {:keys [error opts]} (parse-common-report-opts params)]
+            (if error
+              error
+              (h/json-response {:data (report-time/by-category db user-id (assoc opts :tenant-id tenant-id))})))
+          (catch Exception e
+            (log/error e "Error getting by-category report"
+              {:user-id user-id
+               :query-params (:query-params request)
+               :message (.getMessage e)})
+            (h/json-response {:error "Failed to get by-category report"} 500)))))))
+
 (defn filter-options-handler
   [db]
   (fn [request]
