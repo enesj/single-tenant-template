@@ -3,7 +3,7 @@
 
   Usage:
     clj -T:build clean             ; remove target/
-    clj -T:build release-frontend  ; shadow-cljs release :app :admin + postcss
+    clj -T:build release-frontend  ; shadow-cljs release :app :admin :mobile + postcss
     clj -T:build uber              ; full build → target/app-<version>-standalone.jar
 
   Pass :version to override APP_VERSION env var:
@@ -35,8 +35,8 @@
   [_]
   (println "🎨 Building CSS (postcss)...")
   (b/process {:command-args ["npm" "run" "postcss"]})
-  (println "⚡ Building ClojureScript (shadow-cljs release app admin)...")
-  (b/process {:command-args ["npx" "shadow-cljs" "release" "app" "admin"]}))
+  (println "⚡ Building ClojureScript (shadow-cljs release app admin mobile)...")
+  (b/process {:command-args ["npx" "shadow-cljs" "release" "app" "admin" "mobile"]}))
 
 (defn uber
   "Full production build: clean → frontend → AOT backend → uberjar.
