@@ -379,6 +379,7 @@
                                        (sync-gesture-after-release!)))
         return-to-upload! (fn []
                             (stop-live-stream!)
+                            (reset-preview-transform!)
                             (rf/dispatch [:mobile/navigate "/m/upload"]))
         finish-with-file! (fn [file]
                             (set-capturing-photo! false)
@@ -511,7 +512,7 @@
                                 (finish-with-file! file)
                                 (set! (.-value (.-target e)) "")))})
       ($ :div {:id "page-camera-capture-mobile"
-               :class "relative min-h-[calc(100vh-5rem)] overflow-hidden bg-black text-white"}
+               :class "fixed inset-0 z-[70] overflow-hidden bg-black text-white"}
         ($ :div {:id "camera-preview-stage-mobile"
                  :class "absolute inset-0 overflow-hidden"
                  :style #js {:touchAction "none"}

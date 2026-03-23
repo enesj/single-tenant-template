@@ -31,9 +31,9 @@
 
 (defui current-page []
   (let [current-view (use-subscribe [:mobile/current-view])
-        ;; Auth views render without the tab layout
-        auth-views #{:m/login :m/forgot-password :m/tenant-select}
-        auth-view? (contains? auth-views current-view)
+        ;; Auth views and dedicated camera capture render outside the tab shell
+        shellless-views #{:m/login :m/forgot-password :m/tenant-select :m/upload-camera}
+        shellless-view? (contains? shellless-views current-view)
 
         page-el (case current-view
                   :m/login ($ login-page)
@@ -54,7 +54,7 @@
 
                   ;; Default: show dashboard
                   ($ dashboard-page))]
-    (if auth-view?
+    (if shellless-view?
       page-el
       ($ mobile-layout {:children page-el}))))
 
