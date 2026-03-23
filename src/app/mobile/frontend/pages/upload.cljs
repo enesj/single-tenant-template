@@ -378,6 +378,53 @@
                               (set! (.-srcObject video-el) nil))
                             (reset! active-pointers-ref {})
                             (reset! gesture-ref nil))
+        restart-live-preview! (fn []
+                                (if (media-devices-supported?)
+                                  (let [media-devices (.-mediaDevices js/navigator)]
+                                    (set-camera-starting! true)
+                                    (set-capturing-photo! false)
+                                    (clear-camera-error!)
+                                    (set-native-fallback! false)
+                                    (stop-live-stream!)
+                                    (reset! active-pointers-ref {})
+                                    (reset! gesture-ref nil)
+                                    (set-preview-zoom! 1.0)
+                                    (set-preview-pan! {:x 0 :y 0})
+                                    (-> (.getUserMedia media-devices camera-constraints)
+                                      (.then (fn [stream]
+                                               (reset! live-stream-ref stream)
+                                               (when-let [video-el @live-video-ref]
+                                                 (attach-stream! video-el stream))
+                                               (let [track (first-video-track stream)
+                                                     torch? (torch-supported? track)]
+                                                 (set-torch-available! torch?)
+                                                 (set-torch-enabled! false)
+                                                 (detect-flash-support! track
+                                                   (fn [flash?]
+                                                     (set-flash-available! flash?)
+                                                     (when-not flash?
+                                                       (set-flash-enabled! false))))
+                                                 (set-camera-starting! false))))
+                                      (.catch (fn [err]
+                                                (stop-live-stream!)
+                                                (set-camera-starting! false)
+                                                (set-native-fallback! true)
+                                                (set-device-flash-native-mode! false)
+                                                (set-torch-available! false)
+                                                (set-torch-enabled! false)
+                                                (set-flash-available! false)
+                                                (set-flash-enabled! false)
+                                                (show-camera-error! (camera-error-message err))))))
+                                  (do
+                                    (set-camera-starting! false)
+                                    (set-native-fallback! true)
+                                    (set-device-flash-native-mode! false)
+                                    (set-torch-available! false)
+                                    (set-torch-enabled! false)
+                                    (set-flash-available! false)
+                                    (set-flash-enabled! false)
+                                    (show-camera-error!
+                                      "Live camera preview is unavailable here. Capture will use the device camera instead."))))
         trigger-native-camera! (fn []
                                  (when-let [el @native-camera-ref]
                                    (.click el)))
@@ -502,11 +549,15 @@
                                        (clear-captured-file!)
                                        (trigger-native-camera!)
                                        (save-captured-file! file nil))
-                                     (save-captured-file! file clear-captured-file!))))
+                                     (do
+                                       (clear-captured-file!)
+                                       (restart-live-preview!)
+                                       (save-captured-file! file nil)))))
         retake-photo! (fn []
                         (clear-captured-file!)
-                        (when native-capture-mode?
-                          (reopen-native-camera!)))
+                        (if native-capture-mode?
+                          (reopen-native-camera!)
+                          (restart-live-preview!)))
         capture-live-photo! (fn []
                               (if native-capture-mode?
                                 (trigger-native-camera!)
