@@ -268,9 +268,9 @@
      :on-click on-click
      :class (str "flex h-14 w-14 items-center justify-center rounded-full border text-white shadow-xl backdrop-blur "
               (cond
-                disabled? "border-white/10 bg-black/30 text-white/40"
-                active? "border-amber-300 bg-amber-500/90"
-                :else "border-white/25 bg-black/45 hover:bg-black/60"))}
+                disabled? "border-white/10 bg-black/20 text-white/35"
+                active? "border-amber-300 bg-amber-500/72"
+                :else "border-white/20 bg-black/28 hover:bg-black/38"))}
     ($ :svg {:class "h-6 w-6" :fill "none" :viewBox "0 0 24 24" :stroke-width "1.75" :stroke "currentColor"}
       ($ :path {:stroke-linecap "round" :stroke-linejoin "round" :d icon-path}))))
 
@@ -285,6 +285,7 @@
         [camera-starting? set-camera-starting!] (use-state true)
         [capturing-photo? set-capturing-photo!] (use-state false)
         [camera-error set-camera-error!] (use-state nil)
+        [camera-error-dismissed? set-camera-error-dismissed!] (use-state false)
         [torch-available? set-torch-available!] (use-state false)
         [torch-enabled? set-torch-enabled!] (use-state false)
         [flash-available? set-flash-available!] (use-state false)
@@ -299,6 +300,12 @@
                                    (reset! gesture-ref nil)
                                    (set-preview-zoom! 1.0)
                                    (set-preview-pan! {:x 0 :y 0}))
+        clear-camera-error! (fn []
+                              (set-camera-error! nil)
+                              (set-camera-error-dismissed! false))
+        show-camera-error! (fn [message]
+                             (set-camera-error! message)
+                             (set-camera-error-dismissed! false))
         stop-live-stream! (fn []
                             (when-let [stream @live-stream-ref]
                               (stop-stream! stream)
@@ -396,18 +403,22 @@
                               (not torch-enabled?)
                               (fn [enabled?]
                                 (set-torch-enabled! enabled?)
-                                (set-camera-error! nil))
+                                (do
+                                  (set-camera-error! nil)
+                                  (set-camera-error-dismissed! false)))
                               (fn [_]
                                 (set-torch-available! false)
                                 (set-torch-enabled! false)
-                                (set-camera-error! "Torch control is not available on this device/browser."))))))
+                                (show-camera-error! "Torch control is not available on this device/browser."))))))
         toggle-flash! (fn []
                         (if flash-available?
                           (do
                             (set-flash-enabled! (not flash-enabled?))
-                            (set-camera-error! nil))
+                            (do
+                              (set-camera-error! nil)
+                              (set-camera-error-dismissed! false)))
                           (do
-                            (set-camera-error! "Live flash control is unavailable here. Opening the device camera so you can use native flash controls.")
+                            (show-camera-error! "Live flash control is unavailable here. Opening the device camera so you can use native flash controls.")
                             (trigger-native-camera!))))
         capture-live-photo! (fn []
                               (if native-fallback?
@@ -419,7 +430,7 @@
                                                      (finish-with-file! file))
                                         on-error (fn [message]
                                                    (set-capturing-photo! false)
-                                                   (set-camera-error! message))]
+                                                   (show-camera-error! message))]
                                     (if flash-enabled?
                                       (try-capture-with-flash! track video-el on-success on-error)
                                       (capture-current-frame! video-el on-success on-error))))))]
@@ -430,7 +441,9 @@
           (let [cancelled? (atom false)
                 media-devices (.-mediaDevices js/navigator)]
             (set-camera-starting! true)
-            (set-camera-error! nil)
+            (do
+              (set-camera-error! nil)
+              (set-camera-error-dismissed! false))
             (set-native-fallback! false)
             (do
               (reset! active-pointers-ref {})
@@ -470,7 +483,9 @@
                           (set-torch-enabled! false)
                           (set-flash-available! false)
                           (set-flash-enabled! false)
-                          (set-camera-error! (camera-error-message err))))))
+                          (do
+                            (set-camera-error! (camera-error-message err))
+                            (set-camera-error-dismissed! false))))))
             (fn []
               (reset! cancelled? true)
               (when-let [stream @live-stream-ref]
@@ -487,7 +502,9 @@
             (set-flash-enabled! false)
             (set-torch-available! false)
             (set-torch-enabled! false)
-            (set-camera-error! "Live camera preview is unavailable here. Capture will use the device camera instead.")
+            (do
+              (set-camera-error! "Live camera preview is unavailable here. Capture will use the device camera instead.")
+              (set-camera-error-dismissed! false))
             js/undefined)))
       [])
 
@@ -583,10 +600,17 @@
                                    "bg-black/45 text-white/80"))}
                 (if torch-enabled? "Torch On" "Torch Off")))))
 
-        (when camera-error
+        (when (and camera-error (not camera-error-dismissed?))
           ($ :div {:id "alert-camera-upload-mobile"
-                   :class "absolute left-4 right-4 top-28 z-30 rounded-2xl border border-white/15 bg-black/60 px-4 py-3 text-sm text-white/90 backdrop-blur"}
-            ($ :span camera-error)))
+                   :class "absolute left-4 right-4 top-28 z-30 flex items-start justify-between gap-3 rounded-2xl border border-white/15 bg-black/50 px-4 py-3 text-sm text-white/90 backdrop-blur"}
+            ($ :span {:class "flex-1 leading-5"} camera-error)
+            ($ :button {:id "btn-close-camera-error-mobile"
+                        :type "button"
+                        :aria-label "Dismiss camera warning"
+                        :class "rounded-full bg-white/10 p-2 text-white/80 transition hover:bg-white/15 hover:text-white"
+                        :on-click #(set-camera-error-dismissed! true)}
+              ($ :svg {:class "h-4 w-4" :fill "none" :viewBox "0 0 24 24" :stroke-width "2" :stroke "currentColor"}
+                ($ :path {:stroke-linecap "round" :stroke-linejoin "round" :d "M6 18L18 6M6 6l12 12"})))))
 
         (when zoomed?
           ($ :div {:class "pointer-events-none absolute inset-x-0 bottom-36 z-30 flex justify-center"}
