@@ -47,7 +47,7 @@
              (assoc-in [:mobile :upload :loading?] false)
              (assoc-in [:mobile :upload :error] nil)
              (assoc-in [:mobile :upload :last-upload] response))
-       :fx (cond-> [[:dispatch [:mobile/show-toast "Receipt uploaded successfully"]]]
+       :fx (cond-> [[:dispatch [:mobile/show-toast :mobile/toast-receipt-uploaded]]]
              (and receipt-id (not duplicate?))
              (conj [:http-xhrio
                     {:method :post
@@ -152,13 +152,13 @@
 
 (defn camera-error-message [err]
   (case (some-> err .-name)
-    "NotAllowedError" "Camera access was blocked. You can still use the device camera instead."
-    "NotFoundError" "No rear camera was found on this device."
-    "NotReadableError" "The camera is already in use by another app."
-    "OverconstrainedError" "This device could not open the preferred rear camera."
-    "SecurityError" "The in-app camera needs a secure browser context on this device."
-    "AbortError" "The camera was interrupted before it finished opening."
-    "Couldn't start the in-app camera. You can still use the device camera instead."))
+    "NotAllowedError" :mobile/camera-err-not-allowed
+    "NotFoundError" :mobile/camera-err-not-found
+    "NotReadableError" :mobile/camera-err-not-readable
+    "OverconstrainedError" :mobile/camera-err-overconstrained
+    "SecurityError" :mobile/camera-err-security
+    "AbortError" :mobile/camera-err-abort
+    :mobile/camera-err-default))
 
 (defn attach-stream! [video-el stream]
   (when video-el
@@ -189,7 +189,7 @@
   (let [width (or (.-videoWidth video-el) 0)
         height (or (.-videoHeight video-el) 0)]
     (if (or (<= width 0) (<= height 0))
-      (on-error "The camera preview is not ready yet. Try again in a second.")
+      (on-error :mobile/preview-not-ready)
       (let [{:keys [width height]} (bounded-capture-dimensions width height)
             canvas (.createElement js/document "canvas")
             ctx (.getContext canvas "2d")]
@@ -200,7 +200,7 @@
           (fn [blob]
             (if blob
               (on-success (upload-file-from-blob blob))
-              (on-error "Couldn't capture a photo from the live camera.")))
+              (on-error :mobile/capture-failed)))
           "image/jpeg"
           0.85)))))
 
@@ -346,7 +346,8 @@
       ")")))
 
 (defui toast-banner []
-  (let [toast (use-subscribe [:mobile/toast])]
+  (let [t (use-t)
+        toast (use-subscribe [:mobile/toast])]
     ;; Auto-dismiss after 3s — hook called unconditionally per React rules
     (uix/use-effect
       (fn []
@@ -356,7 +357,7 @@
       [toast])
     (when toast
       ($ :div {:class "fixed top-4 left-4 right-4 z-50 ds-alert ds-alert-success shadow-lg"}
-        ($ :span toast)))))
+        ($ :span (if (keyword? toast) (t toast) toast))))))
 
 (defui camera-icon-button [{:keys [id label icon-path active? disabled? on-click]}]
   ($ :button
@@ -405,9 +406,9 @@
         native-capture-mode? (or native-fallback? device-flash-native-mode?)
         lens-controls-available? (and (map? camera-hardware-zoom-range) (not native-capture-mode?))
         flash-pill-label (cond
-                           flash-available? (if flash-enabled? "Flash On" "Flash Off")
-                           device-flash? "iPhone Flash"
-                           :else "Use iPhone Flash")
+                           flash-available? (if flash-enabled? (t :mobile/flash-on) (t :mobile/flash-off))
+                           device-flash? (t :mobile/iphone-flash)
+                           :else (t :mobile/use-iphone-flash))
         reset-preview-transform! (fn []
                                    (reset! active-pointers-ref {})
                                    (reset! gesture-ref nil)
@@ -502,8 +503,7 @@
                                     (set-torch-enabled! false)
                                     (set-flash-available! false)
                                     (set-flash-enabled! false)
-                                    (show-camera-error!
-                                      "Live camera preview is unavailable here. Capture will use the device camera instead."))))
+                                    (show-camera-error! :mobile/camera-unavailable))))
         trigger-native-camera! (fn []
                                  (when-let [el @native-camera-ref]
                                    (.click el)))
@@ -598,7 +598,7 @@
                               (fn [_]
                                 (set-torch-available! false)
                                 (set-torch-enabled! false)
-                                (show-camera-error! "Torch control is not available on this device/browser."))))))
+                                (show-camera-error! :mobile/torch-unavailable))))))
         toggle-flash! (fn []
                         (let [next-enabled? (not flash-enabled?)]
                           (set-flash-enabled! next-enabled?)
@@ -609,8 +609,7 @@
                             (do
                               (set-device-flash-native-mode! next-enabled?)
                               (if next-enabled?
-                                (show-camera-error!
-                                  "Capture will open the iPhone camera so you can use its flash controls there.")
+                                (show-camera-error! :mobile/flash-native-hint)
                                 (clear-camera-error!))))))
         save-captured-file! (fn [file after-success]
                               (when file
@@ -737,7 +736,7 @@
             (set-flash-enabled! false)
             (set-torch-available! false)
             (set-torch-enabled! false)
-            (set-camera-error! "Live camera preview is unavailable here. Capture will use the device camera instead.")
+            (set-camera-error! :mobile/camera-unavailable)
             (set-camera-error-dismissed! false)
             js/undefined)))
       [])
@@ -794,7 +793,7 @@
               captured-file
               ($ :div {:class "flex h-full items-center justify-center bg-black px-6 text-center"}
                 ($ :p {:class "text-sm text-white/70"}
-                  "Receipt captured. Use the actions below to keep it, take another, or exit."))
+                  (t :mobile/captured-fallback-msg)))
 
               native-capture-mode?
               ($ :div {:class "flex h-full items-center justify-center bg-gradient-to-b from-neutral-900 to-black px-6 text-center"}
@@ -806,8 +805,8 @@
                     (t :mobile/take-photo "Take Photo"))
                   ($ :p {:class "text-sm text-white/70"}
                     (if device-flash?
-                      "Tap Capture below to open the iPhone camera with flash controls."
-                      "This browser cannot keep the live preview open here. Use Capture below to open the device camera."))))
+                      (t :mobile/native-flash-prompt)
+                      (t :mobile/native-camera-prompt)))))
 
               :else
               ($ :video {:id "video-receipt-camera-mobile"
@@ -820,24 +819,24 @@
         (when camera-starting?
           ($ :div {:class "absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-black/45 backdrop-blur-sm"}
             ($ :span {:class "ds-loading ds-loading-spinner ds-loading-lg text-white"})
-            ($ :p {:class "text-sm text-white/80"} "Opening camera...")))
+            ($ :p {:class "text-sm text-white/80"} (t :mobile/opening-camera))))
 
         ($ :div {:class "pointer-events-none absolute inset-x-0 top-0 z-30 flex items-start justify-between p-4"}
           ($ :div {:class "pointer-events-auto flex flex-col items-center gap-2"}
             ($ camera-icon-button
               {:id "btn-back-camera-mobile"
-               :label "Back"
+               :label (t :mobile/back)
                :icon-path "M15.75 19.5L8.25 12l7.5-7.5"
                :on-click return-to-upload!})
             ($ :span {:class "rounded-full bg-black/35 px-3 py-1 text-[11px] font-medium uppercase tracking-wide text-white/75"}
-              "Back"))
+              (t :mobile/back)))
           ($ :div {:class "pointer-events-auto flex items-start gap-3"}
             ($ :div {:class "flex flex-col items-center gap-2"}
               ($ camera-icon-button
                 {:id "btn-flash-upload-mobile"
                  :label (if flash-available?
-                          (str "Flash " (if flash-enabled? "On" "Off"))
-                          (str "iPhone Flash " (if device-flash? "On" "Off")))
+                          (if flash-enabled? (t :mobile/flash-on) (t :mobile/flash-off))
+                          (if device-flash? (t :mobile/iphone-flash-on) (t :mobile/iphone-flash-off)))
                  :icon-path "M12 3v10.5m0 0l3.75-3.75M12 13.5L8.25 9.75M5.25 15a6.75 6.75 0 1013.5 0c0-1.563-.53-3.002-1.42-4.148"
                  :active? flash-enabled?
                  :disabled? busy?
@@ -850,7 +849,7 @@
             ($ :div {:class "flex flex-col items-center gap-2"}
               ($ camera-icon-button
                 {:id "btn-torch-upload-mobile"
-                 :label (str "Torch " (if torch-enabled? "On" "Off"))
+                 :label (if torch-enabled? (t :mobile/torch-on) (t :mobile/torch-off))
                  :icon-path "M12 2.25c-1.311 0-2.53.568-3.375 1.49A4.48 4.48 0 007.5 6.75c0 .73.174 1.42.483 2.032.22.436.35.916.35 1.404v.564c0 .415.336.75.75.75h5.834a.75.75 0 00.75-.75v-.564c0-.488.13-.968.35-1.404.309-.611.483-1.302.483-2.032 0-1.17-.446-2.236-1.175-3.01A4.48 4.48 0 0012 2.25z M9.75 14.25h4.5m-4.125 2.25h3.75m-3 2.25h2.25"
                  :active? torch-enabled?
                  :disabled? (or busy? (not torch-available?))
@@ -859,12 +858,12 @@
                                  (if torch-enabled?
                                    "bg-amber-500/85 text-black"
                                    "bg-black/35 text-white/75"))}
-                (if torch-enabled? "Torch On" "Torch Off")))))
+                (if torch-enabled? (t :mobile/torch-on) (t :mobile/torch-off))))))
 
         (when (and camera-error (not camera-error-dismissed?))
           ($ :div {:id "alert-camera-upload-mobile"
                    :class "absolute left-4 right-4 top-28 z-30 flex items-start justify-between gap-3 rounded-2xl border border-white/15 bg-black/45 px-4 py-3 text-sm text-white/90 backdrop-blur"}
-            ($ :span {:class "flex-1 leading-5"} camera-error)
+            ($ :span {:class "flex-1 leading-5"} (if (keyword? camera-error) (t camera-error) camera-error))
             ($ :button {:id "btn-close-camera-error-mobile"
                         :type "button"
                         :aria-label "Dismiss camera warning"
@@ -883,10 +882,10 @@
                :on-click #(change-camera-hardware-zoom! -1)})
             ($ :span {:id "badge-camera-hardware-zoom-mobile"
                       :class "rounded-full bg-black/35 px-4 py-1.5 text-[11px] font-medium uppercase tracking-[0.18em] text-white/75"}
-              (str "Lens "
+              (str (t :mobile/lens-label) " "
                 (format-camera-zoom-label camera-hardware-zoom)
                 " "
-                (or (format-camera-zoom-range-label camera-hardware-zoom-range) "(range unavailable)")))
+                (or (format-camera-zoom-range-label camera-hardware-zoom-range) "")))
             ($ camera-icon-button
               {:id "btn-lens-increase-camera-mobile"
                :label "Increase Lens Zoom"
@@ -895,18 +894,18 @@
                :on-click #(change-camera-hardware-zoom! 1)}))
           (when zoomed?
             ($ :span {:class "rounded-full bg-black/35 px-4 py-1.5 text-[11px] font-medium uppercase tracking-[0.18em] text-white/75"}
-              (str "Preview " (js/Math.round (* preview-zoom 100)) "%"))))
+              (str (t :mobile/preview-label) " " (js/Math.round (* preview-zoom 100)) "%"))))
 
         ($ :div {:class "pointer-events-none absolute inset-x-0 bottom-8 z-30 flex items-end justify-center"}
           ($ :div {:class "pointer-events-auto flex flex-col items-center gap-3"}
             ($ :span {:class "rounded-full bg-black/35 px-4 py-1.5 text-[11px] font-medium uppercase tracking-[0.18em] text-white/75"}
               (cond
-                capturing-photo? "Capturing"
-                captured-file "Review Capture"
-                device-flash? "iPhone Flash"
-                native-fallback? "Device Camera"
-                flash-enabled? "Flash Ready"
-                :else "Camera Ready"))
+                capturing-photo? (t :mobile/status-capturing)
+                captured-file (t :mobile/status-review-capture)
+                device-flash? (t :mobile/iphone-flash)
+                native-fallback? (t :mobile/status-device-camera)
+                flash-enabled? (t :mobile/status-flash-ready)
+                :else (t :mobile/status-camera-ready)))
             ($ :button {:id "btn-capture-upload-mobile"
                         :type "button"
                         :aria-label (t :mobile/take-photo "Take Photo")
@@ -926,9 +925,9 @@
                    :class "absolute inset-0 z-40 flex items-end bg-black/18 px-4 pb-6 pt-20"}
             ($ :div {:class "mx-auto w-full max-w-sm rounded-3xl border border-white/10 bg-neutral-950/90 p-5 shadow-2xl"}
               ($ :p {:class "text-xs font-semibold uppercase tracking-[0.24em] text-white/45"}
-                "Receipt Captured")
+                (t :mobile/receipt-captured-label))
               ($ :h2 {:class "mt-2 text-xl font-semibold text-white"}
-                "Audit this image, then choose next action")
+                (t :mobile/take-another-or-exit))
               (when captured-preview-url
                 ($ :div {:class "mt-4 overflow-hidden rounded-2xl border border-white/10 bg-black"}
                   ($ :img {:id "img-captured-receipt-audit-mobile"
@@ -937,30 +936,30 @@
                            :class "max-h-64 w-full object-contain bg-black"})))
               ($ :p {:class "mt-3 text-sm leading-6 text-white/70"}
                 (if native-capture-mode?
-                  "Save this image, then use Capture again to open the iPhone camera, or save it and go back to Upload."
-                  "Save this image and keep shooting here, or save it and go back to Upload."))
+                  (t :mobile/save-native-help)
+                  (t :mobile/save-live-help)))
               (when device-flash?
                 ($ :p {:class "mt-2 text-sm leading-6 text-amber-200/90"}
-                  "iPhone camera flash stays inside the native camera. After saving, tap Capture again to open it for the next receipt."))
+                  (t :mobile/iphone-flash-hint)))
               ($ :div {:class "mt-5 grid gap-3"}
                 ($ :button {:id "btn-camera-save-another-mobile"
                             :type "button"
                             :disabled loading?
                             :on-click save-and-take-another!
                             :class "flex w-full items-center justify-center rounded-2xl bg-white/90 px-4 py-3 text-sm font-semibold text-black transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"}
-                  "Use & Take Another")
+                  (t :mobile/use-and-take-another))
                 ($ :button {:id "btn-camera-save-exit-mobile"
                             :type "button"
                             :disabled loading?
                             :on-click save-and-exit!
                             :class "flex w-full items-center justify-center rounded-2xl bg-amber-400/85 px-4 py-3 text-sm font-semibold text-black transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-50"}
-                  "Use & Exit")
+                  (t :mobile/use-and-exit))
                 ($ :button {:id "btn-camera-retake-mobile"
                             :type "button"
                             :disabled loading?
                             :on-click retake-photo!
                             :class "flex w-full items-center justify-center rounded-2xl border border-white/15 bg-white/8 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/12 disabled:cursor-not-allowed disabled:opacity-50"}
-                  "Retake")))))))))
+                  (t :mobile/retake))))))))))
 
 (defui upload-page []
   (let [t (use-t)
@@ -977,7 +976,7 @@
           ($ :div {:class "fixed inset-0 z-40 bg-base-100/80 flex items-center justify-center"}
             ($ :div {:class "text-center"}
               ($ :span {:class "ds-loading ds-loading-spinner ds-loading-lg text-primary"})
-              ($ :p {:class "mt-2 text-sm text-base-content/60"} "Uploading..."))))
+              ($ :p {:class "mt-2 text-sm text-base-content/60"} (t :mobile/uploading)))))
 
         (when error
           ($ :div {:class "ds-alert ds-alert-error text-sm"}
