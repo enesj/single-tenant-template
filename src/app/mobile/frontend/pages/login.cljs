@@ -1,6 +1,7 @@
 (ns app.mobile.frontend.pages.login
   "Mobile login page — simplified full-screen login form."
   (:require
+    [app.template.frontend.components.icons :refer [google-icon]]
     [app.template.frontend.i18n :refer [use-t]]
     [re-frame.core :as rf]
     [uix.core :refer [$ defui] :as uix]
@@ -57,6 +58,19 @@
                              (when loading? "ds-loading"))
                     :disabled loading?}
           (when-not loading? (t :common/sign-in))))
+
+      ;; Divider
+      ($ :div {:class "flex items-center my-6"}
+        ($ :div {:class "flex-1 border-t border-base-300"})
+        ($ :span {:class "px-3 text-sm text-base-content/50"} (t :common/or))
+        ($ :div {:class "flex-1 border-t border-base-300"}))
+
+      ;; Google OAuth button
+      ($ :button {:type "button"
+                  :class "ds-btn ds-btn-outline w-full h-12 text-base gap-2"
+                  :on-click #(set! (.-href js/window.location) "/login/google")}
+        ($ google-icon)
+        (t :login/continue-google))
 
       ($ :div {:class "mt-6 text-center"}
         ($ :a {:class "ds-link ds-link-primary text-sm"
