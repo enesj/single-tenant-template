@@ -7,6 +7,7 @@
     [app.template.frontend.api.http :as http]
     [app.template.frontend.i18n :refer [use-t]]
     [re-frame.core :as rf]
+    [taoensso.timbre :as log]
     [uix.core :refer [$ defui use-effect use-ref use-state] :as uix]
     [uix.re-frame :refer [use-subscribe]]))
 
@@ -31,10 +32,32 @@
 (rf/reg-event-fx
   :mobile/upload-receipt-success
   (fn [{:keys [db]} [_ response]]
-    {:db (-> db
-           (assoc-in [:mobile :upload :loading?] false)
-           (assoc-in [:mobile :upload :last-upload] response))
-     :fx [[:dispatch [:mobile/show-toast "Receipt uploaded successfully"]]]}))
+    (let [receipt-id (get-in response [:data :id])
+          duplicate? (:duplicate? response)]
+      {:db (-> db
+             (assoc-in [:mobile :upload :loading?] false)
+             (assoc-in [:mobile :upload :last-upload] response))
+       :fx (cond-> [[:dispatch [:mobile/show-toast "Receipt uploaded successfully"]]]
+             ;; Trigger OCR extraction for new (non-duplicate) receipts
+             (and receipt-id (not duplicate?))
+             (conj [:http-xhrio
+                    {:method :post
+                     :uri (str "/api/v1/expenses/receipts/" receipt-id "/ocr")
+                     :format (ajax/json-request-format)
+                     :response-format (ajax/json-response-format {:keywords? true})
+                     :on-success [:mobile/ocr-receipt-success receipt-id]
+                     :on-failure [:mobile/ocr-receipt-failure receipt-id]}]))})))
+
+(rf/reg-event-db
+  :mobile/ocr-receipt-success
+  (fn [db [_ _receipt-id _response]]
+    db))
+
+(rf/reg-event-db
+  :mobile/ocr-receipt-failure
+  (fn [db [_ receipt-id error]]
+    (log/warn "Mobile OCR trigger failed" {:receipt-id receipt-id :error error})
+    db))
 
 (rf/reg-event-fx
   :mobile/upload-receipt-failure
