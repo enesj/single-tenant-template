@@ -273,7 +273,7 @@
    In the single-tenant template we don't create tenants or run a tenant setup
    flow. We simply upsert a user in the :users table based on the provider
    email and return session data the frontend can use.
-   
+
    Security: Prevents OAuth from overwriting existing password-based accounts.
    If a user registered with email/password, they cannot login via OAuth with
    the same email unless they explicitly link their account."
@@ -334,23 +334,47 @@
                          (map (fn [[k v]]
                                 [(keyword (name k)) v])
                            user-record))
-            ;; For new OAuth users: send verification email before workspace creation
-            verification-required (when new-user?
-                                    (try
-                                      (let [uid   (:id user-plain)
-                                            token (email-verification/create-verification-token! db uid)]
-                                        (when (:email-service auth-service)
-                                          (email-verification/send-verification-email
-                                            (:email-service auth-service) user-plain token))
-                                        true)
-                                      (catch Exception e
-                                        (log/warn "Failed to send verification email for OAuth user"
-                                          user-email ":" (.getMessage e))
-                                        true)))]
+            verification-email-state (when new-user?
+                                       (let [uid           (:id user-plain)
+                                             token         (email-verification/create-verification-token! db uid)
+                                             email-service (:email-service auth-service)]
+                                         (if-not email-service
+                                           (do
+                                             (log/warn "OAuth signup created without email service; verification email not sent"
+                                               {:email user-email
+                                                :provider provider})
+                                             {:required? true
+                                              :sent? false
+                                              :error :email-service-missing})
+                                           (try
+                                             (let [email-result (email-verification/send-verification-email
+                                                                  email-service user-plain token)]
+                                               (if (:success email-result)
+                                                 {:required? true
+                                                  :sent? true}
+                                                 (do
+                                                   (log/warn "Failed to send verification email for OAuth user"
+                                                     {:email user-email
+                                                      :provider provider
+                                                      :error (:error email-result)
+                                                      :details (dissoc email-result :details)})
+                                                   {:required? true
+                                                    :sent? false
+                                                    :error (or (:error email-result)
+                                                             :verification-email-send-failed)})))
+                                             (catch Exception e
+                                               (log/warn e "Failed to send verification email for OAuth user"
+                                                 {:email user-email
+                                                  :provider provider})
+                                               {:required? true
+                                                :sent? false
+                                                :error :verification-email-send-failed})))))]
 
         {:user user-plain
          :authenticated (not new-user?)
-         :verification-required (boolean verification-required)
+         :verification-required (boolean (:required? verification-email-state))
+         :verification-email-sent? (boolean (:sent? verification-email-state))
+         :verification-email-error (:error verification-email-state)
          :provider provider
          :is-new-signup new-user?}))
     (catch Exception e

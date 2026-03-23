@@ -239,19 +239,30 @@
 
                       ;; Use auth service to process OAuth callback with tenant context
                       (try
-                        (let [session-data    (auth-service/process-oauth-callback auth-service user-info provider)
-                              user-raw        (:user session-data)
-                              user-email      (:email user-raw)
-                              sanitized-user  (sanitize-for-serialization user-raw)
-                              new-signup?     (:is-new-signup session-data)
-                              verification-required? (:verification-required session-data)]
+                        (let [session-data              (auth-service/process-oauth-callback auth-service user-info provider)
+                              user-raw                  (:user session-data)
+                              user-email                (:email user-raw)
+                              sanitized-user            (sanitize-for-serialization user-raw)
+                              new-signup?               (:is-new-signup session-data)
+                              verification-required?    (:verification-required session-data)
+                              verification-email-sent?  (:verification-email-sent? session-data)
+                              verification-email-error  (:verification-email-error session-data)]
 
                           (if (and new-signup? verification-required?)
-                            ;; New OAuth user: redirect to "check your email" page
-                            (do
-                              (log/info "New OAuth user" user-email "— verification email sent, redirecting to pending page")
-                              (-> (response/redirect "/email-verified?pending=true")
-                                (assoc :session {:auth-session {:user sanitized-user}})))
+                            (if verification-email-sent?
+                              ;; New OAuth user: redirect to "check your email" page
+                              (do
+                                (log/info "New OAuth user" user-email "— verification email sent, redirecting to pending page")
+                                (-> (response/redirect "/email-verified?pending=true")
+                                  (assoc :session {:auth-session {:user sanitized-user}})))
+                              ;; New OAuth user but verification delivery failed: don't pretend email was sent
+                              (do
+                                (log/warn "New OAuth user verification email delivery failed"
+                                  {:email user-email
+                                   :provider provider
+                                   :error verification-email-error})
+                                (-> (response/redirect "/email-verified?error=email-send-failed")
+                                  (assoc :session {:auth-session {:user sanitized-user}}))))
 
                             ;; Existing user: resolve tenant context and redirect normally
                             (let [oauth-db     (or db (get-in req [:service-container :db]))

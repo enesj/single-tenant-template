@@ -1,7 +1,9 @@
 (ns app.backend.routes.auth-test
   (:require
+    [app.template.backend.auth.service :as auth-service]
     [app.template.backend.auth.tenant :as tenant-auth]
     [app.template.backend.routes.auth :as routes.auth]
+    [app.template.backend.routes.oauth :as routes.oauth]
     [cheshire.core :as json]
     [clojure.test :refer [deftest is testing]]))
 
@@ -78,3 +80,39 @@
             (is (= "owner" (get-in resp [:session :auth-session :membership :role])))
             (is (= "tenant-1" (get-in resp [:session :auth-session :tenant :id])))
             (is (= "admin-token-1" (get-in resp [:session :admin-token])))))))))
+
+(deftest oauth-callback-does-not-claim-email-was-sent-when-delivery-fails-test
+  (testing "new OAuth signups redirect to an error page when verification delivery fails"
+    (let [handler (app.template.backend.routes.oauth/oauth-callback-handler :auth-service nil {:oauth {:google {:redirect-uri "https://example.com/oauth/google/callback"}}})
+          req {:uri "/oauth/google/callback"
+               :query-params {"code" "oauth-code"}}]
+      (with-redefs [app.template.backend.routes.oauth/exchange-code-for-token
+                    (fn [_oauth-configs provider code redirect-uri _db]
+                      (is (= :google provider))
+                      (is (= "oauth-code" code))
+                      (is (= "https://example.com/oauth/google/callback" redirect-uri))
+                      {:access_token "access-token"})
+
+                    app.template.backend.routes.oauth/fetch-google-user-info
+                    (fn [access-token]
+                      (is (= "access-token" access-token))
+                      {:email "new.user@example.com"
+                       :name "New User"})
+
+                    app.template.backend.auth.service/process-oauth-callback
+                    (fn [_auth-service user-info provider]
+                      (is (= :google provider))
+                      (is (= "new.user@example.com" (:email user-info)))
+                      {:user {:id "user-1"
+                              :email "new.user@example.com"
+                              :full_name "New User"}
+                       :is-new-signup true
+                       :verification-required true
+                       :verification-email-sent? false
+                       :verification-email-error :gmail-api-error})]
+        (let [resp (handler req)]
+          (is (= 302 (:status resp)))
+          (is (= "/email-verified?error=email-send-failed"
+                (get-in resp [:headers "Location"])))
+          (is (= "new.user@example.com"
+                (get-in resp [:session :auth-session :user :email]))))))))
