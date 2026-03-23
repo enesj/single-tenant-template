@@ -336,14 +336,15 @@
         [flash-available? set-flash-available!] (use-state false)
         [flash-enabled? set-flash-enabled!] (use-state false)
         [native-fallback? set-native-fallback!] (use-state false)
+        [device-flash-native-mode? set-device-flash-native-mode!] (use-state false)
         [captured-file set-captured-file!] (use-state nil)
         [captured-preview-url set-captured-preview-url!] (use-state nil)
         [preview-zoom set-preview-zoom!] (use-state 1.0)
         [preview-pan set-preview-pan!] (use-state {:x 0 :y 0})
         busy? (boolean (or loading? camera-starting? capturing-photo?))
         zoomed? (> preview-zoom min-preview-zoom)
-        device-flash? (device-flash-mode? flash-available? flash-enabled?)
-        native-capture-mode? (native-camera-capture? native-fallback? flash-available? flash-enabled?)
+        device-flash? (and device-flash-native-mode? flash-enabled?)
+        native-capture-mode? (or native-fallback? device-flash-native-mode?)
         flash-pill-label (cond
                            flash-available? (if flash-enabled? "Flash On" "Flash Off")
                            device-flash? "iPhone Flash"
@@ -384,6 +385,7 @@
                                 (js/setTimeout trigger-native-camera! 150))
         return-to-upload! (fn []
                             (clear-captured-file!)
+                            (set-device-flash-native-mode! false)
                             (stop-live-stream!)
                             (reset-preview-transform!)
                             (rf/dispatch [:mobile/navigate "/m/upload"]))
@@ -472,13 +474,16 @@
         toggle-flash! (fn []
                         (let [next-enabled? (not flash-enabled?)]
                           (set-flash-enabled! next-enabled?)
-                          (cond
-                            flash-available? (clear-camera-error!)
-                            next-enabled?
-                            (show-camera-error!
-                              "Capture will open the iPhone camera so you can use its flash controls there.")
-                            :else
-                            (clear-camera-error!))))
+                          (if flash-available?
+                            (do
+                              (set-device-flash-native-mode! false)
+                              (clear-camera-error!))
+                            (do
+                              (set-device-flash-native-mode! next-enabled?)
+                              (if next-enabled?
+                                (show-camera-error!
+                                  "Capture will open the iPhone camera so you can use its flash controls there.")
+                                (clear-camera-error!))))))
         save-captured-file! (fn [file after-success]
                               (when file
                                 (rf/dispatch [:mobile/upload-receipt
@@ -553,7 +558,8 @@
                              (detect-flash-support! track
                                (fn [flash?]
                                  (set-flash-available! flash?)
-                                 (set-flash-enabled! false)))
+                                 (set-flash-enabled! false)
+                                 (set-device-flash-native-mode! false)))
                              (set-camera-starting! false)
                              (set-capturing-photo! false))))))
               (.catch (fn [err]
@@ -567,6 +573,7 @@
                           (reset! gesture-ref nil)
                           (set-camera-starting! false)
                           (set-native-fallback! true)
+                          (set-device-flash-native-mode! false)
                           (set-torch-available! false)
                           (set-torch-enabled! false)
                           (set-flash-available! false)
@@ -585,6 +592,7 @@
           (do
             (set-camera-starting! false)
             (set-native-fallback! true)
+            (set-device-flash-native-mode! false)
             (set-flash-available! false)
             (set-flash-enabled! false)
             (set-torch-available! false)
@@ -593,6 +601,15 @@
             (set-camera-error-dismissed! false)
             js/undefined)))
       [])
+
+    (use-effect
+      (fn []
+        (when (and (nil? captured-file) (not native-capture-mode?))
+          (when-let [stream @live-stream-ref]
+            (when-let [video-el @live-video-ref]
+              (attach-stream! video-el stream))))
+        js/undefined)
+      [captured-file native-capture-mode?])
 
     (use-effect
       (fn []
