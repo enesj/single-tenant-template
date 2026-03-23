@@ -16,7 +16,7 @@
     [app.mobile.frontend.pages.receipt-review :refer [receipt-review-page]]
     [app.mobile.frontend.pages.reports :refer [reports-page]]
     [app.mobile.frontend.pages.tenant-select :refer [tenant-select-page]]
-    [app.mobile.frontend.pages.upload :refer [upload-page]]
+    [app.mobile.frontend.pages.upload :refer [camera-capture-page upload-page]]
     [app.mobile.frontend.routes :as routes]
     [app.template.frontend.events.bootstrap :as bootstrap]
     [re-frame.core :as rf]
@@ -44,6 +44,7 @@
                   :m/expenses ($ expenses-page)
                   :m/expense-detail ($ expense-detail-page)
                   :m/upload ($ upload-page)
+                  :m/upload-camera ($ camera-capture-page)
                   :m/upload-review ($ receipt-review-page)
                   :m/upload-manual ($ manual-entry-page)
                   :m/reports ($ reports-page)

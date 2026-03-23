@@ -30,6 +30,7 @@
             :m/expense-detail :expenses
             :m/search :expenses
             :m/upload :upload
+            :m/upload-camera :upload
             :m/upload-review :upload
             :m/upload-manual :upload
             :m/reports :reports

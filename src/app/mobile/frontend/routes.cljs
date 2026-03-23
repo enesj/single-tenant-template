@@ -43,6 +43,9 @@
    ["/upload"
     {:name :m/upload
      :view :m/upload}]
+   ["/upload/camera"
+    {:name :m/upload-camera
+     :view :m/upload-camera}]
    ["/upload/review/:id"
     {:name :m/upload-review
      :view :m/upload-review}]
