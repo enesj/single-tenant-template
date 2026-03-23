@@ -479,21 +479,25 @@
                               "Capture will open the iPhone camera so you can use its flash controls there.")
                             :else
                             (clear-camera-error!))))
-        save-captured-file! (fn [after-success]
-                              (when captured-file
+        save-captured-file! (fn [file after-success]
+                              (when file
                                 (rf/dispatch [:mobile/upload-receipt
-                                              captured-file
+                                              file
                                               {:on-success (fn [_response]
                                                              (when (fn? after-success)
                                                                (after-success)))
                                                :on-error (fn [message]
                                                            (show-camera-error! message))}])))
         save-and-exit! (fn []
-                         (save-captured-file! return-to-upload!))
+                         (save-captured-file! captured-file return-to-upload!))
         save-and-take-another! (fn []
-                                 (save-captured-file!
-                                   (fn []
-                                     (clear-captured-file!))))
+                                 (when-let [file captured-file]
+                                   (if native-capture-mode?
+                                     (do
+                                       (clear-captured-file!)
+                                       (trigger-native-camera!)
+                                       (save-captured-file! file nil))
+                                     (save-captured-file! file clear-captured-file!))))
         retake-photo! (fn []
                         (clear-captured-file!)
                         (when native-capture-mode?
