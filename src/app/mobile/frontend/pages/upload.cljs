@@ -243,9 +243,23 @@
     (when (fn? on-failure)
       (on-failure nil))))
 
-(defn apply-default-camera-zoom! [track]
-  (when-let [zoom (some-> track .getCapabilities (preferred-camera-zoom default-live-camera-zoom))]
-    (apply-camera-zoom! track zoom nil nil)))
+(defn apply-default-camera-zoom! [track on-success]
+  (let [capabilities (some-> track .getCapabilities)
+        preferred-zoom (preferred-camera-zoom capabilities default-live-camera-zoom)]
+    (cond
+      (number? preferred-zoom)
+      (apply-camera-zoom! track preferred-zoom
+        (fn [zoom]
+          (when (fn? on-success)
+            (on-success zoom)))
+        (fn [_]
+          (when (fn? on-success)
+            (on-success 1.0))))
+
+      (fn? on-success)
+      (on-success 1.0)
+
+      :else nil)))
 
 (defn supported-fill-light-modes [capabilities]
   (let [modes (some-> capabilities .-fillLightMode)]
@@ -320,6 +334,9 @@
   {:x (/ (+ x1 x2) 2)
    :y (/ (+ y1 y2) 2)})
 
+(defn format-camera-zoom-label [zoom]
+  (str (.toFixed (double (or zoom 1.0)) 1) "x"))
+
 (defui toast-banner []
   (let [toast (use-subscribe [:mobile/toast])]
     ;; Auto-dismiss after 3s — hook called unconditionally per React rules
@@ -368,6 +385,7 @@
         [flash-enabled? set-flash-enabled!] (use-state false)
         [native-fallback? set-native-fallback!] (use-state false)
         [device-flash-native-mode? set-device-flash-native-mode!] (use-state false)
+        [camera-hardware-zoom set-camera-hardware-zoom!] (use-state 1.0)
         [captured-file set-captured-file!] (use-state nil)
         [captured-preview-url set-captured-preview-url!] (use-state nil)
         [preview-zoom set-preview-zoom!] (use-state 1.0)
@@ -416,6 +434,7 @@
                                     (set-capturing-photo! false)
                                     (clear-camera-error!)
                                     (set-native-fallback! false)
+                                    (set-camera-hardware-zoom! 1.0)
                                     (stop-live-stream!)
                                     (reset! active-pointers-ref {})
                                     (reset! gesture-ref nil)
@@ -428,7 +447,7 @@
                                                  (attach-stream! video-el stream))
                                                (let [track (first-video-track stream)
                                                      torch? (torch-supported? track)]
-                                                 (apply-default-camera-zoom! track)
+                                                 (apply-default-camera-zoom! track set-camera-hardware-zoom!)
                                                  (set-torch-available! torch?)
                                                  (set-torch-enabled! false)
                                                  (detect-flash-support! track
@@ -442,6 +461,7 @@
                                                 (set-camera-starting! false)
                                                 (set-native-fallback! true)
                                                 (set-device-flash-native-mode! false)
+                                                (set-camera-hardware-zoom! 1.0)
                                                 (set-torch-available! false)
                                                 (set-torch-enabled! false)
                                                 (set-flash-available! false)
@@ -451,6 +471,7 @@
                                     (set-camera-starting! false)
                                     (set-native-fallback! true)
                                     (set-device-flash-native-mode! false)
+                                    (set-camera-hardware-zoom! 1.0)
                                     (set-torch-available! false)
                                     (set-torch-enabled! false)
                                     (set-flash-available! false)
@@ -621,6 +642,7 @@
             (set-camera-error! nil)
             (set-camera-error-dismissed! false)
             (set-native-fallback! false)
+            (set-camera-hardware-zoom! 1.0)
             (do
               (reset! active-pointers-ref {})
               (reset! gesture-ref nil)
@@ -636,7 +658,7 @@
                              (attach-stream! video-el stream))
                            (let [track (first-video-track stream)
                                  torch? (torch-supported? track)]
-                             (apply-default-camera-zoom! track)
+                             (apply-default-camera-zoom! track set-camera-hardware-zoom!)
                              (set-torch-available! torch?)
                              (set-torch-enabled! false)
                              (detect-flash-support! track
@@ -658,6 +680,7 @@
                           (set-camera-starting! false)
                           (set-native-fallback! true)
                           (set-device-flash-native-mode! false)
+                          (set-camera-hardware-zoom! 1.0)
                           (set-torch-available! false)
                           (set-torch-enabled! false)
                           (set-flash-available! false)
@@ -677,6 +700,7 @@
             (set-camera-starting! false)
             (set-native-fallback! true)
             (set-device-flash-native-mode! false)
+            (set-camera-hardware-zoom! 1.0)
             (set-flash-available! false)
             (set-flash-enabled! false)
             (set-torch-available! false)
@@ -817,10 +841,13 @@
               ($ :svg {:class "h-4 w-4" :fill "none" :viewBox "0 0 24 24" :stroke-width "2" :stroke "currentColor"}
                 ($ :path {:stroke-linecap "round" :stroke-linejoin "round" :d "M6 18L18 6M6 6l12 12"})))))
 
-        (when zoomed?
-          ($ :div {:class "pointer-events-none absolute inset-x-0 bottom-36 z-30 flex justify-center"}
+        ($ :div {:class "pointer-events-none absolute inset-x-0 bottom-36 z-30 flex justify-center gap-2"}
+          ($ :span {:id "badge-camera-hardware-zoom-mobile"
+                    :class "rounded-full bg-black/35 px-4 py-1.5 text-[11px] font-medium uppercase tracking-[0.18em] text-white/75"}
+            (str "Lens " (format-camera-zoom-label camera-hardware-zoom)))
+          (when zoomed?
             ($ :span {:class "rounded-full bg-black/35 px-4 py-1.5 text-[11px] font-medium uppercase tracking-[0.18em] text-white/75"}
-              (str "Zoom " (js/Math.round (* preview-zoom 100)) "%"))))
+              (str "Preview " (js/Math.round (* preview-zoom 100)) "%"))))
 
         ($ :div {:class "pointer-events-none absolute inset-x-0 bottom-8 z-30 flex items-end justify-center"}
           ($ :div {:class "pointer-events-auto flex flex-col items-center gap-3"}
