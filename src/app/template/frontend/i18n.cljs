@@ -389,6 +389,8 @@
     :email-verification/err-already-used "Ovaj link za provjeru je već korišten."
     :email-verification/err-too-many     "Previše pokušaja provjere. Zatražite novi link."
     :email-verification/err-db          "Došlo je do tehničke greške. Pokušajte ponovo."
+    :email-verification/err-email-send-failed "Nismo uspjeli poslati verifikacijski e-mail. Prijavite se i zatražite novi link."
+    :email-verification/err-workspace-provisioning "E-mail je potvrđen, ali radni prostor nije kreiran. Kontaktirajte administratora."
     :email-verification/err-default     "Greška pri provjeri."
 
     ;; Verify email success page
@@ -1472,6 +1474,8 @@
     :email-verification/err-already-used "This verification link has already been used."
     :email-verification/err-too-many     "Too many verification attempts. Please request a new link."
     :email-verification/err-db          "A technical error occurred. Please try again."
+    :email-verification/err-email-send-failed "We couldn't send the verification email. Please sign in and request a new link."
+    :email-verification/err-workspace-provisioning "Your email was verified, but the workspace could not be created. Please contact an administrator."
     :email-verification/err-default     "An error occurred during verification."
 
     ;; Verify email success page

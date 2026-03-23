@@ -59,6 +59,8 @@
                   "token-already-used" (t :email-verification/err-already-used)
                   "too-many-attempts" (t :email-verification/err-too-many)
                   "database-error" (t :email-verification/err-db)
+                  "email-send-failed" (t :email-verification/err-email-send-failed)
+                  "workspace-provisioning-failed" (t :email-verification/err-workspace-provisioning)
                   (t :email-verification/err-default)))
               ($ :div.ds-card-actions.justify-center.gap-2
                 ($ button
@@ -66,7 +68,7 @@
                    :id "btn-back-to-login"
                    :on-click #(set! js/window.location.href "/login")}
                   (t :email-verification/back-to-login))
-                (when (contains? #{"token-expired" "token-not-found"} error-type)
+                (when (contains? #{"token-expired" "token-not-found" "email-send-failed"} error-type)
                   ($ button
                     {:btn-type :primary
                      :id "btn-request-new-verification"
