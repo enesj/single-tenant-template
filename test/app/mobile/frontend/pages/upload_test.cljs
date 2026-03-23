@@ -36,6 +36,18 @@
     (is (true? (sut/native-camera-capture? true false false)))
     (is (false? (sut/native-camera-capture? false true false)))))
 
+(deftest preferred-camera-zoom-clamps-to-supported-range
+  (testing "default live zoom uses hardware zoom only when the track exposes a supported range"
+    (is (= {:min 1 :max 3 :step 0.5}
+          (sut/camera-zoom-range #js {:zoom #js {:min 1 :max 3 :step 0.5}})))
+    (is (= 1.5
+          (sut/preferred-camera-zoom #js {:zoom #js {:min 1 :max 3}} 1.5)))
+    (is (= 2
+          (sut/preferred-camera-zoom #js {:zoom #js {:min 2 :max 4}} 1.5)))
+    (is (= 3
+          (sut/preferred-camera-zoom #js {:zoom #js {:min 1 :max 3}} 4)))
+    (is (nil? (sut/preferred-camera-zoom #js {} 1.5)))))
+
 (deftest zoom-helpers-keep-overlay-independent
   (testing "pinch helpers clamp zoom and compute geometry for media-only transforms"
     (is (= 4 (sut/clamp-number 10 1 4)))

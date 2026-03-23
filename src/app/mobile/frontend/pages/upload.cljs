@@ -216,6 +216,37 @@
     (when (fn? on-failure)
       (on-failure nil))))
 
+(def default-live-camera-zoom 1.5)
+
+(defn camera-zoom-range [capabilities]
+  (let [zoom (some-> capabilities .-zoom)
+        min-zoom (some-> zoom .-min)
+        max-zoom (some-> zoom .-max)]
+    (when (and (number? min-zoom) (number? max-zoom))
+      {:min min-zoom
+       :max max-zoom
+       :step (some-> zoom .-step)})))
+
+(defn preferred-camera-zoom [capabilities desired-zoom]
+  (when-let [{min-zoom :min max-zoom :max} (camera-zoom-range capabilities)]
+    (-> desired-zoom (max min-zoom) (min max-zoom))))
+
+(defn apply-camera-zoom! [track zoom on-success on-failure]
+  (if (and track (number? zoom) (fn? (.-applyConstraints track)))
+    (-> (.applyConstraints track #js {:advanced #js [#js {:zoom zoom}]})
+      (.then (fn [_]
+               (when (fn? on-success)
+                 (on-success zoom))))
+      (.catch (fn [err]
+                (when (fn? on-failure)
+                  (on-failure err)))))
+    (when (fn? on-failure)
+      (on-failure nil))))
+
+(defn apply-default-camera-zoom! [track]
+  (when-let [zoom (some-> track .getCapabilities (preferred-camera-zoom default-live-camera-zoom))]
+    (apply-camera-zoom! track zoom nil nil)))
+
 (defn supported-fill-light-modes [capabilities]
   (let [modes (some-> capabilities .-fillLightMode)]
     (cond
@@ -397,6 +428,7 @@
                                                  (attach-stream! video-el stream))
                                                (let [track (first-video-track stream)
                                                      torch? (torch-supported? track)]
+                                                 (apply-default-camera-zoom! track)
                                                  (set-torch-available! torch?)
                                                  (set-torch-enabled! false)
                                                  (detect-flash-support! track
@@ -604,6 +636,7 @@
                              (attach-stream! video-el stream))
                            (let [track (first-video-track stream)
                                  torch? (torch-supported? track)]
+                             (apply-default-camera-zoom! track)
                              (set-torch-available! torch?)
                              (set-torch-enabled! false)
                              (detect-flash-support! track
