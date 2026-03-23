@@ -153,3 +153,54 @@
                 (get-in resp [:headers "Location"])))
           (is (= "new.user@example.com"
                 (get-in resp [:session :auth-session :user :email]))))))))
+
+(deftest oauth-callback-existing-user-prefers-onboarding-redirect-test
+  (testing "existing OAuth users go to onboarding when the summary says they should"
+    (let [handler (routes.oauth/oauth-callback-handler :auth-service :mock-db {:oauth {:google {:redirect-uri "https://example.com/oauth/google/callback"}}})
+          req {:uri "/oauth/google/callback"
+               :query-params {"code" "oauth-code"}
+               :service-container {:db :mock-db}}]
+      (with-redefs [routes.oauth/exchange-code-for-token
+                    (fn [_oauth-configs provider code redirect-uri _db]
+                      (is (= :google provider))
+                      (is (= "oauth-code" code))
+                      (is (= "https://example.com/oauth/google/callback" redirect-uri))
+                      {:access_token "access-token"})
+
+                    routes.oauth/fetch-google-user-info
+                    (fn [access-token]
+                      (is (= "access-token" access-token))
+                      {:email "existing.user@example.com"
+                       :name "Existing User"})
+
+                    auth-service/process-oauth-callback
+                    (fn [_auth-service user-info provider]
+                      (is (= :google provider))
+                      (is (= "existing.user@example.com" (:email user-info)))
+                      {:user {:id "user-1"
+                              :email "existing.user@example.com"
+                              :full_name "Existing User"}
+                       :is-new-signup false
+                       :verification-required false})
+
+                    tenant-auth/resolve-tenant-context
+                    (fn [_db _config user _opts]
+                      (is (= "existing.user@example.com" (:email user)))
+                      {:action :auto-set
+                       :tenant {:id "tenant-1" :name "Acme"}
+                       :membership {:id "membership-1" :role "owner"}})
+
+                    app.template.backend.services.onboarding.core/get-progress-summary
+                    (fn [_db user-id role]
+                      (is (= "user-1" user-id))
+                      (is (= "owner" role))
+                      {:active? true
+                       :completed 0
+                       :total 7
+                       :dismissed false
+                       :redirect-to-onboarding? true})]
+        (let [resp (handler req)]
+          (is (= 302 (:status resp)))
+          (is (= "/onboarding" (get-in resp [:headers "Location"])))
+          (is (= "existing.user@example.com"
+                (get-in resp [:session :auth-session :user :email]))))))))

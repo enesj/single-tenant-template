@@ -28,7 +28,8 @@
                        {:return-url return-url
                         :no-tenant? (get-in db [:session :no-tenant?])
                         :tenant-selection-required (get-in db [:session :tenant-selection-required])
-                        :membership-role (get-in db [:session :membership-role])})})
+                        :membership-role (get-in db [:session :membership-role])
+                        :onboarding (get-in db [:session :onboarding])})})
         ;; Otherwise, fetch auth status and show login page
         {:db (-> db
                (assoc-in (paths/current-page) :login))
@@ -60,7 +61,8 @@
                        {:return-url return-url
                         :no-tenant? (get-in db [:session :no-tenant?])
                         :tenant-selection-required (get-in db [:session :tenant-selection-required])
-                        :membership-role (get-in db [:session :membership-role])})})
+                        :membership-role (get-in db [:session :membership-role])
+                        :onboarding (get-in db [:session :onboarding])})})
         ;; Otherwise, clear auth state and show registration page
         {:db (-> db
                (assoc-in (paths/current-page) :register))

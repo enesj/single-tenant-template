@@ -4,6 +4,7 @@
     [app.template.backend.auth.service :as auth-service]
     [app.template.backend.auth.tenant :as tenant-auth]
     [app.template.backend.routes.utils :as route-utils :refer [get-oauth-configs]]
+    [app.template.backend.services.onboarding.core :as onboarding]
     [clj-http.client :as http]
     [clojure.string :as str]
     [clojure.walk :as walk]
@@ -195,6 +196,35 @@
              :request-url (:access-token-uri config) :severity :error}))
         nil))))
 
+(defn- ensure-onboarding-summary
+  "Return the current onboarding summary for a (user, role) pair.
+   If none exists yet, initialise onboarding lazily and re-read the summary."
+  [db user-id role]
+  (when (and db user-id role)
+    (try
+      (or (onboarding/get-progress-summary db user-id role)
+        (do
+          (onboarding/initialise-delta-onboarding! db user-id role)
+          (onboarding/get-progress-summary db user-id role)))
+      (catch Exception e
+        (log/debug "OAuth onboarding summary skipped" {:error (.getMessage e)})
+        nil))))
+
+(defn- post-login-redirect-url
+  "Choose the post-auth redirect, preferring onboarding when a fresh summary says
+   the user should start there."
+  [db tenant-ctx auth-session]
+  (case (:action tenant-ctx)
+    :selection-required "/tenant-select"
+    :no-tenant "/tenant-select"
+    (let [role (or (get-in auth-session [:membership :role])
+                 (:membership-role auth-session))
+          user-id (get-in auth-session [:user :id])
+          onboarding-summary (ensure-onboarding-summary db user-id role)]
+      (if (:redirect-to-onboarding? onboarding-summary)
+        "/onboarding"
+        (domain-registry/get-post-login-path)))))
+
 ;; Enhanced OAuth callback handler with tenant-aware authentication
 (defn oauth-callback-handler
   "Create OAuth callback handler using authentication service.
@@ -270,10 +300,7 @@
                                                  {:client-ip (:remote-addr req)})
                                   auth-session (sanitize-for-serialization
                                                  (tenant-auth/build-auth-session {:user sanitized-user} tenant-ctx))
-                                  redirect-url (case (:action tenant-ctx)
-                                                 :selection-required "/tenant-select"
-                                                 :no-tenant          "/tenant-select"
-                                                 (domain-registry/get-post-login-path))]
+                                  redirect-url (post-login-redirect-url oauth-db tenant-ctx auth-session)]
 
                               (log/info "Authentication successful for:" user-email)
                               (log/info "Redirecting user" user-email "to:" redirect-url)
