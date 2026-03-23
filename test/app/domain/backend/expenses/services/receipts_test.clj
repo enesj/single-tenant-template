@@ -5,6 +5,7 @@
     [app.domain.backend.expenses.services.receipts.status :as receipt-status]
     [app.domain.backend.expenses.services.suppliers :as suppliers]
     [app.domain.expenses.test-helpers :as th]
+    [cheshire.core :as json]
     [clojure.string :as str]
     [clojure.test :refer [deftest is testing use-fixtures]]
     [next.jdbc :as jdbc]
@@ -29,6 +30,15 @@
        total-amount-guess
        tenant-id]
       {:builder-fn rs/as-unqualified-lower-maps})))
+
+(defn- parse-jsonish
+  [raw]
+  (cond
+    (map? raw) raw
+    (string? raw) (json/parse-string raw true)
+    (instance? org.postgresql.util.PGobject raw)
+    (json/parse-string (.getValue ^org.postgresql.util.PGobject raw) true)
+    :else nil))
 
 (deftest store-extraction-results-patch-style-and-casts
   (testing "does not wipe absent fields and uses jsonb/currency casts"
@@ -63,8 +73,8 @@
       (let [[sql & _] @captured]
         (is (str/includes? sql "NOW() - INTERVAL '60 seconds'"))))))
 
-(deftest save-review-parses-datetime-local-validates-currency-and-does-not-mutate-total-guess
-  (testing "datetime-local purchased_at is parsed; invalid currency yields 400; saving a review does not overwrite total_amount_guess"
+(deftest save-review-parses-datetime-local-validates-currency-and-persists-reviewed-total
+  (testing "datetime-local purchased_at is parsed; invalid currency yields 400; saving a review persists the reviewed total_amount_guess"
     (let [db fixtures/*test-db*
           user (th/ensure-test-user! db)
           {:keys [tenant-id]} (th/ensure-test-tenant! db user)
@@ -77,7 +87,7 @@
                                         :tenant-id tenant-id})
           items [{:raw_label "Line 1" :line-total "12.00"}]]
 
-      (testing "valid review saves reviewed items and keeps total_amount_guess unchanged"
+      (testing "valid review saves reviewed items and updates total_amount_guess"
         (let [updated (receipt-approval/save-review!
                         db
                         receipt-id
@@ -88,8 +98,11 @@
                          :items items})]
           (is (= "extracted" (str (:status updated)))
             "status should be promoted to extracted once the reviewed receipt has all required fields")
-          (is (= 10.00M (:total_amount_guess updated))
-            "total_amount_guess should remain the original OCR/extraction guess")
+          (is (= 12.00M (:total_amount_guess updated))
+            "total_amount_guess should reflect the reviewed total")
+          (is (= 12.0 (get-in (parse-jsonish (:raw_extract_json updated))
+                        [:extraction :totals :total]))
+            "raw_extract_json should reflect the reviewed total")
           (is (some? (:purchased_at_guess updated))
             "purchased_at_guess should be persisted (parsed from datetime-local)")))
 

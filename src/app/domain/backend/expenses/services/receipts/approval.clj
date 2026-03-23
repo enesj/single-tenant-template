@@ -59,10 +59,31 @@
     ;; No OCR prices to compare — treat all as unmodified (auto-post path)
     (mapv #(assoc % :price_modified false) approved-items)))
 
+(defn- parse-raw-extract-json
+  [raw]
+  (try
+    (cond
+      (map? raw) raw
+      (string? raw) (json/parse-string raw true)
+      (instance? org.postgresql.util.PGobject raw)
+      (json/parse-string (.getValue ^org.postgresql.util.PGobject raw) true)
+      :else {})
+    (catch Exception e
+      (log/warn e "Failed to parse receipt raw_extract_json while saving review"
+        {:raw-type (some-> raw class str)})
+      {})))
+
+(defn- reviewed-raw-extract-json
+  [receipt items total]
+  (-> (parse-raw-extract-json (:raw_extract_json receipt))
+    (assoc-in [:extraction :items] items)
+    (assoc-in [:extraction :totals :total] total)))
+
 (defn save-review!
   "Persist reviewed receipt values without posting an expense.
 
   - Updates raw_extract_json.extraction.items to reviewed items
+  - Updates raw_extract_json.extraction.totals.total and total_amount_guess to the reviewed total
   - Updates supplier_guess/supplier_alias_id/currency_guess/purchased_at_guess
   - Flips status review_required → extracted once all required fields are provided
     (supplier, purchased_at, items, total_amount). Totals alignment is a soft
@@ -93,10 +114,6 @@
                                     {:receipt-id receipt-id :supplier-guess supplier-guess})
                                   nil))
             _ (when (and supplier-alias-id supplier-uuid)
-                 ;; User selected a canonical supplier during review: this is a strong
-                 ;; signal that the raw supplier label should map to that supplier.
-                 ;; We intentionally overwrite mappings here (user intent), unlike
-                 ;; automated OCR flows which only map when unmapped.
                 (try
                   (supplier-aliases/map-alias-to-supplier! tx supplier-alias-id supplier-uuid 100)
                   (catch Exception e
@@ -118,10 +135,6 @@
         (when-not (some? total*)
           (throw (ex-info "total_amount is required" {:status 400 :field :total_amount})))
 
-        ;; All required fields are present: a human has reviewed the receipt.
-        ;; Promote review_required → extracted unconditionally. The effective-status
-        ;; layer in the API response will still surface a soft warning if the
-        ;; submitted items do not sum to the total.
         (let [new-status (if (= "review_required" (:status receipt))
                            "extracted"
                            (:status receipt))]
@@ -129,16 +142,12 @@
             tx
             (sql/format
               {:update :receipts
-               :set {:raw_extract_json
-                     [:call :jsonb_set
-                      [:call :coalesce :raw_extract_json [:cast "{}" :jsonb]]
-                      [:raw "'{extraction,items}'::text[]"]
-                      (storage/jsonb-value items)
-                      true]
+               :set {:raw_extract_json (storage/jsonb-value (reviewed-raw-extract-json receipt items total*))
                      :supplier_guess supplier-guess
                      :supplier_alias_id supplier-alias-id
                      :currency_guess (when currency* [:cast currency* :currency])
                      :purchased_at_guess purchased-at*
+                     :total_amount_guess total*
                      :status (storage/receipt-status-cast new-status)}
                :where [:= :id receipt-id]
                :returning [:*]})
