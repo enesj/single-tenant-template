@@ -1087,6 +1087,17 @@
     :mobile/toast-expense-created "Trošak kreiran"
     :mobile/toast-receipt-uploaded "Račun uspješno učitan"
 
+    ;; Mobile quick-add workflow
+    :mobile/quick-add-title    "Brzi unos"
+    :mobile/continue           "Nastavi"
+    :mobile/no-results         "Nema rezultata"
+    :mobile/items-title        "Stavke"
+    :mobile/add-article        "+ Artikal"
+    :mobile/total-label        "Ukupno"
+    :mobile/suggested-context  "Predloženi kontekst"
+    :mobile/phase2-title       "Detalji troška"
+    :mobile/back-to-items      "Nazad na stavke"
+
     ;; Common keys used by mobile
     :common/date               "Datum"
     :common/amount             "Iznos"
@@ -2164,6 +2175,17 @@
     ;; Mobile toast messages
     :mobile/toast-expense-created "Expense created"
     :mobile/toast-receipt-uploaded "Receipt uploaded successfully"
+
+    ;; Mobile quick-add workflow
+    :mobile/quick-add-title    "Quick Add"
+    :mobile/continue           "Continue"
+    :mobile/no-results         "No results"
+    :mobile/items-title        "Items"
+    :mobile/add-article        "+ Article"
+    :mobile/total-label        "Total"
+    :mobile/suggested-context  "Suggested context"
+    :mobile/phase2-title       "Expense Details"
+    :mobile/back-to-items      "Back to items"
 
     ;; Common keys used by mobile
     :common/date               "Date"
