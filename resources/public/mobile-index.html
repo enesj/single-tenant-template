@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="csrf-token" content="{{csrf-token}}">
+    <meta name="description" content="Bookkeeping mobile — capture and review expenses on the go.">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <title>Bookkeeping Mobile</title>
+    <link rel="icon" href="/favicon.ico" type="image/x-icon">
+    <link rel="stylesheet" href="/assets/css/style.css" type="text/css" />
+    <script>
+        // Apply saved theme immediately to prevent flash of default theme
+        (function() {
+            var savedTheme = localStorage.getItem('theme') || 'light';
+            document.documentElement.setAttribute('data-theme', savedTheme);
+        })();
+    </script>
+</head>
+<body>
+    <div id="mobile-app"></div>
+    <script src="/js/mobile/app.js" defer></script>
+</body>
+</html>

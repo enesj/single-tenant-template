@@ -47,6 +47,7 @@ __pycache__/
 /resources/public/*
 !resources/public/index.html
 !resources/public/admin.html
+!resources/public/mobile-index.html
 !resources/public/favicon.ico
 # package-lock.json tracked for reproducible production builds
 /scripts/dev-frontend-files.txt
