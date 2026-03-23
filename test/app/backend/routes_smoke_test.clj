@@ -1,14 +1,14 @@
 (ns app.backend.routes-smoke-test
   (:require
-   [app.template.backend.routes :as routes]
-   [app.template.backend.routes.admin-api :as admin-api]
-   [app.admin.backend.services.admin.dashboard :as admin-dashboard]
-   [app.template.backend.services.monitoring.login-events :as login-monitoring]
-   [app.template.backend.webserver :as webserver]
-   [cheshire.core :as json]
+    [app.template.backend.routes :as routes]
+    [app.template.backend.routes.admin-api :as admin-api]
+    [app.admin.backend.services.admin.dashboard :as admin-dashboard]
+    [app.template.backend.services.monitoring.login-events :as login-monitoring]
+    [app.template.backend.webserver :as webserver]
+    [cheshire.core :as json]
     [clojure.string :as str]
-   [clojure.test :refer [deftest is]]
-   [ring.mock.request :as mock]))
+    [clojure.test :refer [deftest is]]
+    [ring.mock.request :as mock]))
 
 (defn- stub-service-container
   ([] (stub-service-container {}))
@@ -16,7 +16,7 @@
    (let [base
          {:models-data {}
           ;; crud-routes must be in the format from DI container: [["/:entity" config subroutes...]]
-          :crud-routes [["/:entity" 
+          :crud-routes [["/:entity"
                          {:middleware []
                           "" {:get {:handler (fn [_] {:status 200 :body "stub list"})}
                               :post {:handler (fn [_] {:status 201 :body "stub create"})}}}
@@ -39,7 +39,7 @@
 
 (defn- build-handler [service-container]
   (-> (routes/app-routes {} service-container)
-      (webserver/wrap-service-container service-container)))
+    (webserver/wrap-service-container service-container)))
 
 (defn- slurp-body [resp]
   (let [body (:body resp)]
@@ -84,3 +84,23 @@
       (is (= 200 (:status resp)))
       (is (:ok body))
       (is (:has-service-container body)))))
+
+(deftest admin-password-routes-use-db-adapter-when-available
+  (let [captured (atom [])
+        db {:kind :raw-db}
+        db-adapter {:kind :db-adapter}
+        service-container (stub-service-container {:db-adapter db-adapter})]
+    (with-redefs [admin-dashboard/get-dashboard-stats (fn [_] {:total-admins 0})
+                  login-monitoring/count-recent-login-events (fn [_ _] 0)
+                  app.template.backend.routes.admin.password/public-routes
+                  (fn [passed-db _email-service _base-url]
+                    (swap! captured conj [:public passed-db])
+                    ["" ["/forgot-password" {:post (fn [_] {:status 200})}]])
+                  app.template.backend.routes.admin.password/protected-routes
+                  (fn [passed-db _email-service _base-url]
+                    (swap! captured conj [:protected passed-db])
+                    ["" ["/change-password" {:post (fn [_] {:status 200})}]])]
+      (admin-api/admin-api-routes db service-container)
+      (is (= [[:public db-adapter]
+              [:protected db-adapter]]
+            @captured)))))

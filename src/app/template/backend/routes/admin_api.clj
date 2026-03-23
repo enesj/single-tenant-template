@@ -25,6 +25,7 @@
   [db service-container]
   (let [email-service (get service-container :email-service)
         base-url (email-svc/create-base-url (:config service-container))
+        password-db (or (get service-container :db-adapter) db)
         ;; Collect domain routes from registry
         domain-routes (domain-registry/all-admin-api-routes db service-container)]
     ["/admin/api"
@@ -35,7 +36,7 @@
      (admin-auth/routes db)
 
      ;; 🔓 Public password routes (no authentication required)
-     ["/auth" (admin-password/public-routes db email-service base-url)]
+     ["/auth" (admin-password/public-routes password-db email-service base-url)]
 
      ;; 🔓 Public invitation routes (accept/validate — invitee has no account yet)
      (admin-invitations/public-routes db)
@@ -59,7 +60,7 @@
       (admin-settings/routes db)
 
       ;; Protected password routes
-      ["/auth" (admin-password/protected-routes db email-service base-url)]
+      ["/auth" (admin-password/protected-routes password-db email-service base-url)]
 
       ;; Impersonation management
       (admin-impersonation/routes db)
