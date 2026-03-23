@@ -37,6 +37,18 @@
     {:init-fn app.template.frontend.core/init
      :preloads [app.template.frontend.preload.silence]}}}
 
+  :mobile
+  {:target :browser
+   :output-dir "resources/public/js/mobile"
+   :asset-path "/js/mobile"
+   :devtools {:reload-strategy :full
+              :auto-refresh true
+              :after-load app.mobile.frontend.core/after-load}
+   :modules
+   {:app
+    {:init-fn app.mobile.frontend.core/init
+     :preloads [app.template.frontend.preload.silence]}}}
+
   :admin
   {:target :browser
    :output-dir "resources/public/js/admin"

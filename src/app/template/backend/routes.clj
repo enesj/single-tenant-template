@@ -2,8 +2,10 @@
   "Top-level route composition; mount new route trees here."
   (:require
     [app.domain.backend.registry :as domain-registry]
+    [app.template.backend.middleware.device-detection :as device-detection]
     [app.template.backend.middleware.security :as security]
     [app.template.backend.routes.admin-api :as admin-api]
+    [app.template.backend.routes.mobile :as mobile]
     [app.template.backend.routes.api :as api]
     [app.template.backend.routes.auth :as auth]
     [app.template.backend.routes.entities :as entities]
@@ -215,6 +217,7 @@
         all-routes (concat static-routes
                      [admin-api-routes]    ; Admin API routes first
                      [admin-frontend-routes]  ; Admin frontend routes second
+                     [mobile/mobile-spa-routes] ; Mobile SPA routes
                      frontend-routes
                      (generate-app-frontend-routes md)      ; NEW: App routes alias to entities
                      (generate-frontend-entity-routes md))
@@ -255,6 +258,7 @@
                           (ring/create-default-handler))
 ;; Apply middleware in correct order (security re-enabled with fixes)
                       global-debug-middleware         ; Add global request debugging FIRST
+                      (device-detection/wrap-mobile-redirect) ; Phone UA → /m/* redirect
                       (security/wrap-security)        ; HTTPS + security headers - RE-ENABLED
                       (wrap-resource "public")
                       wrap-static-cache-headers

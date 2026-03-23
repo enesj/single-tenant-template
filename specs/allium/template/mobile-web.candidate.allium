@@ -1,0 +1,631 @@
+-- allium: 2
+-- mobile-web.candidate.allium
+--
+-- Mobile Web Application — Simplified expense capture & review for phones.
+-- Status: candidate (distilled from implementation — offline queue not yet built)
+--
+-- Scope: Device detection, mobile routing, receipt capture, OCR confirmation,
+--         manual expense entry, dashboard, expense/receipt review, reports.
+-- Includes: Mobile navigation, auth subset, capture flow, review surfaces.
+-- Excludes:
+--   - Admin features (member management, reference data editing, alias mapping)
+--   - User registration (desktop only)
+--   - Email verification (post-registration only)
+--   - Workspace onboarding (desktop only)
+--   - Push notifications (passive app)
+--   - Receipt detail view on mobile
+--   - Desktop-to-mobile toggle (no user override)
+--   - Offline queue (planned, not yet implemented)
+-- Dependencies:
+--   - User, BrowserSession from authentication.allium
+--   - Tenant, TenantMembership from multi-tenancy.candidate.allium
+--   - Expense, Receipt entities from domain specs
+
+use "./authentication.allium" as auth
+use "./multi-tenancy.candidate.allium" as mt
+
+------------------------------------------------------------
+-- External Entities
+------------------------------------------------------------
+
+external entity Expense {
+    supplier: Supplier?
+    store: Store?
+    payer: Payer?
+    category: ExpenseCategory?
+    purchased_at: Timestamp?
+    total_amount: Decimal?
+    currency: String
+    notes: String?
+    items: List<LineItem>
+    tenant: mt/Tenant
+}
+
+external entity Receipt {
+    status: uploaded | parsing | parsed | extracting | extracted | review_required | posted | failed
+    supplier_guess: String?
+    supplier_guess_supplier: Supplier?
+    purchased_at_guess: Timestamp?
+    total_amount_guess: Decimal?
+    currency_guess: String?
+    payer: Payer?
+    notes: String?
+    extracted_items: List<LineItem>
+    tenant: mt/Tenant
+    user: auth/User?
+    expense: Expense?
+
+    -- Derived
+    is_reviewable: status in {extracted, review_required}
+    is_processing: status in {uploaded, parsing, parsed, extracting}
+}
+
+external entity Supplier {
+    display_name: String
+}
+
+external entity Store {
+    display_name: String
+}
+
+external entity Payer {
+    label: String
+}
+
+external entity ExpenseCategory {
+    name: String
+}
+
+------------------------------------------------------------
+-- Value Types
+------------------------------------------------------------
+
+value LineItem {
+    description: String?
+    quantity: Decimal?
+    unit_price: Decimal?
+    line_total: Decimal?
+}
+
+value DeviceInfo {
+    user_agent: String
+    is_phone: Boolean
+
+    -- Derived: phone detection based on user-agent heuristics.
+    -- Tablets are NOT classified as phones — they get the desktop experience.
+}
+
+value DashboardSummary {
+    last_30_days_total: Decimal
+    last_30_days_count: Integer
+    previous_30_days_total: Decimal
+    previous_30_days_count: Integer
+    daily_average: Decimal?
+    weekly_average: Decimal?
+    monthly_average: Decimal?
+    monthly_trend: List<MonthlyTotal>
+    top_suppliers: List<SupplierTotal>
+    category_breakdown: List<CategoryTotal>
+    biggest_expense: ExpenseHighlight?
+}
+
+value MonthlyTotal {
+    month_label: String
+    total_bam: Decimal
+    expense_count: Integer
+}
+
+value SupplierTotal {
+    display_name: String
+    total_spend_bam: Decimal
+    expense_count: Integer
+}
+
+value CategoryTotal {
+    category_name: String
+    total_spend_bam: Decimal
+    expense_count: Integer
+    percentage: Decimal
+}
+
+value ExpenseHighlight {
+    bam_amount: Decimal
+    supplier_name: String?
+    store_name: String?
+    purchased_at: Timestamp?
+}
+
+value ReceiptReviewCorrections {
+    -- Fields the user can edit during receipt review
+    supplier_id: String?
+    purchased_at: Timestamp?
+    total_amount: Decimal?
+    currency: String?
+    payer_id: String?
+    notes: String?
+    -- Line items are passed through from OCR (read-only for user)
+    items: List<LineItem>
+}
+
+value ManualExpenseData {
+    -- Full field parity with desktop expense form
+    supplier_id: String?
+    store_id: String?
+    payer_id: String?
+    category_id: String?
+    purchased_at: Timestamp?
+    total_amount: Decimal?
+    currency: String
+    notes: String?
+    items: List<LineItem>
+}
+
+value ExpenseFilter {
+    search: String?
+    limit: Integer
+    offset: Integer
+}
+
+------------------------------------------------------------
+-- Enumerations
+------------------------------------------------------------
+
+enum MobileTab { dashboard | expenses | upload | reports | more }
+
+enum CaptureSource { camera | gallery }
+
+------------------------------------------------------------
+-- Config
+------------------------------------------------------------
+
+config {
+    supported_currencies: List<String> = ["BAM", "EUR", "USD", "GBP", "CHF", "HRK", "RSD"]
+    -- Currency options shown in mobile forms
+
+    supported_locales: List<String> = ["bs", "en"]
+    -- Bosnian (default) and English
+}
+
+------------------------------------------------------------
+-- Rules — Device Detection & Routing
+------------------------------------------------------------
+
+rule DetectMobileDevice {
+    when: HttpRequestReceived(request)
+
+    let device = DeviceInfo(
+        user_agent: request.user_agent,
+        is_phone: detect_phone(request.user_agent)
+    )
+
+    requires: request.method = GET
+    requires: device.is_phone
+    requires: not request.path.starts_with("/m/")
+    requires: not request.path.starts_with("/api/")
+    requires: not request.path.starts_with("/admin/")
+    requires: not request.path.starts_with("/js/")
+    requires: not request.path.starts_with("/assets/")
+
+    ensures: HttpRedirect(
+        status: 302,
+        location: "/m" + mobile_path_for(request.path)
+    )
+
+    @guidance
+        -- Detection is user-agent based, phones only.
+        -- Tablets are NOT classified as phones.
+        -- Only GET requests are redirected — POST/PUT/DELETE are API calls.
+        -- Static assets, API routes, admin routes, and already-mobile paths are excluded.
+        -- Phone patterns: iPhone, Android.*Mobile, Windows Phone, BlackBerry, Opera Mini, IEMobile.
+}
+
+rule MobileRouteServesApp {
+    when: HttpRequestReceived(request)
+
+    requires: request.path.starts_with("/m/")
+
+    ensures: MobileSpaServed(path: request.path)
+
+    @guidance
+        -- All /m/* paths serve the same mobile SPA HTML.
+        -- Client-side routing (reitit) resolves the view from the path.
+        -- The mobile SPA is a separate build with its own entry point,
+        -- layout, and component tree — but shares the same backend API.
+}
+
+------------------------------------------------------------
+-- Rules — Authentication (Mobile Subset)
+------------------------------------------------------------
+
+rule MobileLogin {
+    when: MobileUserLogsIn(email, password, session)
+
+    ensures: auth/UserLogsInWithPassword(email, password, session)
+
+    @guidance
+        -- Same auth API endpoint as desktop.
+        -- On success: check auth status to determine next route.
+        -- If tenant-selection-required → /m/tenant-select
+        -- If authenticated with tenant → /m/dashboard
+        -- If not authenticated → stay on /m/login
+}
+
+rule MobileForgotPassword {
+    when: MobileUserRequestsPasswordReset(email)
+
+    ensures: auth/UserRequestsPasswordReset(email)
+
+    @guidance
+        -- Same API endpoint. Mobile shows success message inline.
+}
+
+rule MobileTenantSelection {
+    when: MobileUserSelectsTenant(user, tenant, session)
+
+    ensures: mt/TenantSwitched(user, tenant, session)
+
+    @guidance
+        -- Shown only when user has multiple tenant memberships.
+        -- Selection only — no workspace creation on mobile.
+        -- On selection → redirect to /m/dashboard.
+}
+
+rule MobileSessionCheck {
+    when: MobileAppLoaded(session)
+
+    ensures: auth/SessionValidated(session)
+
+    @guidance
+        -- On app load, check /auth/status.
+        -- If session expired or not authenticated → redirect to /m/login.
+        -- If tenant-selection-required → /m/tenant-select.
+        -- Session cookie is shared with desktop (same domain, path=/).
+}
+
+rule MobileLogout {
+    when: MobileUserLogsOut(user, session)
+
+    ensures: auth/SessionDestroyed(session)
+
+    @guidance
+        -- POST to /api/v1/auth/logout, then redirect to /m/login.
+}
+
+------------------------------------------------------------
+-- Rules — Receipt Capture
+------------------------------------------------------------
+
+rule CaptureReceipt {
+    when: MobileUserCapturesReceipt(user, image, source, tenant)
+
+    requires: source in {camera, gallery}
+
+    ensures: Receipt.created(
+        image: upload(image),
+        status: uploaded,
+        tenant: tenant,
+        user: user
+    )
+
+    @guidance
+        -- Upload tab presents a chooser: "Take Photo" (camera) or "Choose from Gallery".
+        -- Camera uses <input type="file" accept="image/*" capture="environment">.
+        -- Gallery uses <input type="file" accept="image/*"> without capture attribute.
+        -- Upload is a multipart FormData POST to /api/v1/expenses/upload.
+        -- On success, OCR pipeline processes the image asynchronously.
+        -- User sees a toast confirmation and stays on the upload page.
+}
+
+rule ConfirmReceiptAndCreateExpense {
+    when: MobileUserApprovesReceipt(user, receipt, corrections)
+
+    requires: receipt.is_reviewable
+    requires: receipt.user = user or receipt.user = null
+
+    ensures: Expense.created(
+        supplier: resolve_supplier(corrections.supplier_id),
+        purchased_at: corrections.purchased_at,
+        total_amount: corrections.total_amount,
+        currency: corrections.currency,
+        payer: resolve_payer(corrections.payer_id),
+        notes: corrections.notes,
+        items: corrections.items,
+        tenant: receipt.tenant
+    )
+    ensures: receipt.status = posted
+
+    @guidance
+        -- POST to /api/v1/expenses/receipts/{id}/approve.
+        -- Editable fields: supplier (autocomplete), date, total, currency, payer, notes.
+        -- Line items are passed through from OCR extraction (read-only for user).
+        -- On success: decrement pending review count, navigate to /m/upload.
+        -- Supplier autocomplete reuses the same component as manual entry.
+}
+
+------------------------------------------------------------
+-- Rules — Manual Expense Entry
+------------------------------------------------------------
+
+rule MobileManualExpenseEntry {
+    when: MobileUserCreatesExpense(user, expense_data, tenant)
+
+    ensures: Expense.created(
+        supplier: resolve_supplier(expense_data.supplier_id),
+        store: resolve_store(expense_data.store_id),
+        payer: resolve_payer(expense_data.payer_id),
+        category: resolve_category(expense_data.category_id),
+        purchased_at: expense_data.purchased_at,
+        total_amount: expense_data.total_amount,
+        currency: expense_data.currency,
+        notes: expense_data.notes,
+        items: expense_data.items,
+        tenant: tenant
+    )
+
+    @guidance
+        -- POST to /api/v1/expenses (same endpoint as desktop).
+        -- Full field parity with desktop form.
+        -- All reference fields (supplier, store, payer, category) use
+        -- search/autocomplete dropdowns that query /api/v1/expenses/{type}s.
+        -- Line items can be added/removed, each with label, qty, price, total.
+        -- Layout is vertical stacked form optimized for small screens.
+        -- On success: toast + navigate to /m/expenses.
+}
+
+------------------------------------------------------------
+-- Rules — Language Sync
+------------------------------------------------------------
+
+rule MobileLanguageFromUserPreference {
+    when: MobileSessionEstablished(user, session)
+
+    ensures: session.locale = user.locale_preference
+
+    @guidance
+        -- Language preference is stored server-side on the user profile.
+        -- Mobile inherits the same setting — no separate mobile language toggle.
+        -- Supported: :bs (Bosnian, default), :en (English).
+        -- More menu shows current locale as a read-only indicator.
+        -- Change language on desktop → reflected on mobile on next load.
+}
+
+------------------------------------------------------------
+-- Invariants
+------------------------------------------------------------
+
+invariant MobileNoAdminFeatures {
+    -- Mobile surfaces never expose admin capabilities:
+    -- no member management, reference data editing, alias mapping,
+    -- impersonation, or workspace onboarding.
+
+    @guidance
+        -- Enforced by the mobile route tree simply not including
+        -- admin routes. No runtime check needed.
+        -- All user roles (owner, admin, member, viewer) have the
+        -- same mobile experience.
+}
+
+invariant ApiSharedAcrossSurfaces {
+    -- The /api/v1/* endpoints serve both desktop and mobile clients.
+    -- No mobile-specific API endpoints exist.
+
+    @guidance
+        -- Mobile differences are purely in the frontend presentation layer.
+        -- This keeps the backend simple and avoids API fragmentation.
+}
+
+invariant ReceiptReviewFieldScope {
+    -- During mobile receipt review, the user can edit:
+    -- supplier, date, total_amount, currency, payer, notes.
+    -- Line items from OCR extraction are read-only.
+
+    @guidance
+        -- This matches the desktop approval flow where line items
+        -- can be edited. Mobile simplifies by making them read-only
+        -- since editing individual OCR line items on a small screen
+        -- is error-prone and low-value.
+}
+
+------------------------------------------------------------
+-- Actor Declarations
+------------------------------------------------------------
+
+actor MobileUser : auth/User {
+    -- Any authenticated user accessing from a phone.
+    -- All roles (owner, admin, member, viewer) have the same
+    -- mobile experience — admin features are desktop-only.
+}
+
+------------------------------------------------------------
+-- Surfaces
+------------------------------------------------------------
+
+surface MobileDetectionBoundary {
+    facing request: HttpRequest
+
+    provides:
+        DetectDevice(request)
+        RedirectToMobile(request)
+
+    guarantee:
+        DetectDevice(request) classifies phones via user-agent heuristics.
+        Tablets and desktops are NOT redirected.
+
+    guarantee:
+        RedirectToMobile(request) issues HTTP 302 from desktop paths
+        to /m/* equivalents for phone user-agents.
+        Only GET requests are redirected.
+
+    guarantee:
+        API routes (/api/*), admin routes (/admin/*), static assets
+        (/js/*, /assets/*), and already-mobile paths (/m/*) are never redirected.
+}
+
+surface MobileAuthBoundary {
+    facing user: MobileUser
+
+    provides:
+        MobileUserLogsIn(email, password, session)
+        MobileUserRequestsPasswordReset(email)
+        MobileUserSelectsTenant(user, tenant, session)
+        MobileUserLogsOut(user, session)
+
+    guarantee:
+        Login, forgot-password, tenant selection, and logout are
+        the only auth flows available on mobile.
+
+    guarantee:
+        Registration, email verification, and onboarding are not
+        accessible from mobile routes.
+
+    guarantee:
+        On app load, session is validated via /auth/status.
+        Expired sessions redirect to /m/login.
+
+    @guidance
+        -- Auth pages render without the tab bar layout (full-screen forms).
+        -- After login: redirect to /m/tenant-select (if multiple tenants)
+        -- or /m/dashboard (single tenant / tenant already selected).
+}
+
+surface MobileCaptureBoundary {
+    facing user: MobileUser
+
+    provides:
+        CaptureReceipt(user, image, source)
+            -- source: camera | gallery
+        ApproveReceipt(user, receipt, corrections)
+            -- Confirm/correct OCR results and create expense
+        CreateExpenseManually(user, expense_data)
+            -- Full parity with desktop form fields
+
+    exposes:
+        Receipt with is_reviewable = true and user = current_user
+            -- Pending receipts shown as a list on the upload page
+        Receipt.count where is_reviewable = true
+            -- Badge count on the upload tab
+
+    guarantee:
+        Upload page presents three sections:
+        1. Capture Receipt (camera + gallery buttons)
+        2. Manual Entry (link to manual expense form)
+        3. Pending Reviews (list of reviewable receipts with tap-to-review)
+
+    guarantee:
+        Receipt review shows: receipt image, editable supplier/date/total/currency/payer/notes,
+        read-only line items, and a confirm button.
+
+    guarantee:
+        Manual entry form has full field parity with desktop:
+        supplier, store, date, amount, currency, payer, category, notes, line items.
+        All reference fields use search/autocomplete.
+}
+
+surface MobileReviewBoundary {
+    facing user: MobileUser
+
+    provides:
+        ViewDashboard(user)
+            -- Summary cards (30-day total, expense count, averages),
+            -- monthly trend bars, top suppliers list, category breakdown,
+            -- biggest expense
+        ListExpenses(user, filters)
+            -- Searchable list with "load more" pagination
+        ViewExpenseDetail(user, expense_id)
+            -- Read-only detail with all fields and line items
+        ListReceipts(user)
+            -- Receipt list with status badges, no detail view
+        ViewReports(user)
+            -- By-category bars, monthly spending bars, day-of-week bars
+
+    guarantee:
+        Receipt detail view is NOT available on mobile.
+        Receipt list shows status, supplier guess, total guess, date.
+
+    guarantee:
+        All review surfaces consume the same /api/v1/* endpoints as desktop.
+
+    guarantee:
+        Expense list supports search by supplier name with debounced input.
+        Results use offset-based pagination with explicit "Load more" button.
+
+    guarantee:
+        Dashboard data is fetched in a single request to /api/v1/expenses/dashboard.
+        All monetary aggregations are normalized to BAM for cross-currency consistency.
+
+    guarantee:
+        Reports fetch three datasets in parallel: by-category, monthly spending,
+        day-of-week spending. Each renders independently as data arrives.
+}
+
+surface MobileNavigationBoundary {
+    facing user: MobileUser
+
+    provides:
+        NavigateToTab(user, tab)
+            -- tab: dashboard | expenses | upload | reports | more
+
+    exposes:
+        MobileTab
+        Receipt.count where is_reviewable = true
+            -- Badge on upload tab
+
+    guarantee:
+        Navigation is a bottom tab bar with 5 items:
+        Dashboard, Expenses, Upload (center/prominent), Reports, More.
+
+    guarantee:
+        Upload tab is visually prominent: center position, larger icon,
+        raised above the tab bar, accent color background.
+        This reinforces capture as the primary action.
+
+    guarantee:
+        Search is accessible via a search bar at the top of the Expenses tab,
+        not as a separate navigation item.
+
+    guarantee:
+        More menu contains: Receipt list link, Search (redirects to expenses),
+        Language indicator (read-only, shows current locale), Logout.
+
+    guarantee:
+        Language indicator shows current locale (synced from user preference).
+        Changing language is done on desktop.
+}
+
+------------------------------------------------------------
+-- Deferred Specifications
+------------------------------------------------------------
+
+-- Offline queue and sync
+-- Planned but not yet implemented. Design decisions:
+-- - Storage: IndexedDB for persistence across app restarts
+-- - Capacity: max 5 queued receipts per user
+-- - Sync trigger: explicit user action only (no background sync)
+-- - Sync flow: for each entry, upload image → create receipt → remove from queue
+-- - Partial failure: keep failed entries, report which succeeded
+
+------------------------------------------------------------
+-- Open Questions (Resolved)
+------------------------------------------------------------
+
+-- Q: Separate shadow-cljs build or runtime switch?
+-- A: RESOLVED — Separate :mobile build. Smaller bundle, clean separation,
+--    independent deploy cycle. Shared code via common namespaces.
+
+-- Q: Offline queue persistence mechanism?
+-- A: RESOLVED — IndexedDB recommended (survives browser close).
+--    Implementation deferred to Phase 2.4.
+
+-- Q: Session expiry handling on mobile?
+-- A: RESOLVED — Redirect to /m/login. Auth status checked on app load.
+
+-- Q: Pending review badge update mechanism?
+-- A: RESOLVED — Updated on page/tab navigation and after receipt operations.
+--    No polling. Fetched via GET /api/v1/expenses/receipts?status=extracted,review_required.
+
+-- Q: Dashboard charts — same library or mobile-optimized?
+-- A: RESOLVED — No chart library. Bar charts rendered as CSS width percentages.
+--    Day-of-week uses flexbox columns. Simpler, lighter, no dependency.
+
+-- Q: Attach photo to existing manual expense?
+-- A: RESOLVED — Deferred. Manual entry and receipt upload are separate flows in V1.

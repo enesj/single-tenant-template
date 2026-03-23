@@ -932,6 +932,80 @@
     :lang/bs "BS"
     :lang/en "EN"
 
+    ;; Mobile tab labels
+    :mobile/tab-dashboard "Početna"
+    :mobile/tab-expenses  "Troškovi"
+    :mobile/tab-reports   "Izvještaji"
+    :mobile/tab-more      "Više"
+    :mobile/tab-upload    "Učitaj"
+
+    ;; Mobile upload page
+    :mobile/capture-receipt    "Fotografiraj račun"
+    :mobile/take-photo         "Slikaj"
+    :mobile/take-photo-sub     "Koristi kameru za snimanje računa"
+    :mobile/from-gallery       "Odaberi iz galerije"
+    :mobile/from-gallery-sub   "Odaberi postojeću fotografiju"
+    :mobile/manual-entry       "Ručni unos"
+    :mobile/add-manually       "Dodaj trošak ručno"
+    :mobile/add-manually-sub   "Unesi podatke bez računa"
+    :mobile/pending-reviews    "Na čekanju"
+    :mobile/pending-reviews-desc "Računi obrađeni OCR-om, čekaju vašu potvrdu."
+    :mobile/review-now         "Pregledaj"
+    :mobile/receipts-queued    "računa čeka sinkronizaciju"
+    :mobile/sync-now           "Sinkroniziraj"
+
+    ;; Mobile manual entry form
+    :mobile/search-supplier    "Traži dobavljača..."
+    :mobile/search-store       "Traži prodavnicu..."
+    :mobile/search-payer       "Traži platitelja..."
+    :mobile/search-category    "Traži kategoriju..."
+    :mobile/notes-placeholder  "Opcionalne napomene..."
+
+    ;; Mobile receipt review
+    :mobile/review-receipt     "Pregledaj račun"
+    :mobile/confirm-approve    "Potvrdi i spremi"
+    :mobile/unknown-supplier   "Nepoznat dobavljač"
+
+    ;; Mobile dashboard
+    :mobile/monthly-trend      "Mjesečni trend"
+    :mobile/categories         "Kategorije"
+    :mobile/total-30d          "Zadnjih 30 dana"
+    :mobile/expense-count      "Troškovi"
+    :mobile/vs-prev            "u odnosu na prethodno"
+    :mobile/daily-avg          "Dnevni prosjek"
+    :mobile/weekly-avg         "Sedmični prosjek"
+    :mobile/monthly-avg        "Mjesečni prosjek"
+    :mobile/top-suppliers      "Top dobavljači"
+    :mobile/biggest-expense    "Najveći trošak"
+
+    ;; Mobile expense list
+    :mobile/search-expenses    "Traži po dobavljaču..."
+    :mobile/no-expenses        "Nema pronađenih troškova"
+    :mobile/load-more          "Učitaj više"
+    :mobile/expense-detail     "Detalji troška"
+
+    ;; Mobile receipts
+    :mobile/receipts-title     "Računi"
+    :mobile/view-receipts      "Pregledaj sve učitane račune"
+    :mobile/no-receipts        "Nema pronađenih računa"
+
+    ;; Mobile reports
+    :mobile/by-category        "Po kategoriji artikla"
+    :mobile/monthly-spending   "Mjesečna potrošnja"
+    :mobile/by-day             "Po danu u sedmici"
+    :mobile/uncategorized      "Nekategorizirano"
+
+    ;; Mobile more menu
+    :mobile/search             "Pretraga"
+    :mobile/language            "Jezik"
+    :mobile/change-on-desktop  "Promijenite jezik na desktopu"
+
+    ;; Common keys used by mobile
+    :common/date               "Datum"
+    :common/amount             "Iznos"
+    :common/line-items         "Stavke"
+    :common/save               "Spremi"
+
     :tongue/fallback :en}
 
    ;; ---------------------------------------------------------------------------
@@ -1847,7 +1921,81 @@
 
     ;; Language switcher labels
     :lang/bs "BS"
-    :lang/en "EN"}})
+    :lang/en "EN"
+
+    ;; Mobile tab labels
+    :mobile/tab-dashboard "Home"
+    :mobile/tab-expenses  "Expenses"
+    :mobile/tab-reports   "Reports"
+    :mobile/tab-more      "More"
+    :mobile/tab-upload    "Upload"
+
+    ;; Mobile upload page
+    :mobile/capture-receipt    "Capture Receipt"
+    :mobile/take-photo         "Take Photo"
+    :mobile/take-photo-sub     "Use camera to capture receipt"
+    :mobile/from-gallery       "Choose from Gallery"
+    :mobile/from-gallery-sub   "Select existing photo"
+    :mobile/manual-entry       "Manual Entry"
+    :mobile/add-manually       "Add Expense Manually"
+    :mobile/add-manually-sub   "Enter details without receipt"
+    :mobile/pending-reviews    "Pending Reviews"
+    :mobile/pending-reviews-desc "Receipts processed by OCR, awaiting your confirmation."
+    :mobile/review-now         "Review Now"
+    :mobile/receipts-queued    "receipts queued offline"
+    :mobile/sync-now           "Sync Now"
+
+    ;; Mobile manual entry form
+    :mobile/search-supplier    "Search supplier..."
+    :mobile/search-store       "Search store..."
+    :mobile/search-payer       "Search payer..."
+    :mobile/search-category    "Search category..."
+    :mobile/notes-placeholder  "Optional notes..."
+
+    ;; Mobile receipt review
+    :mobile/review-receipt     "Review Receipt"
+    :mobile/confirm-approve    "Confirm & Save"
+    :mobile/unknown-supplier   "Unknown supplier"
+
+    ;; Mobile dashboard
+    :mobile/monthly-trend      "Monthly Trend"
+    :mobile/categories         "Categories"
+    :mobile/total-30d          "Last 30 days"
+    :mobile/expense-count      "Expenses"
+    :mobile/vs-prev            "vs previous"
+    :mobile/daily-avg          "Daily avg"
+    :mobile/weekly-avg         "Weekly avg"
+    :mobile/monthly-avg        "Monthly avg"
+    :mobile/top-suppliers      "Top Suppliers"
+    :mobile/biggest-expense    "Biggest Expense"
+
+    ;; Mobile expense list
+    :mobile/search-expenses    "Search by supplier..."
+    :mobile/no-expenses        "No expenses found"
+    :mobile/load-more          "Load more"
+    :mobile/expense-detail     "Expense Detail"
+
+    ;; Mobile receipts
+    :mobile/receipts-title     "Receipts"
+    :mobile/view-receipts      "View all uploaded receipts"
+    :mobile/no-receipts        "No receipts found"
+
+    ;; Mobile reports
+    :mobile/by-category        "By Article Category"
+    :mobile/monthly-spending   "Monthly Spending"
+    :mobile/by-day             "By Day of Week"
+    :mobile/uncategorized      "Uncategorized"
+
+    ;; Mobile more menu
+    :mobile/search             "Search"
+    :mobile/language           "Language"
+    :mobile/change-on-desktop  "Change language on desktop"
+
+    ;; Common keys used by mobile
+    :common/date               "Date"
+    :common/amount             "Amount"
+    :common/line-items         "Line Items"
+    :common/save               "Save"}})
 
 ;; ---------------------------------------------------------------------------
 ;; translate fn and use-t hook
