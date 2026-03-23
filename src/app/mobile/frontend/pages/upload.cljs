@@ -923,13 +923,19 @@
 
         (when captured-file
           ($ :div {:id "modal-camera-next-action-mobile"
-                   :class "absolute inset-0 z-40 flex items-end bg-black/40 px-4 pb-6 pt-28 backdrop-blur-sm"}
-            ($ :div {:class "mx-auto w-full max-w-sm rounded-3xl border border-white/10 bg-neutral-950/88 p-5 shadow-2xl"}
+                   :class "absolute inset-0 z-40 flex items-end bg-black/18 px-4 pb-6 pt-20"}
+            ($ :div {:class "mx-auto w-full max-w-sm rounded-3xl border border-white/10 bg-neutral-950/90 p-5 shadow-2xl"}
               ($ :p {:class "text-xs font-semibold uppercase tracking-[0.24em] text-white/45"}
                 "Receipt Captured")
               ($ :h2 {:class "mt-2 text-xl font-semibold text-white"}
-                "Take another receipt or exit?")
-              ($ :p {:class "mt-2 text-sm leading-6 text-white/70"}
+                "Audit this image, then choose next action")
+              (when captured-preview-url
+                ($ :div {:class "mt-4 overflow-hidden rounded-2xl border border-white/10 bg-black"}
+                  ($ :img {:id "img-captured-receipt-audit-mobile"
+                           :src captured-preview-url
+                           :alt "Captured receipt audit preview"
+                           :class "max-h-64 w-full object-contain bg-black"})))
+              ($ :p {:class "mt-3 text-sm leading-6 text-white/70"}
                 (if native-capture-mode?
                   "Save this image, then use Capture again to open the iPhone camera, or save it and go back to Upload."
                   "Save this image and keep shooting here, or save it and go back to Upload."))
