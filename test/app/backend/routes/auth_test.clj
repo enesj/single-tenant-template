@@ -81,6 +81,43 @@
             (is (= "tenant-1" (get-in resp [:session :auth-session :tenant :id])))
             (is (= "admin-token-1" (get-in resp [:session :admin-token])))))))))
 
+(deftest auth-status-initializes-missing-onboarding-summary-test
+  (testing "verified users with active memberships get onboarding initialized on demand"
+    (let [req {:session {:auth-session {:user {:id "user-1"
+                                               :email "user@example.com"}
+                                        :tenant {:id "tenant-1"}
+                                        :membership {:role "owner"}}}
+               :service-container {:db :mock-db}}
+          parse-body #(json/parse-string (:body %) true)
+          summary {:active? true
+                   :completed 0
+                   :total 7
+                   :dismissed false
+                   :redirect-to-onboarding? true}
+          init-calls (atom 0)]
+      (with-redefs-fn {#'routes.auth/invalid-auth-session-message (fn [& _] nil)
+                       #'app.template.backend.services.onboarding.core/get-progress-summary
+                       (let [calls (atom 0)]
+                         (fn [_db user-id role]
+                           (swap! calls inc)
+                           (is (= "user-1" user-id))
+                           (is (= "owner" role))
+                           (when (> @calls 1)
+                             summary)))
+                       #'app.template.backend.services.onboarding.core/initialise-delta-onboarding!
+                       (fn [_db user-id role]
+                         (swap! init-calls inc)
+                         (is (= "user-1" user-id))
+                         (is (= "owner" role))
+                         :created)}
+        (fn []
+          (let [resp (routes.auth/auth-status-handler req)
+                body (parse-body resp)]
+            (is (= 200 (:status resp)))
+            (is (= 1 @init-calls))
+            (is (= true (:authenticated body)))
+            (is (= true (get-in body [:onboarding :redirect-to-onboarding?])))))))))
+
 (deftest oauth-callback-does-not-claim-email-was-sent-when-delivery-fails-test
   (testing "new OAuth signups redirect to an error page when verification delivery fails"
     (let [handler (app.template.backend.routes.oauth/oauth-callback-handler :auth-service nil {:oauth {:google {:redirect-uri "https://example.com/oauth/google/callback"}}})

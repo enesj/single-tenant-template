@@ -8,6 +8,7 @@
     [app.template.backend.auth.tenant :as tenant-auth]
     [app.template.backend.routes.utils :as route-utils]
     [app.template.backend.services.monitoring.login-events :as login-monitoring]
+    [app.template.backend.services.onboarding.core :as onboarding]
     [app.template.backend.services.tenant :as tenant-svc]
     [cheshire.core :as json]
     [clojure.walk :as walk]
@@ -246,6 +247,23 @@
            :reason :verified-user-session-refreshed
            :auth-session repaired-session})))))
 
+(defn- ensure-onboarding-summary
+  "Return the current onboarding summary for a (user, role) pair.
+   If none exists yet, initialise onboarding lazily and re-read the summary.
+
+   This protects verified users created before onboarding initialisation was
+   wired into workspace provisioning, and keeps first-login redirects honest."
+  [db user-id role]
+  (when (and db user-id role)
+    (try
+      (or (onboarding/get-progress-summary db user-id role)
+        (do
+          (onboarding/initialise-delta-onboarding! db user-id role)
+          (onboarding/get-progress-summary db user-id role)))
+      (catch Exception e
+        (log/debug "Onboarding summary skipped" {:error (.getMessage e)})
+        nil))))
+
 (defn register-handler
   "Handler for user registration"
   [auth-service]
@@ -433,19 +451,13 @@
                           (get-in effective-auth-session [:user :users/id]))
                :tenant-id (or (get-in effective-auth-session [:tenant :id])
                             (get-in effective-auth-session [:tenant :tenants/id]))}))
-          ;; Fetch lightweight onboarding summary (safe — nil if no progress exists)
+          ;; Fetch lightweight onboarding summary and lazily initialize missing
+          ;; onboarding for verified users with active memberships.
           (let [onboarding-summary
                 (when-let [eff-user (:user effective-auth-session)]
                   (let [role (or (get-in effective-auth-session [:membership :role])
                                (:membership-role effective-auth-session))]
-                    (when (and db role)
-                      (try
-                        (let [get-summary (requiring-resolve
-                                            'app.template.backend.services.onboarding.core/get-progress-summary)]
-                          (get-summary db (:id eff-user) role))
-                        (catch Exception e
-                          (log/debug "Onboarding summary skipped" {:error (.getMessage e)})
-                          nil)))))]
+                    (ensure-onboarding-summary db (:id eff-user) role)))]
             (cond-> {:status 200
                      :headers {"Content-Type" "application/json"}
                      :body (json/generate-string
