@@ -28,6 +28,14 @@
     (is (false? (sut/flash-supported? #js {:fillLightMode #js ["off"]})))
     (is (false? (sut/flash-supported? #js {})))))
 
+(deftest device-flash-mode-prefers-native-camera-when-live-flash-is-unavailable
+  (testing "unsupported flash can stay in a device-camera loop for repeated receipts"
+    (is (true? (sut/device-flash-mode? false true)))
+    (is (false? (sut/device-flash-mode? true true)))
+    (is (true? (sut/native-camera-capture? false false true)))
+    (is (true? (sut/native-camera-capture? true false false)))
+    (is (false? (sut/native-camera-capture? false true false)))))
+
 (deftest zoom-helpers-keep-overlay-independent
   (testing "pinch helpers clamp zoom and compute geometry for media-only transforms"
     (is (= 4 (sut/clamp-number 10 1 4)))
@@ -58,3 +66,14 @@
     (rf/dispatch-sync [:mobile/upload-receipt-failure {:response {:error "File too large (max 10MB)"}}])
     (is (= "File too large (max 10MB)"
           (get-in @rf-db/app-db [:mobile :upload :error])))))
+
+(deftest upload-events-invoke-optional-camera-callbacks
+  (testing "camera review actions can react to upload success and failure"
+    (reset! rf-db/app-db {})
+    (let [success-response {:duplicate? true}
+          success-result (atom nil)
+          error-result (atom nil)]
+      (rf/dispatch-sync [:mobile/upload-receipt-success {:on-success #(reset! success-result %)} success-response])
+      (rf/dispatch-sync [:mobile/upload-receipt-failure {:on-error #(reset! error-result %)} {:response {:error "Upload failed badly"}}])
+      (is (= success-response @success-result))
+      (is (= "Upload failed badly" @error-result)))))

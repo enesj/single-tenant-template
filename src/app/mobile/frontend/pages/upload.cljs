@@ -17,28 +17,37 @@
 
 (rf/reg-event-fx
   :mobile/upload-receipt
-  (fn [{:keys [db]} [_ file]]
-    (let [form-data (js/FormData.)]
+  (fn [{:keys [db]} [_ file callbacks]]
+    (let [form-data (js/FormData.)
+          callbacks (when (map? callbacks) callbacks)]
       (.append form-data "file" file)
-      {:db (assoc-in db [:mobile :upload :loading?] true)
+      {:db (-> db
+             (assoc-in [:mobile :upload :loading?] true)
+             (assoc-in [:mobile :upload :error] nil))
        :http-xhrio {:method :post
                     :uri "/api/v1/expenses/upload"
                     :body form-data
                     :format {:write identity :content-type false}
                     :response-format (ajax/json-response-format {:keywords? true})
-                    :on-success [:mobile/upload-receipt-success]
-                    :on-failure [:mobile/upload-receipt-failure]}})))
+                    :on-success [:mobile/upload-receipt-success callbacks]
+                    :on-failure [:mobile/upload-receipt-failure callbacks]}})))
 
 (rf/reg-event-fx
   :mobile/upload-receipt-success
-  (fn [{:keys [db]} [_ response]]
-    (let [receipt-id (get-in response [:data :id])
-          duplicate? (:duplicate? response)]
+  (fn [{:keys [db]} [_ maybe-callbacks maybe-response]]
+    (let [[callbacks response] (if (some? maybe-response)
+                                 [maybe-callbacks maybe-response]
+                                 [nil maybe-callbacks])
+          receipt-id (get-in response [:data :id])
+          duplicate? (:duplicate? response)
+          on-success (:on-success callbacks)]
+      (when (fn? on-success)
+        (on-success response))
       {:db (-> db
              (assoc-in [:mobile :upload :loading?] false)
+             (assoc-in [:mobile :upload :error] nil)
              (assoc-in [:mobile :upload :last-upload] response))
        :fx (cond-> [[:dispatch [:mobile/show-toast "Receipt uploaded successfully"]]]
-             ;; Trigger OCR extraction for new (non-duplicate) receipts
              (and receipt-id (not duplicate?))
              (conj [:http-xhrio
                     {:method :post
@@ -61,11 +70,17 @@
 
 (rf/reg-event-fx
   :mobile/upload-receipt-failure
-  (fn [{:keys [db]} [_ error]]
-    {:db (-> db
-           (assoc-in [:mobile :upload :loading?] false)
-           (assoc-in [:mobile :upload :error]
-             (or (http/extract-error-message error) "Upload failed")))}))
+  (fn [{:keys [db]} [_ maybe-callbacks maybe-error]]
+    (let [[callbacks error] (if (some? maybe-error)
+                              [maybe-callbacks maybe-error]
+                              [nil maybe-callbacks])
+          message (or (http/extract-error-message error) "Upload failed")
+          on-error (:on-error callbacks)]
+      (when (fn? on-error)
+        (on-error message))
+      {:db (-> db
+             (assoc-in [:mobile :upload :loading?] false)
+             (assoc-in [:mobile :upload :error] message))})))
 
 (rf/reg-event-db
   :mobile/show-toast
@@ -252,6 +267,13 @@
         (on-result false)))
     (on-result false)))
 
+(defn device-flash-mode? [flash-available? flash-enabled?]
+  (and flash-enabled? (not flash-available?)))
+
+(defn native-camera-capture? [native-fallback? flash-available? flash-enabled?]
+  (or native-fallback?
+    (device-flash-mode? flash-available? flash-enabled?)))
+
 (def min-preview-zoom 1.0)
 (def max-preview-zoom 4.0)
 
@@ -314,10 +336,18 @@
         [flash-available? set-flash-available!] (use-state false)
         [flash-enabled? set-flash-enabled!] (use-state false)
         [native-fallback? set-native-fallback!] (use-state false)
+        [captured-file set-captured-file!] (use-state nil)
+        [captured-preview-url set-captured-preview-url!] (use-state nil)
         [preview-zoom set-preview-zoom!] (use-state 1.0)
         [preview-pan set-preview-pan!] (use-state {:x 0 :y 0})
         busy? (boolean (or loading? camera-starting? capturing-photo?))
         zoomed? (> preview-zoom min-preview-zoom)
+        device-flash? (device-flash-mode? flash-available? flash-enabled?)
+        native-capture-mode? (native-camera-capture? native-fallback? flash-available? flash-enabled?)
+        flash-pill-label (cond
+                           flash-available? (if flash-enabled? "Flash On" "Flash Off")
+                           device-flash? "iPhone Flash"
+                           :else "Use iPhone Flash")
         reset-preview-transform! (fn []
                                    (reset! active-pointers-ref {})
                                    (reset! gesture-ref nil)
@@ -329,6 +359,16 @@
         show-camera-error! (fn [message]
                              (set-camera-error! message)
                              (set-camera-error-dismissed! false))
+        clear-captured-file! (fn []
+                               (set-captured-file! nil)
+                               (set-captured-preview-url! nil))
+        queue-captured-file! (fn [file]
+                               (set-capturing-photo! false)
+                               (clear-camera-error!)
+                               (set-captured-file! file)
+                               (if (and (exists? js/URL) (fn? (.-createObjectURL js/URL)))
+                                 (set-captured-preview-url! (.createObjectURL js/URL file))
+                                 (set-captured-preview-url! nil)))
         stop-live-stream! (fn []
                             (when-let [stream @live-stream-ref]
                               (stop-stream! stream)
@@ -337,6 +377,16 @@
                               (set! (.-srcObject video-el) nil))
                             (reset! active-pointers-ref {})
                             (reset! gesture-ref nil))
+        trigger-native-camera! (fn []
+                                 (when-let [el @native-camera-ref]
+                                   (.click el)))
+        reopen-native-camera! (fn []
+                                (js/setTimeout trigger-native-camera! 150))
+        return-to-upload! (fn []
+                            (clear-captured-file!)
+                            (stop-live-stream!)
+                            (reset-preview-transform!)
+                            (rf/dispatch [:mobile/navigate "/m/upload"]))
         current-points (fn []
                          (vals @active-pointers-ref))
         begin-drag! (fn [pointer]
@@ -407,18 +457,6 @@
                                      (let [pointer-id (.-pointerId e)]
                                        (swap! active-pointers-ref dissoc pointer-id)
                                        (sync-gesture-after-release!)))
-        return-to-upload! (fn []
-                            (stop-live-stream!)
-                            (reset-preview-transform!)
-                            (rf/dispatch [:mobile/navigate "/m/upload"]))
-        finish-with-file! (fn [file]
-                            (set-capturing-photo! false)
-                            (stop-live-stream!)
-                            (rf/dispatch [:mobile/navigate "/m/upload"])
-                            (rf/dispatch [:mobile/upload-receipt file]))
-        trigger-native-camera! (fn []
-                                 (when-let [el @native-camera-ref]
-                                   (.click el)))
         toggle-torch! (fn []
                         (when torch-available?
                           (when-let [track (first-video-track @live-stream-ref)]
@@ -426,37 +464,63 @@
                               (not torch-enabled?)
                               (fn [enabled?]
                                 (set-torch-enabled! enabled?)
-                                (do
-                                  (set-camera-error! nil)
-                                  (set-camera-error-dismissed! false)))
+                                (clear-camera-error!))
                               (fn [_]
                                 (set-torch-available! false)
                                 (set-torch-enabled! false)
                                 (show-camera-error! "Torch control is not available on this device/browser."))))))
         toggle-flash! (fn []
-                        (if flash-available?
-                          (do
-                            (set-flash-enabled! (not flash-enabled?))
-                            (do
-                              (set-camera-error! nil)
-                              (set-camera-error-dismissed! false)))
-                          (do
-                            (show-camera-error! "Live flash control is unavailable here. Opening the device camera so you can use native flash controls.")
-                            (trigger-native-camera!))))
+                        (let [next-enabled? (not flash-enabled?)]
+                          (set-flash-enabled! next-enabled?)
+                          (cond
+                            flash-available? (clear-camera-error!)
+                            next-enabled?
+                            (show-camera-error!
+                              "Capture will open the iPhone camera so you can use its flash controls there.")
+                            :else
+                            (clear-camera-error!))))
+        save-captured-file! (fn [after-success]
+                              (when captured-file
+                                (rf/dispatch [:mobile/upload-receipt
+                                              captured-file
+                                              {:on-success (fn [_response]
+                                                             (when (fn? after-success)
+                                                               (after-success)))
+                                               :on-error (fn [message]
+                                                           (show-camera-error! message))}])))
+        save-and-exit! (fn []
+                         (save-captured-file! return-to-upload!))
+        save-and-take-another! (fn []
+                                 (save-captured-file!
+                                   (fn []
+                                     (clear-captured-file!)
+                                     (when native-capture-mode?
+                                       (reopen-native-camera!)))))
+        retake-photo! (fn []
+                        (clear-captured-file!)
+                        (when native-capture-mode?
+                          (reopen-native-camera!)))
         capture-live-photo! (fn []
-                              (if native-fallback?
+                              (if native-capture-mode?
                                 (trigger-native-camera!)
                                 (when-let [video-el @live-video-ref]
                                   (set-capturing-photo! true)
                                   (let [track (first-video-track @live-stream-ref)
                                         on-success (fn [file]
-                                                     (finish-with-file! file))
+                                                     (queue-captured-file! file))
                                         on-error (fn [message]
                                                    (set-capturing-photo! false)
                                                    (show-camera-error! message))]
-                                    (if flash-enabled?
+                                    (if (and flash-available? flash-enabled?)
                                       (try-capture-with-flash! track video-el on-success on-error)
                                       (capture-current-frame! video-el on-success on-error))))))]
+
+    (use-effect
+      (fn []
+        (fn []
+          (when (and captured-preview-url (exists? js/URL) (fn? (.-revokeObjectURL js/URL)))
+            (.revokeObjectURL js/URL captured-preview-url))))
+      [captured-preview-url])
 
     (use-effect
       (fn []
@@ -464,9 +528,8 @@
           (let [cancelled? (atom false)
                 media-devices (.-mediaDevices js/navigator)]
             (set-camera-starting! true)
-            (do
-              (set-camera-error! nil)
-              (set-camera-error-dismissed! false))
+            (set-camera-error! nil)
+            (set-camera-error-dismissed! false)
             (set-native-fallback! false)
             (do
               (reset! active-pointers-ref {})
@@ -488,7 +551,7 @@
                              (detect-flash-support! track
                                (fn [flash?]
                                  (set-flash-available! flash?)
-                                 (set-flash-enabled! flash?)))
+                                 (set-flash-enabled! false)))
                              (set-camera-starting! false)
                              (set-capturing-photo! false))))))
               (.catch (fn [err]
@@ -506,9 +569,8 @@
                           (set-torch-enabled! false)
                           (set-flash-available! false)
                           (set-flash-enabled! false)
-                          (do
-                            (set-camera-error! (camera-error-message err))
-                            (set-camera-error-dismissed! false))))))
+                          (set-camera-error! (camera-error-message err))
+                          (set-camera-error-dismissed! false)))))
             (fn []
               (reset! cancelled? true)
               (when-let [stream @live-stream-ref]
@@ -525,9 +587,8 @@
             (set-flash-enabled! false)
             (set-torch-available! false)
             (set-torch-enabled! false)
-            (do
-              (set-camera-error! "Live camera preview is unavailable here. Capture will use the device camera instead.")
-              (set-camera-error-dismissed! false))
+            (set-camera-error! "Live camera preview is unavailable here. Capture will use the device camera instead.")
+            (set-camera-error-dismissed! false)
             js/undefined)))
       [])
 
@@ -549,22 +610,34 @@
                  :class "hidden"
                  :on-change (fn [e]
                               (when-let [file (-> e .-target .-files (aget 0))]
-                                (finish-with-file! file)
+                                (queue-captured-file! file)
                                 (set! (.-value (.-target e)) "")))})
       ($ :div {:id "page-camera-capture-mobile"
                :class "fixed inset-0 z-[70] overflow-hidden bg-black text-white"}
         ($ :div {:id "camera-preview-stage-mobile"
                  :class "absolute inset-0 overflow-hidden"
                  :style #js {:touchAction "none"}
-                 :on-pointer-down (when-not native-fallback? handle-preview-pointer-down!)
-                 :on-pointer-move (when-not native-fallback? handle-preview-pointer-move!)
-                 :on-pointer-up (when-not native-fallback? handle-preview-pointer-up!)
-                 :on-pointer-cancel (when-not native-fallback? handle-preview-pointer-up!)}
+                 :on-pointer-down (when (and (not native-fallback?) (nil? captured-file)) handle-preview-pointer-down!)
+                 :on-pointer-move (when (and (not native-fallback?) (nil? captured-file)) handle-preview-pointer-move!)
+                 :on-pointer-up (when (and (not native-fallback?) (nil? captured-file)) handle-preview-pointer-up!)
+                 :on-pointer-cancel (when (and (not native-fallback?) (nil? captured-file)) handle-preview-pointer-up!)}
           ($ :div {:class "absolute inset-0"
                    :style #js {:transform (str "translate(" (:x preview-pan) "px, " (:y preview-pan) "px) scale(" preview-zoom ")")
                                :transformOrigin "center center"
                                :willChange "transform"}}
-            (if native-fallback?
+            (cond
+              captured-preview-url
+              ($ :img {:id "img-captured-receipt-preview-mobile"
+                       :src captured-preview-url
+                       :alt "Captured receipt preview"
+                       :class "h-full w-full object-contain bg-black"})
+
+              captured-file
+              ($ :div {:class "flex h-full items-center justify-center bg-black px-6 text-center"}
+                ($ :p {:class "text-sm text-white/70"}
+                  "Receipt captured. Use the actions below to keep it, take another, or exit."))
+
+              native-fallback?
               ($ :div {:class "flex h-full items-center justify-center bg-gradient-to-b from-neutral-900 to-black px-6 text-center"}
                 ($ :div {:class "space-y-3"}
                   ($ :div {:class "mx-auto flex h-20 w-20 items-center justify-center rounded-full border border-white/20 bg-white/10"}
@@ -573,7 +646,11 @@
                   ($ :p {:class "text-lg font-semibold"}
                     (t :mobile/take-photo "Take Photo"))
                   ($ :p {:class "text-sm text-white/70"}
-                    "This browser cannot keep the live preview open here. Use the capture button below to open the device camera.")))
+                    (if device-flash?
+                      "Use the capture button below to open the iPhone camera and turn flash on there."
+                      "This browser cannot keep the live preview open here. Use the capture button below to open the device camera."))))
+
+              :else
               ($ :video {:id "video-receipt-camera-mobile"
                          :ref live-video-ref
                          :class "h-full w-full object-cover"
@@ -593,22 +670,24 @@
                :label "Back"
                :icon-path "M15.75 19.5L8.25 12l7.5-7.5"
                :on-click return-to-upload!})
-            ($ :span {:class "rounded-full bg-black/45 px-3 py-1 text-[11px] font-medium uppercase tracking-wide text-white/80"}
+            ($ :span {:class "rounded-full bg-black/35 px-3 py-1 text-[11px] font-medium uppercase tracking-wide text-white/75"}
               "Back"))
           ($ :div {:class "pointer-events-auto flex items-start gap-3"}
             ($ :div {:class "flex flex-col items-center gap-2"}
               ($ camera-icon-button
                 {:id "btn-flash-upload-mobile"
-                 :label (str "Flash " (if flash-enabled? "On" "Off"))
+                 :label (if flash-available?
+                          (str "Flash " (if flash-enabled? "On" "Off"))
+                          (str "iPhone Flash " (if device-flash? "On" "Off")))
                  :icon-path "M12 3v10.5m0 0l3.75-3.75M12 13.5L8.25 9.75M5.25 15a6.75 6.75 0 1013.5 0c0-1.563-.53-3.002-1.42-4.148"
                  :active? flash-enabled?
                  :disabled? busy?
                  :on-click toggle-flash!})
               ($ :span {:class (str "rounded-full px-3 py-1 text-[11px] font-medium uppercase tracking-wide "
                                  (if flash-enabled?
-                                   "bg-amber-500/90 text-black"
-                                   "bg-black/45 text-white/80"))}
-                (if flash-enabled? "Flash On" "Flash Off")))
+                                   "bg-amber-500/85 text-black"
+                                   "bg-black/35 text-white/75"))}
+                flash-pill-label))
             ($ :div {:class "flex flex-col items-center gap-2"}
               ($ camera-icon-button
                 {:id "btn-torch-upload-mobile"
@@ -619,13 +698,13 @@
                  :on-click toggle-torch!})
               ($ :span {:class (str "rounded-full px-3 py-1 text-[11px] font-medium uppercase tracking-wide "
                                  (if torch-enabled?
-                                   "bg-amber-500/90 text-black"
-                                   "bg-black/45 text-white/80"))}
+                                   "bg-amber-500/85 text-black"
+                                   "bg-black/35 text-white/75"))}
                 (if torch-enabled? "Torch On" "Torch Off")))))
 
         (when (and camera-error (not camera-error-dismissed?))
           ($ :div {:id "alert-camera-upload-mobile"
-                   :class "absolute left-4 right-4 top-28 z-30 flex items-start justify-between gap-3 rounded-2xl border border-white/15 bg-black/50 px-4 py-3 text-sm text-white/90 backdrop-blur"}
+                   :class "absolute left-4 right-4 top-28 z-30 flex items-start justify-between gap-3 rounded-2xl border border-white/15 bg-black/45 px-4 py-3 text-sm text-white/90 backdrop-blur"}
             ($ :span {:class "flex-1 leading-5"} camera-error)
             ($ :button {:id "btn-close-camera-error-mobile"
                         :type "button"
@@ -637,14 +716,16 @@
 
         (when zoomed?
           ($ :div {:class "pointer-events-none absolute inset-x-0 bottom-36 z-30 flex justify-center"}
-            ($ :span {:class "rounded-full bg-black/45 px-4 py-1.5 text-[11px] font-medium uppercase tracking-[0.18em] text-white/80"}
+            ($ :span {:class "rounded-full bg-black/35 px-4 py-1.5 text-[11px] font-medium uppercase tracking-[0.18em] text-white/75"}
               (str "Zoom " (js/Math.round (* preview-zoom 100)) "%"))))
 
         ($ :div {:class "pointer-events-none absolute inset-x-0 bottom-8 z-30 flex items-end justify-center"}
           ($ :div {:class "pointer-events-auto flex flex-col items-center gap-3"}
-            ($ :span {:class "rounded-full bg-black/45 px-4 py-1.5 text-[11px] font-medium uppercase tracking-[0.18em] text-white/80"}
+            ($ :span {:class "rounded-full bg-black/35 px-4 py-1.5 text-[11px] font-medium uppercase tracking-[0.18em] text-white/75"}
               (cond
                 capturing-photo? "Capturing"
+                captured-file "Review Capture"
+                device-flash? "iPhone Flash"
                 native-fallback? "Device Camera"
                 flash-enabled? "Flash Ready"
                 :else "Camera Ready"))
@@ -660,7 +741,42 @@
               ($ :span {:class (str "h-12 w-12 rounded-full border-2 transition "
                                  (if capturing-photo?
                                    "border-amber-400 bg-amber-300"
-                                   "border-neutral-300 bg-neutral-900"))}))))))))
+                                   "border-neutral-300 bg-neutral-900"))}))))
+
+        (when captured-file
+          ($ :div {:id "modal-camera-next-action-mobile"
+                   :class "absolute inset-0 z-40 flex items-end bg-black/40 px-4 pb-6 pt-28 backdrop-blur-sm"}
+            ($ :div {:class "mx-auto w-full max-w-sm rounded-3xl border border-white/10 bg-neutral-950/88 p-5 shadow-2xl"}
+              ($ :p {:class "text-xs font-semibold uppercase tracking-[0.24em] text-white/45"}
+                "Receipt Captured")
+              ($ :h2 {:class "mt-2 text-xl font-semibold text-white"}
+                "Take another receipt or exit?")
+              ($ :p {:class "mt-2 text-sm leading-6 text-white/70"}
+                (if native-capture-mode?
+                  "Save this image and reopen the iPhone camera, or save it and go back to Upload."
+                  "Save this image and keep shooting here, or save it and go back to Upload."))
+              (when device-flash?
+                ($ :p {:class "mt-2 text-sm leading-6 text-amber-200/90"}
+                  "iPhone camera flash stays inside the native camera. The live in-app preview cannot keep that flash state on."))
+              ($ :div {:class "mt-5 grid gap-3"}
+                ($ :button {:id "btn-camera-save-another-mobile"
+                            :type "button"
+                            :disabled loading?
+                            :on-click save-and-take-another!
+                            :class "flex w-full items-center justify-center rounded-2xl bg-white/90 px-4 py-3 text-sm font-semibold text-black transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"}
+                  "Use & Take Another")
+                ($ :button {:id "btn-camera-save-exit-mobile"
+                            :type "button"
+                            :disabled loading?
+                            :on-click save-and-exit!
+                            :class "flex w-full items-center justify-center rounded-2xl bg-amber-400/85 px-4 py-3 text-sm font-semibold text-black transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-50"}
+                  "Use & Exit")
+                ($ :button {:id "btn-camera-retake-mobile"
+                            :type "button"
+                            :disabled loading?
+                            :on-click retake-photo!
+                            :class "flex w-full items-center justify-center rounded-2xl border border-white/15 bg-white/8 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/12 disabled:cursor-not-allowed disabled:opacity-50"}
+                  "Retake")))))))))
 
 (defui upload-page []
   (let [t (use-t)
