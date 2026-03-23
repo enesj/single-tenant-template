@@ -28,6 +28,14 @@
     (is (false? (sut/flash-supported? #js {:fillLightMode #js ["off"]})))
     (is (false? (sut/flash-supported? #js {})))))
 
+(deftest zoom-helpers-keep-overlay-independent
+  (testing "pinch helpers clamp zoom and compute geometry for media-only transforms"
+    (is (= 4 (sut/clamp-number 10 1 4)))
+    (is (= 1 (sut/clamp-number -2 1 4)))
+    (is (= 5 (sut/point-distance {:x 0 :y 0} {:x 3 :y 4})))
+    (is (= {:x 5 :y 10}
+          (sut/point-midpoint {:x 0 :y 0} {:x 10 :y 20})))))
+
 (deftest camera-error-message-covers-common-failures
   (testing "maps browser camera errors to friendly fallback guidance"
     (is (= "Camera access was blocked. You can still use the device camera instead."

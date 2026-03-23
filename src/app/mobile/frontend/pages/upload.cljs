@@ -229,6 +229,21 @@
         (on-result false)))
     (on-result false)))
 
+(def min-preview-zoom 1.0)
+(def max-preview-zoom 4.0)
+
+(defn clamp-number [value min-value max-value]
+  (-> value (max min-value) (min max-value)))
+
+(defn point-distance [{x1 :x y1 :y} {x2 :x y2 :y}]
+  (let [dx (- x2 x1)
+        dy (- y2 y1)]
+    (js/Math.sqrt (+ (* dx dx) (* dy dy)))))
+
+(defn point-midpoint [{x1 :x y1 :y} {x2 :x y2 :y}]
+  {:x (/ (+ x1 x2) 2)
+   :y (/ (+ y1 y2) 2)})
+
 (defui toast-banner []
   (let [toast (use-subscribe [:mobile/toast])]
     ;; Auto-dismiss after 3s — hook called unconditionally per React rules
@@ -265,6 +280,8 @@
         live-video-ref (use-ref nil)
         live-stream-ref (use-ref nil)
         native-camera-ref (use-ref nil)
+        active-pointers-ref (use-ref {})
+        gesture-ref (use-ref nil)
         [camera-starting? set-camera-starting!] (use-state true)
         [capturing-photo? set-capturing-photo!] (use-state false)
         [camera-error set-camera-error!] (use-state nil)
@@ -273,13 +290,93 @@
         [flash-available? set-flash-available!] (use-state false)
         [flash-enabled? set-flash-enabled!] (use-state false)
         [native-fallback? set-native-fallback!] (use-state false)
+        [preview-zoom set-preview-zoom!] (use-state 1.0)
+        [preview-pan set-preview-pan!] (use-state {:x 0 :y 0})
         busy? (boolean (or loading? camera-starting? capturing-photo?))
+        zoomed? (> preview-zoom min-preview-zoom)
+        reset-preview-transform! (fn []
+                                   (reset! active-pointers-ref {})
+                                   (reset! gesture-ref nil)
+                                   (set-preview-zoom! 1.0)
+                                   (set-preview-pan! {:x 0 :y 0}))
         stop-live-stream! (fn []
                             (when-let [stream @live-stream-ref]
                               (stop-stream! stream)
                               (reset! live-stream-ref nil))
                             (when-let [video-el @live-video-ref]
-                              (set! (.-srcObject video-el) nil)))
+                              (set! (.-srcObject video-el) nil))
+                            (reset! active-pointers-ref {})
+                            (reset! gesture-ref nil))
+        current-points (fn []
+                         (vals @active-pointers-ref))
+        begin-drag! (fn [pointer]
+                      (if zoomed?
+                        (reset! gesture-ref {:mode :drag
+                                             :pointer-id (:id pointer)
+                                             :start-point {:x (:x pointer) :y (:y pointer)}
+                                             :start-pan preview-pan})
+                        (reset! gesture-ref nil)))
+        begin-pinch! (fn []
+                       (let [[p1 p2] (take 2 (current-points))]
+                         (if (and p1 p2)
+                           (let [distance (point-distance p1 p2)]
+                             (if (> distance 0)
+                               (reset! gesture-ref {:mode :pinch
+                                                    :start-distance distance
+                                                    :start-midpoint (point-midpoint p1 p2)
+                                                    :start-zoom preview-zoom
+                                                    :start-pan preview-pan})
+                               (reset! gesture-ref nil)))
+                           (reset! gesture-ref nil))))
+        sync-gesture-after-release! (fn []
+                                      (let [points (vec (current-points))]
+                                        (cond
+                                          (>= (count points) 2) (begin-pinch!)
+                                          (= (count points) 1) (begin-drag! (first points))
+                                          :else (reset! gesture-ref nil))))
+        handle-preview-pointer-down! (fn [e]
+                                       (let [pointer {:id (.-pointerId e)
+                                                      :x (.-clientX e)
+                                                      :y (.-clientY e)}]
+                                         (.preventDefault e)
+                                         (try
+                                           (.setPointerCapture (.-currentTarget e) (.-pointerId e))
+                                           (catch :default _ nil))
+                                         (swap! active-pointers-ref assoc (:id pointer) pointer)
+                                         (if (>= (count @active-pointers-ref) 2)
+                                           (begin-pinch!)
+                                           (begin-drag! pointer))))
+        handle-preview-pointer-move! (fn [e]
+                                       (let [pointer-id (.-pointerId e)]
+                                         (when (contains? @active-pointers-ref pointer-id)
+                                           (.preventDefault e)
+                                           (swap! active-pointers-ref assoc pointer-id {:id pointer-id
+                                                                                        :x (.-clientX e)
+                                                                                        :y (.-clientY e)})
+                                           (let [{:keys [mode pointer-id start-point start-pan start-distance start-midpoint start-zoom]} @gesture-ref]
+                                             (case mode
+                                               :drag (when (= pointer-id (.-pointerId e))
+                                                       (let [dx (- (.-clientX e) (:x start-point))
+                                                             dy (- (.-clientY e) (:y start-point))]
+                                                         (set-preview-pan! {:x (+ (:x start-pan) dx)
+                                                                            :y (+ (:y start-pan) dy)})))
+                                               :pinch (let [[p1 p2] (take 2 (current-points))]
+                                                        (when (and p1 p2 (> start-distance 0))
+                                                          (let [distance (point-distance p1 p2)
+                                                                midpoint (point-midpoint p1 p2)
+                                                                next-zoom (clamp-number (* start-zoom (/ distance start-distance))
+                                                                            min-preview-zoom
+                                                                            max-preview-zoom)
+                                                                dx (- (:x midpoint) (:x start-midpoint))
+                                                                dy (- (:y midpoint) (:y start-midpoint))]
+                                                            (set-preview-zoom! next-zoom)
+                                                            (set-preview-pan! {:x (+ (:x start-pan) dx)
+                                                                               :y (+ (:y start-pan) dy)}))))
+                                               nil)))))
+        handle-preview-pointer-up! (fn [e]
+                                     (let [pointer-id (.-pointerId e)]
+                                       (swap! active-pointers-ref dissoc pointer-id)
+                                       (sync-gesture-after-release!)))
         return-to-upload! (fn []
                             (stop-live-stream!)
                             (rf/dispatch [:mobile/navigate "/m/upload"]))
@@ -305,8 +402,12 @@
                                 (set-camera-error! "Torch control is not available on this device/browser."))))))
         toggle-flash! (fn []
                         (if flash-available?
-                          (set-flash-enabled! (not flash-enabled?))
-                          (set-camera-error! "Flash capture is not available on this device/browser.")))
+                          (do
+                            (set-flash-enabled! (not flash-enabled?))
+                            (set-camera-error! nil))
+                          (do
+                            (set-camera-error! "Live flash control is unavailable here. Opening the device camera so you can use native flash controls.")
+                            (trigger-native-camera!))))
         capture-live-photo! (fn []
                               (if native-fallback?
                                 (trigger-native-camera!)
@@ -330,6 +431,11 @@
             (set-camera-starting! true)
             (set-camera-error! nil)
             (set-native-fallback! false)
+            (do
+              (reset! active-pointers-ref {})
+              (reset! gesture-ref nil)
+              (set-preview-zoom! 1.0)
+              (set-preview-pan! {:x 0 :y 0}))
             (-> (.getUserMedia media-devices camera-constraints)
               (.then (fn [stream]
                        (if @cancelled?
@@ -355,6 +461,8 @@
                             (reset! live-stream-ref nil))
                           (when-let [video-el @live-video-ref]
                             (set! (.-srcObject video-el) nil))
+                          (reset! active-pointers-ref {})
+                          (reset! gesture-ref nil)
                           (set-camera-starting! false)
                           (set-native-fallback! true)
                           (set-torch-available! false)
@@ -368,7 +476,9 @@
                 (stop-stream! stream)
                 (reset! live-stream-ref nil))
               (when-let [video-el @live-video-ref]
-                (set! (.-srcObject video-el) nil))))
+                (set! (.-srcObject video-el) nil))
+              (reset! active-pointers-ref {})
+              (reset! gesture-ref nil)))
           (do
             (set-camera-starting! false)
             (set-native-fallback! true)
@@ -379,6 +489,14 @@
             (set-camera-error! "Live camera preview is unavailable here. Capture will use the device camera instead.")
             js/undefined)))
       [])
+
+    (use-effect
+      (fn []
+        (when (<= preview-zoom min-preview-zoom)
+          (set-preview-pan! {:x 0 :y 0})
+          (reset! gesture-ref nil))
+        js/undefined)
+      [preview-zoom])
 
     ($ :<>
       ($ toast-banner)
@@ -394,92 +512,107 @@
                                 (set! (.-value (.-target e)) "")))})
       ($ :div {:id "page-camera-capture-mobile"
                :class "relative min-h-[calc(100vh-5rem)] overflow-hidden bg-black text-white"}
-        ($ :div {:class "absolute inset-0"}
-          (if native-fallback?
-            ($ :div {:class "flex h-full items-center justify-center bg-gradient-to-b from-neutral-900 to-black px-6 text-center"}
-              ($ :div {:class "space-y-3"}
-                ($ :div {:class "mx-auto flex h-20 w-20 items-center justify-center rounded-full border border-white/20 bg-white/10"}
-                  ($ :svg {:class "h-10 w-10" :fill "none" :viewBox "0 0 24 24" :stroke-width "1.5" :stroke "currentColor"}
-                    ($ :path {:stroke-linecap "round" :stroke-linejoin "round" :d "M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z"})))
-                ($ :p {:class "text-lg font-semibold"}
-                  (t :mobile/take-photo "Take Photo"))
-                ($ :p {:class "text-sm text-white/70"}
-                  "This browser cannot keep the live preview open here. Use the capture button below to open the device camera.")))
-            ($ :video {:id "video-receipt-camera-mobile"
-                       :ref live-video-ref
-                       :class "h-full w-full object-cover"
-                       :autoPlay true
-                       :muted true
-                       :playsInline true}))
+        ($ :div {:id "camera-preview-stage-mobile"
+                 :class "absolute inset-0 overflow-hidden"
+                 :style #js {:touchAction "none"}
+                 :on-pointer-down (when-not native-fallback? handle-preview-pointer-down!)
+                 :on-pointer-move (when-not native-fallback? handle-preview-pointer-move!)
+                 :on-pointer-up (when-not native-fallback? handle-preview-pointer-up!)
+                 :on-pointer-cancel (when-not native-fallback? handle-preview-pointer-up!)}
+          ($ :div {:class "absolute inset-0"
+                   :style #js {:transform (str "translate(" (:x preview-pan) "px, " (:y preview-pan) "px) scale(" preview-zoom ")")
+                               :transformOrigin "center center"
+                               :willChange "transform"}}
+            (if native-fallback?
+              ($ :div {:class "flex h-full items-center justify-center bg-gradient-to-b from-neutral-900 to-black px-6 text-center"}
+                ($ :div {:class "space-y-3"}
+                  ($ :div {:class "mx-auto flex h-20 w-20 items-center justify-center rounded-full border border-white/20 bg-white/10"}
+                    ($ :svg {:class "h-10 w-10" :fill "none" :viewBox "0 0 24 24" :stroke-width "1.5" :stroke "currentColor"}
+                      ($ :path {:stroke-linecap "round" :stroke-linejoin "round" :d "M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z"})))
+                  ($ :p {:class "text-lg font-semibold"}
+                    (t :mobile/take-photo "Take Photo"))
+                  ($ :p {:class "text-sm text-white/70"}
+                    "This browser cannot keep the live preview open here. Use the capture button below to open the device camera.")))
+              ($ :video {:id "video-receipt-camera-mobile"
+                         :ref live-video-ref
+                         :class "h-full w-full object-cover"
+                         :autoPlay true
+                         :muted true
+                         :playsInline true}))))
 
-          (when camera-starting?
-            ($ :div {:class "absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-black/45 backdrop-blur-sm"}
-              ($ :span {:class "ds-loading ds-loading-spinner ds-loading-lg text-white"})
-              ($ :p {:class "text-sm text-white/80"} "Opening camera...")))
+        (when camera-starting?
+          ($ :div {:class "absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-black/45 backdrop-blur-sm"}
+            ($ :span {:class "ds-loading ds-loading-spinner ds-loading-lg text-white"})
+            ($ :p {:class "text-sm text-white/80"} "Opening camera...")))
 
-          ($ :div {:class "pointer-events-none absolute inset-x-0 top-0 z-30 flex items-start justify-between p-4"}
-            ($ :div {:class "pointer-events-auto flex flex-col items-center gap-2"}
+        ($ :div {:class "pointer-events-none absolute inset-x-0 top-0 z-30 flex items-start justify-between p-4"}
+          ($ :div {:class "pointer-events-auto flex flex-col items-center gap-2"}
+            ($ camera-icon-button
+              {:id "btn-back-camera-mobile"
+               :label "Back"
+               :icon-path "M15.75 19.5L8.25 12l7.5-7.5"
+               :on-click return-to-upload!})
+            ($ :span {:class "rounded-full bg-black/45 px-3 py-1 text-[11px] font-medium uppercase tracking-wide text-white/80"}
+              "Back"))
+          ($ :div {:class "pointer-events-auto flex items-start gap-3"}
+            ($ :div {:class "flex flex-col items-center gap-2"}
               ($ camera-icon-button
-                {:id "btn-back-camera-mobile"
-                 :label "Back"
-                 :icon-path "M15.75 19.5L8.25 12l7.5-7.5"
-                 :on-click return-to-upload!})
-              ($ :span {:class "rounded-full bg-black/45 px-3 py-1 text-[11px] font-medium uppercase tracking-wide text-white/80"}
-                "Back"))
-            ($ :div {:class "pointer-events-auto flex items-start gap-3"}
-              ($ :div {:class "flex flex-col items-center gap-2"}
-                ($ camera-icon-button
-                  {:id "btn-flash-upload-mobile"
-                   :label (str "Flash " (if flash-enabled? "On" "Off"))
-                   :icon-path "M12 3v10.5m0 0l3.75-3.75M12 13.5L8.25 9.75M5.25 15a6.75 6.75 0 1013.5 0c0-1.563-.53-3.002-1.42-4.148"
-                   :active? flash-enabled?
-                   :disabled? (or busy? (not flash-available?))
-                   :on-click toggle-flash!})
-                ($ :span {:class (str "rounded-full px-3 py-1 text-[11px] font-medium uppercase tracking-wide "
-                                   (if flash-enabled?
-                                     "bg-amber-500/90 text-black"
-                                     "bg-black/45 text-white/80"))}
-                  (if flash-enabled? "Flash On" "Flash Off")))
-              ($ :div {:class "flex flex-col items-center gap-2"}
-                ($ camera-icon-button
-                  {:id "btn-torch-upload-mobile"
-                   :label (str "Torch " (if torch-enabled? "On" "Off"))
-                   :icon-path "M12 2.25c-1.311 0-2.53.568-3.375 1.49A4.48 4.48 0 007.5 6.75c0 .73.174 1.42.483 2.032.22.436.35.916.35 1.404v.564c0 .415.336.75.75.75h5.834a.75.75 0 00.75-.75v-.564c0-.488.13-.968.35-1.404.309-.611.483-1.302.483-2.032 0-1.17-.446-2.236-1.175-3.01A4.48 4.48 0 0012 2.25z M9.75 14.25h4.5m-4.125 2.25h3.75m-3 2.25h2.25"
-                   :active? torch-enabled?
-                   :disabled? (or busy? (not torch-available?))
-                   :on-click toggle-torch!})
-                ($ :span {:class (str "rounded-full px-3 py-1 text-[11px] font-medium uppercase tracking-wide "
-                                   (if torch-enabled?
-                                     "bg-amber-500/90 text-black"
-                                     "bg-black/45 text-white/80"))}
-                  (if torch-enabled? "Torch On" "Torch Off")))))
+                {:id "btn-flash-upload-mobile"
+                 :label (str "Flash " (if flash-enabled? "On" "Off"))
+                 :icon-path "M12 3v10.5m0 0l3.75-3.75M12 13.5L8.25 9.75M5.25 15a6.75 6.75 0 1013.5 0c0-1.563-.53-3.002-1.42-4.148"
+                 :active? flash-enabled?
+                 :disabled? busy?
+                 :on-click toggle-flash!})
+              ($ :span {:class (str "rounded-full px-3 py-1 text-[11px] font-medium uppercase tracking-wide "
+                                 (if flash-enabled?
+                                   "bg-amber-500/90 text-black"
+                                   "bg-black/45 text-white/80"))}
+                (if flash-enabled? "Flash On" "Flash Off")))
+            ($ :div {:class "flex flex-col items-center gap-2"}
+              ($ camera-icon-button
+                {:id "btn-torch-upload-mobile"
+                 :label (str "Torch " (if torch-enabled? "On" "Off"))
+                 :icon-path "M12 2.25c-1.311 0-2.53.568-3.375 1.49A4.48 4.48 0 007.5 6.75c0 .73.174 1.42.483 2.032.22.436.35.916.35 1.404v.564c0 .415.336.75.75.75h5.834a.75.75 0 00.75-.75v-.564c0-.488.13-.968.35-1.404.309-.611.483-1.302.483-2.032 0-1.17-.446-2.236-1.175-3.01A4.48 4.48 0 0012 2.25z M9.75 14.25h4.5m-4.125 2.25h3.75m-3 2.25h2.25"
+                 :active? torch-enabled?
+                 :disabled? (or busy? (not torch-available?))
+                 :on-click toggle-torch!})
+              ($ :span {:class (str "rounded-full px-3 py-1 text-[11px] font-medium uppercase tracking-wide "
+                                 (if torch-enabled?
+                                   "bg-amber-500/90 text-black"
+                                   "bg-black/45 text-white/80"))}
+                (if torch-enabled? "Torch On" "Torch Off")))))
 
-          (when camera-error
-            ($ :div {:id "alert-camera-upload-mobile"
-                     :class "absolute left-4 right-4 top-28 z-30 rounded-2xl border border-white/15 bg-black/60 px-4 py-3 text-sm text-white/90 backdrop-blur"}
-              ($ :span camera-error)))
+        (when camera-error
+          ($ :div {:id "alert-camera-upload-mobile"
+                   :class "absolute left-4 right-4 top-28 z-30 rounded-2xl border border-white/15 bg-black/60 px-4 py-3 text-sm text-white/90 backdrop-blur"}
+            ($ :span camera-error)))
 
-          ($ :div {:class "pointer-events-none absolute inset-x-0 bottom-8 z-30 flex items-end justify-center"}
-            ($ :div {:class "pointer-events-auto flex flex-col items-center gap-3"}
-              ($ :span {:class "rounded-full bg-black/45 px-4 py-1.5 text-[11px] font-medium uppercase tracking-[0.18em] text-white/80"}
-                (cond
-                  capturing-photo? "Capturing"
-                  native-fallback? "Device Camera"
-                  flash-enabled? "Flash Ready"
-                  :else "Camera Ready"))
-              ($ :button {:id "btn-capture-upload-mobile"
-                          :type "button"
-                          :aria-label (t :mobile/take-photo "Take Photo")
-                          :disabled busy?
-                          :on-click capture-live-photo!
-                          :class (str "relative flex h-20 w-20 items-center justify-center rounded-full border-4 border-white shadow-2xl transition "
-                                   (if busy?
-                                     "bg-white/30"
-                                     "bg-white/95 active:scale-95"))}
-                ($ :span {:class (str "h-12 w-12 rounded-full border-2 transition "
-                                   (if capturing-photo?
-                                     "border-amber-400 bg-amber-300"
-                                     "border-neutral-300 bg-neutral-900"))})))))))))
+        (when zoomed?
+          ($ :div {:class "pointer-events-none absolute inset-x-0 bottom-36 z-30 flex justify-center"}
+            ($ :span {:class "rounded-full bg-black/45 px-4 py-1.5 text-[11px] font-medium uppercase tracking-[0.18em] text-white/80"}
+              (str "Zoom " (js/Math.round (* preview-zoom 100)) "%"))))
+
+        ($ :div {:class "pointer-events-none absolute inset-x-0 bottom-8 z-30 flex items-end justify-center"}
+          ($ :div {:class "pointer-events-auto flex flex-col items-center gap-3"}
+            ($ :span {:class "rounded-full bg-black/45 px-4 py-1.5 text-[11px] font-medium uppercase tracking-[0.18em] text-white/80"}
+              (cond
+                capturing-photo? "Capturing"
+                native-fallback? "Device Camera"
+                flash-enabled? "Flash Ready"
+                :else "Camera Ready"))
+            ($ :button {:id "btn-capture-upload-mobile"
+                        :type "button"
+                        :aria-label (t :mobile/take-photo "Take Photo")
+                        :disabled busy?
+                        :on-click capture-live-photo!
+                        :class (str "relative flex h-20 w-20 items-center justify-center rounded-full border-4 border-white shadow-2xl transition "
+                                 (if busy?
+                                   "bg-white/30"
+                                   "bg-white/95 active:scale-95"))}
+              ($ :span {:class (str "h-12 w-12 rounded-full border-2 transition "
+                                 (if capturing-photo?
+                                   "border-amber-400 bg-amber-300"
+                                   "border-neutral-300 bg-neutral-900"))}))))))))
 
 (defui upload-page []
   (let [t (use-t)
