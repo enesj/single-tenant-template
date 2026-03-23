@@ -493,9 +493,7 @@
         save-and-take-another! (fn []
                                  (save-captured-file!
                                    (fn []
-                                     (clear-captured-file!)
-                                     (when native-capture-mode?
-                                       (reopen-native-camera!)))))
+                                     (clear-captured-file!))))
         retake-photo! (fn []
                         (clear-captured-file!)
                         (when native-capture-mode?
@@ -617,10 +615,10 @@
         ($ :div {:id "camera-preview-stage-mobile"
                  :class "absolute inset-0 overflow-hidden"
                  :style #js {:touchAction "none"}
-                 :on-pointer-down (when (and (not native-fallback?) (nil? captured-file)) handle-preview-pointer-down!)
-                 :on-pointer-move (when (and (not native-fallback?) (nil? captured-file)) handle-preview-pointer-move!)
-                 :on-pointer-up (when (and (not native-fallback?) (nil? captured-file)) handle-preview-pointer-up!)
-                 :on-pointer-cancel (when (and (not native-fallback?) (nil? captured-file)) handle-preview-pointer-up!)}
+                 :on-pointer-down (when (and (not native-capture-mode?) (nil? captured-file)) handle-preview-pointer-down!)
+                 :on-pointer-move (when (and (not native-capture-mode?) (nil? captured-file)) handle-preview-pointer-move!)
+                 :on-pointer-up (when (and (not native-capture-mode?) (nil? captured-file)) handle-preview-pointer-up!)
+                 :on-pointer-cancel (when (and (not native-capture-mode?) (nil? captured-file)) handle-preview-pointer-up!)}
           ($ :div {:class "absolute inset-0"
                    :style #js {:transform (str "translate(" (:x preview-pan) "px, " (:y preview-pan) "px) scale(" preview-zoom ")")
                                :transformOrigin "center center"
@@ -637,7 +635,7 @@
                 ($ :p {:class "text-sm text-white/70"}
                   "Receipt captured. Use the actions below to keep it, take another, or exit."))
 
-              native-fallback?
+              native-capture-mode?
               ($ :div {:class "flex h-full items-center justify-center bg-gradient-to-b from-neutral-900 to-black px-6 text-center"}
                 ($ :div {:class "space-y-3"}
                   ($ :div {:class "mx-auto flex h-20 w-20 items-center justify-center rounded-full border border-white/20 bg-white/10"}
@@ -647,8 +645,8 @@
                     (t :mobile/take-photo "Take Photo"))
                   ($ :p {:class "text-sm text-white/70"}
                     (if device-flash?
-                      "Use the capture button below to open the iPhone camera and turn flash on there."
-                      "This browser cannot keep the live preview open here. Use the capture button below to open the device camera."))))
+                      "Tap Capture below to open the iPhone camera with flash controls."
+                      "This browser cannot keep the live preview open here. Use Capture below to open the device camera."))))
 
               :else
               ($ :video {:id "video-receipt-camera-mobile"
@@ -753,11 +751,11 @@
                 "Take another receipt or exit?")
               ($ :p {:class "mt-2 text-sm leading-6 text-white/70"}
                 (if native-capture-mode?
-                  "Save this image and reopen the iPhone camera, or save it and go back to Upload."
+                  "Save this image, then use Capture again to open the iPhone camera, or save it and go back to Upload."
                   "Save this image and keep shooting here, or save it and go back to Upload."))
               (when device-flash?
                 ($ :p {:class "mt-2 text-sm leading-6 text-amber-200/90"}
-                  "iPhone camera flash stays inside the native camera. The live in-app preview cannot keep that flash state on."))
+                  "iPhone camera flash stays inside the native camera. After saving, tap Capture again to open it for the next receipt."))
               ($ :div {:class "mt-5 grid gap-3"}
                 ($ :button {:id "btn-camera-save-another-mobile"
                             :type "button"
