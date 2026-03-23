@@ -10,6 +10,7 @@
         rewrite-clj/rewrite-clj {:mvn/version "1.1.47"}
         aero/aero {:mvn/version "1.1.6"}}
  :tasks {:init (do
+                 (require '[aero.core :as aero])
                  (require '[clojure.java.io :as io])
                  (require '[clojure.string :as str])
                  (defn dotenv
@@ -467,6 +468,25 @@
          spellcheck-article-names
          {:doc "Spellcheck `articles.canonical_name` using the JSpell Checker MCP server (RapidAPI via mcp-remote) and write suggestions to an EDN file in the project root.\n\nRequires: Node/npx + a RapidAPI key in env (JSPELL_RAPIDAPI_KEY preferred, or RAPIDAPI_KEY).\n\nUsage: bb spellcheck-article-names [--dev|--test|dev|test] [--out <path>] [--lang <bs|hr|sr|...>] [--limit N] [--max-suggestions N]",
           :task (apply shell "/bin/sh" "-c" "repo_root=\"$(git rev-parse --show-toplevel 2>/dev/null || pwd)\"; cd \"$repo_root\" || exit 1; set -a; [ -f \"$repo_root/.env\" ] && . \"$repo_root/.env\"; set +a; exec clj -M:spellcheck scripts/bb/expenses/spellcheck_article_canonical_names.clj \"$@\"" "--" *command-line-args*)},
+
+         google-refresh-token
+         {:doc "Run the Gmail refresh-token helper using Google OAuth client credentials resolved through Aero (:prod config + config/.secrets.edn).\n\nDefaults to local-flow when no subcommand is provided.\n\nUsage:\n  bb google-refresh-token [local-flow|authorize-url|exchange-code] [--redirect-uri URI] [--port N] [--callback-path PATH] [--code CODE]",
+          :task (let [args          (if (seq *command-line-args*)
+                                      *command-line-args*
+                                      ["local-flow"])
+                      config        (aero/read-config "config/base.edn" {:profile :prod})
+                      client-id     (get-in config [:email :gmail-api :client-id])
+                      client-secret (get-in config [:email :gmail-api :client-secret])
+                      _             (when-not (seq client-id)
+                                      (println "Missing Gmail OAuth client ID in prod config. Set GOOGLE_OAUTH_CLIENT_ID or config/.secrets.edn.")
+                                      (System/exit 1))
+                      _             (when-not (seq client-secret)
+                                      (println "Missing Gmail OAuth client secret in prod config. Set GOOGLE_OAUTH_CLIENT_SECRET or config/.secrets.edn.")
+                                      (System/exit 1))
+                      extra-env     (merge (dotenv)
+                                      {"GOOGLE_OAUTH_CLIENT_ID" client-id
+                                       "GOOGLE_OAUTH_CLIENT_SECRET" client-secret})]
+                  (apply shell {:extra-env extra-env} "bb" "scripts/bb/web/google_refresh_token.clj" args))},
 
          serper-search
          {:doc "Run a Serper.dev (Google SERP) API query and print results.\n\nRequires env (source .env automatically if present):\n  - SERPER_API_KEY\n\nUsage:\n  bb serper-search \"<query>\" [--type web|news|images] [--num N] [--page N] [--gl CC] [--hl LL] [--location STR] [--tbs STR] [--autocorrect true|false] [--site example.com] [--format pretty|edn|json]",
