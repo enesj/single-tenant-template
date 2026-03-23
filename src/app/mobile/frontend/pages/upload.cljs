@@ -4,6 +4,7 @@
     [ajax.core :as ajax]
     [app.mobile.frontend.components.header :refer [mobile-header]]
     [app.mobile.frontend.pages.receipt-review :refer [pending-receipts-section]]
+    [app.template.frontend.api.http :as http]
     [app.template.frontend.i18n :refer [use-t]]
     [re-frame.core :as rf]
     [uix.core :refer [$ defui use-effect use-ref use-state] :as uix]
@@ -41,7 +42,7 @@
     {:db (-> db
            (assoc-in [:mobile :upload :loading?] false)
            (assoc-in [:mobile :upload :error]
-             (or (get-in error [:response :message]) "Upload failed")))}))
+             (or (http/extract-error-message error) "Upload failed")))}))
 
 (rf/reg-event-db
   :mobile/show-toast
@@ -91,7 +92,9 @@
 
 (def camera-constraints
   #js {:audio false
-       :video #js {:facingMode #js {:ideal "environment"}}})
+       :video #js {:facingMode #js {:ideal "environment"}
+                   :width #js {:ideal 1280 :max 1600}
+                   :height #js {:ideal 720 :max 1200}}})
 
 (defn media-devices-supported? []
   (boolean (some-> js/navigator .-mediaDevices .-getUserMedia)))
@@ -134,12 +137,23 @@
       (js/File. #js [blob] filename #js {:type "image/jpeg"})
       blob)))
 
+(def max-capture-dimension 1600)
+
+(defn bounded-capture-dimensions [width height]
+  (let [width (double (max 1 width))
+        height (double (max 1 height))
+        longest-edge (max width height)
+        scale (min 1.0 (/ max-capture-dimension longest-edge))]
+    {:width (max 1 (js/Math.round (* width scale)))
+     :height (max 1 (js/Math.round (* height scale)))}))
+
 (defn capture-current-frame! [video-el on-success on-error]
   (let [width (or (.-videoWidth video-el) 0)
         height (or (.-videoHeight video-el) 0)]
     (if (or (<= width 0) (<= height 0))
       (on-error "The camera preview is not ready yet. Try again in a second.")
-      (let [canvas (.createElement js/document "canvas")
+      (let [{:keys [width height]} (bounded-capture-dimensions width height)
+            canvas (.createElement js/document "canvas")
             ctx (.getContext canvas "2d")]
         (set! (.-width canvas) width)
         (set! (.-height canvas) height)
@@ -150,7 +164,7 @@
               (on-success (upload-file-from-blob blob))
               (on-error "Couldn't capture a photo from the live camera.")))
           "image/jpeg"
-          0.92)))))
+          0.85)))))
 
 (defn apply-torch! [track enabled? on-success on-failure]
   (if (and track (torch-supported? track) (fn? (.-applyConstraints track)))
@@ -163,6 +177,42 @@
                   (on-failure err)))))
     (when (fn? on-failure)
       (on-failure nil))))
+
+(defn supported-fill-light-modes [capabilities]
+  (let [modes (some-> capabilities .-fillLightMode)]
+    (cond
+      (nil? modes) #{}
+      (string? modes) #{modes}
+      (instance? js/Array modes) (set (array-seq modes))
+      :else #{})))
+
+(defn flash-supported? [capabilities]
+  (contains? (supported-fill-light-modes capabilities) "flash"))
+
+(defn try-capture-with-flash! [track video-el on-success on-error]
+  (let [fallback! #(capture-current-frame! video-el on-success on-error)]
+    (if (and track video-el (exists? js/ImageCapture))
+      (try
+        (let [image-capture (js/ImageCapture. track)]
+          (if (fn? (.-getPhotoCapabilities image-capture))
+            (-> (.getPhotoCapabilities image-capture)
+              (.then (fn [capabilities]
+                       (if (and (flash-supported? capabilities)
+                             (fn? (.-takePhoto image-capture)))
+                         (-> (.takePhoto image-capture #js {:fillLightMode "flash"})
+                           (.then (fn [blob]
+                                    (if blob
+                                      (on-success (upload-file-from-blob blob))
+                                      (fallback!))))
+                           (.catch (fn [_]
+                                     (fallback!))))
+                         (fallback!))))
+              (.catch (fn [_]
+                        (fallback!))))
+            (fallback!)))
+        (catch :default _
+          (fallback!)))
+      (fallback!))))
 
 (defui toast-banner []
   (let [toast (use-subscribe [:mobile/toast])]
@@ -222,7 +272,8 @@
         capture-live-photo! (fn []
                               (when-let [video-el @live-video-ref]
                                 (set-capturing-photo! true)
-                                (capture-current-frame! video-el
+                                (try-capture-with-flash! (first-video-track @live-stream-ref)
+                                  video-el
                                   (fn [file]
                                     (set-capturing-photo! false)
                                     (close-live-camera!)
@@ -251,14 +302,7 @@
                              (set-torch-available! torch?)
                              (set-camera-starting! false)
                              (set-capturing-photo! false)
-                             (if torch?
-                               (apply-torch! track true
-                                 (fn [enabled?]
-                                   (set-torch-enabled! enabled?)
-                                   (set-camera-error! nil))
-                                 (fn [_]
-                                   (set-torch-enabled! false)))
-                               (set-torch-enabled! false)))))))
+                             (set-torch-enabled! false))))))
               (.catch (fn [err]
                         (when-not @cancelled?
                           (set-camera-starting! false)
@@ -341,10 +385,9 @@
                 ($ :p {:class "text-sm text-base-content/70"}
                   (if torch-available?
                     (if torch-enabled?
-                      "Torch is on while the live camera is open."
-                      "Torch is supported on this device.")
-
-                    "Using the live rear camera without direct torch control."))
+                      "Capture uses flash when supported. Torch is on for preview."
+                      "Capture uses flash when supported. Turn on torch if you need preview light.")
+                    "Capture uses flash when supported on this device/browser."))
                 ($ :div {:class (str "grid gap-2 "
                                   (if torch-available?
                                     "grid-cols-1 sm:grid-cols-3"
@@ -380,7 +423,7 @@
             {:id "btn-take-photo-upload-mobile"
              :icon-path "M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z"
              :label (t :mobile/take-photo "Take Photo")
-             :sublabel (t :mobile/take-photo-sub "Use the rear camera with torch when supported")
+             :sublabel (t :mobile/take-photo-sub "Use the rear camera and fire flash when supported")
              :disabled? (or busy? camera-open?)
              :on-click open-live-camera!})
 

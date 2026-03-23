@@ -1,7 +1,9 @@
 (ns app.mobile.frontend.pages.upload-test
   (:require
     [app.mobile.frontend.pages.upload :as sut]
-    [cljs.test :refer [deftest is testing]]))
+    [cljs.test :refer [deftest is testing]]
+    [re-frame.core :as rf]
+    [re-frame.db :as rf-db]))
 
 (defn- fake-track [capabilities]
   #js {:getCapabilities (fn [] capabilities)})
@@ -18,6 +20,14 @@
     (is (false? (sut/torch-supported? #js {})))
     (is (false? (sut/torch-supported? nil)))))
 
+(deftest flash-supported-detects-photo-capabilities
+  (testing "flash support comes from ImageCapture photo capabilities"
+    (is (= #{"flash" "auto"}
+          (sut/supported-fill-light-modes #js {:fillLightMode #js ["flash" "auto"]})))
+    (is (true? (sut/flash-supported? #js {:fillLightMode #js ["off" "flash"]})))
+    (is (false? (sut/flash-supported? #js {:fillLightMode #js ["off"]})))
+    (is (false? (sut/flash-supported? #js {})))))
+
 (deftest camera-error-message-covers-common-failures
   (testing "maps browser camera errors to friendly fallback guidance"
     (is (= "Camera access was blocked. You can still use the device camera instead."
@@ -26,3 +36,17 @@
           (sut/camera-error-message (fake-error "NotFoundError"))))
     (is (= "Couldn't start the in-app camera. You can still use the device camera instead."
           (sut/camera-error-message (fake-error "SomethingElse"))))))
+
+(deftest bounded-capture-dimensions-keeps-images-small
+  (testing "large captures are downscaled while smaller ones are left alone"
+    (is (= {:width 1600 :height 900}
+          (sut/bounded-capture-dimensions 4032 2268)))
+    (is (= {:width 800 :height 600}
+          (sut/bounded-capture-dimensions 800 600)))))
+
+(deftest upload-failure-surfaces-server-error
+  (testing "mobile upload failures preserve backend error text"
+    (reset! rf-db/app-db {})
+    (rf/dispatch-sync [:mobile/upload-receipt-failure {:response {:error "File too large (max 10MB)"}}])
+    (is (= "File too large (max 10MB)"
+          (get-in @rf-db/app-db [:mobile :upload :error])))))
