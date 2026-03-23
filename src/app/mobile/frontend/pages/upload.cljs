@@ -6,7 +6,7 @@
     [app.mobile.frontend.pages.receipt-review :refer [pending-receipts-section]]
     [app.template.frontend.i18n :refer [use-t]]
     [re-frame.core :as rf]
-    [uix.core :refer [$ defui] :as uix]
+    [uix.core :refer [$ defui use-effect use-ref use-state] :as uix]
     [uix.re-frame :refer [use-subscribe]]))
 
 ;; ========================================================================
@@ -72,9 +72,11 @@
 ;; Components
 ;; ========================================================================
 
-(defui capture-button [{:keys [icon-path label sublabel on-click disabled?]}]
+(defui capture-button [{:keys [id icon-path label sublabel on-click disabled?]}]
   ($ :button
-    {:class (str "flex items-center w-full p-4 bg-base-100 rounded-xl shadow-sm "
+    {:id id
+     :type "button"
+     :class (str "flex items-center w-full p-4 bg-base-100 rounded-xl shadow-sm "
               "active:bg-base-200 transition-colors "
               (when disabled? "opacity-50 pointer-events-none"))
      :on-click on-click
@@ -87,21 +89,80 @@
       (when sublabel
         ($ :p {:class "text-sm text-base-content/60"} sublabel)))))
 
-(defui file-input-trigger [{:keys [accept capture on-file-selected]}]
-  (let [input-ref (uix/use-ref nil)]
-    ($ :<>
-      ($ :input {:ref input-ref
-                 :type "file"
-                 :accept accept
-                 :capture capture
-                 :class "hidden"
-                 :on-change (fn [e]
-                              (when-let [file (-> e .-target .-files (aget 0))]
-                                (on-file-selected file)
-                                ;; Reset so the same file can be selected again
-                                (set! (.-value (.-target e)) "")))})
-      ;; Return the ref so parent can trigger click
-      input-ref)))
+(def camera-constraints
+  #js {:audio false
+       :video #js {:facingMode #js {:ideal "environment"}}})
+
+(defn media-devices-supported? []
+  (boolean (some-> js/navigator .-mediaDevices .-getUserMedia)))
+
+(defn first-video-track [stream]
+  (some-> stream .getVideoTracks array-seq first))
+
+(defn stop-stream! [stream]
+  (doseq [track (some-> stream .getTracks array-seq)]
+    (.stop track)))
+
+(defn torch-supported? [track]
+  (try
+    (boolean (some-> track .getCapabilities .-torch))
+    (catch :default _
+      false)))
+
+(defn camera-error-message [err]
+  (case (some-> err .-name)
+    "NotAllowedError" "Camera access was blocked. You can still use the device camera instead."
+    "NotFoundError" "No rear camera was found on this device."
+    "NotReadableError" "The camera is already in use by another app."
+    "OverconstrainedError" "This device could not open the preferred rear camera."
+    "SecurityError" "The in-app camera needs a secure browser context on this device."
+    "AbortError" "The camera was interrupted before it finished opening."
+    "Couldn't start the in-app camera. You can still use the device camera instead."))
+
+(defn attach-stream! [video-el stream]
+  (when video-el
+    (set! (.-autoplay video-el) true)
+    (set! (.-muted video-el) true)
+    (set! (.-playsInline video-el) true)
+    (set! (.-srcObject video-el) stream)
+    (when-let [play-promise (.play video-el)]
+      (.catch play-promise (fn [_] nil)))))
+
+(defn upload-file-from-blob [blob]
+  (let [filename (str "receipt-" (.now js/Date) ".jpg")]
+    (if (exists? js/File)
+      (js/File. #js [blob] filename #js {:type "image/jpeg"})
+      blob)))
+
+(defn capture-current-frame! [video-el on-success on-error]
+  (let [width (or (.-videoWidth video-el) 0)
+        height (or (.-videoHeight video-el) 0)]
+    (if (or (<= width 0) (<= height 0))
+      (on-error "The camera preview is not ready yet. Try again in a second.")
+      (let [canvas (.createElement js/document "canvas")
+            ctx (.getContext canvas "2d")]
+        (set! (.-width canvas) width)
+        (set! (.-height canvas) height)
+        (.drawImage ctx video-el 0 0 width height)
+        (.toBlob canvas
+          (fn [blob]
+            (if blob
+              (on-success (upload-file-from-blob blob))
+              (on-error "Couldn't capture a photo from the live camera.")))
+          "image/jpeg"
+          0.92)))))
+
+(defn apply-torch! [track enabled? on-success on-failure]
+  (if (and track (torch-supported? track) (fn? (.-applyConstraints track)))
+    (-> (.applyConstraints track #js {:advanced #js [#js {:torch enabled?}]})
+      (.then (fn [_]
+               (when (fn? on-success)
+                 (on-success enabled?))))
+      (.catch (fn [err]
+                (when (fn? on-failure)
+                  (on-failure err)))))
+    (when (fn? on-failure)
+      (on-failure nil))))
 
 (defui toast-banner []
   (let [toast (use-subscribe [:mobile/toast])]
@@ -121,85 +182,236 @@
         loading? (use-subscribe [:mobile/upload-loading?])
         error (use-subscribe [:mobile/upload-error])
         offline-count (use-subscribe [:mobile/offline-queue-count])
-        camera-ref (uix/use-ref nil)
-        gallery-ref (uix/use-ref nil)]
+        camera-ref (use-ref nil)
+        gallery-ref (use-ref nil)
+        live-video-ref (use-ref nil)
+        live-stream-ref (use-ref nil)
+        [camera-open? set-camera-open!] (use-state false)
+        [camera-starting? set-camera-starting!] (use-state false)
+        [capturing-photo? set-capturing-photo!] (use-state false)
+        [camera-error set-camera-error!] (use-state nil)
+        [torch-available? set-torch-available!] (use-state false)
+        [torch-enabled? set-torch-enabled!] (use-state false)
+        busy? (boolean (or loading? camera-starting? capturing-photo?))
+        close-live-camera! (fn []
+                             (set-camera-open! false)
+                             (set-camera-starting! false)
+                             (set-capturing-photo! false)
+                             (set-torch-available! false)
+                             (set-torch-enabled! false))
+        open-device-camera! (fn []
+                              (when-let [el @camera-ref]
+                                (.click el)))
+        open-live-camera! (fn []
+                            (set-camera-error! nil)
+                            (if (media-devices-supported?)
+                              (set-camera-open! true)
+                              (when-let [el @camera-ref]
+                                (.click el))))
+        toggle-torch! (fn []
+                        (when-let [track (first-video-track @live-stream-ref)]
+                          (apply-torch! track
+                            (not torch-enabled?)
+                            (fn [enabled?]
+                              (set-torch-enabled! enabled?)
+                              (set-camera-error! nil))
+                            (fn [_]
+                              (set-torch-available! false)
+                              (set-torch-enabled! false)
+                              (set-camera-error! "Torch control is not available on this device/browser.")))))
+        capture-live-photo! (fn []
+                              (when-let [video-el @live-video-ref]
+                                (set-capturing-photo! true)
+                                (capture-current-frame! video-el
+                                  (fn [file]
+                                    (set-capturing-photo! false)
+                                    (close-live-camera!)
+                                    (rf/dispatch [:mobile/upload-receipt file]))
+                                  (fn [message]
+                                    (set-capturing-photo! false)
+                                    (set-camera-error! message)))))]
+
+    (use-effect
+      (fn []
+        (when camera-open?
+          (let [cancelled? (atom false)
+                media-devices (.-mediaDevices js/navigator)]
+            (set-camera-starting! true)
+            (set-camera-error! nil)
+            (-> (.getUserMedia media-devices camera-constraints)
+              (.then (fn [stream]
+                       (if @cancelled?
+                         (stop-stream! stream)
+                         (do
+                           (reset! live-stream-ref stream)
+                           (when-let [video-el @live-video-ref]
+                             (attach-stream! video-el stream))
+                           (let [track (first-video-track stream)
+                                 torch? (torch-supported? track)]
+                             (set-torch-available! torch?)
+                             (set-camera-starting! false)
+                             (set-capturing-photo! false)
+                             (if torch?
+                               (apply-torch! track true
+                                 (fn [enabled?]
+                                   (set-torch-enabled! enabled?)
+                                   (set-camera-error! nil))
+                                 (fn [_]
+                                   (set-torch-enabled! false)))
+                               (set-torch-enabled! false)))))))
+              (.catch (fn [err]
+                        (when-not @cancelled?
+                          (set-camera-starting! false)
+                          (set-camera-open! false)
+                          (set-torch-available! false)
+                          (set-torch-enabled! false)
+                          (set-camera-error! (camera-error-message err))
+                          (when-let [el @camera-ref]
+                            (.click el))))))
+            (fn []
+              (reset! cancelled? true)
+              (when-let [stream @live-stream-ref]
+                (stop-stream! stream)
+                (reset! live-stream-ref nil))
+              (when-let [video-el @live-video-ref]
+                (set! (.-srcObject video-el) nil))))))
+      [camera-open?])
 
     ($ :<>
       ($ mobile-header {:title (t :mobile/tab-upload "Upload")})
       ($ toast-banner)
 
       ($ :div {:class "p-4 space-y-4"}
-        ;; Loading overlay
         (when loading?
           ($ :div {:class "fixed inset-0 z-40 bg-base-100/80 flex items-center justify-center"}
             ($ :div {:class "text-center"}
               ($ :span {:class "ds-loading ds-loading-spinner ds-loading-lg text-primary"})
               ($ :p {:class "mt-2 text-sm text-base-content/60"} "Uploading..."))))
 
-        ;; Error banner
         (when error
           ($ :div {:class "ds-alert ds-alert-error text-sm"}
             ($ :span error)))
 
-        ;; Capture section
         ($ :div {:class "space-y-3"}
           ($ :h2 {:class "text-sm font-semibold text-base-content/70 uppercase tracking-wide"}
             (t :mobile/capture-receipt "Capture Receipt"))
 
-          ;; Hidden file inputs
-          ($ :input {:ref camera-ref
+          (when camera-error
+            ($ :div {:id "alert-camera-upload-mobile"
+                     :class "ds-alert ds-alert-warning text-sm"}
+              ($ :span camera-error)))
+
+          ($ :input {:id "input-camera-upload-mobile"
+                     :ref camera-ref
                      :type "file"
                      :accept "image/*"
                      :capture "environment"
                      :class "hidden"
                      :on-change (fn [e]
                                   (when-let [file (-> e .-target .-files (aget 0))]
+                                    (set-camera-error! nil)
                                     (rf/dispatch [:mobile/upload-receipt file])
                                     (set! (.-value (.-target e)) "")))})
-          ($ :input {:ref gallery-ref
+          ($ :input {:id "input-gallery-upload-mobile"
+                     :ref gallery-ref
                      :type "file"
                      :accept "image/*"
                      :class "hidden"
                      :on-change (fn [e]
                                   (when-let [file (-> e .-target .-files (aget 0))]
+                                    (set-camera-error! nil)
                                     (rf/dispatch [:mobile/upload-receipt file])
                                     (set! (.-value (.-target e)) "")))})
 
-          ($ capture-button
-            {:icon-path "M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z"
-             :label (t :mobile/take-photo "Take Photo")
-             :sublabel (t :mobile/take-photo-sub "Use camera to capture receipt")
-             :disabled? loading?
-             :on-click #(when-let [el @camera-ref] (.click el))})
+          (when camera-open?
+            ($ :div {:id "panel-live-camera-upload-mobile"
+                     :class "bg-base-100 rounded-2xl shadow-sm overflow-hidden border border-base-300"}
+              ($ :div {:class "relative bg-black aspect-[3/4]"}
+                ($ :video {:id "video-receipt-camera-mobile"
+                           :ref live-video-ref
+                           :class "w-full h-full object-cover"
+                           :autoPlay true
+                           :muted true
+                           :playsInline true})
+                (when camera-starting?
+                  ($ :div {:class "absolute inset-0 bg-black/60 flex flex-col items-center justify-center gap-3 text-white"}
+                    ($ :span {:class "ds-loading ds-loading-spinner ds-loading-lg"})
+                    ($ :p {:class "text-sm"} "Opening camera..."))))
+              ($ :div {:class "p-4 space-y-3"}
+                ($ :p {:class "text-sm text-base-content/70"}
+                  (if torch-available?
+                    (if torch-enabled?
+                      "Torch is on while the live camera is open."
+                      "Torch is supported on this device.")
+
+                    "Using the live rear camera without direct torch control."))
+                ($ :div {:class (str "grid gap-2 "
+                                  (if torch-available?
+                                    "grid-cols-1 sm:grid-cols-3"
+                                    "grid-cols-1 sm:grid-cols-2"))}
+                  (when torch-available?
+                    ($ :button {:id "btn-torch-upload-mobile"
+                                :type "button"
+                                :class (str "ds-btn "
+                                         (if torch-enabled?
+                                           "ds-btn-warning"
+                                           "ds-btn-outline"))
+                                :disabled busy?
+                                :on-click toggle-torch!}
+                      (if torch-enabled?
+                        "Torch On"
+                        "Turn On Torch")))
+                  ($ :button {:id "btn-capture-upload-mobile"
+                              :type "button"
+                              :class "ds-btn ds-btn-primary"
+                              :disabled busy?
+                              :on-click capture-live-photo!}
+                    (if capturing-photo?
+                      "Capturing..."
+                      "Capture Receipt"))
+                  ($ :button {:id "btn-close-camera-upload-mobile"
+                              :type "button"
+                              :class "ds-btn ds-btn-ghost"
+                              :disabled loading?
+                              :on-click close-live-camera!}
+                    "Close Camera")))))
 
           ($ capture-button
-            {:icon-path "M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z"
+            {:id "btn-take-photo-upload-mobile"
+             :icon-path "M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z"
+             :label (t :mobile/take-photo "Take Photo")
+             :sublabel (t :mobile/take-photo-sub "Use the rear camera with torch when supported")
+             :disabled? (or busy? camera-open?)
+             :on-click open-live-camera!})
+
+          ($ capture-button
+            {:id "btn-gallery-upload-mobile"
+             :icon-path "M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z"
              :label (t :mobile/from-gallery "Choose from Gallery")
              :sublabel (t :mobile/from-gallery-sub "Select existing photo")
-             :disabled? loading?
+             :disabled? busy?
              :on-click #(when-let [el @gallery-ref] (.click el))}))
 
-        ;; Divider
         ($ :div {:class "ds-divider text-base-content/40 text-xs"} (t :common/or "OR"))
 
-        ;; Manual entry
         ($ :div {:class "space-y-3"}
           ($ :h2 {:class "text-sm font-semibold text-base-content/70 uppercase tracking-wide"}
             (t :mobile/manual-entry "Manual Entry"))
           ($ capture-button
-            {:icon-path "M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10"
+            {:id "btn-manual-upload-mobile"
+             :icon-path "M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10"
              :label (t :mobile/add-manually "Add Expense Manually")
              :sublabel (t :mobile/add-manually-sub "Enter details without receipt")
              :on-click #(rf/dispatch [:mobile/navigate "/m/upload/manual"])}))
 
-        ;; Pending reviews — real receipt list with tap-to-review
         ($ pending-receipts-section)
 
-        ;; Offline queue indicator
         (when (and offline-count (pos? offline-count))
           ($ :div {:class "bg-warning/10 border border-warning/30 rounded-xl p-4 mt-4"}
             ($ :p {:class "text-sm font-medium text-warning"}
               (str offline-count " " (t :mobile/receipts-queued "receipts queued offline")))
-            ($ :button {:class "ds-btn ds-btn-warning ds-btn-sm mt-2"
+            ($ :button {:id "btn-sync-offline-upload-mobile"
+                        :type "button"
+                        :class "ds-btn ds-btn-warning ds-btn-sm mt-2"
                         :on-click #(rf/dispatch [:mobile/trigger-sync])}
               (t :mobile/sync-now "Sync Now"))))))))
