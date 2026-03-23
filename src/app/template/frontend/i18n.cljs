@@ -1000,6 +1000,91 @@
     :mobile/language            "Jezik"
     :mobile/change-on-desktop  "Promijenite jezik na desktopu"
 
+    ;; Mobile login
+    :mobile/app-subtitle       "Bookkeeping Mobile"
+    :mobile/no-account         "Nemate račun?"
+    :mobile/signup-desktop     "Registrujte se na desktopu."
+
+    ;; Mobile forgot password
+    :mobile/back-to-login      "Nazad na prijavu"
+
+    ;; Mobile manual entry / line items
+    :mobile/item-label         (fn [n] (str "Stavka " n))
+    :mobile/remove-item        "Ukloni"
+    :mobile/item-name-placeholder "Naziv stavke"
+    :mobile/qty-placeholder    "Kol."
+    :mobile/price-placeholder  "Cijena"
+    :mobile/total-placeholder  "Ukupno"
+    :mobile/add-item           "+ Dodaj stavku"
+
+    ;; Mobile receipt statuses
+    :mobile/status-uploaded    "Učitano"
+    :mobile/status-processing  "Obrađuje se"
+    :mobile/status-extracting  "Ekstrahuje"
+    :mobile/status-ready       "Spremno"
+    :mobile/status-review      "Pregled"
+    :mobile/status-approved    "Odobreno"
+    :mobile/status-posted      "Proknjiženo"
+    :mobile/status-failed      "Neuspjelo"
+
+    ;; Mobile day names
+    :mobile/day-mon            "Pon"
+    :mobile/day-tue            "Uto"
+    :mobile/day-wed            "Sri"
+    :mobile/day-thu            "Čet"
+    :mobile/day-fri            "Pet"
+    :mobile/day-sat            "Sub"
+    :mobile/day-sun            "Ned"
+
+    ;; Mobile camera UI
+    :mobile/flash-on           "Blic uklj."
+    :mobile/flash-off          "Blic isklj."
+    :mobile/iphone-flash-on    "iPhone blic uklj."
+    :mobile/iphone-flash-off   "iPhone blic isklj."
+    :mobile/iphone-flash       "iPhone blic"
+    :mobile/use-iphone-flash   "Koristi iPhone blic"
+    :mobile/back               "Nazad"
+    :mobile/torch-on           "Lampa uklj."
+    :mobile/torch-off          "Lampa isklj."
+    :mobile/opening-camera     "Otvaranje kamere..."
+    :mobile/status-capturing   "Snimam"
+    :mobile/status-review-capture "Pregled snimka"
+    :mobile/status-device-camera "Kamera uređaja"
+    :mobile/status-flash-ready "Blic spreman"
+    :mobile/status-camera-ready "Kamera spremna"
+    :mobile/receipt-captured-label "Račun snimljen"
+    :mobile/take-another-or-exit "Slikaj još jedan račun ili izađi?"
+    :mobile/save-native-help   "Spremi sliku, zatim koristi Snimi ponovo za iPhone kameru, ili spremi i vrati se na Učitavanje."
+    :mobile/save-live-help     "Spremi sliku i nastavi snimati, ili spremi i vrati se na Učitavanje."
+    :mobile/iphone-flash-hint  "iPhone blic ostaje u nativnoj kameri. Nakon spremanja, tapni Snimi ponovo za sljedeći račun."
+    :mobile/use-and-take-another "Spremi i slikaj još"
+    :mobile/use-and-exit       "Spremi i izađi"
+    :mobile/retake             "Ponovo slikaj"
+    :mobile/uploading          "Učitavam..."
+    :mobile/lens-label         "Objektiv"
+    :mobile/preview-label      "Pregled"
+    :mobile/captured-fallback-msg "Račun snimljen. Koristite opcije ispod za nastavak."
+    :mobile/native-flash-prompt "Tapni Snimi ispod za otvaranje iPhone kamere s blicom."
+    :mobile/native-camera-prompt "Preglednik ne može držati pregled otvorenim. Koristite Snimi ispod za kameru uređaja."
+
+    ;; Mobile camera errors
+    :mobile/camera-err-not-allowed "Pristup kameri blokiran. Možete koristiti kameru uređaja."
+    :mobile/camera-err-not-found "Zadnja kamera nije pronađena na ovom uređaju."
+    :mobile/camera-err-not-readable "Kamera je u upotrebi od strane druge aplikacije."
+    :mobile/camera-err-overconstrained "Ovaj uređaj ne može otvoriti preferiranu zadnju kameru."
+    :mobile/camera-err-security "Kamera zahtijeva siguran kontekst pretraživača."
+    :mobile/camera-err-abort   "Kamera je prekinuta prije završetka otvaranja."
+    :mobile/camera-err-default "Pokretanje kamere neuspješno. Možete koristiti kameru uređaja."
+    :mobile/camera-unavailable "Pregled kamere nije dostupan. Snimanje koristi kameru uređaja."
+    :mobile/torch-unavailable  "Kontrola lampe nije dostupna na ovom uređaju/pretraživaču."
+    :mobile/flash-native-hint  "Snimanje će otvoriti iPhone kameru za korištenje kontrola blica."
+    :mobile/preview-not-ready  "Pregled kamere nije spreman. Pokušajte ponovo za sekundu."
+    :mobile/capture-failed     "Snimanje fotografije neuspješno."
+
+    ;; Mobile toast messages
+    :mobile/toast-expense-created "Trošak kreiran"
+    :mobile/toast-receipt-uploaded "Račun uspješno učitan"
+
     ;; Common keys used by mobile
     :common/date               "Datum"
     :common/amount             "Iznos"
@@ -1990,6 +2075,91 @@
     :mobile/search             "Search"
     :mobile/language           "Language"
     :mobile/change-on-desktop  "Change language on desktop"
+
+    ;; Mobile login
+    :mobile/app-subtitle       "Bookkeeping Mobile"
+    :mobile/no-account         "Don't have an account?"
+    :mobile/signup-desktop     "Sign up on desktop."
+
+    ;; Mobile forgot password
+    :mobile/back-to-login      "Back to login"
+
+    ;; Mobile manual entry / line items
+    :mobile/item-label         (fn [n] (str "Item " n))
+    :mobile/remove-item        "Remove"
+    :mobile/item-name-placeholder "Item name"
+    :mobile/qty-placeholder    "Qty"
+    :mobile/price-placeholder  "Price"
+    :mobile/total-placeholder  "Total"
+    :mobile/add-item           "+ Add Item"
+
+    ;; Mobile receipt statuses
+    :mobile/status-uploaded    "Uploaded"
+    :mobile/status-processing  "Processing"
+    :mobile/status-extracting  "Extracting"
+    :mobile/status-ready       "Ready"
+    :mobile/status-review      "Review"
+    :mobile/status-approved    "Approved"
+    :mobile/status-posted      "Posted"
+    :mobile/status-failed      "Failed"
+
+    ;; Mobile day names
+    :mobile/day-mon            "Mon"
+    :mobile/day-tue            "Tue"
+    :mobile/day-wed            "Wed"
+    :mobile/day-thu            "Thu"
+    :mobile/day-fri            "Fri"
+    :mobile/day-sat            "Sat"
+    :mobile/day-sun            "Sun"
+
+    ;; Mobile camera UI
+    :mobile/flash-on           "Flash On"
+    :mobile/flash-off          "Flash Off"
+    :mobile/iphone-flash-on    "iPhone Flash On"
+    :mobile/iphone-flash-off   "iPhone Flash Off"
+    :mobile/iphone-flash       "iPhone Flash"
+    :mobile/use-iphone-flash   "Use iPhone Flash"
+    :mobile/back               "Back"
+    :mobile/torch-on           "Torch On"
+    :mobile/torch-off          "Torch Off"
+    :mobile/opening-camera     "Opening camera..."
+    :mobile/status-capturing   "Capturing"
+    :mobile/status-review-capture "Review Capture"
+    :mobile/status-device-camera "Device Camera"
+    :mobile/status-flash-ready "Flash Ready"
+    :mobile/status-camera-ready "Camera Ready"
+    :mobile/receipt-captured-label "Receipt Captured"
+    :mobile/take-another-or-exit "Take another receipt or exit?"
+    :mobile/save-native-help   "Save this image, then use Capture again to open the iPhone camera, or save it and go back to Upload."
+    :mobile/save-live-help     "Save this image and keep shooting here, or save it and go back to Upload."
+    :mobile/iphone-flash-hint  "iPhone camera flash stays inside the native camera. After saving, tap Capture again to open it for the next receipt."
+    :mobile/use-and-take-another "Use & Take Another"
+    :mobile/use-and-exit       "Use & Exit"
+    :mobile/retake             "Retake"
+    :mobile/uploading          "Uploading..."
+    :mobile/lens-label         "Lens"
+    :mobile/preview-label      "Preview"
+    :mobile/captured-fallback-msg "Receipt captured. Use the actions below to keep it, take another, or exit."
+    :mobile/native-flash-prompt "Tap Capture below to open the iPhone camera with flash controls."
+    :mobile/native-camera-prompt "This browser cannot keep the live preview open here. Use Capture below to open the device camera."
+
+    ;; Mobile camera errors
+    :mobile/camera-err-not-allowed "Camera access was blocked. You can still use the device camera instead."
+    :mobile/camera-err-not-found "No rear camera was found on this device."
+    :mobile/camera-err-not-readable "The camera is already in use by another app."
+    :mobile/camera-err-overconstrained "This device could not open the preferred rear camera."
+    :mobile/camera-err-security "The in-app camera needs a secure browser context on this device."
+    :mobile/camera-err-abort   "The camera was interrupted before it finished opening."
+    :mobile/camera-err-default "Couldn't start the in-app camera. You can still use the device camera instead."
+    :mobile/camera-unavailable "Live camera preview is unavailable here. Capture will use the device camera instead."
+    :mobile/torch-unavailable  "Torch control is not available on this device/browser."
+    :mobile/flash-native-hint  "Capture will open the iPhone camera so you can use its flash controls there."
+    :mobile/preview-not-ready  "The camera preview is not ready yet. Try again in a second."
+    :mobile/capture-failed     "Couldn't capture a photo from the live camera."
+
+    ;; Mobile toast messages
+    :mobile/toast-expense-created "Expense created"
+    :mobile/toast-receipt-uploaded "Receipt uploaded successfully"
 
     ;; Common keys used by mobile
     :common/date               "Date"

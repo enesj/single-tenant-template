@@ -17,7 +17,7 @@
       ($ :div {:class "mb-8 text-center"}
         ($ :h1 {:class "text-2xl font-bold"} (t :common/sign-in))
         ($ :p {:class "text-base-content/60 mt-2 text-sm"}
-          "Bookkeeping Mobile"))
+          (t :mobile/app-subtitle)))
 
       (when error
         ($ :div {:class "ds-alert ds-alert-error mb-4 text-sm"}
@@ -78,5 +78,5 @@
           (t :login/forgot-password)))
 
       ($ :div {:class "mt-8 text-center text-sm text-base-content/50"}
-        ($ :p "Don't have an account?")
-        ($ :p "Sign up on desktop.")))))
+        ($ :p (t :mobile/no-account))
+        ($ :p (t :mobile/signup-desktop))))))

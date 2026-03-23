@@ -83,7 +83,7 @@
     {:db (-> db
            (assoc-in [:mobile :receipt-approving?] false)
            (update-in [:mobile :pending-review-count] (fnil dec 1)))
-     :fx [[:dispatch [:mobile/show-toast "Expense created"]]
+     :fx [[:dispatch [:mobile/show-toast :mobile/toast-expense-created]]
           [:dispatch [:mobile/navigate "/m/upload"]]]}))
 
 (rf/reg-event-fx
@@ -92,7 +92,7 @@
     {:db (-> db
            (assoc-in [:mobile :receipt-approving?] false)
            (assoc-in [:mobile :receipt-approve-error]
-             (or (get-in error [:response :error]) "Failed to approve receipt")))}))
+             (get-in error [:response :error])))}))
 
 ;; ========================================================================
 ;; Subscriptions

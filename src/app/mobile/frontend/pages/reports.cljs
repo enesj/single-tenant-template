@@ -75,7 +75,9 @@
     (.toLocaleString (js/Number. n) "de-DE"
       #js {:minimumFractionDigits 2 :maximumFractionDigits 2})))
 
-(def ^:private day-names ["Mon" "Tue" "Wed" "Thu" "Fri" "Sat" "Sun"])
+(def ^:private day-name-keys
+  [:mobile/day-mon :mobile/day-tue :mobile/day-wed :mobile/day-thu
+   :mobile/day-fri :mobile/day-sat :mobile/day-sun])
 
 ;; ========================================================================
 ;; Components
@@ -139,7 +141,7 @@
               (let [total (or (:total_amount day) 0)
                     pct (if (pos? max-val) (* 100 (/ total max-val)) 0)
                     day-idx (dec (or (:iso_day_of_week day) 1))
-                    day-name (get day-names day-idx "?")]
+                    day-name (t (get day-name-keys day-idx :mobile/day-mon))]
                 ($ :div {:key day-idx :class "flex-1 flex flex-col items-center"}
                   ($ :div {:class "w-full flex-1 flex items-end"}
                     ($ :div {:class "w-full bg-primary rounded-t transition-all"

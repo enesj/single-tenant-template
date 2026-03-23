@@ -75,27 +75,28 @@
       (catch :default _ (str s)))))
 
 (def ^:private status-styles
-  {"uploaded"        {:class "ds-badge-info"    :label "Uploaded"}
-   "parsing"         {:class "ds-badge-info"    :label "Processing"}
-   "parsed"          {:class "ds-badge-info"    :label "Processing"}
-   "extracting"      {:class "ds-badge-info"    :label "Extracting"}
-   "extracted"       {:class "ds-badge-success" :label "Ready"}
-   "review_required" {:class "ds-badge-warning" :label "Review"}
-   "approved"        {:class "ds-badge-success" :label "Approved"}
-   "posted"          {:class "ds-badge-primary" :label "Posted"}
-   "failed"          {:class "ds-badge-error"   :label "Failed"}})
+  {"uploaded"        {:class "ds-badge-info"    :key :mobile/status-uploaded}
+   "parsing"         {:class "ds-badge-info"    :key :mobile/status-processing}
+   "parsed"          {:class "ds-badge-info"    :key :mobile/status-processing}
+   "extracting"      {:class "ds-badge-info"    :key :mobile/status-extracting}
+   "extracted"       {:class "ds-badge-success" :key :mobile/status-ready}
+   "review_required" {:class "ds-badge-warning" :key :mobile/status-review}
+   "approved"        {:class "ds-badge-success" :key :mobile/status-approved}
+   "posted"          {:class "ds-badge-primary" :key :mobile/status-posted}
+   "failed"          {:class "ds-badge-error"   :key :mobile/status-failed}})
 
 ;; ========================================================================
 ;; Components
 ;; ========================================================================
 
 (defui receipt-card [{:keys [receipt]}]
-  (let [supplier (or (:supplier_guess receipt) (:supplier-guess receipt) "—")
+  (let [t (use-t)
+        supplier (or (:supplier_guess receipt) (:supplier-guess receipt) "—")
         total (or (:total_amount_guess receipt) (:total-amount-guess receipt))
         currency (or (:currency_guess receipt) (:currency-guess receipt) "BAM")
         date (or (:created_at receipt) (:created-at receipt))
         status (or (:status receipt) "uploaded")
-        style (get status-styles status {:class "ds-badge-ghost" :label status})]
+        style (get status-styles status {:class "ds-badge-ghost" :key nil})]
     ($ :div {:class "flex items-center p-3 bg-base-100 rounded-xl shadow-sm"}
       ;; Thumbnail placeholder
       ($ :div {:class "flex-shrink-0 w-12 h-12 bg-base-200 rounded-lg flex items-center justify-center mr-3"}
@@ -106,7 +107,8 @@
       ($ :div {:class "flex-1 min-w-0"}
         ($ :div {:class "flex items-center justify-between"}
           ($ :p {:class "text-sm font-medium truncate flex-1 mr-2"} supplier)
-          ($ :span {:class (str "ds-badge ds-badge-sm " (:class style))} (:label style)))
+          ($ :span {:class (str "ds-badge ds-badge-sm " (:class style))}
+            (if-let [k (:key style)] (t k) status)))
         ($ :div {:class "flex items-center gap-2 mt-0.5"}
           ($ :span {:class "text-xs text-base-content/50"} (format-date date))
           (when total

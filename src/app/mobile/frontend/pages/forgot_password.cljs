@@ -14,7 +14,7 @@
       ($ :div {:class "mb-8"}
         ($ :a {:class "ds-link text-sm mb-4 inline-block"
                :href "/m/login"}
-          "<- Back to login")
+          (str "\u2190 " (t :mobile/back-to-login)))
         ($ :h1 {:class "text-2xl font-bold"} (t :forgot-password/title))
         ($ :p {:class "text-base-content/60 mt-2 text-sm"}
           (t :forgot-password/subtitle)))

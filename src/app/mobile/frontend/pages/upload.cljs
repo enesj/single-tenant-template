@@ -337,6 +337,14 @@
 (defn format-camera-zoom-label [zoom]
   (str (.toFixed (double (or zoom 1.0)) 1) "x"))
 
+(defn format-camera-zoom-range-label [zoom-range]
+  (when (and (map? zoom-range) (number? (:min zoom-range)) (number? (:max zoom-range)))
+    (str "(range "
+      (format-camera-zoom-label (:min zoom-range))
+      "-"
+      (format-camera-zoom-label (:max zoom-range))
+      ")")))
+
 (defui toast-banner []
   (let [toast (use-subscribe [:mobile/toast])]
     ;; Auto-dismiss after 3s — hook called unconditionally per React rules
@@ -386,6 +394,7 @@
         [native-fallback? set-native-fallback!] (use-state false)
         [device-flash-native-mode? set-device-flash-native-mode!] (use-state false)
         [camera-hardware-zoom set-camera-hardware-zoom!] (use-state 1.0)
+        [camera-hardware-zoom-range set-camera-hardware-zoom-range!] (use-state nil)
         [captured-file set-captured-file!] (use-state nil)
         [captured-preview-url set-captured-preview-url!] (use-state nil)
         [preview-zoom set-preview-zoom!] (use-state 1.0)
@@ -394,6 +403,7 @@
         zoomed? (> preview-zoom min-preview-zoom)
         device-flash? (and device-flash-native-mode? flash-enabled?)
         native-capture-mode? (or native-fallback? device-flash-native-mode?)
+        lens-controls-available? (and (map? camera-hardware-zoom-range) (not native-capture-mode?))
         flash-pill-label (cond
                            flash-available? (if flash-enabled? "Flash On" "Flash Off")
                            device-flash? "iPhone Flash"
@@ -412,6 +422,18 @@
         clear-captured-file! (fn []
                                (set-captured-file! nil)
                                (set-captured-preview-url! nil))
+        change-camera-hardware-zoom! (fn [direction]
+                                       (when-let [track (first-video-track @live-stream-ref)]
+                                         (when-let [{min-zoom :min max-zoom :max step :step} camera-hardware-zoom-range]
+                                           (let [step (or step 0.5)
+                                                 next-zoom (-> (+ camera-hardware-zoom (* direction step))
+                                                             (max min-zoom)
+                                                             (min max-zoom))]
+                                             (when (not= next-zoom camera-hardware-zoom)
+                                               (apply-camera-zoom! track next-zoom
+                                                 set-camera-hardware-zoom!
+                                                 (fn [_]
+                                                   (show-camera-error! "Camera zoom could not be changed on this device/browser."))))))))
         queue-captured-file! (fn [file]
                                (set-capturing-photo! false)
                                (clear-camera-error!)
@@ -435,6 +457,7 @@
                                     (clear-camera-error!)
                                     (set-native-fallback! false)
                                     (set-camera-hardware-zoom! 1.0)
+                                    (set-camera-hardware-zoom-range! nil)
                                     (stop-live-stream!)
                                     (reset! active-pointers-ref {})
                                     (reset! gesture-ref nil)
@@ -447,6 +470,7 @@
                                                  (attach-stream! video-el stream))
                                                (let [track (first-video-track stream)
                                                      torch? (torch-supported? track)]
+                                                 (set-camera-hardware-zoom-range! (some-> track .getCapabilities camera-zoom-range))
                                                  (apply-default-camera-zoom! track set-camera-hardware-zoom!)
                                                  (set-torch-available! torch?)
                                                  (set-torch-enabled! false)
@@ -462,6 +486,7 @@
                                                 (set-native-fallback! true)
                                                 (set-device-flash-native-mode! false)
                                                 (set-camera-hardware-zoom! 1.0)
+                                                (set-camera-hardware-zoom-range! nil)
                                                 (set-torch-available! false)
                                                 (set-torch-enabled! false)
                                                 (set-flash-available! false)
@@ -472,6 +497,7 @@
                                     (set-native-fallback! true)
                                     (set-device-flash-native-mode! false)
                                     (set-camera-hardware-zoom! 1.0)
+                                    (set-camera-hardware-zoom-range! nil)
                                     (set-torch-available! false)
                                     (set-torch-enabled! false)
                                     (set-flash-available! false)
@@ -486,6 +512,8 @@
         return-to-upload! (fn []
                             (clear-captured-file!)
                             (set-device-flash-native-mode! false)
+                            (set-camera-hardware-zoom! 1.0)
+                            (set-camera-hardware-zoom-range! nil)
                             (stop-live-stream!)
                             (reset-preview-transform!)
                             (rf/dispatch [:mobile/navigate "/m/upload"]))
@@ -643,6 +671,7 @@
             (set-camera-error-dismissed! false)
             (set-native-fallback! false)
             (set-camera-hardware-zoom! 1.0)
+            (set-camera-hardware-zoom-range! nil)
             (do
               (reset! active-pointers-ref {})
               (reset! gesture-ref nil)
@@ -658,6 +687,7 @@
                              (attach-stream! video-el stream))
                            (let [track (first-video-track stream)
                                  torch? (torch-supported? track)]
+                             (set-camera-hardware-zoom-range! (some-> track .getCapabilities camera-zoom-range))
                              (apply-default-camera-zoom! track set-camera-hardware-zoom!)
                              (set-torch-available! torch?)
                              (set-torch-enabled! false)
@@ -681,6 +711,7 @@
                           (set-native-fallback! true)
                           (set-device-flash-native-mode! false)
                           (set-camera-hardware-zoom! 1.0)
+                          (set-camera-hardware-zoom-range! nil)
                           (set-torch-available! false)
                           (set-torch-enabled! false)
                           (set-flash-available! false)
@@ -701,6 +732,7 @@
             (set-native-fallback! true)
             (set-device-flash-native-mode! false)
             (set-camera-hardware-zoom! 1.0)
+            (set-camera-hardware-zoom-range! nil)
             (set-flash-available! false)
             (set-flash-enabled! false)
             (set-torch-available! false)
@@ -842,9 +874,25 @@
                 ($ :path {:stroke-linecap "round" :stroke-linejoin "round" :d "M6 18L18 6M6 6l12 12"})))))
 
         ($ :div {:class "pointer-events-none absolute inset-x-0 bottom-36 z-30 flex justify-center gap-2"}
-          ($ :span {:id "badge-camera-hardware-zoom-mobile"
-                    :class "rounded-full bg-black/35 px-4 py-1.5 text-[11px] font-medium uppercase tracking-[0.18em] text-white/75"}
-            (str "Lens " (format-camera-zoom-label camera-hardware-zoom)))
+          ($ :div {:class "pointer-events-auto flex items-center gap-2"}
+            ($ camera-icon-button
+              {:id "btn-lens-decrease-camera-mobile"
+               :label "Decrease Lens Zoom"
+               :icon-path "M18 12H6"
+               :disabled? (or busy? (not lens-controls-available?))
+               :on-click #(change-camera-hardware-zoom! -1)})
+            ($ :span {:id "badge-camera-hardware-zoom-mobile"
+                      :class "rounded-full bg-black/35 px-4 py-1.5 text-[11px] font-medium uppercase tracking-[0.18em] text-white/75"}
+              (str "Lens "
+                (format-camera-zoom-label camera-hardware-zoom)
+                " "
+                (or (format-camera-zoom-range-label camera-hardware-zoom-range) "(range unavailable)")))
+            ($ camera-icon-button
+              {:id "btn-lens-increase-camera-mobile"
+               :label "Increase Lens Zoom"
+               :icon-path "M12 6v12m6-6H6"
+               :disabled? (or busy? (not lens-controls-available?))
+               :on-click #(change-camera-hardware-zoom! 1)}))
           (when zoomed?
             ($ :span {:class "rounded-full bg-black/35 px-4 py-1.5 text-[11px] font-medium uppercase tracking-[0.18em] text-white/75"}
               (str "Preview " (js/Math.round (* preview-zoom 100)) "%"))))

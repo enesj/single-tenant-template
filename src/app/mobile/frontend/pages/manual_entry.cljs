@@ -108,7 +108,7 @@
   :mobile/create-expense-success
   (fn [{:keys [db]} _]
     {:db (assoc-in db [:mobile :manual-entry :submitting?] false)
-     :fx [[:dispatch [:mobile/show-toast "Expense created"]]
+     :fx [[:dispatch [:mobile/show-toast :mobile/toast-expense-created]]
           [:dispatch [:mobile/navigate "/m/expenses"]]]}))
 
 (rf/reg-event-fx
@@ -117,7 +117,7 @@
     {:db (-> db
            (assoc-in [:mobile :manual-entry :submitting?] false)
            (assoc-in [:mobile :manual-entry :error]
-             (or (get-in error [:response :error]) "Failed to create expense")))}))
+             (get-in error [:response :error])))}))
 
 ;; ========================================================================
 ;; Autocomplete dropdown component
@@ -175,33 +175,33 @@
 ;; Line items sub-form
 ;; ========================================================================
 
-(defui line-item-row [{:keys [item index on-change on-remove]}]
+(defui line-item-row [{:keys [item index on-change on-remove t]}]
   ($ :div {:class "bg-base-100 rounded-lg p-3 space-y-2"}
     ($ :div {:class "flex items-center justify-between"}
-      ($ :span {:class "text-xs text-base-content/60 font-medium"} (str "Item " (inc index)))
+      ($ :span {:class "text-xs text-base-content/60 font-medium"} (t :mobile/item-label (inc index)))
       ($ :button {:class "ds-btn ds-btn-ghost ds-btn-xs text-error"
                   :on-click on-remove}
-        "Remove"))
+        (t :mobile/remove-item)))
     ($ :input {:type "text"
                :class "ds-input ds-input-bordered ds-input-sm w-full"
-               :placeholder "Item name"
+               :placeholder (t :mobile/item-name-placeholder)
                :value (or (:label item) "")
                :on-change #(on-change :label (.. % -target -value))})
     ($ :div {:class "grid grid-cols-3 gap-2"}
       ($ :input {:type "number"
                  :class "ds-input ds-input-bordered ds-input-sm"
-                 :placeholder "Qty"
+                 :placeholder (t :mobile/qty-placeholder)
                  :value (or (:qty item) "")
                  :on-change #(on-change :qty (.. % -target -value))})
       ($ :input {:type "number"
                  :class "ds-input ds-input-bordered ds-input-sm"
-                 :placeholder "Price"
+                 :placeholder (t :mobile/price-placeholder)
                  :step "0.01"
                  :value (or (:unit-price item) "")
                  :on-change #(on-change :unit-price (.. % -target -value))})
       ($ :input {:type "number"
                  :class "ds-input ds-input-bordered ds-input-sm"
-                 :placeholder "Total"
+                 :placeholder (t :mobile/total-placeholder)
                  :step "0.01"
                  :value (or (:total item) "")
                  :on-change #(on-change :total (.. % -target -value))}))))
@@ -333,12 +333,13 @@
               (t :common/line-items "Line Items"))
             ($ :button {:class "ds-btn ds-btn-ghost ds-btn-xs"
                         :on-click add-item!}
-              "+ Add Item"))
+              (t :mobile/add-item)))
           (for [[idx item] (map-indexed vector (:items form))]
             ($ line-item-row
               {:key idx
                :item item
                :index idx
+               :t t
                :on-change (fn [k v] (update-item! idx k v))
                :on-remove #(remove-item! idx)})))
 
