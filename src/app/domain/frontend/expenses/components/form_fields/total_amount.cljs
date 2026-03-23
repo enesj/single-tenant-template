@@ -114,14 +114,22 @@
           ($ :label {:class label-class}
             ($ :span {:class label-text-class} "Total guess:"))
           ($ :div {:class value-wrap-class}
-            ($ :input {:id (str input-id "-guess")
-                       :class (str "ds-input ds-input-bordered ds-input-sm w-32 text-right text-lg font-semibold "
-                                (when totals-match? "text-success"))
-                       :type "number"
-                       :step "0.01"
-                       :value (or local-guess "")
-                       :on-change (fn [e]
-                                    (set-local-guess! (.. e -target -value)))})))
+            ($ :div {:class "flex items-center gap-2"}
+              ($ :input {:id (str input-id "-guess")
+                         :class (str "ds-input ds-input-bordered ds-input-sm w-32 text-right text-lg font-semibold "
+                                  (when totals-match? "text-success"))
+                         :type "number"
+                         :step "0.01"
+                         :value (or local-guess "")
+                         :on-change (fn [e]
+                                      (set-local-guess! (.. e -target -value)))})
+              (when (and (pos? computed-total) (not totals-match?))
+                ($ :button {:id (str "btn-use-line-total-" input-id)
+                            :class "ds-btn ds-btn-ghost ds-btn-xs"
+                            :type "button"
+                            :on-click (fn []
+                                        (set-local-guess! computed-total))}
+                  "Use line total")))))
 
         (when error
           ($ :div {:id (str input-id "-error")
