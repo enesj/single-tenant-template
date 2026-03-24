@@ -11,7 +11,8 @@
     [taoensso.timbre :as log])
   (:import
     [java.nio.file Files]
-    [java.time Instant]))
+    [java.time Instant]
+    [java.sql Timestamp]))
 
 (def ^:private default-storage-base-dir
   "upload/stripes")
@@ -88,7 +89,7 @@
    (jdbc/execute-one!
      db
      (sql/format {:update :receipts
-                  :set {:file_purged_at (or at (Instant/now))}
+                  :set {:file_purged_at (Timestamp/from ^Instant (or at (Instant/now)))}
                   :where [:and
                           [:= :id receipt-id]
                           [:is :file_purged_at nil]]
