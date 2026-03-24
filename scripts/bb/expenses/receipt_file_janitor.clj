@@ -63,9 +63,9 @@
                  :loop? false
                  :dry-run? false
                  :delete-orphans? true
-                 :older-than-days 60
-                 :limit 200
-                 :orphan-limit 200
+                 :older-than-days 30
+                 :limit 1000
+                 :orphan-limit 1000
                  :storage-base-dir "upload/stripes"
                  :sleep-seconds default-sleep-seconds}]
     (let [[a b & more] args]
@@ -127,6 +127,27 @@
   [profile]
   (jdbc/get-datasource {:jdbcUrl (mig/get-jdbc-url profile)}))
 
+(defn- print-summary!
+  [{:keys [summary]}]
+  (let [{:keys [purge-candidates purged purge-errors
+                orphan-candidates orphan-deletions orphan-errors
+                dry-run?]} summary
+        mode (if dry-run? "[DRY RUN] " "")]
+    (println)
+    (println (str mode "=== Receipt File Janitor Summary ==="))
+    (println (str mode "Receipt files:"))
+    (println (str "  - Candidates: " purge-candidates))
+    (println (str "  - Purged:     " purged))
+    (when (pos? purge-errors)
+      (println (str "  - Errors:     " purge-errors)))
+    (println (str mode "Orphan files:"))
+    (println (str "  - Candidates: " orphan-candidates))
+    (println (str "  - Deleted:    " orphan-deletions))
+    (when (pos? orphan-errors)
+      (println (str "  - Errors:     " orphan-errors)))
+    (println "=====================================")
+    (flush)))
+
 (defn- run-once!
   [db {:keys [profile] :as opts}]
   (println (str "Running receipt-file-janitor"
@@ -138,8 +159,7 @@
              " delete-orphans?=" (:delete-orphans? opts)
              " storage-base-dir=" (:storage-base-dir opts)))
   (let [result (janitor/run-janitor! db (dissoc opts :profile :loop? :sleep-seconds))]
-    (pprint/pprint result)
-    (flush)
+    (print-summary! result)
     result))
 
 (defn- run-loop!

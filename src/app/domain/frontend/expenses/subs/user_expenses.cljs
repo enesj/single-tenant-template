@@ -173,6 +173,21 @@
     (get-in db [:user-expenses :receipts :items])))
 
 (rf/reg-sub
+  :user-expenses/show-purged-receipts?
+  (fn [db _]
+    (get-in db [:user-expenses :receipts :show-purged?] false)))
+
+(rf/reg-sub
+  :user-expenses/filtered-receipts
+  (fn [[_ _]]
+    [(rf/subscribe [:user-expenses/receipts])
+     (rf/subscribe [:user-expenses/show-purged-receipts?])])
+  (fn [[receipts show-purged?]]
+    (if show-purged?
+      (vec receipts)
+      (filterv (comp nil? :file-purged-at) receipts))))
+
+(rf/reg-sub
   :user-expenses/receipts-error
   (fn [db _]
     (get-in db [:user-expenses :receipts :error])))

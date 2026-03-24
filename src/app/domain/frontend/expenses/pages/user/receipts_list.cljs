@@ -149,7 +149,13 @@
   (let [t (use-t)
         error (use-subscribe [:user-expenses/receipts-error])
         form-error (use-subscribe [:user-expenses/form-error])
-        receipts (or (use-subscribe [:user-expenses/receipts]) [])
+        all-receipts (vec (or (use-subscribe [:user-expenses/receipts]) []))
+        receipts (vec (or (use-subscribe [:user-expenses/filtered-receipts]) []))
+        show-purged? (use-subscribe [:user-expenses/show-purged-receipts?])
+        purged-count (->> all-receipts
+                       (filter :file-purged-at)
+                       count)
+        show-purged-toggle? (pos? purged-count)
         selected-receipt-ids (or (use-subscribe [::list-subs/selected-ids :receipts]) #{})
         selected-count (count selected-receipt-ids)
         action-loading? (true? (use-subscribe [:user-expenses/receipt-action-loading?]))
@@ -162,6 +168,7 @@
                          (filter receipt-refine-pending?)
                          count)
         processing? (or (pos? processing-count) (pos? refining-count))
+        show-status-bar? (or processing? show-purged-toggle?)
         processing-label (if (pos? processing-count) (t :receipts/processing) (t :receipts/refining))
         processing-total (if (pos? processing-count) processing-count refining-count)
         [processing-started-at set-processing-started-at!] (use-state nil)
@@ -187,7 +194,6 @@
                            (rf/dispatch [:user-expenses/post-selected (vec selected-receipt-ids)]))
                          [selected-receipt-ids])]
 
-    ;; Initial load
     (use-effect
       (fn []
         (rf/dispatch [:app.template.frontend.events.list/clear-selection :receipts])
@@ -198,7 +204,6 @@
         js/undefined)
       [refresh!])
 
-    ;; Poll processing status in the background; refresh list once processing ends.
     (use-effect
       (fn []
         (when processing?
@@ -207,7 +212,6 @@
               (js/clearInterval handle)))))
       [check-processing-complete! processing?])
 
-    ;; Track a processing "session" start time so we can display duration.
     (use-effect
       (fn []
         (cond
@@ -252,25 +256,36 @@
                                             (rf/dispatch [:user-expenses/clear-form-error]))}
                       "✕"))))
 
-            ;; Top bar: live processing indicator + batch actions
               ($ :div {:class (str "flex items-center gap-2 px-4 pt-4 "
-                                (if processing? "justify-between" "justify-end"))}
-                (when processing?
-                  ($ :div {:id "receipt-processing-banner"
-                           :class "flex items-center gap-2"}
-                    ($ :span {:class "ds-loading ds-loading-spinner ds-loading-xs"})
-                    ($ :span {:class "text-sm"}
-                      (str processing-label " " (t :receipts/receipts processing-total) "…"))
-                    (when-let [duration (format-duration processing-started-at last-checked)]
-                      ($ :span {:class "text-xs text-base-content/60"}
-                        (str (t :receipts/duration) ": " duration)))
-                    ($ :button {:id "btn-refresh-user-receipts"
-                                :class "ds-btn ds-btn-ghost ds-btn-xs"
-                                :type "button"
-                                :on-click (fn [e]
-                                            (.preventDefault e)
-                                            (refresh!))}
-                      (t :receipts/refresh))))
+                                (if show-status-bar? "justify-between" "justify-end"))}
+                (when show-status-bar?
+                  ($ :div {:class "flex items-center gap-4 flex-wrap"}
+                    (when processing?
+                      ($ :div {:id "receipt-processing-banner"
+                               :class "flex items-center gap-2"}
+                        ($ :span {:class "ds-loading ds-loading-spinner ds-loading-xs"})
+                        ($ :span {:class "text-sm"}
+                          (str processing-label " " (t :receipts/receipts processing-total) "…"))
+                        (when-let [duration (format-duration processing-started-at last-checked)]
+                          ($ :span {:class "text-xs text-base-content/60"}
+                            (str (t :receipts/duration) ": " duration)))
+                        ($ :button {:id "btn-refresh-user-receipts"
+                                    :class "ds-btn ds-btn-ghost ds-btn-xs"
+                                    :type "button"
+                                    :on-click (fn [e]
+                                                (.preventDefault e)
+                                                (refresh!))}
+                          (t :receipts/refresh))))
+
+                    (when show-purged-toggle?
+                      ($ :label {:class "flex items-center gap-2 cursor-pointer"}
+                        ($ :input {:type "checkbox"
+                                   :id "toggle-show-purged-receipts"
+                                   :class "ds-toggle ds-toggle-sm"
+                                   :checked show-purged?
+                                   :on-change #(rf/dispatch [:user-expenses/toggle-show-purged-receipts])})
+                        ($ :span {:class "text-sm text-base-content/70"}
+                          (str (t :receipts/show-purged) " (" purged-count ")"))))))
 
                 ($ :div {:class "flex items-center gap-2"}
                   ($ :button {:id "btn-batch-parse-user-receipts"
@@ -302,6 +317,7 @@
                 ($ list-view
                   {:entity-name :receipts
                    :entity-spec (receipts-entity-spec t)
+                   :rows-override receipts
                    :custom-actions (fn [receipt]
                                      (receipt-actions t can-ocr? receipt))
                    :on-add-click #(rf/dispatch [:navigate-to "/expenses/upload"])}))))))

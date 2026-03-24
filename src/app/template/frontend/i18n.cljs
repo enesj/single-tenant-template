@@ -719,6 +719,7 @@
     :receipts/receipts                    (fn [n] (str n " račun" (when (not= 1 n) "a")))
     :receipts/duration                    "Trajanje"
     :receipts/refresh                     "Osvježi"
+    :receipts/show-purged                 "Prikaži obrisane"
     :receipts/parse-selected              "Parsiraj odabrane (OCR)"
     :receipts/post-selected               "Objavi odabrane (trošak)"
     :receipts/tooltip-no-ocr              "Samo članovi, administratori i vlasnici mogu pokrenuti OCR"
@@ -1844,6 +1845,7 @@
     :receipts/receipts                    (fn [n] (str n " receipt" (when (not= 1 n) "s")))
     :receipts/duration                    "Duration"
     :receipts/refresh                     "Refresh"
+    :receipts/show-purged                 "Show purged"
     :receipts/parse-selected              "Parse Selected (OCR)"
     :receipts/post-selected               "Post Selected (to Expense)"
     :receipts/tooltip-no-ocr              "Only members, admins, and owners can run OCR"

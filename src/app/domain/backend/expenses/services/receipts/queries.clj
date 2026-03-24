@@ -236,6 +236,7 @@
                                 :receipts.payer_id
                                 :receipts.created_by
                                 [[:coalesce :cb.full_name :cb.email] :created_by_name]
+                                :receipts.file_purged_at
                                 [[:raw "coalesce((receipts.raw_extract_json->>'refine_pending')::boolean, false)"] :refine_pending]
                                 :receipts.created_at
                                 :receipts.updated_at]
@@ -284,6 +285,7 @@
                             :receipts.payer_id
                             :receipts.created_by
                             [[:coalesce :cb.full_name :cb.email] :created_by_name]
+                            :receipts.file_purged_at
                             [[:raw "coalesce((receipts.raw_extract_json->>'refine_pending')::boolean, false)"] :refine_pending]
                             :receipts.created_at
                             :receipts.updated_at]

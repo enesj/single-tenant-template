@@ -65,7 +65,7 @@
                         [:is :r.file_purged_at nil]
                         [:is-not :r.storage_key nil]
                         [:is-not :r.expense_id nil]
-                        [:<= :r.updated_at cutoff]
+                        [:<= :r.updated_at (Timestamp/from ^Instant cutoff)]
                         [:exists {:select [1]
                                   :from [[:expenses :e]]
                                   :where [:and

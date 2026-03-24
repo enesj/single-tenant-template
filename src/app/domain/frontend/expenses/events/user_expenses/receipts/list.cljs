@@ -176,6 +176,12 @@
   (fn [{:keys [db]} _]
     {:dispatch [:user-expenses/fetch-receipts (current-receipts-page-params db)]}))
 
+(rf/reg-event-db
+  :user-expenses/toggle-show-purged-receipts
+  common-interceptors
+  (fn [db _]
+    (update-in db (conj base-path :show-purged?) not)))
+
 (rf/reg-event-fx
   :user-expenses/check-receipts-processing-complete
   common-interceptors
