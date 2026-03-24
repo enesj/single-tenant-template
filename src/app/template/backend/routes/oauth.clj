@@ -17,6 +17,26 @@
 ;; This namespace provides route handlers for OAuth authentication.
 ;; It handles the OAuth callback, token exchange, and user creation/login via Auth Service.
 
+(defn- safe-return-path
+  "Extract a relative path from a return URL to prevent open-redirect attacks.
+   Accepts full URLs (strips origin) or relative paths.
+   Returns nil for anything that doesn't start with `/`."
+  [url]
+  (when (and url (not (str/blank? url)))
+    (let [path (cond
+                 ;; Full URL — extract path + query
+                 (str/starts-with? url "http")
+                 (try
+                   (let [u (java.net.URI. url)]
+                     (str (.getPath u)
+                       (when-let [q (.getQuery u)] (str "?" q))))
+                   (catch Exception _ nil))
+                 ;; Already a relative path
+                 (str/starts-with? url "/") url
+                 :else nil)]
+      (when (and path (str/starts-with? path "/"))
+        path))))
+
 (defn- build-auth-url [base-url params]
   (let [query-string (str/join "&"
                        (map (fn [[k v]]
@@ -44,23 +64,33 @@
     :else (str scopes)))
 
 (defn google-login-handler
-  "Initiate Google OAuth login"
+  "Initiate Google OAuth login.
+   Preserves an optional `return` query param via the OAuth `state` parameter
+   so the callback can redirect the user back after authentication.
+   Using `state` instead of the session avoids SameSite cookie issues on
+   cross-origin redirects from Google."
   []
   (fn [req]
     (route-utils/with-error-handling "google-login"
       (let [config (get-in req [:service-container :config])
             oauth-configs (route-utils/get-oauth-configs config)
-            provider-config (:google oauth-configs)]
+            provider-config (:google oauth-configs)
+            return-url (get-in req [:query-params "return"])
+            ;; Encode return URL in the state param (base64 to keep it URL-safe)
+            state-value (when return-url
+                          (.encodeToString (java.util.Base64/getUrlEncoder)
+                            (.getBytes (str "return:" return-url) "UTF-8")))]
         (if provider-config
           (let [base-url (or (:authorization-uri provider-config)
                            (:authorize-uri provider-config))
-                params {:client_id (:client-id provider-config)
-                        :redirect_uri (:redirect-uri provider-config)
-                        :scope (or (normalize-scopes (:scopes provider-config))
-                                 "email profile openid")
-                        :response_type "code"
-                        :access_type "offline"
-                        :prompt "consent"}]
+                params (cond-> {:client_id (:client-id provider-config)
+                                :redirect_uri (:redirect-uri provider-config)
+                                :scope (or (normalize-scopes (:scopes provider-config))
+                                         "email profile openid")
+                                :response_type "code"
+                                :access_type "offline"
+                                :prompt "consent"}
+                         state-value (assoc :state state-value))]
             (if base-url
               (response/redirect (build-auth-url base-url params))
               (do
@@ -71,20 +101,26 @@
             (html-error-response "Configuration Error" "Google OAuth is not configured.")))))))
 
 (defn github-login-handler
-  "Initiate GitHub OAuth login"
+  "Initiate GitHub OAuth login.
+   Preserves an optional `return` query param via the OAuth `state` parameter."
   []
   (fn [req]
     (route-utils/with-error-handling "github-login"
       (let [config (get-in req [:service-container :config])
             oauth-configs (route-utils/get-oauth-configs config)
-            provider-config (:github oauth-configs)]
+            provider-config (:github oauth-configs)
+            return-url (get-in req [:query-params "return"])
+            state-value (when return-url
+                          (.encodeToString (java.util.Base64/getUrlEncoder)
+                            (.getBytes (str "return:" return-url) "UTF-8")))]
         (if provider-config
           (let [base-url (or (:authorization-uri provider-config)
                            (:authorize-uri provider-config))
-                params {:client_id (:client-id provider-config)
-                        :redirect_uri (:redirect-uri provider-config)
-                        :scope (or (normalize-scopes (:scopes provider-config))
-                                 "user:email")}]
+                params (cond-> {:client_id (:client-id provider-config)
+                                :redirect_uri (:redirect-uri provider-config)
+                                :scope (or (normalize-scopes (:scopes provider-config))
+                                         "user:email")}
+                         state-value (assoc :state state-value))]
             (if base-url
               (response/redirect (build-auth-url base-url params))
               (do
@@ -248,6 +284,15 @@
                                                [k (when v (java.net.URLDecoder/decode v "UTF-8"))]))
                                         (clojure.string/split (:query-string req) #"&")))))
             code (get query-params "code")
+            ;; Extract return URL from state parameter (base64-encoded "return:<url>")
+            state-raw (get query-params "state")
+            state-return (when state-raw
+                           (try
+                             (let [decoded (String. (.decode (java.util.Base64/getUrlDecoder)
+                                                      state-raw) "UTF-8")]
+                               (when (str/starts-with? decoded "return:")
+                                 (safe-return-path (subs decoded 7))))
+                             (catch Exception _ nil)))
             redirect-uri (get-in oauth-configs [provider :redirect-uri])]
 
         (log/info "OAuth callback - Provider:" provider)
@@ -300,10 +345,14 @@
                                                  {:client-ip (:remote-addr req)})
                                   auth-session (sanitize-for-serialization
                                                  (tenant-auth/build-auth-session {:user sanitized-user} tenant-ctx))
-                                  redirect-url (post-login-redirect-url oauth-db tenant-ctx auth-session)]
+                                  ;; Prefer return URL from OAuth state param (e.g. invitation accept)
+                                  ;; over the default post-login redirect.
+                                  redirect-url  (or state-return
+                                                  (post-login-redirect-url oauth-db tenant-ctx auth-session))]
 
                               (log/info "Authentication successful for:" user-email)
-                              (log/info "Redirecting user" user-email "to:" redirect-url)
+                              (log/info "Redirecting user" user-email "to:" redirect-url
+                                (when state-return "(from OAuth state return URL)"))
 
                               (-> (response/redirect redirect-url)
                                 (assoc :session {:auth-session auth-session})))))

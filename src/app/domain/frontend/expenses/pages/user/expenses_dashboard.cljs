@@ -403,26 +403,6 @@
                           (* 100 (/ (- curr prev) prev)))))]
 
     ($ :div {:class "min-h-screen bg-slate-50"}
-      ;; Onboarding banner (shown when onboarding is active but not on first visit)
-      (let [onboarding-active? (use-subscribe [:onboarding/active?])
-            onboarding-summary (use-subscribe [:onboarding/summary])]
-        (when (and onboarding-active? (not (:redirect-to-onboarding? onboarding-summary)))
-          ($ :div {:class "bg-primary/10 border-b border-primary/20 px-4 py-3"}
-            ($ :div {:class "max-w-6xl mx-auto flex items-center justify-between"}
-              ($ :div {:class "flex items-center gap-3"}
-                ($ :span {:class "text-sm font-medium text-primary"}
-                  (t :onboarding/banner-title))
-                ($ :span {:class "text-xs text-primary/70"}
-                  (str (:completed onboarding-summary 0) "/" (:total onboarding-summary 0))))
-              ($ :div {:class "flex items-center gap-2"}
-                ($ button {:btn-type :primary
-                           :class "ds-btn-sm"
-                           :on-click #(rf/dispatch [:navigate-to "/onboarding"])}
-                  (t :onboarding/sidebar-label))
-                ($ button {:btn-type :ghost
-                           :class "ds-btn-sm"
-                           :on-click #(rf/dispatch [:app.template.frontend.events.onboarding/dismiss])}
-                  (t :onboarding/banner-dismiss)))))))
       ;; Header
       ($ :header {:class "bg-white border-b border-slate-200"}
         ($ :div {:class "max-w-6xl mx-auto px-4 py-4 sm:py-6"}

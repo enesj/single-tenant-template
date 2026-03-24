@@ -441,11 +441,17 @@
             (throw (ex-info "Name is required"
                      {:type :validation-error
                       :errors {:name ["Workspace name cannot be blank"]}})))
-          (let [updated (tenant-svc/update-tenant! db tenant-id {:name new-name})]
+          (let [updated      (tenant-svc/update-tenant! db tenant-id {:name new-name})
+                existing     (or (:session req) {})
+                auth-session (get existing :auth-session)
+                new-session  (when auth-session
+                               (assoc existing :auth-session
+                                 (assoc auth-session :tenant (sanitize updated))))]
             ;; Auto-complete name_workspace onboarding step
             (onboarding/try-complete-step! db (:id user) "owner" "name_workspace")
             (log/info "Updated tenant name" {:tenant-id tenant-id :name new-name})
-            (response/response {:success true :tenant (sanitize updated)})))))))
+            (cond-> (response/response {:success true :tenant (sanitize updated)})
+              new-session (assoc :session new-session))))))))
 
 (defn tenant-routes
   "Create tenant management routes. All protected by `wrap-user-auth`."

@@ -101,7 +101,12 @@
        ["/onboarding"
         {:name :onboarding
          :view :onboarding
-         :controllers (controllers/user-guarded-start :page/init-onboarding)}]]
+         :controllers (controllers/user-guarded-start :page/init-onboarding)}]
+
+       ["/management-guide"
+        {:name :management-guide
+         :view :management-guide
+         :controllers (controllers/user-guarded-start nil)}]]
       ;; Domain user routes from registry (decoupled from template)
       (domain-registry/all-user-routes)
       admin-routes/admin-routes)))

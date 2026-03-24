@@ -18,7 +18,7 @@
    "configure_categories" {:icon "tag"         :color "accent"    :link "/expense-categories"}
    "review_payer_types"   {:icon "credit-card" :color "accent"    :link "/payer-types"}
    "invite_members"       {:icon "user-plus"   :color "primary"   :link "/tenant/members"}
-   "management_intro"     {:icon "shield"      :color "secondary" :link "/dashboard"}
+   "management_intro"     {:icon "shield"      :color "secondary" :link "/management-guide"}
    "upload_first_receipt" {:icon "upload"      :color "primary"   :link "/expenses/upload"}
    "browse_intro"         {:icon "eye"         :color "accent"    :link "/expenses"}})
 

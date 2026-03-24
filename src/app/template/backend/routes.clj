@@ -125,6 +125,7 @@
          ["/tenant/impersonation" {:get {:handler render-page}}]
          ["/invitation/accept" {:get {:handler render-page}}]
          ["/onboarding" {:get {:handler render-page}}]
+         ["/management-guide" {:get {:handler render-page}}]
 
          ;; Tenant-slug URL prefix — cosmetic only, session is source of truth
          ["/t/:slug/*path" {:get {:handler render-page}}]

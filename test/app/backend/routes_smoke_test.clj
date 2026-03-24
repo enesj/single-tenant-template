@@ -104,3 +104,15 @@
       (is (= [[:public db-adapter]
               [:protected db-adapter]]
             @captured)))))
+
+(deftest webserver-close-releases-port-for-immediate-rebind
+  (with-redefs [admin-api/admin-api-routes (fn [_ _] ["/admin/api" {:get {:handler (constantly {:status 200})}}])
+                admin-dashboard/get-dashboard-stats (fn [_] {:total-admins 0})
+                login-monitoring/count-recent-login-events (fn [_ _] 0)]
+    (let [port (with-open [socket (java.net.ServerSocket. 0)]
+                 (.getLocalPort socket))
+          service-container (stub-service-container)]
+      (with-open [_ws-1 (webserver/create-webserver "127.0.0.1" port {} service-container)]
+        (is (pos? port)))
+      (with-open [_ws-2 (webserver/create-webserver "127.0.0.1" port {} service-container)]
+        (is true "Port should be immediately reusable after server shutdown")))))

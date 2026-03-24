@@ -155,11 +155,18 @@
                 ($ :div {:class "divider my-6"}
                   ($ :div {:class "divider-text"} (t :common/or)))
 
-                ;; Google OAuth button
+                ;; Google OAuth button — preserve return URL through OAuth flow
                 ($ button {:btn-type :outline
                            :class "ds-btn-lg w-full"
                            :id "login-google-btn"
-                           :on-click #(set! (.-href js/window.location) "/login/google")}
+                           :on-click #(let [return-param (when (and (exists? js/window) (exists? js/URLSearchParams))
+                                                           (-> js/window .-location .-search
+                                                             (js/URLSearchParams.)
+                                                             (.get "return")))]
+                                        (set! (.-href js/window.location)
+                                          (if (seq return-param)
+                                            (str "/login/google?return=" (js/encodeURIComponent return-param))
+                                            "/login/google")))}
                   ($ google-icon)
                   (t :login/continue-google))
 

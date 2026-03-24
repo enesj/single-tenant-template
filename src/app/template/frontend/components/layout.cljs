@@ -1,6 +1,7 @@
 (ns app.template.frontend.components.layout
   (:require
     [app.template.frontend.components.auth :refer [auth-component]]
+    [app.template.frontend.components.button :refer [button]]
     [app.template.frontend.components.icons :refer [admins-icon
                                                     arrow-up
                                                     article-aliases-icon
@@ -9,6 +10,7 @@
                                                     dashboard-icon
                                                     expense-items-icon
                                                     expenses-icon
+                                                    guide-icon
                                                     logout-icon
 
                                                     payers-icon
@@ -20,6 +22,7 @@
     [app.template.frontend.components.settings.global-settings :refer [settings-panel]]
     [app.template.frontend.components.sidebar :refer [sidebar]]
     [app.template.frontend.events.i18n :as i18n]
+    [app.template.frontend.events.onboarding :as onboarding]
     [app.template.frontend.events.tenant :as tenant]
     [app.template.frontend.i18n :refer [use-t]]
     [re-frame.core :as rf]
@@ -285,6 +288,13 @@
                                           :badge (str (:completed onboarding-summary 0)
                                                    "/" (:total onboarding-summary 0))})])
                             (when power-user?
+                              [(nav-item {:id "user-sidebar-management-guide"
+                                          :label (t :nav/management-guide)
+                                          :href (th "/management-guide")
+                                          :route :management-guide
+                                          :icon ($ guide-icon {:class "w-6 h-6"})
+                                          :active? (active? #{:management-guide})})])
+                            (when power-user?
                               [(nav-item {:id "user-sidebar-members"
                                           :label (t :nav/members)
                                           :href (th "/tenant/members")
@@ -332,6 +342,32 @@
       ($ :div {:class "flex-none flex items-center"}
         ($ settings-panel {:global-settings? true})))))
 
+(defui onboarding-banner []
+  (let [t (use-t)
+        onboarding-active? (use-subscribe [:onboarding/active?])
+        onboarding-summary (use-subscribe [:onboarding/summary])
+        current-route (use-subscribe [:current-route])
+        route-name (or (get-in current-route [:data :name]) (:name current-route))]
+    (when (and onboarding-active?
+            (not (:redirect-to-onboarding? onboarding-summary))
+            (not= route-name :onboarding))
+      ($ :div {:class "bg-primary/10 border-b border-primary/20 px-4 py-3"}
+        ($ :div {:class "max-w-6xl mx-auto flex items-center justify-between"}
+          ($ :div {:class "flex items-center gap-3"}
+            ($ :span {:class "text-sm font-medium text-primary"}
+              (t :onboarding/banner-title))
+            ($ :span {:class "text-xs text-primary/70"}
+              (str (:completed onboarding-summary 0) "/" (:total onboarding-summary 0))))
+          ($ :div {:class "flex items-center gap-2"}
+            ($ button {:btn-type :primary
+                       :class "ds-btn-sm"
+                       :on-click #(rf/dispatch [:navigate-to "/onboarding"])}
+              (t :onboarding/sidebar-label))
+            ($ button {:btn-type :ghost
+                       :class "ds-btn-sm"
+                       :on-click #(rf/dispatch [::onboarding/dismiss])}
+              (t :onboarding/banner-dismiss))))))))
+
 (defui user-layout
   [{:keys [children]}]
   (let [[sidebar-open? set-sidebar-open!] (use-state true)]
@@ -339,5 +375,6 @@
       ($ user-sidebar {:open? sidebar-open?})
       ($ :div {:class "flex flex-col w-0 flex-1 overflow-hidden"}
         ($ user-header {:on-toggle-sidebar #(set-sidebar-open! (not sidebar-open?))})
+        ($ onboarding-banner)
         ($ :main {:class "flex-1 relative overflow-y-auto focus:outline-none bg-base-100"}
           children)))))
