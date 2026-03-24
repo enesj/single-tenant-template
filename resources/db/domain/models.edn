@@ -172,6 +172,7 @@
                      [:original_filename [:varchar 255]]
                      [:content_type [:varchar 100]]
                      [:file_size :integer]
+                     [:file_purged_at :timestamptz]
                      [:status [:enum :receipt-status] {:null false :default "uploaded"}]
 
                      [:raw_extract_json :jsonb]

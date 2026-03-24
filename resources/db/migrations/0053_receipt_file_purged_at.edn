@@ -1,0 +1,84 @@
+({:action :create-table,
+  :model-name :onboarding_progress,
+  :fields
+  {:id {:primary-key true, :type :uuid},
+   :user-id
+   {:foreign-key :users/id,
+    :null false,
+    :on-delete :cascade,
+    :type :uuid},
+   :role {:null false, :type [:enum :membership-role]},
+   :dismissed {:null false, :default false, :type :boolean},
+   :created-at {:default [:now], :type :timestamptz},
+   :updated-at {:default [:now], :type :timestamptz}}}
+ {:action :create-index,
+  :index-name :uniq-onboarding-progress-user-role,
+  :model-name :onboarding_progress,
+  :options {:fields [:user_id :role], :unique true, :type :btree}}
+ {:action :create-type,
+  :type-name :onboarding-step-status,
+  :model-name :onboarding_progress,
+  :options {:choices ["pending" "completed" "skipped"], :type :enum}}
+ {:action :create-type,
+  :type-name :onboarding-step-kind,
+  :model-name :onboarding_progress,
+  :options
+  {:choices
+   ["name_workspace"
+    "setup_profile"
+    "configure_categories"
+    "review_payer_types"
+    "invite_members"
+    "management_intro"
+    "upload_first_receipt"
+    "browse_intro"],
+   :type :enum}}
+ {:action :create-table,
+  :model-name :onboarding_steps,
+  :fields
+  {:id {:primary-key true, :type :uuid},
+   :progress-id
+   {:foreign-key :onboarding_progress/id,
+    :null false,
+    :on-delete :cascade,
+    :type :uuid},
+   :kind {:null false, :type [:enum :onboarding-step-kind]},
+   :step-order {:null false, :type :integer},
+   :status
+   {:null false,
+    :default "pending",
+    :type [:enum :onboarding-step-status]},
+   :completed-at {:type :timestamptz},
+   :created-at {:default [:now], :type :timestamptz},
+   :updated-at {:default [:now], :type :timestamptz}}}
+ {:action :create-index,
+  :index-name :idx-onboarding-steps-status,
+  :model-name :onboarding_steps,
+  :options {:fields [:status], :type :btree}}
+ {:action :create-index,
+  :index-name :uniq-onboarding-steps-progress-kind,
+  :model-name :onboarding_steps,
+  :options {:fields [:progress_id :kind], :unique true, :type :btree}}
+ {:action :create-index,
+  :index-name :idx-onboarding-progress-user,
+  :model-name :onboarding_progress,
+  :options {:fields [:user_id], :type :btree}}
+ {:action :create-index,
+  :index-name :idx-onboarding-steps-progress,
+  :model-name :onboarding_steps,
+  :options {:fields [:progress_id], :type :btree}}
+ {:action :add-column,
+  :field-name :file-purged-at,
+  :model-name :receipts,
+  :options {:type :timestamptz}}
+ {:action :alter-type,
+  :type-name :audit-actor-type,
+  :model-name :users,
+  :options {:choices ["user" "admin" "system"], :type :enum},
+  :changes
+  {:choices {:from ["user" "admin"], :to ["user" "admin" "system"]}}}
+ {:action :alter-column,
+  :field-name :actor-id,
+  :model-name :audit_logs,
+  :options {:type :uuid},
+  :changes {:null {:from false, :to :EMPTY}}})

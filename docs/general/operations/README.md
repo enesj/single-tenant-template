@@ -40,6 +40,10 @@ Quick guide for configuring and running the template locally. Defaults match `co
   - Select workflow with `RECEIPT_OCR_WORKFLOW=mistral|llamaparse`
   - `mistral` requires `MISTRAL_API_KEY`
   - `llamaparse` requires `LLAMA_CLOUD_API_KEY`
+- Receipt file janitor (optional): `bb receipt-file-janitor dev --dry-run`
+  - Purges receipt binaries only for receipts that are already `posted`, linked to a real expense row, older than the retention window, and not yet marked with `file_purged_at`
+  - Also deletes orphaned files under `upload/stripes` that are no longer referenced by any `receipts.storage_key`
+  - Production recommendation: run once daily via platform scheduler, e.g. `bb receipt-file-janitor prod --older-than-days 60`
 - Frontend config checks (fast):
   - `bb validate-frontend-config`
   - `bb config-audit --strict`

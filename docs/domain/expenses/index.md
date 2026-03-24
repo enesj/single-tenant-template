@@ -340,6 +340,15 @@ Notes:
     - Requires `CEREBRAS_API_KEY` to be configured; if missing, refine is skipped.
     - Implementation details: `CEREBRAS-INFERENCE-DOCS.md`.
 
+### Receipt File Janitor
+
+- Dry-run locally: `bb receipt-file-janitor dev --dry-run`
+- Run once: `bb receipt-file-janitor dev --older-than-days 60`
+- Optional loop mode: `bb receipt-file-janitor dev --loop --sleep-seconds 86400`
+- Intended production mode: one scheduled run per day, not an interactive/manual shell habit
+- Safety rule: only purge files for receipts already `posted`, linked to an actual expense row, older than the retention window, and not previously marked with `file_purged_at`
+- Also removes orphaned files in `upload/stripes` that are no longer referenced by `receipts.storage_key`
+
 ### POS integration: auto-matching + unmapped items
 
 When POS receipts produce item labels that don’t match your canonical article names, the domain provides a workflow to reduce manual mapping:

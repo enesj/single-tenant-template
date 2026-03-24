@@ -82,27 +82,34 @@
     [:cast status :receipt_status]))
 
 (defn resolve-local-receipt-file
-  "Return a java.io.File for a local receipt storage key (relative to `upload/stripes/`).
+  "Return a java.io.File for a local receipt storage key.
+
+  Arity:
+  - ([storage-key]) resolves relative to the default `upload/stripes/` base dir.
+  - ([storage-base-dir storage-key]) resolves relative to the supplied base dir.
 
   Returns nil when:
   - storage-key is blank
   - the resolved file does not exist
 
   Throws ex-info with :status 400 when the path is unsafe (escapes base dir)."
-  [storage-key]
-  (let [k (some-> storage-key str/trim not-empty)]
-    (when k
-      (try
-        (let [base-path (.toPath local-receipt-storage-base-dir)
-              resolved (.normalize (.resolve base-path k))]
-          (when-not (.startsWith resolved base-path)
-            (throw (ex-info "Unsafe storage_key path" {:status 400 :storage_key k})))
-          (let [f (.toFile resolved)]
-            (when (.exists f) f)))
-        (catch clojure.lang.ExceptionInfo e
-          (throw (ex-info (ex-message e)
-                   (assoc (ex-data e) :status 400)
-                   e)))))))
+  ([storage-key]
+   (resolve-local-receipt-file local-receipt-storage-base-dir storage-key))
+  ([storage-base-dir storage-key]
+   (let [k (some-> storage-key str/trim not-empty)]
+     (when k
+       (try
+         (let [base-dir (io/file storage-base-dir)
+               base-path (.toPath base-dir)
+               resolved (.normalize (.resolve base-path k))]
+           (when-not (.startsWith resolved base-path)
+             (throw (ex-info "Unsafe storage_key path" {:status 400 :storage_key k})))
+           (let [f (.toFile resolved)]
+             (when (.exists f) f)))
+         (catch clojure.lang.ExceptionInfo e
+           (throw (ex-info (ex-message e)
+                    (assoc (ex-data e) :status 400)
+                    e))))))))
 
 (defn delete-receipt-file!
   "Delete the receipt file from disk if it exists.
