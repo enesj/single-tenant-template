@@ -13,14 +13,14 @@
 ;; ============================================================================
 
 (def step-config
-  {"name_workspace"       {:icon "building"    :color "primary"}
-   "setup_profile"        {:icon "user"        :color "secondary"}
-   "configure_categories" {:icon "tag"         :color "accent"}
-   "review_payer_types"   {:icon "credit-card" :color "accent"}
-   "invite_members"       {:icon "user-plus"   :color "primary"}
-   "management_intro"     {:icon "shield"      :color "secondary"}
-   "upload_first_receipt" {:icon "upload"      :color "primary"}
-   "browse_intro"         {:icon "eye"         :color "accent"}})
+  {"name_workspace"       {:icon "building"    :color "primary"   :link "/tenant/members"}
+   "setup_profile"        {:icon "user"        :color "secondary" :link "/profile"}
+   "configure_categories" {:icon "tag"         :color "accent"    :link "/expense-categories"}
+   "review_payer_types"   {:icon "credit-card" :color "accent"    :link "/payer-types"}
+   "invite_members"       {:icon "user-plus"   :color "primary"   :link "/tenant/members"}
+   "management_intro"     {:icon "shield"      :color "secondary" :link "/dashboard"}
+   "upload_first_receipt" {:icon "upload"      :color "primary"   :link "/expenses/upload"}
+   "browse_intro"         {:icon "eye"         :color "accent"    :link "/expenses"}})
 
 ;; ============================================================================
 ;; Step Icons (inline SVG)
@@ -100,6 +100,7 @@
         skipped? (= status "skipped")
         pending? (= status "pending")
         loading? (= step-loading? kind)
+        {:keys [link]} (get step-config kind)
         step-title-key (keyword "onboarding" (str "step-" kind))
         step-desc-key (keyword "onboarding" (str "step-" kind "-desc"))]
     ($ :div {:class (str "ds-card ds-card-compact bg-base-100 shadow-sm border "
@@ -128,6 +129,10 @@
         ;; Actions
         (when pending?
           ($ :div {:class "flex items-center gap-2 flex-shrink-0"}
+            (when link
+              ($ button {:class "ds-btn ds-btn-outline ds-btn-primary ds-btn-sm"
+                         :on-click #(rf/dispatch [:navigate-to link])}
+                (t :onboarding/go-to-step)))
             ($ button {:class "ds-btn ds-btn-primary ds-btn-sm"
                        :disabled loading?
                        :on-click #(on-complete kind)}

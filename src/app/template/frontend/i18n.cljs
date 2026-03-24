@@ -424,6 +424,7 @@
     :onboarding/welcome             "Dobrodošli u vaš radni prostor"
     :onboarding/workspace-intro     (fn [{:keys [name]}] (str "Postavite " name " u nekoliko koraka"))
     :onboarding/mark-done           "Gotovo"
+    :onboarding/go-to-step          "Otvori"
     :onboarding/skip                "Preskoči"
     :onboarding/skip-all            "Preskoči sve"
     :onboarding/finish              "Završi postavljanje"
@@ -1520,6 +1521,7 @@
     :onboarding/welcome             "Welcome to your workspace"
     :onboarding/workspace-intro     (fn [{:keys [name]}] (str "Set up " name " in a few steps"))
     :onboarding/mark-done           "Done"
+    :onboarding/go-to-step          "Open"
     :onboarding/skip                "Skip"
     :onboarding/skip-all            "Skip all"
     :onboarding/finish              "Finish setup"
