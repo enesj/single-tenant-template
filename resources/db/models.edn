@@ -575,7 +575,9 @@
    [:expense_id
     :uuid
     {:foreign-key :expenses/id, :null false, :on-delete :cascade}]
-   [:alias_id :uuid {:foreign-key :article_aliases/id}]
+   [:alias_id
+    :uuid
+    {:foreign-key :article_aliases/id, :on-delete :set-null}]
    [:article_id
     :uuid
     {:foreign-key :articles/id, :on-delete :set-null}]

@@ -201,7 +201,6 @@
    :default-order-by "raw_label"
    :required-fields [:supplier-id :raw-label :raw-label-normalized]
    :has-search? false
-   :route-middleware [(fn [handler] (impersonation-mw/wrap-require-impersonation handler))]
    :filter-params {:supplier-id :uuid
                    :raw-label :string
                    :article-id :uuid}
@@ -223,7 +222,6 @@
    :default-order-by "raw_label"
    :required-fields [:raw-label :raw-label-normalized]
    :has-search? false
-   :route-middleware [(fn [handler] (impersonation-mw/wrap-require-impersonation handler))]
    :filter-params {:supplier-id :uuid
                    :unmapped-only :boolean
                    :search :string}
@@ -250,7 +248,6 @@
    :default-order-by "raw_label"
    :required-fields [:raw-label :raw-label-normalized]
    :has-search? false
-   :route-middleware [(fn [handler] (impersonation-mw/wrap-require-impersonation handler))]
    :filter-params [:search]
 
    ;; Allow clients to omit raw-label-normalized; compute it server-side.

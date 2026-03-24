@@ -1,0 +1,8 @@
+({:action :alter-column,
+  :field-name :alias-id,
+  :model-name :expense_items,
+  :options
+  {:foreign-key :article_aliases/id,
+   :on-delete :set-null,
+   :type :uuid},
+  :changes {:on-delete {:from :EMPTY, :to :set-null}}})

@@ -822,7 +822,7 @@
   :type-name :backlog-status,
   :model-name :backlog,
   :options
-  {:choices ["Waiting" "In progres" "Completed" "Need improvments"],
+  {:choices ["Waiting" "In progress" "Completed" "Need improvements"],
    :type :enum}}
  {:action :create-index,
   :index-name :idx-password-reset-tokens-principal,
@@ -832,7 +832,7 @@
   :type-name :backlog-type,
   :model-name :backlog,
   :options
-  {:choices ["Issue" "Feature" "Refactoring" "Review" "Improvment"],
+  {:choices ["Issue" "Feature" "Refactoring" "Review" "Improvement"],
    :type :enum}}
  {:action :create-table,
   :model-name :backlog,
