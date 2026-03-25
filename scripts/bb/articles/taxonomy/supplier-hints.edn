@@ -1,0 +1,6 @@
+;; Supplier display_name regex patterns → default category
+[["(?i)apoteka|pharmacy|ljekarna"       "Zdravlje i apoteka"]
+ ["(?i)mesnica|mesar"                    "Meso, morski plodovi i delikatesi"]
+ ["(?i)pekara|bakery"                    "Pekara i deserti"]
+ ["(?i)cevab|fast.?food|kafic|caffe|cafe|bistro|pizzeria|grill|slasticarna|restoran|konoba"
+  "Pekara i deserti"]]

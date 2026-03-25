@@ -1,0 +1,8 @@
+;; Set of Bosnian meat-related keywords.
+;; These trigger category "Meso, morski plodovi i delikatesi" / "Svježe meso".
+;; NOTE: "pasteta" and "virsla" are excluded — they are mesne prerađevine, not svježe meso.
+#{"juneci" "juneca" "teleci" "teleca" "pileci" "pileca"
+  "svinjski" "svinjska" "janjetina" "jagnjetina" "govedina"
+  "prsa" "but" "vrat" "plecka" "rebra" "ramstek"
+  "filea" "bubreg" "jetra" "fasirano"
+  "kobasica" "hrenovka" "sudzuk" "kulen" "salama" "sunka"}

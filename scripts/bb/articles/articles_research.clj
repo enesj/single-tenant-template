@@ -129,122 +129,45 @@
 ;; Local heuristic resolution
 ;; ============================================================
 
+(def ^:private taxonomy-dir "scripts/bb/articles/taxonomy")
+
+(defn- load-taxonomy
+  "Load an EDN taxonomy file from the taxonomy directory. Returns nil if missing."
+  [filename]
+  (let [f (io/file taxonomy-dir filename)]
+    (when (.exists f)
+      (edn/read-string (slurp f)))))
+
+(defn- save-taxonomy!
+  "Write an EDN value back to a taxonomy file."
+  [filename data]
+  (spit (io/file taxonomy-dir filename)
+    (with-out-str (pprint/pprint data))))
+
 ;; Supplier display_name patterns → default category
 (def ^:private supplier-hints
-  [["(?i)apoteka|pharmacy|ljekarna"       "Zdravlje i apoteka"]
-   ["(?i)mesnica|mesar"                    "Meso, morski plodovi i delikatesi"]
-   ["(?i)pekara|bakery"                    "Pekara i deserti"]
-   ["(?i)cevab|fast.?food|kafic|caffe|cafe|bistro|pizzeria|grill|slasticarna|restoran|konoba"
-    "Pekara i deserti"]])
+  (or (load-taxonomy "supplier-hints.edn")
+    [["(?i)apoteka|pharmacy|ljekarna"       "Zdravlje i apoteka"]
+     ["(?i)mesnica|mesar"                    "Meso, morski plodovi i delikatesi"]
+     ["(?i)pekara|bakery"                    "Pekara i deserti"]
+     ["(?i)cevab|fast.?food|kafic|caffe|cafe|bistro|pizzeria|grill|slasticarna|restoran|konoba"
+      "Pekara i deserti"]]))
 
 ;; Brand prefix → [manufacturer-name category-name subcategory-or-nil]
 (def ^:private brand-rules
-  [;; Beverages
-   ["(?i)^coca.?cola"              "The Coca-Cola Company"  "Pakovana hrana i pića"         "Bezalkoholna pića"]
-   ["(?i)^fanta\\b"                "The Coca-Cola Company"  "Pakovana hrana i pića"         "Bezalkoholna pića"]
-   ["(?i)^sprite\\b"               "The Coca-Cola Company"  "Pakovana hrana i pića"         "Bezalkoholna pića"]
-   ["(?i)^schweppes\\b"            "The Coca-Cola Company"  "Pakovana hrana i pića"         "Bezalkoholna pića"]
-   ["(?i)^pepsi\\b"                "PepsiCo"                "Pakovana hrana i pića"         "Bezalkoholna pića"]
-   ["(?i)^7.?up\\b"                "PepsiCo"                "Pakovana hrana i pića"         "Bezalkoholna pića"]
-   ;; Snacks
-   ["(?i)^chipsy\\b"               "Marbo Product"          "Pakovana hrana i pića"         "Grickalice"]
-   ["(?i)^smoki\\b"                "Štark"                  "Pakovana hrana i pića"         "Grickalice"]
-   ;; Tobacco
-   ["(?i)^(cig\\s+)?dunhill\\b"    nil                      "Duhan i duvanski proizvodi"    "Opste"]
-   ["(?i)^(cig\\s+)?marlboro\\b"   nil                      "Duhan i duvanski proizvodi"    "Opste"]
-   ["(?i)^(cig\\s+)?lucky.?str"    nil                      "Duhan i duvanski proizvodi"    "Opste"]
-   ["(?i)^(cig\\s+)?winston\\b"    nil                      "Duhan i duvanski proizvodi"    "Opste"]
-   ["(?i)^(cig\\s+)?camel\\b"      nil                      "Duhan i duvanski proizvodi"    "Opste"]
-   ;; Personal care
-   ["(?i)^nivea\\b"                "Beiersdorf"             "Lična njega"                   nil]
-   ["(?i)^balea\\b"                "dm"                     "Lična njega"                   nil]
-   ["(?i)^dove\\b"                 "Unilever"               "Lična njega"                   nil]
-   ["(?i)^palmolive\\b"            "Colgate-Palmolive"      "Lična njega"                   nil]
-   ;; Dairy / regional
-   ["(?i)^meggle\\b"               "Meggle"                 "Mliječni proizvodi i jaja"     nil]
-   ["(?i)^dukat\\b"                "Dukat"                  "Mliječni proizvodi i jaja"     nil]
-   ["(?i)^alpsko\\b"               "Ljubljanske Mlekarne"   "Mliječni proizvodi i jaja"     "Mlijeko"]
-   ["(?i)^milka\\b"                "Mondelēz"               "Pakovana hrana i pića"         "Slatkiši"]
-   ;; Coffee
-   ["(?i)^nescafe\\b"              "Nestlé"                 "Pakovana hrana i pića"         "Kafa"]
-   ["(?i)^grand\\b.*kafa"          "Grand"                  "Pakovana hrana i pića"         "Kafa"]
-   ;; Cleaning
-   ["(?i)^fairy\\b"                "Procter & Gamble"       "Sredstva za čišćenje"          "Sredstvo za suđe"]
-   ["(?i)^pur\\b"                  "Henkel"                 "Sredstva za čišćenje"          "Sredstvo za suđe"]
-   ;; Paper
-   ["(?i)^zewa\\b"                 "Essity"                 "Papirna galanterija"           nil]
-   ;; Additional dairy / regional
-   ["(?i)^milkos\\b"               "Milkos"                 "Mliječni proizvodi i jaja"     nil]
-   ["(?i)^vindija\\b"              "Vindija"                "Mliječni proizvodi i jaja"     nil]
-   ["(?i)^zbregov\\b"              "Vindija"                "Mliječni proizvodi i jaja"     "Mlijeko"]
-   ["(?i)^president\\b"            "Lactalis"               "Mliječni proizvodi i jaja"     nil]
-   ;; Coffee
-   ["(?i)zlatna.?d[zž]ezva"        "Vispak"                 "Pakovana hrana i pića"         "Kafa"]
-   ["(?i)^vispak\\b"               "Vispak"                 "Pakovana hrana i pića"         "Kafa"]
-   ["(?i)^doncafe\\b"              "Strauss"                "Pakovana hrana i pića"         "Kafa"]
-   ;; Condiments / oil / food
-   ["(?i)^zvijezda\\b"             "Podravka"               "Pakovana hrana i pića"         "Ulje"]
-   ["(?i)^podravka\\b"             "Podravka"               "Pakovana hrana i pića"         nil]
-   ["(?i)^dolcela\\b"              "Podravka"               "Pakovana hrana i pića"         "Slatkiši"]
-   ["(?i)^vegeta\\b"               "Podravka"               "Pakovana hrana i pića"         "Začini"]
-   ["(?i)^lino\\b"                 "Podravka"               "Pakovana hrana i pića"         "Dječja hrana"]
-   ;; Pâté / spreads
-   ["(?i)^argeta\\b"               "Atlantic Grupa"         "Pakovana hrana i pića"         "Paštete"]
-   ["(?i)^linolada\\b"             "Podravka"               "Pakovana hrana i pića"         "Slatkiši"]
-   ;; Personal care (additional)
-   ["(?i)^alverde\\b"              "dm"                     "Lična njega"                   nil]
-   ["(?i)^head.?shoulders"         "Procter & Gamble"       "Lična njega"                   "Šampon"]
-   ["(?i)^always\\b"               "Procter & Gamble"       "Lična njega"                   nil]
-   ["(?i)^colgate\\b"              "Colgate-Palmolive"      "Lična njega"                   "Oralna higijena"]
-   ["(?i)^oral.?b\\b"              "Procter & Gamble"       "Lična njega"                   "Oralna higijena"]
-   ;; Cleaning (additional)
-   ["(?i)^domestos\\b"             "Unilever"               "Sredstva za čišćenje"          nil]
-   ["(?i)^ajax\\b"                 "Colgate-Palmolive"      "Sredstva za čišćenje"          nil]
-   ["(?i)^persil\\b"               "Henkel"                 "Sredstva za čišćenje"          "Deterdžent"]
-   ["(?i)^ariel\\b"                "Procter & Gamble"       "Sredstva za čišćenje"          "Deterdžent"]
-   ["(?i)^lenor\\b"                "Procter & Gamble"       "Sredstva za čišćenje"          "Omekšivač"]
-   ;; Sweets / confectionery
-   ["(?i)^kinder\\b"               "Ferrero"                "Pakovana hrana i pića"         "Slatkiši"]
-   ["(?i)^ferrero\\b"              "Ferrero"                "Pakovana hrana i pića"         "Slatkiši"]
-   ["(?i)^nutella\\b"              "Ferrero"                "Pakovana hrana i pića"         "Slatkiši"]
-   ["(?i)^haribo\\b"               "Haribo"                 "Pakovana hrana i pića"         "Slatkiši"]
-   ["(?i)^dorina\\b"               "Kraš"                   "Pakovana hrana i pića"         "Slatkiši"]
-   ["(?i)^kras\\b"                 "Kraš"                   "Pakovana hrana i pića"         "Slatkiši"]
-   ["(?i)^stark\\b"                "Štark"                  "Pakovana hrana i pića"         "Slatkiši"]
-   ;; Cereal / breakfast
-   ["(?i)^nesquik\\b"              "Nestlé"                 "Pakovana hrana i pića"         "Žitarice"]])
+  (or (load-taxonomy "brand-rules.edn")
+    [["(?i)^coca.?cola" "The Coca-Cola Company" "Pakovana hrana i pića" "Bezalkoholna pića"]]))
 
 ;; Product keyword → [category subcategory]
 (def ^:private keyword-category-hints
-  {"mlijeko"   ["Mliječni proizvodi i jaja"          "Mlijeko"]
-   "jogurt"    ["Mliječni proizvodi i jaja"          "Jogurt"]
-   "sir"       ["Mliječni proizvodi i jaja"          "Sir"]
-   "kajmak"    ["Mliječni proizvodi i jaja"          "Kajmak"]
-   "vrhnje"    ["Mliječni proizvodi i jaja"          "Vrhnje"]
-   "kafa"      ["Pakovana hrana i pića"              "Kafa"]
-   "caj"       ["Pakovana hrana i pića"              "Čaj"]
-   "hljeb"     ["Pekara i deserti"                   "Hljeb"]
-   "pecivo"    ["Pekara i deserti"                   "Pecivo"]
-   "burek"     ["Pekara i deserti"                   "Pecivo"]
-   "kesa"      ["Jednokratno posuđe i pakovanje"     "Kese"]
-   "tregerice" ["Jednokratno posuđe i pakovanje"     "Kese"]
-   "secer"     ["Pakovana hrana i pića"              "Opste"]
-   "ulje"      ["Pakovana hrana i pića"              "Ulje"]
-   "brasno"    ["Pakovana hrana i pića"              "Opste"]
-   "sol"       ["Pakovana hrana i pića"              "Opste"]
-   "tablete"   ["Zdravlje i apoteka"                 "Opste"]
-   "kapsule"   ["Zdravlje i apoteka"                 "Opste"]
-   "krema"     ["Lična njega"                        "Opste"]
-   "sampon"    ["Lična njega"                        "Opste"]})
+  (or (load-taxonomy "keyword-category-hints.edn")
+    {"mlijeko" ["Mliječni proizvodi i jaja" "Mlijeko"]
+     "kafa"    ["Pakovana hrana i pića"     "Kafa"]}))
 
 ;; Bosnian meat-related keywords
 (def ^:private meat-words
-  #{"juneci" "juneca" "teleci" "teleca" "pileci" "pileca"
-    "svinjski" "svinjska" "janjetina" "jagnjetina" "govedina"
-    "prsa" "but" "vrat" "plecka" "rebra" "ramstek"
-    "filea" "bubreg" "jetra" "fasirano"
-    "kobasica" "hrenovka" "sudzuk" "kulen" "salama" "sunka"
-    "pasteta" "virsla"})
+  (or (load-taxonomy "meat-words.edn")
+    #{"juneci" "teleci" "pileci" "govedina" "sunka" "salama"}))
 
 (defn- strip-diacritics [s]
   (-> (Normalizer/normalize (str s) Normalizer$Form/NFD)
@@ -277,14 +200,18 @@
 (defn- match-keywords [raw-label]
   (let [words (label-words-ascii raw-label)]
     (when words
-      ;; Check meat words first
-      (if (some meat-words words)
-        {:category "Meso, morski plodovi i delikatesi" :subcategory "Svježe meso" :source :keyword-meat}
-        ;; Then check keyword hints
-        (some (fn [w]
-                (when-let [[cat subcat] (get keyword-category-hints w)]
-                  {:category cat :subcategory subcat :source :keyword-hint}))
-          words)))))
+      (let [coffee-context? (some #{"barista" "intenso" "espresso" "dolce" "lungo" "kafa" "nescafe"} words)]
+        ;; Check meat words first
+        (if (some meat-words words)
+          {:category "Meso, morski plodovi i delikatesi" :subcategory "Svježe meso" :source :keyword-meat}
+          ;; Then check keyword hints, with kapsule context-awareness
+          (some (fn [w]
+                  (when-let [[cat subcat] (get keyword-category-hints w)]
+                    ;; "kapsule" in coffee context → Kafa, not pharmacy
+                    (if (and (= w "kapsule") coffee-context?)
+                      {:category "Pakovana hrana i pića" :subcategory "Kafa" :source :keyword-hint}
+                      {:category cat :subcategory subcat :source :keyword-hint})))
+            words))))))
 
 (defn- build-canonical-name
   "Build a reasonable canonical name from a raw OCR label.
@@ -364,7 +291,7 @@
   [groups db-category-names subcategory-map]
   (let [cat-list (str/join ", " db-category-names)
         taxonomy-text (when (seq subcategory-map)
-                        (str "\n\nExisting category → subcategory taxonomy (prefer these existing subcategories):\n"
+                        (str "\n\nExisting category → subcategory taxonomy. You MUST pick a subcategory from this list when one fits. Only create a new Bosnian subcategory if absolutely none of the existing ones are appropriate:\n"
                           (->> subcategory-map
                             (map (fn [[cat subcats]]
                                    (str "  " cat ": " (str/join ", " subcats))))
@@ -389,11 +316,13 @@
                "Rules:\n"
                "- Include size/weight/volume in name when present (e.g. \"Coca-Cola 1.25L\")\n"
                "- For unbranded items (loose meat, produce, bags), set mfr to null\n"
-               "- Pick an existing subcategory from the taxonomy above when possible\n"
-               "- If no existing subcategory fits, create a new descriptive one in Bosnian\n"
+               "- Set mfr to null when unsure of the brand — NEVER extract mfr from measurement suffixes (/KO, /KG, /pc), trailing OCR abbreviations, or short codes in the label\n"
+               "- You MUST pick an existing subcategory from the taxonomy above when one fits\n"
+               "- Only create a new subcategory if absolutely none of the existing ones match\n"
                "- All category and subcategory names MUST be in Bosnian (never English)\n"
                "- If unsure, use your best guess based on store context\n"
-               "- Never use \"General\" or \"Opšte\" as subcategory — be descriptive")
+               "- Never use \"General\" or \"Opšte\" as subcategory — be descriptive\n"
+               "- New subcategory names must be in Bosnian language")
      :user (str "Identify these products from Bosnian store receipts:\n" items-text)}))
 
 (defn- research-batch!
@@ -429,6 +358,44 @@
 ;; Category validation
 ;; ============================================================
 
+(defn- sanitize-manufacturer
+  "Reject OCR artifact manufacturer names. Returns cleaned name or nil."
+  [mfr-name]
+  (when mfr-name
+    (let [trimmed (str/trim mfr-name)]
+      (cond
+        (str/blank? trimmed) nil
+        (<= (count trimmed) 2) nil
+        ;; Starts with / (label suffix fragment)
+        (re-find #"^/" trimmed) nil
+        ;; Ends with unit suffix like /KO, /KG, /KOM, /pc, /L
+        (re-find #"(?i)/(ko|kg|kom|pc|l)$" trimmed) nil
+        ;; All-caps <= 4 chars with no vowels (OCR fragment)
+        (and (<= (count trimmed) 4)
+          (= trimmed (str/upper-case trimmed))
+          (not (re-find #"[aeiouAEIOU]" trimmed))) nil
+        :else trimmed))))
+
+(defn- sanitize-subcategory
+  "Try to match a subcategory against existing subcategories for a category.
+  Returns the best DB match, or the original if no match found."
+  [subcat-name cat-name subcategory-map]
+  (if-not (and subcat-name cat-name)
+    (or subcat-name "Opste")
+    (let [existing (get subcategory-map cat-name)
+          lower (str/lower-case subcat-name)]
+      (or
+        ;; Exact match
+        (some #(when (= subcat-name %) %) existing)
+        ;; Case-insensitive match
+        (some #(when (= lower (str/lower-case %)) %) existing)
+        ;; Substring match (subcat contained in existing, or vice versa)
+        (some #(when (or (str/includes? (str/lower-case %) lower)
+                       (str/includes? lower (str/lower-case %)))
+                 %) existing)
+        ;; No match — keep original (will create new subcategory)
+        subcat-name))))
+
 (defn- find-best-category
   "Match a category name against DB categories. Returns the DB name or the input."
   [cat-name db-category-names]
@@ -447,45 +414,9 @@
 ;; ============================================================
 
 (def ^:private english->bosnian-category
-  "Mapping of common English category names Perplexity might return to Bosnian equivalents."
-  {"Dairy"                            "Mliječni proizvodi i jaja"
-   "Dairy Products"                   "Mliječni proizvodi i jaja"
-   "Dairy & Eggs"                     "Mliječni proizvodi i jaja"
-   "Milk & Dairy"                     "Mliječni proizvodi i jaja"
-   "Beverages"                        "Pakovana hrana i pića"
-   "Drinks"                           "Pakovana hrana i pića"
-   "Food & Beverages"                 "Pakovana hrana i pića"
-   "Packaged Food"                    "Pakovana hrana i pića"
-   "Packaged Food & Drinks"           "Pakovana hrana i pića"
-   "Snacks"                           "Pakovana hrana i pića"
-   "Confectionery"                    "Pakovana hrana i pića"
-   "Sweets & Confectionery"           "Pakovana hrana i pića"
-   "Jams & Marmalades"                "Pakovana hrana i pića"
-   "Jams & Marmalades & Honey & Preserve" "Pakovana hrana i pića"
-   "Condiments"                       "Pakovana hrana i pića"
-   "Spices & Seasonings"              "Pakovana hrana i pića"
-   "Personal Care"                    "Lična njega"
-   "Health & Beauty"                  "Lična njega"
-   "Beauty & Personal Care"           "Lična njega"
-   "Hygiene"                          "Lična njega"
-   "Health & Pharmacy"                "Zdravlje i apoteka"
-   "Pharmacy"                         "Zdravlje i apoteka"
-   "Medicine"                         "Zdravlje i apoteka"
-   "Meat & Seafood"                   "Meso, morski plodovi i delikatesi"
-   "Meat"                             "Meso, morski plodovi i delikatesi"
-   "Bakery"                           "Pekara i deserti"
-   "Bakery & Pastry"                  "Pekara i deserti"
-   "Bread & Pastry"                   "Pekara i deserti"
-   "Tobacco"                          "Duhan i duvanski proizvodi"
-   "Tobacco Products"                 "Duhan i duvanski proizvodi"
-   "Cleaning"                         "Sredstva za čišćenje"
-   "Cleaning Products"                "Sredstva za čišćenje"
-   "Household"                        "Sredstva za čišćenje"
-   "Paper Products"                   "Papirna galanterija"
-   "Clothing"                         "Odjeća i modni dodaci"
-   "Fashion"                          "Odjeća i modni dodaci"
-   "Other"                            "Ostalo"
-   "Miscellaneous"                    "Ostalo"})
+  (or (load-taxonomy "english-bosnian-categories.edn")
+    {"Dairy" "Mliječni proizvodi i jaja"
+     "Other" "Ostalo"}))
 
 (defn- translate-category
   "If a category looks like English, try to map it to Bosnian. Returns best match."
@@ -537,6 +468,32 @@
 ;; ============================================================
 ;; Output generation
 ;; ============================================================
+
+(defn- learn-brand-rules!
+  "Scan Perplexity-resolved items for new brand patterns and append to brand-rules.edn.
+  Returns count of new rules learned."
+  [perplexity-results]
+  (let [existing-patterns (set (map first brand-rules))
+        new-rules (atom [])]
+    (doseq [{:keys [canonical-name manufacturer-name resolution]} perplexity-results
+            :when (and (= resolution :perplexity)
+                    manufacturer-name
+                    (sanitize-manufacturer manufacturer-name))]
+      (let [first-word (first (str/split (str/trim (or canonical-name "")) #"\s+"))
+            pattern (str "(?i)^" (java.util.regex.Pattern/quote (str/lower-case first-word)) "\\b")]
+        (when (and (not (str/blank? first-word))
+                (> (count first-word) 2)
+                (not (contains? existing-patterns pattern))
+                (not (some #(= (first %) pattern) @new-rules)))
+          (swap! new-rules conj
+            [pattern manufacturer-name
+             (:category-name (first (filter #(= (:canonical-name %) canonical-name) perplexity-results)))
+             nil]))))
+    (when (seq @new-rules)
+      (let [current (or (load-taxonomy "brand-rules.edn") [])
+            updated (vec (concat current @new-rules))]
+        (save-taxonomy! "brand-rules.edn" updated)))
+    (count @new-rules)))
 
 (defn- suggestion->article-edn
   [{:keys [canonical-name manufacturer-name category-name subcategory-name]}]
@@ -740,11 +697,20 @@
         successful (filterv #(not= :failed (:resolution %)) all-resolved)
         failed (filterv #(= :failed (:resolution %)) all-resolved)
 
-        ;; 8. Post-process: English→Bosnian translation + category validation
+        ;; 7b. Learning: append new brand discoveries from Perplexity to brand-rules.edn
+        learned-count (if (seq researched)
+                        (learn-brand-rules! researched)
+                        0)
+        _ (when (pos? learned-count)
+            (log "  " learned-count "new brand rules learned and saved to taxonomy"))
+
+        ;; 8. Post-process: sanitize manufacturers, translate categories, validate subcategories
         successful (mapv (fn [s]
                            (-> s
+                             (update :manufacturer-name sanitize-manufacturer)
                              (update :category-name translate-category db-category-names)
-                             (update :category-name find-best-category db-category-names)))
+                             (update :category-name find-best-category db-category-names)
+                             (#(update % :subcategory-name sanitize-subcategory (:category-name %) subcategory-map))))
                      successful)
 
         ;; 8b. Validate subcategories — warn about unknown ones
@@ -809,6 +775,7 @@
                          :mappings-suggested      (count all-mappings)
                          :near-duplicates         (count duplicates)
                          :new-subcategories       (count unknown-subcats)
+                         :brand-rules-learned     learned-count
                          :skip-research?          skip-research?}
                   (seq unknown-subcats)
                   (assoc :new-subcategory-list (mapv :subcategory unknown-subcats)))]

@@ -1,0 +1,199 @@
+[["(?i)^coca.?cola"
+  "The Coca-Cola Company"
+  "Pakovana hrana i pića"
+  "Bezalkoholna pića"]
+ ["(?i)^fanta\\b"
+  "The Coca-Cola Company"
+  "Pakovana hrana i pića"
+  "Bezalkoholna pića"]
+ ["(?i)^sprite\\b"
+  "The Coca-Cola Company"
+  "Pakovana hrana i pića"
+  "Bezalkoholna pića"]
+ ["(?i)^schweppes\\b"
+  "The Coca-Cola Company"
+  "Pakovana hrana i pića"
+  "Bezalkoholna pića"]
+ ["(?i)^pepsi\\b"
+  "PepsiCo"
+  "Pakovana hrana i pića"
+  "Bezalkoholna pića"]
+ ["(?i)^7.?up\\b"
+  "PepsiCo"
+  "Pakovana hrana i pića"
+  "Bezalkoholna pića"]
+ ["(?i)^chipsy\\b"
+  "Marbo Product"
+  "Pakovana hrana i pića"
+  "Grickalice"]
+ ["(?i)^smoki\\b" "Štark" "Pakovana hrana i pića" "Grickalice"]
+ ["(?i)^(cig[\\s.]\\s*)?dunhill\\b"
+  nil
+  "Duhan i duvanski proizvodi"
+  "Cigarete"]
+ ["(?i)^(cig\\s+)?marlboro\\b"
+  nil
+  "Duhan i duvanski proizvodi"
+  "Cigarete"]
+ ["(?i)^(cig\\s+)?lucky.?str"
+  nil
+  "Duhan i duvanski proizvodi"
+  "Cigarete"]
+ ["(?i)^(cig\\s+)?winston\\b"
+  nil
+  "Duhan i duvanski proizvodi"
+  "Cigarete"]
+ ["(?i)^(cig\\s+)?camel\\b"
+  nil
+  "Duhan i duvanski proizvodi"
+  "Cigarete"]
+ ["(?i)^cigarete\\b" nil "Duhan i duvanski proizvodi" "Cigarete"]
+ ["(?i)^cigare\\b" nil "Duhan i duvanski proizvodi" "Cigarete"]
+ ["(?i)^nivea\\b" "Beiersdorf" "Lična njega" nil]
+ ["(?i)^balea\\b" "dm" "Lična njega" nil]
+ ["(?i)^dove\\b" "Unilever" "Lična njega" "Dezodoransi"]
+ ["(?i)^palmolive\\b" "Colgate-Palmolive" "Lična njega" nil]
+ ["(?i)^maybelline\\b" "Maybelline" "Lična njega" "Šminka"]
+ ["(?i)^bourjois\\b" "Bourjois" "Lična njega" "Šminka"]
+ ["(?i)^sensodyne\\b" "GSK" "Lična njega" "Oralna higijena"]
+ ["(?i)^libresse\\b" "Essity" "Lična njega" "Higijenski ulošci"]
+ ["(?i)^syoss\\b" "Henkel" "Lična njega" "Boje za kosu"]
+ ["(?i)^meggle\\b" "Meggle" "Mliječni proizvodi i jaja" nil]
+ ["(?i)^dukat\\b" "Dukat" "Mliječni proizvodi i jaja" nil]
+ ["(?i)^alpsko\\b"
+  "Ljubljanske Mlekarne"
+  "Mliječni proizvodi i jaja"
+  "Mlijeko"]
+ ["(?i)^milka\\b" "Mondelēz" "Pakovana hrana i pića" "Slatkiši"]
+ ["(?i)^nescafe\\b" "Nestlé" "Pakovana hrana i pića" "Kafa"]
+ ["(?i)^grand\\b.*kafa" "Grand" "Pakovana hrana i pića" "Kafa"]
+ ["(?i)^marcaffe\\b" "Marcaffe" "Pakovana hrana i pića" "Kafa"]
+ ["(?i)^fairy\\b"
+  "Procter & Gamble"
+  "Sredstva za čišćenje"
+  "Sredstvo za suđe"]
+ ["(?i)^pur\\b" "Henkel" "Sredstva za čišćenje" "Sredstvo za suđe"]
+ ["(?i)(^|\\.)coccolino\\b"
+  "Unilever"
+  "Sredstva za čišćenje"
+  "Omekšivači za rublje"]
+ ["(?i)^zewa\\b" "Essity" "Papirna galanterija" nil]
+ ["(?i)^milkos\\b" "Milkos" "Mliječni proizvodi i jaja" nil]
+ ["(?i)^vindija\\b" "Vindija" "Mliječni proizvodi i jaja" nil]
+ ["(?i)^zbregov\\b" "Vindija" "Mliječni proizvodi i jaja" "Mlijeko"]
+ ["(?i)^president\\b" "Lactalis" "Mliječni proizvodi i jaja" nil]
+ ["(?i)zlatna.?d[zž]ezva" "Vispak" "Pakovana hrana i pića" "Kafa"]
+ ["(?i)^vispak\\b" "Vispak" "Pakovana hrana i pića" "Kafa"]
+ ["(?i)^doncafe\\b" "Strauss" "Pakovana hrana i pića" "Kafa"]
+ ["(?i)^zvijezda\\b" "Podravka" "Pakovana hrana i pića" "Ulje"]
+ ["(?i)^podravka\\b" "Podravka" "Pakovana hrana i pića" nil]
+ ["(?i)^dolcela\\b" "Podravka" "Pakovana hrana i pića" "Slatkiši"]
+ ["(?i)^vegeta\\b" "Podravka" "Pakovana hrana i pića" "Začini"]
+ ["(?i)^lino\\b" "Podravka" "Pakovana hrana i pića" "Dječja hrana"]
+ ["(?i)^argeta\\b" "Atlantic Grupa" "Pakovana hrana i pića" "Paštete"]
+ ["(?i)^linolada\\b" "Podravka" "Pakovana hrana i pića" "Slatkiši"]
+ ["(?i)^alverde\\b" "dm" "Lična njega" nil]
+ ["(?i)^head.?shoulders" "Procter & Gamble" "Lična njega" "Šampon"]
+ ["(?i)^always\\b" "Procter & Gamble" "Lična njega" nil]
+ ["(?i)^colgate\\b"
+  "Colgate-Palmolive"
+  "Lična njega"
+  "Oralna higijena"]
+ ["(?i)^oral.?b\\b" "Procter & Gamble" "Lična njega" "Oralna higijena"]
+ ["(?i)^domestos\\b" "Unilever" "Sredstva za čišćenje" nil]
+ ["(?i)^ajax\\b" "Colgate-Palmolive" "Sredstva za čišćenje" nil]
+ ["(?i)^persil\\b" "Henkel" "Sredstva za čišćenje" "Deterdžent"]
+ ["(?i)^ariel\\b"
+  "Procter & Gamble"
+  "Sredstva za čišćenje"
+  "Deterdžent"]
+ ["(?i)^lenor\\b"
+  "Procter & Gamble"
+  "Sredstva za čišćenje"
+  "Omekšivač"]
+ ["(?i)^kinder\\b" "Ferrero" "Pakovana hrana i pića" "Slatkiši"]
+ ["(?i)^ferrero\\b" "Ferrero" "Pakovana hrana i pića" "Slatkiši"]
+ ["(?i)^raffaello\\b"
+  "Ferrero"
+  "Pakovana hrana i pića"
+  "Čokolada i bomboni"]
+ ["(?i)^nutella\\b" "Ferrero" "Pakovana hrana i pića" "Slatkiši"]
+ ["(?i)^haribo\\b" "Haribo" "Pakovana hrana i pića" "Slatkiši"]
+ ["(?i)^dorina\\b" "Kraš" "Pakovana hrana i pića" "Slatkiši"]
+ ["(?i)^kras\\b" "Kraš" "Pakovana hrana i pića" "Slatkiši"]
+ ["(?i)^stark\\b" "Štark" "Pakovana hrana i pića" "Slatkiši"]
+ ["(?i)^nesquik\\b" "Nestlé" "Pakovana hrana i pića" "Žitarice"]
+ ["(?i)^logilink\\b" "Logilink" "Elektronika i dodaci" "Baterije"]
+ ["(?i)^\\Qneofen\\E\\b" "Neofen" "Zdravlje i apoteka" nil]
+ ["(?i)^\\Qvoda\\E\\b" "Jana" "Pića" nil]
+ ["(?i)^\\Qsok\\E\\b" "Happy Day" "Pića" nil]
+ ["(?i)^\\Qapipol\\E\\b" "Apipol" "Zdravlje i apoteka" nil]
+ ["(?i)^\\Qbulldog\\E\\b" "Bulldog" "Pića" nil]
+ ["(?i)^\\Qčaša\\E\\b" "Romed" "Zdravlje i apoteka" nil]
+ ["(?i)^\\Qželée\\E\\b" "ROSHEN" "Pakovana hrana i pića" nil]
+ ["(?i)^\\Qfolja\\E\\b" "BINGO" "Kuhinjske potrepštine" nil]
+ ["(?i)^\\Qpremium\\E\\b" "BAS" "Ostalo" nil]
+ ["(?i)^\\Qsupa\\E\\b" "VISPAK" "Pakovana hrana i pića" nil]
+ ["(?i)^\\Qcoca-cola\\E\\b" "Coca-Cola" "Beverages" nil]
+ ["(?i)^\\Qmellow\\E\\b" "Mellow Spirit" "Odjeća i modni dodaci" nil]
+ ["(?i)^\\Qukrasni\\E\\b" "One" "Papirna galanterija" nil]
+ ["(?i)^\\Qstrange\\E\\b" "Strange Love" "Beverages" nil]
+ ["(?i)^\\Qtoplomjer\\E\\b" "UEBE" "Zdravlje i apoteka" nil]
+ ["(?i)^\\Qmicro\\E\\b" "Micro" "Pakovana hrana i pića" nil]
+ ["(?i)^\\Qcig\\E\\b" "Dunhill" "Duhan i duvanski proizvodi" nil]
+ ["(?i)^\\Qpasteta\\E\\b"
+  "Argeta"
+  "Meso, morski plodovi i delikatesi"
+  nil]
+ ["(?i)^\\Qnamaz\\E\\b" "ABC Classic" "Mliječni proizvodi i jaja" nil]
+ ["(?i)^\\Qpita\\E\\b" "Bingo" "Pekara i deserti" nil]
+ ["(?i)^\\Qsomun\\E\\b" "Don Don" "Pekara i deserti" nil]
+ ["(?i)^\\Qkikiriki\\E\\b" "Gud" "Pakovana hrana i pića" nil]
+ ["(?i)^\\Qriža\\E\\b" "DK Trade" "Pakovana hrana i pića" nil]
+ ["(?i)^\\Qpassata\\E\\b" "Brik" "Pakovana hrana i pića" nil]
+ ["(?i)^\\Qherbiko\\E\\b" "Herbiko" "Zdravlje i apoteka" nil]
+ ["(?i)^\\Qkeks\\E\\b" "Lovita" "Pakovana hrana i pića" nil]
+ ["(?i)^\\Qbombonjera\\E\\b" "Raffaello" "Pakovana hrana i pića" nil]
+ ["(?i)^\\Qarf\\E\\b" "ARF" "Duhan i duvanski proizvodi" nil]
+ ["(?i)^\\Qparadajz\\E\\b" "Fiamma" "Pakovana hrana i pića" nil]
+ ["(?i)^\\Qbomboni\\E\\b" "Haribo" "Pakovana hrana i pića" nil]
+ ["(?i)^\\Qpečenica\\E\\b"
+  "Visočka"
+  "Meso, morski plodovi i delikatesi"
+  nil]
+ ["(?i)^\\Qtjestenina\\E\\b" "Biofit" "Pakovana hrana i pića" nil]
+ ["(?i)^\\Qpivo\\E\\b" "Tuborg" "Pića" nil]
+ ["(?i)^\\Qgalas\\E\\b" "GALAS" "Zdravlje i apoteka" nil]
+ ["(?i)^\\Qcokoladne\\E\\b" "STARK" "Pakovana hrana i pića" nil]
+ ["(?i)^\\Qdomaća\\E\\b" "BONY" "Pekara i deserti" nil]
+ ["(?i)^\\Qkrompir\\E\\b" "MCCAIN" "Pakovana hrana i pića" nil]
+ ["(?i)^\\Qpasta\\E\\b" "SENSODYNE" "Personal Care" nil]
+ ["(?i)^\\Qkvasac\\E\\b" "Dr Oetker" "Pakovana hrana i pića" nil]
+ ["(?i)^\\Qsuho\\E\\b"
+  "Semic Rinfuza"
+  "Meso, morski plodovi i delikatesi"
+  nil]
+ ["(?i)^\\Qflasteri\\E\\b" "Mivolis" "Zdravlje i apoteka" nil]
+ ["(?i)^\\Qodmacivac\\E\\b" "DIPLO" "Sredstva za čišćenje" nil]
+ ["(?i)^\\Qvioleta\\E\\b" "VIOLETA" "Proizvodi za bebe" nil]
+ ["(?i)^\\Qprofissimo\\E\\b" "Profissimo" "Sredstva za čišćenje" nil]
+ ["(?i)^\\Qvreća\\E\\b" "G.A EX RA" "Skladištenje i organizacija" nil]
+ ["(?i)^\\Qkolač\\E\\b" "MARLENKA" "Pekara i deserti" nil]
+ ["(?i)^\\Qkuhinjski\\E\\b" "ONE" "Skladištenje i organizacija" nil]
+ ["(?i)^\\Qamisu\\E\\b" "Amisu" "Odjeća i modni dodaci" nil]
+ ["(?i)^\\Qsjemenke\\E\\b" "Rinfu" "Pakovana hrana i pića" nil]
+ ["(?i)^\\Qtoalet\\E\\b" "Pure" "Papirna galanterija" nil]
+ ["(?i)^\\Qspužva\\E\\b" "One" "Sredstva za čišćenje" nil]
+ ["(?i)^\\Qtuborg\\E\\b" "Tuborg" "Beverages" nil]
+ ["(?i)^\\Qfolija\\E\\b" "One" "Jednokratno posuđe i pakovanje" nil]
+ ["(?i)^\\Qcasa\\E\\b" "ROMED" "Zdravlje i apoteka" nil]
+ ["(?i)^\\Qzačin\\E\\b" "KOT" "Pakovana hrana i pića" nil]
+ ["(?i)^\\Qpoklon\\E\\b" "DJ ASS" "Papirna galanterija" nil]
+ ["(?i)^\\Qžele\\E\\b" "ROSHEN" "Pakovana hrana i pića" nil]
+ ["(?i)^\\Qvizol\\E\\b" "Vizol" "Zdravlje i apoteka" nil]
+ ["(?i)^\\Qflips\\E\\b" "Gold Corn" "Pakovana hrana i pića" nil]
+ ["(?i)^\\Qvoćar\\E\\b" "Voćar" "Pakovana hrana i pića" nil]
+ ["(?i)^\\Qbombone\\E\\b" "Haribo" "Pakovana hrana i pića" nil]
+ ["(?i)^\\Qdesert\\E\\b" "Panna" "Mliječni proizvodi i jaja" nil]
+ ["(?i)^\\Qesenbak\\E\\b" "Esenbak" "Zdravlje i apoteka" nil]
+ ["(?i)^\\Qmivolis\\E\\b" "Mivolis" "Zdravlje i apoteka" nil]]
