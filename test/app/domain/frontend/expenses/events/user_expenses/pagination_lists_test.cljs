@@ -90,12 +90,13 @@
           (rf/reg-fx :dispatch rf/dispatch))))))
 
 (deftest receipts-refresh-list-forwards-status-filter
-  (testing "refresh wrapper forwards template status filter to fetch params"
+  (testing "refresh wrapper forwards template status filter and show-purged flag to fetch params"
     (sup/reset-db!)
     (swap! rf-db/app-db assoc-in (paths/list-per-page :receipts) 25)
     (swap! rf-db/app-db assoc-in (paths/list-current-page :receipts) 1)
     (swap! rf-db/app-db assoc-in (paths/list-filters :receipts)
       {:status [{:value "review_required" :label "Review Required"}]})
+    (swap! rf-db/app-db assoc-in [:user-expenses :receipts :show-purged?] true)
     (let [dispatches (atom [])]
       (rf/reg-fx :dispatch (fn [event]
                              (swap! dispatches conj event)))
@@ -104,8 +105,26 @@
         (let [[event-id params] (first @dispatches)]
           (is (= :user-expenses/fetch-receipts event-id))
           (is (= ["review_required"] (:status params)))
+          (is (true? (:show-purged params)))
           (is (= {:limit 25 :offset 0}
                 (select-keys params [:limit :offset]))))
+        (finally
+          (rf/reg-fx :dispatch rf/dispatch))))))
+
+(deftest receipts-toggle-show-purged-resets-to-first-page-and-refreshes
+  (testing "toggling purged receipts resets pagination and schedules a refresh"
+    (sup/reset-db!)
+    (swap! rf-db/app-db assoc-in (paths/list-per-page :receipts) 25)
+    (swap! rf-db/app-db assoc-in (paths/list-current-page :receipts) 4)
+    (swap! rf-db/app-db assoc-in (paths/list-pagination-mode :receipts) :server)
+    (let [dispatches (atom [])]
+      (rf/reg-fx :dispatch (fn [event]
+                             (swap! dispatches conj event)))
+      (try
+        (rf/dispatch-sync [:user-expenses/toggle-show-purged-receipts])
+        (is (true? (get-in @rf-db/app-db [:user-expenses :receipts :show-purged?])))
+        (is (= 1 (get-in @rf-db/app-db (paths/list-current-page :receipts))))
+        (is (= [[:user-expenses/refresh-receipts-list]] @dispatches))
         (finally
           (rf/reg-fx :dispatch rf/dispatch))))))
 
@@ -173,17 +192,19 @@
     (is (= 0 (count @sup/captured-http-requests)))))
 
 (deftest fetch-receipts-success-stores-server-total-items
-  (testing "fetch success persists server :total for template server pagination"
+  (testing "fetch success persists server totals and purged metadata for receipts"
     (sup/reset-db!)
     (rf/dispatch-sync
       [:user-expenses/fetch-receipts-success
        {:data [{:id "rec-1"}
                {:id "rec-2"}]
         :total 87
+        :purged-total 10
         :limit 25
         :offset 50}])
     (is (= 87 (get-in @rf-db/app-db (paths/list-total-items :receipts))))
-    (is (= 87 (get-in @rf-db/app-db [:user-expenses :receipts :total])))))
+    (is (= 87 (get-in @rf-db/app-db [:user-expenses :receipts :total])))
+    (is (= 10 (get-in @rf-db/app-db [:user-expenses :receipts :purged-total])))))
 
 (deftest fetch-receipts-clears-processing-check-guards
   (testing "fetch success and failure reset processing-check guard flags"

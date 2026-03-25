@@ -4,10 +4,11 @@
     [app.domain.frontend.expenses.admin.adapters.sync :as expenses-sync]
     [app.domain.frontend.expenses.events.user-expenses.endpoints :as endpoints]
     [app.domain.frontend.expenses.events.user-expenses.xhrio :as x]
-    [app.template.frontend.api.http :as http]
     [app.shared.pagination :as pagination]
+    [app.template.frontend.api.http :as http]
     [app.template.frontend.db.db :refer [common-interceptors]]
     [app.template.frontend.db.paths :as paths]
+
     [app.template.frontend.shared.bridges.crud :as crud-bridges]
     [clojure.string :as str]
     [re-frame.core :as rf]
@@ -74,7 +75,7 @@
          current-page (paths/resolved-list-current-page db entity-key)
          active-filters (or (get-in db (paths/list-filters entity-key)) {})
          status (normalize-status-filter (:status active-filters))
-         ;; Text filters: everything except :status, normalized to simple strings
+         show-purged? (true? (get-in db (conj base-path :show-purged?)))
          text-filters (reduce-kv
                         (fn [acc k v]
                           (if (= k :status)
@@ -98,6 +99,7 @@
                      :offset (* (max 0 (dec current-page)) per-page)}
                text-filters)
        (and include-status? (some? status)) (assoc :status status)
+       show-purged? (assoc :show-purged true)
        (some? order-dir) (assoc :order-dir order-dir)
        (some? order-field) (assoc :order-by order-field)))))
 
@@ -176,11 +178,16 @@
   (fn [{:keys [db]} _]
     {:dispatch [:user-expenses/fetch-receipts (current-receipts-page-params db)]}))
 
-(rf/reg-event-db
+(rf/reg-event-fx
   :user-expenses/toggle-show-purged-receipts
   common-interceptors
-  (fn [db _]
-    (update-in db (conj base-path :show-purged?) not)))
+  (fn [{:keys [db]} _]
+    {:db (-> db
+           (update-in (conj base-path :show-purged?) not)
+           (assoc-in (paths/list-current-page :receipts) 1)
+           (assoc-in (conj (paths/list-ui-state :receipts) :current-page) 1)
+           (assoc-in (conj (paths/list-ui-state :receipts) :pagination :current-page) 1))
+     :dispatch [:user-expenses/refresh-receipts-list]}))
 
 (rf/reg-event-fx
   :user-expenses/check-receipts-processing-complete
@@ -207,6 +214,7 @@
           still-processing? (response-has-processing? rows)
           check-path (conj base-path :processing-check)
           total (or (:total response) (count rows))
+          purged-total (long (or (:purged-total response) 0))
           limit (or (:limit response) (get-in db (conj base-path :limit)))
           offset (or (:offset response) (get-in db (conj base-path :offset)))
           db' (-> db
@@ -214,6 +222,7 @@
                 (assoc-in (conj check-path :refresh-pending?) (not still-processing?))
                 (assoc-in (conj base-path :items) rows)
                 (assoc-in (conj base-path :total) total)
+                (assoc-in (conj base-path :purged-total) purged-total)
                 (assoc-in (conj base-path :limit) limit)
                 (assoc-in (conj base-path :offset) offset)
                 (assoc-in (paths/list-total-items :receipts) total))]
@@ -257,6 +266,7 @@
   (fn [{:keys [db]} [response]]
     (let [rows (apply-refining-status (:data response))
           total (or (:total response) (count rows))
+          purged-total (long (or (:purged-total response) 0))
           limit (or (:limit response) (get-in db (conj base-path :limit)))
           offset (or (:offset response) (get-in db (conj base-path :offset)))]
       {:db (cond-> (-> db
@@ -268,6 +278,7 @@
                      (assoc-in (conj base-path :processing-check :refresh-pending?) false)
                      (assoc-in (conj base-path :items) rows)
                      (assoc-in (conj base-path :total) total)
+                     (assoc-in (conj base-path :purged-total) purged-total)
                      (assoc-in (conj base-path :limit) limit)
                      (assoc-in (conj base-path :offset) offset)
                      (assoc-in (paths/list-total-items :receipts) total))

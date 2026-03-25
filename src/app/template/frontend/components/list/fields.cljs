@@ -93,7 +93,7 @@
     (contains? #{"uploaded" "pending" "parsing" "parsed" "extracting" "processing" "in-progress"} status-lower)
     "ds-badge-info"
 
-    (contains? #{"inactive" "suspended" "archived"} status-lower)
+    (contains? #{"inactive" "suspended" "archived" "purged"} status-lower)
     "ds-badge-ghost"
 
     :else

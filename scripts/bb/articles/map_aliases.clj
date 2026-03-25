@@ -32,6 +32,7 @@
    (println "  --mappings-file PATH           (EDN map/vector; each entry defines alias selector + article selector)")
    (println "")
    (println "Options:")
+   (println "  --skip-mapped      Silently skip aliases already mapped (article_id IS NOT NULL)")
    (println "  --allow-reassign   Allow remapping aliases that already have article_id")
    (println "")
    (println "Output:")
@@ -48,6 +49,7 @@
   (loop [args args
          parsed {:dry-run? false
                  :allow-reassign? false
+                 :skip-mapped? false
                  :pretty? false
                  :alias-ids []}]
     (let [[a b & more] args]
@@ -62,6 +64,9 @@
 
         (= a "--allow-reassign")
         (recur (cons b more) (assoc parsed :allow-reassign? true))
+
+        (= a "--skip-mapped")
+        (recur (cons b more) (assoc parsed :skip-mapped? true))
 
         (= a "--pretty")
         (recur (cons b more) (assoc parsed :pretty? true))
@@ -304,7 +309,7 @@
        (validate-mapping! "cli options"))]))
 
 (defn- execute-mapping!
-  [db mapping]
+  [db mapping {:keys [skip-mapped?]}]
   (let [{:keys [alias-ids raw-label supplier-display-name allow-reassign?]} mapping
         supplier-id (when (and (empty? alias-ids) supplier-display-name)
                       (resolve-supplier-id! db supplier-display-name))
@@ -328,29 +333,38 @@
                                 (->> alias-ids
                                   (remove updated-alias-id-set)
                                   vec)
-                                [])
-        _ (when (empty? rows)
-            (throw (ex-info (if allow-reassign?
-                              "No alias rows updated"
-                              "No alias rows updated. Alias may already be mapped; rerun with --allow-reassign to override.")
-                     {:mapping (mapping-summary mapping)
-                      :supplier-id supplier-id
-                      :allow-reassign? allow-reassign?})))]
-    (cond-> {:updated (count rows)
-             :requested (if (seq alias-ids) (count alias-ids) 1)
-             :article_id resolved-article-id
-             :rows rows}
-      (seq not-updated-alias-ids)
-      (assoc :not_updated_alias_ids not-updated-alias-ids))))
+                                [])]
+    (if (empty? rows)
+      (if skip-mapped?
+        ;; Silently skip — return a "skipped" result instead of throwing
+        {:updated 0
+         :requested (if (seq alias-ids) (count alias-ids) 1)
+         :article_id resolved-article-id
+         :rows []
+         :skipped true
+         :skipped_alias_ids (if (seq alias-ids) alias-ids [])}
+        (throw (ex-info (if allow-reassign?
+                          "No alias rows updated"
+                          "No alias rows updated. Alias may already be mapped; rerun with --allow-reassign or --skip-mapped to skip.")
+                 {:mapping (mapping-summary mapping)
+                  :supplier-id supplier-id
+                  :allow-reassign? allow-reassign?})))
+      (cond-> {:updated (count rows)
+               :requested (if (seq alias-ids) (count alias-ids) 1)
+               :article_id resolved-article-id
+               :rows rows}
+        (seq not-updated-alias-ids)
+        (assoc :not_updated_alias_ids not-updated-alias-ids)))))
 
 (defn -main
   [& args]
   (let [{:keys [profile args]} (db/parse-profile args)
         opts (parse-args args)
-        {:keys [dry-run? pretty?]} opts
+        {:keys [dry-run? pretty? skip-mapped?]} opts
         mappings (collect-mappings! opts)
         config (db/read-config profile)
         db (:database config)
+        exec-opts {:skip-mapped? skip-mapped?}
         planned {:mapping_count (count mappings)
                  :mappings (mapv mapping-summary mappings)}]
     (if dry-run?
@@ -358,11 +372,12 @@
         (db/pprint-edn {:dry_run true :planned planned})
         (db/prn-edn {:dry_run true :planned planned}))
       (let [results (->> mappings
-                      (mapv #(execute-mapping! db %)))
+                      (mapv #(execute-mapping! db % exec-opts)))
             not-updated (->> results
                           (mapcat :not_updated_alias_ids)
                           distinct
                           vec)
+            skipped-count (count (filter :skipped results))
             result (cond-> {:updated (reduce + (map :updated results))
                             :requested (reduce + (map :requested results))
                             :mapping_count (count results)
@@ -374,7 +389,10 @@
                      (assoc :mappings (mapv #(dissoc % :rows) results))
 
                      (seq not-updated)
-                     (assoc :not_updated_alias_ids not-updated))]
+                     (assoc :not_updated_alias_ids not-updated)
+
+                     (pos? skipped-count)
+                     (assoc :skipped_count skipped-count))]
         (if pretty?
           (db/pprint-edn result)
           (db/prn-edn result))))))

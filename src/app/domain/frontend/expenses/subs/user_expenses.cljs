@@ -178,6 +178,11 @@
     (get-in db [:user-expenses :receipts :show-purged?] false)))
 
 (rf/reg-sub
+  :user-expenses/purged-receipts-total
+  (fn [db _]
+    (long (or (get-in db [:user-expenses :receipts :purged-total]) 0))))
+
+(rf/reg-sub
   :user-expenses/filtered-receipts
   (fn [[_ _]]
     [(rf/subscribe [:user-expenses/receipts])

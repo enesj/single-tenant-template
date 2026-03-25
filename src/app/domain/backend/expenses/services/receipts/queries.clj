@@ -173,7 +173,7 @@
   When `tenant-id` is provided, scopes to that tenant.
 
   Column references are qualified with `receipts.` for JOIN safety."
-  [status user-id helpers & {:keys [tenant-id]}]
+  [status user-id helpers & {:keys [tenant-id show-purged? purged-only?]}]
   (let [status-clause (build-status-clause status helpers)
         visibility-clause (when user-id
                             [:or
@@ -181,7 +181,11 @@
                              [:is :receipts.user_id nil]])
         tenant-clause (when tenant-id
                         [:= :receipts.tenant_id tenant-id])
-        clauses (remove nil? [tenant-clause visibility-clause status-clause])]
+        purged-clause (cond
+                        purged-only? [:not [:is :receipts.file_purged_at nil]]
+                        show-purged? nil
+                        :else [:is :receipts.file_purged_at nil])
+        clauses (remove nil? [tenant-clause visibility-clause status-clause purged-clause])]
     (case (count clauses)
       0 nil
       1 (first clauses)
@@ -216,11 +220,13 @@
   Optional :tenant-id in opts scopes to a specific tenant.
   Text filter keys: :original-filename, :supplier-guess."
   [db {:keys [status tenant-id limit offset order-dir order-by
-              original-filename supplier-guess]
+              original-filename supplier-guess show-purged?]
        :or {limit 50 offset 0 order-dir :desc}}]
   (let [helpers (build-status-query-helpers)
         {:keys [lines-total-sql effective-status-sql]} helpers
-        where-clause (build-receipts-where-clause status nil helpers :tenant-id tenant-id)
+        where-clause (build-receipts-where-clause status nil helpers
+                       :tenant-id tenant-id
+                       :show-purged? show-purged?)
         order-col (if (= (some-> order-by name) "status")
                     [:raw effective-status-sql]
                     (or (get sortable-receipt-columns (some-> order-by name)) :created_at))
@@ -263,13 +269,15 @@
   Returns a lightweight projection for list views (detail endpoints return
   raw_extract_json / parsed_markdown, etc.)."
   [db user-id {:keys [status tenant-id limit offset order-dir order-by
-                      original-filename supplier-guess]
+                      original-filename supplier-guess show-purged?]
                :or {limit 50 offset 0 order-dir :desc}}]
   (when-not user-id
     (throw (ex-info "user-id is required" {:status 400})))
   (let [helpers (build-status-query-helpers)
         {:keys [lines-total-sql effective-status-sql]} helpers
-        where-clause (build-receipts-where-clause status user-id helpers :tenant-id tenant-id)
+        where-clause (build-receipts-where-clause status user-id helpers
+                       :tenant-id tenant-id
+                       :show-purged? show-purged?)
         order-col (if (= (some-> order-by name) "status")
                     [:raw effective-status-sql]
                     (or (get sortable-receipt-columns (some-> order-by name)) :created_at))
@@ -302,9 +310,11 @@
   "Count receipts using the same status/text filter semantics as `list-receipts`.
    Optional :tenant-id in opts scopes to a specific tenant.
    Text filter keys: :original-filename, :supplier-guess."
-  [db {:keys [status tenant-id original-filename supplier-guess]}]
+  [db {:keys [status tenant-id original-filename supplier-guess show-purged?]}]
   (let [helpers (build-status-query-helpers)
-        where-clause (build-receipts-where-clause status nil helpers :tenant-id tenant-id)
+        where-clause (build-receipts-where-clause status nil helpers
+                       :tenant-id tenant-id
+                       :show-purged? show-purged?)
         text-filters {:original-filename original-filename
                       :supplier-guess supplier-guess}
         query (-> (cond-> {:select [[[:count :*] :total]]
@@ -318,11 +328,47 @@
   "Count receipts visible to `user-id` using the same filters as `list-user-receipts`.
    Optional :tenant-id in opts scopes to a specific tenant.
    Text filter keys: :original-filename, :supplier-guess."
+  [db user-id {:keys [status tenant-id original-filename supplier-guess show-purged?]}]
+  (when-not user-id
+    (throw (ex-info "user-id is required" {:status 400})))
+  (let [helpers (build-status-query-helpers)
+        where-clause (build-receipts-where-clause status user-id helpers
+                       :tenant-id tenant-id
+                       :show-purged? show-purged?)
+        text-filters {:original-filename original-filename
+                      :supplier-guess supplier-guess}
+        query (-> {:select [[[:count :*] :total]]
+                   :from [:receipts]
+                   :where where-clause}
+                (shared-qb/apply-text-filters receipt-text-filter-columns text-filters))
+        row (jdbc/execute-one! db (sql/format query) {:builder-fn rs/as-unqualified-lower-maps})]
+    (long (or (:total row) 0))))
+
+(defn count-purged-receipts
+  "Count purged receipts using the same status/text filters as `list-receipts`."
+  [db {:keys [status tenant-id original-filename supplier-guess]}]
+  (let [helpers (build-status-query-helpers)
+        where-clause (build-receipts-where-clause status nil helpers
+                       :tenant-id tenant-id
+                       :purged-only? true)
+        text-filters {:original-filename original-filename
+                      :supplier-guess supplier-guess}
+        query (-> (cond-> {:select [[[:count :*] :total]]
+                           :from [:receipts]}
+                    where-clause (assoc :where where-clause))
+                (shared-qb/apply-text-filters receipt-text-filter-columns text-filters))
+        row (jdbc/execute-one! db (sql/format query) {:builder-fn rs/as-unqualified-lower-maps})]
+    (long (or (:total row) 0))))
+
+(defn count-user-purged-receipts
+  "Count purged receipts visible to `user-id` using the same filters as `list-user-receipts`."
   [db user-id {:keys [status tenant-id original-filename supplier-guess]}]
   (when-not user-id
     (throw (ex-info "user-id is required" {:status 400})))
   (let [helpers (build-status-query-helpers)
-        where-clause (build-receipts-where-clause status user-id helpers :tenant-id tenant-id)
+        where-clause (build-receipts-where-clause status user-id helpers
+                       :tenant-id tenant-id
+                       :purged-only? true)
         text-filters {:original-filename original-filename
                       :supplier-guess supplier-guess}
         query (-> {:select [[[:count :*] :total]]
@@ -337,9 +383,11 @@
   [db opts]
   (let [opts* (merge {:limit 50 :offset 0} opts)
         rows (list-receipts db opts*)
-        total (count-receipts db opts*)]
+        total (count-receipts db opts*)
+        purged-total (count-purged-receipts db opts*)]
     {:rows rows
      :total total
+     :purged-total purged-total
      :limit (:limit opts*)
      :offset (:offset opts*)}))
 
@@ -348,9 +396,11 @@
   [db user-id opts]
   (let [opts* (merge {:limit 50 :offset 0} opts)
         rows (list-user-receipts db user-id opts*)
-        total (count-user-receipts db user-id opts*)]
+        total (count-user-receipts db user-id opts*)
+        purged-total (count-user-purged-receipts db user-id opts*)]
     {:rows rows
      :total total
+     :purged-total purged-total
      :limit (:limit opts*)
      :offset (:offset opts*)}))
 

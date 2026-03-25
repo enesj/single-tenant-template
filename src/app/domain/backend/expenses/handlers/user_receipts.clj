@@ -53,6 +53,15 @@
         s))
     :else nil))
 
+(defn- parse-show-purged-param
+  [params]
+  (contains? #{"1" "true" "yes"}
+    (some-> (or (:show-purged params)
+              (get params "show-purged"))
+      str
+      str/lower-case
+      str/trim)))
+
 (defn- parse-money
   [v]
   (cond
@@ -157,6 +166,7 @@
   - limit (default 50)
   - offset (default 0)
   - order-dir (default desc)
+  - show-purged (optional boolean; when truthy include purged receipts)
   - original-filename (text filter, ILIKE)
   - supplier-guess (text filter, ILIKE)"
   [db]
@@ -168,21 +178,24 @@
           (let [tenant-id (h/get-tenant-id request)
                 qp (:query-params request)
                 status (parse-status-param (or (:status qp) (get qp "status")))
+                show-purged? (parse-show-purged-param qp)
                 text-filters (h/extract-text-filter-params qp
                                [:original-filename :supplier-guess])
                 opts (cond-> (merge {:status status
+                                     :show-purged? show-purged?
                                      :limit (parse-long-param qp :limit 50)
                                      :offset (parse-long-param qp :offset 0)
                                      :order-dir (keyword (or (:order-dir qp) (get qp "order-dir") "desc"))
                                      :order-by (or (:order-by qp) (get qp "order-by"))}
                                text-filters)
                        tenant-id (assoc :tenant-id tenant-id))
-                {:keys [rows total limit offset]}
+                {:keys [rows total purged-total limit offset]}
                 (if (h/tenant-elevated? request)
                   (receipt-queries/list-receipts-page db opts)
                   (receipt-queries/list-user-receipts-page db user-id opts))]
             (h/json-response {:data (to-app rows)
                               :total total
+                              :purged-total purged-total
                               :limit limit
                               :offset offset}
               200)))

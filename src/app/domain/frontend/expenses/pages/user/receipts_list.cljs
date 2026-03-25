@@ -24,6 +24,7 @@
              :label (t :common/status)
              :type :select
              :input-type "select"
+             :display-source-field :receipt-status-display
              :options [{:value "uploaded" :label (t :receipts/status-uploaded)}
                        {:value "parsing" :label (t :receipts/status-parsing)}
                        {:value "parsed" :label (t :receipts/status-parsed)}
@@ -144,17 +145,28 @@
        :actions action-groups
        :position :portal})))
 
+(defn- receipt-purged?
+  [receipt]
+  (some? (or (:file-purged-at receipt)
+           (:file_purged_at receipt)
+           (:receipts/file-purged-at receipt)
+           (:receipts/file_purged_at receipt))))
+
+(defn- present-receipt
+  [receipt]
+  (cond-> receipt
+    (receipt-purged? receipt)
+    (assoc :receipt-status-display "purged")))
+
 (defui receipts-list-page
   []
   (let [t (use-t)
         error (use-subscribe [:user-expenses/receipts-error])
         form-error (use-subscribe [:user-expenses/form-error])
-        all-receipts (vec (or (use-subscribe [:user-expenses/receipts]) []))
-        receipts (vec (or (use-subscribe [:user-expenses/filtered-receipts]) []))
+        receipts (vec (or (use-subscribe [:user-expenses/receipts]) []))
+        display-receipts (mapv present-receipt receipts)
         show-purged? (use-subscribe [:user-expenses/show-purged-receipts?])
-        purged-count (->> all-receipts
-                       (filter :file-purged-at)
-                       count)
+        purged-count (long (or (use-subscribe [:user-expenses/purged-receipts-total]) 0))
         show-purged-toggle? (pos? purged-count)
         selected-receipt-ids (or (use-subscribe [::list-subs/selected-ids :receipts]) #{})
         selected-count (count selected-receipt-ids)
@@ -317,7 +329,8 @@
                 ($ list-view
                   {:entity-name :receipts
                    :entity-spec (receipts-entity-spec t)
-                   :rows-override receipts
+                   :rows-override display-receipts
+
                    :custom-actions (fn [receipt]
                                      (receipt-actions t can-ocr? receipt))
                    :on-add-click #(rf/dispatch [:navigate-to "/expenses/upload"])}))))))

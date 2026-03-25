@@ -46,7 +46,7 @@
       (is (= "Role assignment required" (:error body))))))
 
 (deftest user-receipts-list-includes-pagination-metadata
-  (testing "list receipts returns data with total/limit/offset"
+  (testing "list receipts returns data with total/limit/offset and purged metadata"
     (let [handler (user-receipts/list-receipts-handler :mock-db)
           user-id (UUID/randomUUID)
           request {:identity {:id user-id
@@ -61,10 +61,12 @@
                     (fn [_db actual-user-id opts]
                       (is (= user-id actual-user-id))
                       (is (= "uploaded" (:status opts)))
+                      (is (false? (:show-purged? opts)))
                       (is (= 2 (:limit opts)))
                       (is (= 1 (:offset opts)))
                       {:rows [sample-row]
                        :total 3
+                       :purged-total 1
                        :limit (:limit opts)
                        :offset (:offset opts)})]
         (let [resp (handler request)
@@ -73,16 +75,18 @@
           (is (vector? (:data body)))
           (is (= 1 (count (:data body))))
           (is (= 3 (:total body)))
+          (is (= 1 (:purged-total body)))
           (is (= 2 (:limit body)))
           (is (= 1 (:offset body))))))))
 
 (deftest user-receipts-list-parses-string-query-param-keys
-  (testing "list receipts parses string-keyed limit/offset params"
+  (testing "list receipts parses string-keyed limit/offset params and show-purged flag"
     (let [handler (user-receipts/list-receipts-handler :mock-db)
           user-id (UUID/randomUUID)
           request {:identity {:id user-id
                               :role "viewer"}
                    :query-params {"status" "uploaded"
+                                  "show-purged" "true"
                                   "limit" "20"
                                   "offset" "40"}}
           sample-row {:id (UUID/randomUUID)
@@ -92,16 +96,19 @@
                     (fn [_db actual-user-id opts]
                       (is (= user-id actual-user-id))
                       (is (= "uploaded" (:status opts)))
+                      (is (true? (:show-purged? opts)))
                       (is (= 20 (:limit opts)))
                       (is (= 40 (:offset opts)))
                       {:rows [sample-row]
                        :total 42
+                       :purged-total 5
                        :limit (:limit opts)
                        :offset (:offset opts)})]
         (let [resp (handler request)
               body (parse-json-body resp)]
           (is (= 200 (:status resp)))
           (is (= 42 (:total body)))
+          (is (= 5 (:purged-total body)))
           (is (= 20 (:limit body)))
           (is (= 40 (:offset body))))))))
 
