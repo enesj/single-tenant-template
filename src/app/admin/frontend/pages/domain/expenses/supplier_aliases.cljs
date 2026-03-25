@@ -5,6 +5,7 @@
   (:require
     [app.admin.frontend.components.layout :as layout]
     [app.template.frontend.components.list :refer [list-view]]
+    [app.template.frontend.events.list.ui-state :as list-ui-state-events]
     [re-frame.core :as rf]
     [uix.core :refer [$ defui use-callback use-effect]]
     [uix.re-frame :refer [use-subscribe]]
@@ -26,6 +27,9 @@
                        [])]
     (use-effect
       (fn []
+        (rf/dispatch [::list-ui-state-events/set-pagination-mode entity-name :server])
+        (rf/dispatch [::list-ui-state-events/set-refresh-event entity-name [:app.domain.frontend.expenses.events.supplier-aliases/load-list {}]])
+        (rf/dispatch [::list-ui-state-events/set-per-page entity-name 50])
         (refresh-list)
         js/undefined)
       [refresh-list])

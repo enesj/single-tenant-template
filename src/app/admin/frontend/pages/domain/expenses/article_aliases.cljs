@@ -8,6 +8,7 @@
     [app.template.frontend.components.dropdown.action :as dropdown]
     [app.template.frontend.components.list :refer [list-view]]
     [app.template.frontend.components.list.cells :as list-cells]
+    [app.template.frontend.events.list.ui-state :as list-ui-state-events]
     [app.template.frontend.utils.id :as id-utils]
     [re-frame.core :as rf]
     [uix.core :refer [$ defui use-callback use-effect]]
@@ -66,6 +67,9 @@
                        [])]
     (use-effect
       (fn []
+        (rf/dispatch [::list-ui-state-events/set-pagination-mode entity-name :server])
+        (rf/dispatch [::list-ui-state-events/set-refresh-event entity-name [:app.domain.frontend.expenses.events.article-aliases/load-list {}]])
+        (rf/dispatch [::list-ui-state-events/set-per-page entity-name 50])
         (refresh-list)
         js/undefined)
       [refresh-list])
