@@ -144,6 +144,10 @@
   (spit (io/file taxonomy-dir filename)
     (with-out-str (pprint/pprint data))))
 
+(defn- strip-diacritics [s]
+  (-> (Normalizer/normalize (str s) Normalizer$Form/NFD)
+    (str/replace #"\p{InCombiningDiacriticalMarks}+" "")))
+
 ;; Supplier display_name patterns → default category
 (def ^:private supplier-hints
   (or (load-taxonomy "supplier-hints.edn")
@@ -154,9 +158,83 @@
       "Pekara i deserti"]]))
 
 ;; Brand prefix → [manufacturer-name category-name subcategory-or-nil]
-(def ^:private brand-rules
+;; Loaded once, then sanitized at startup to prune stale/bad auto-learned rules.
+(def ^:private brand-rules-raw
   (or (load-taxonomy "brand-rules.edn")
     [["(?i)^coca.?cola" "The Coca-Cola Company" "Pakovana hrana i pića" "Bezalkoholna pića"]]))
+
+;; Common Bosnian product/category nouns that must NEVER become brand patterns.
+;; These are generic first words in OCR labels (e.g. "sok", "keks", "suho").
+;; Auto-learned rules matching these will be pruned on every run.
+(def ^:private generic-first-words
+  #{"sok" "keks" "bombonjera" "bombone" "bomboni" "bombon"
+    "paradajz" "passata" "biber" "suho" "sjemenke" "sjemenka"
+    "salata" "mlijeko" "jogurt" "sir" "meso" "riza" "riža"
+    "brasno" "brašno" "secer" "šećer" "ulje" "voda" "caj" "čaj"
+    "hljeb" "hleb" "pecivo" "pita" "somun" "supa" "juha"
+    "tjestenina" "testenina" "kvasac" "pivo" "vino"
+    "desert" "kolac" "kolač" "torta" "sendvič" "sendvic"
+    "namaz" "maslac" "kajmak" "mileram" "vrhnje" "pavlaka"
+    "krompir" "limun" "ananas" "narandza" "narandža" "jabuka"
+    "kafa" "espresso" "superiore" "marcaffe"
+    "pasta" "flasteri" "mivolis" "galas"
+    "arf" "folija" "folja" "folije" "kesa" "vrecica" "vrećica"
+    "vreća" "vreca" "toalet" "salveta" "salvete" "spužva" "spuzva"
+    "upaljac" "upaljač" "odmacivac" "odmačivač"
+    "cokoladne" "čokoladne" "voćar" "vocar"
+    "kuhinjski" "mirisna" "ukrasni" "svijeca" "svijeća"
+    "kikiriki" "flips" "krekeri" "krekere"
+    "teleci" "teleći" "juneci" "juneći" "pileci" "pileći"
+    "govedina" "sunka" "šunka" "pecenje" "pečenje" "pecenica" "pećenica"
+    "pastrmka" "losos" "file" "filet"
+    "cigare" "cigarete" "cig" "duhan"
+    "aspirin" "vizol" "esenbak"
+    "casa" "čaša" "toplomjer"
+    "herbifit" "herbiko" "apipol"
+    "micro" "premium" "poklon" "žele" "želée" "zele"
+    "amisu" "tuborg" "violeta" "profissimo"
+    "domaća" "domaca" "strani" "strange"
+    "logilink"
+    ;; "pasteta" = generic for pâté. Already present: pecenica, pecenje on meat line.
+    "pasteta"})
+
+(defn- generic-pattern?
+  "Return true if a brand-rule pattern was auto-generated from a generic product word.
+  Matches \\Q-quoted patterns whose inner word is in the blocklist.
+  Checks both the original word and its diacritic-stripped form."
+  [[pattern _ _ _]]
+  (when-let [[_ word] (re-matches #"(?i)\(\?i\)\^\\Q(.+?)\\E\\b" pattern)]
+    (let [lower (str/lower-case word)]
+      (or (contains? generic-first-words lower)
+        (contains? generic-first-words (strip-diacritics lower))))))
+
+(defn- bad-manufacturer?
+  "Return true if the manufacturer in a brand-rule is a known non-brand artifact."
+  [[_ mfr _ _]]
+  (when mfr
+    (let [lower (str/lower-case (str/trim mfr))]
+      (or
+        ;; Packaging/bulk terms mistaken for brands
+        (re-find #"(?i)\brinfuz" lower)
+        (re-find #"(?i)\bbrik\b" lower)
+        ;; OCR artifact manufacturers
+        (re-find #"(?i)^(sar|bas|kot|dj ass|g\.?a ex ra)$" lower)))))
+
+(defn- sanitize-brand-rules!
+  "Prune auto-learned brand rules that use generic product words as patterns,
+  or have OCR artifact manufacturers. Persists cleaned rules to brand-rules.edn.
+  Returns [cleaned-rules removed-count]."
+  [rules]
+  (let [bad-rules (filterv #(or (generic-pattern? %) (bad-manufacturer? %)) rules)
+        cleaned (vec (remove (set bad-rules) rules))]
+    (when (seq bad-rules)
+      (save-taxonomy! "brand-rules.edn" cleaned)
+      (binding [*out* *err*]
+        (println "  Brand rules sanitized:" (count bad-rules) "bad rules removed")))
+    [cleaned (count bad-rules)]))
+
+(def ^:private brand-rules
+  (first (sanitize-brand-rules! brand-rules-raw)))
 
 ;; Product keyword → [category subcategory]
 (def ^:private keyword-category-hints
@@ -168,10 +246,6 @@
 (def ^:private meat-words
   (or (load-taxonomy "meat-words.edn")
     #{"juneci" "teleci" "pileci" "govedina" "sunka" "salama"}))
-
-(defn- strip-diacritics [s]
-  (-> (Normalizer/normalize (str s) Normalizer$Form/NFD)
-    (str/replace #"\p{InCombiningDiacriticalMarks}+" "")))
 
 (defn- label-words-ascii
   "Extract lowercase ASCII words from a raw label (diacritics stripped)."
@@ -285,17 +359,43 @@
 ;; Perplexity batch research
 ;; ============================================================
 
+(defn- load-system-prompt-template []
+  (let [f (io/file "scripts/bb/articles/perplexity-system-prompt.txt")]
+    (if (.exists f)
+      (slurp f)
+      (throw (ex-info "Perplexity system prompt template not found"
+               {:path (.getAbsolutePath f)
+                :hint "Expected at scripts/bb/articles/perplexity-system-prompt.txt"})))))
+
 (defn- build-research-prompt
   "Build Perplexity system + user prompts for a batch of alias groups.
-  When subcategory-map is provided, includes existing taxonomy as constraint."
+  Loads the system prompt template from perplexity-system-prompt.txt and
+  injects the live category list, taxonomy, and brand mapping tables."
   [groups db-category-names subcategory-map]
   (let [cat-list (str/join ", " db-category-names)
-        taxonomy-text (when (seq subcategory-map)
-                        (str "\n\nExisting category → subcategory taxonomy. You MUST pick a subcategory from this list when one fits. Only create a new Bosnian subcategory if absolutely none of the existing ones are appropriate:\n"
-                          (->> subcategory-map
-                            (map (fn [[cat subcats]]
-                                   (str "  " cat ": " (str/join ", " subcats))))
-                            (str/join "\n"))))
+        taxonomy-block (when (seq subcategory-map)
+                         (str "\nExisting category \u2192 subcategory taxonomy. You MUST pick a subcategory from this list when one fits. Only create a new Bosnian subcategory if absolutely none of the existing ones are appropriate:\n"
+                           (->> subcategory-map
+                             (map (fn [[cat subcats]]
+                                    (str "  " cat ": " (str/join ", " subcats))))
+                             (str/join "\n"))))
+        ;; Brand mapping tables injected from taxonomy EDN files
+        brand-parent-map (or (load-taxonomy "brand-parent-mappings.edn") {})
+        self-named       (or (load-taxonomy "self-named-brands.edn") [])
+        brand-block (str "- Key brand\u2192parent-company mappings (use the right-hand value as mfr): "
+                      (->> brand-parent-map
+                        (group-by val)
+                        (sort-by key)
+                        (map (fn [[parent brands]]
+                               (str (str/join "/" (sort (map key brands)))
+                                 " \u2192 \"" parent "\"")))
+                        (str/join ", "))
+                      "\n- Self-named brands (the brand IS the manufacturer \u2014 use brand name as mfr): "
+                      (str/join ", " (sort self-named)))
+        system-prompt (-> (load-system-prompt-template)
+                        (str/replace "{{CATEGORIES}}" cat-list)
+                        (str/replace "{{TAXONOMY}}" (or taxonomy-block ""))
+                        (str/replace "{{BRAND_MAPPINGS}}" brand-block))
         items-text (->> groups
                      (map-indexed
                        (fn [idx {:keys [raw-label suppliers]}]
@@ -304,26 +404,8 @@
                            raw-label
                            (str/join " / " (take 2 suppliers)))))
                      (str/join "\n"))]
-    {:system (str "You are a product identification assistant for Bosnian retail/grocery receipts.\n"
-               "Respond with ONLY a JSON array. No markdown code fences, no explanation text.\n\n"
-               "Available product categories: " cat-list "\n"
-               (or taxonomy-text "")
-               "\n\nEach element must have exactly these keys:\n"
-               "{\"i\": <1-based index>, \"name\": \"<canonical product name with size/weight if known>\", "
-               "\"mfr\": \"<manufacturer/brand or null if generic/unbranded>\", "
-               "\"cat\": \"<one category from list above>\", "
-               "\"subcat\": \"<subcategory in Bosnian from the taxonomy above, or a new descriptive one>\"}\n\n"
-               "Rules:\n"
-               "- Include size/weight/volume in name when present (e.g. \"Coca-Cola 1.25L\")\n"
-               "- For unbranded items (loose meat, produce, bags), set mfr to null\n"
-               "- Set mfr to null when unsure of the brand — NEVER extract mfr from measurement suffixes (/KO, /KG, /pc), trailing OCR abbreviations, or short codes in the label\n"
-               "- You MUST pick an existing subcategory from the taxonomy above when one fits\n"
-               "- Only create a new subcategory if absolutely none of the existing ones match\n"
-               "- All category and subcategory names MUST be in Bosnian (never English)\n"
-               "- If unsure, use your best guess based on store context\n"
-               "- Never use \"General\" or \"Opšte\" as subcategory — be descriptive\n"
-               "- New subcategory names must be in Bosnian language")
-     :user (str "Identify these products from Bosnian store receipts:\n" items-text)}))
+    {:system system-prompt
+     :user   (str "Identify these products from Bosnian store receipts:\n" items-text)}))
 
 (defn- research-batch!
   "Send a batch of alias groups to Perplexity for identification.
@@ -370,11 +452,23 @@
         (re-find #"^/" trimmed) nil
         ;; Ends with unit suffix like /KO, /KG, /KOM, /pc, /L
         (re-find #"(?i)/(ko|kg|kom|pc|l)$" trimmed) nil
-        ;; All-caps <= 4 chars with no vowels (OCR fragment)
+        ;; All-caps <= 4 chars with no vowels (OCR fragment — e.g. PODR, HOC, KOT)
         (and (<= (count trimmed) 4)
           (= trimmed (str/upper-case trimmed))
-          (not (re-find #"[aeiouAEIOU]" trimmed))) nil
-        :else trimmed))))
+          (not (re-find #"[AEIOU]" trimmed))) nil
+        ;; All-caps 3-4 chars with vowels that are likely OCR fragments (not known brand abbreviations)
+        ;; Known valid short brands: BAT, dm, INA, OMO, ACE, AXE, UHU
+        (and (<= (count trimmed) 4)
+          (= trimmed (str/upper-case trimmed))
+          (not (re-find #"(?i)^(BAT|INA|OMO|ACE|AXE|UHU|dm)$" trimmed))) nil
+        ;; Packaging/bulk terms mistaken for brand names
+        (re-find #"(?i)\brinfuz" trimmed) nil
+        (re-find #"(?i)^brik$" trimmed) nil
+        ;; Known OCR artifact "manufacturers"
+        (re-find #"(?i)^(SAR|BAS|KOT|DJ ASS|G\.?A EX RA)$" trimmed) nil
+        ;; Contains "Rinfuza" appended to a real name — strip it
+        :else (let [cleaned (str/trim (str/replace trimmed #"(?i)\s+rinfuz\w*$" ""))]
+                (when-not (str/blank? cleaned) cleaned))))))
 
 (defn- sanitize-subcategory
   "Try to match a subcategory against existing subcategories for a category.
@@ -471,6 +565,7 @@
 
 (defn- learn-brand-rules!
   "Scan Perplexity-resolved items for new brand patterns and append to brand-rules.edn.
+  Skips generic product words (from blocklist) and OCR artifact manufacturers.
   Returns count of new rules learned."
   [perplexity-results]
   (let [existing-patterns (set (map first brand-rules))
@@ -480,13 +575,17 @@
                     manufacturer-name
                     (sanitize-manufacturer manufacturer-name))]
       (let [first-word (first (str/split (str/trim (or canonical-name "")) #"\s+"))
-            pattern (str "(?i)^" (java.util.regex.Pattern/quote (str/lower-case first-word)) "\\b")]
+            lower-word (str/lower-case (or first-word ""))
+            pattern (str "(?i)^" (java.util.regex.Pattern/quote lower-word) "\\b")]
         (when (and (not (str/blank? first-word))
                 (> (count first-word) 2)
+                ;; Block generic product words from becoming brand patterns
+                (not (contains? generic-first-words lower-word))
+                (not (contains? generic-first-words (strip-diacritics lower-word)))
                 (not (contains? existing-patterns pattern))
                 (not (some #(= (first %) pattern) @new-rules)))
           (swap! new-rules conj
-            [pattern manufacturer-name
+            [pattern (sanitize-manufacturer manufacturer-name)
              (:category-name (first (filter #(= (:canonical-name %) canonical-name) perplexity-results)))
              nil]))))
     (when (seq @new-rules)
@@ -527,6 +626,7 @@
   (println "")
   (println "Options:")
   (println "  --skip-research       Only run local heuristics (no Perplexity API)")
+  (println "  --merge               Merge new articles/mappings INTO existing tmp/ files instead of overwriting")
   (println "  --batch-size N        Aliases per Perplexity batch (default: 15)")
   (println "  --supplier PATTERN    Only process aliases from matching suppliers")
   (println "  --output-prefix PFX   Prefix output files: tmp/{pfx}-articles-suggested.edn etc.")
@@ -544,6 +644,7 @@
 (defn- parse-args [args]
   (loop [args (seq args)
          opts {:skip-research? false
+               :merge? false
                :batch-size default-batch-size
                :supplier-filter nil
                :output-prefix nil
@@ -555,6 +656,7 @@
         (cond
           (or (= a "--help") (= a "-h")) (do (usage) (System/exit 0))
           (= a "--skip-research") (recur (next args) (assoc opts :skip-research? true))
+          (= a "--merge")         (recur (next args) (assoc opts :merge? true))
           (= a "--pretty")        (recur (next args) (assoc opts :pretty? true))
           (= a "--batch-size")    (recur more (assoc opts :batch-size (or (db/parse-long b) default-batch-size)))
           (= a "--supplier")      (recur more (assoc opts :supplier-filter b))
@@ -607,7 +709,7 @@
 (defn -main [& args]
   (let [{:keys [profile args]} (db/parse-profile args)
         opts (parse-args args)
-        {:keys [skip-research? batch-size supplier-filter output-prefix limit pretty?]} opts
+        {:keys [skip-research? merge? batch-size supplier-filter output-prefix limit pretty?]} opts
 
         config (db/read-config profile)
         db (:database config)
@@ -782,9 +884,27 @@
 
     ;; Write output files
     (.mkdirs (io/file "tmp"))
-    (let [f (fn [name] (str "tmp/" file-prefix name))]
-      (spit (f "articles-suggested.edn")  (with-out-str (pprint/pprint articles-edn)))
-      (spit (f "mappings-suggested.edn")  (with-out-str (pprint/pprint all-mappings)))
+    (let [f (fn [name] (str "tmp/" file-prefix name))
+          read-existing-edn (fn [path]
+                              (let [file (io/file path)]
+                                (when (and merge? (.exists file))
+                                  (try (edn/read-string (slurp file))
+                                    (catch Exception _ nil)))))
+          ;; Merge articles: keep existing entries, append only new keys
+          existing-articles (or (read-existing-edn (f "articles-suggested.edn")) [])
+          existing-article-keys (set (map #(db/normalize-key (:canonical-name %)) existing-articles))
+          new-articles (filterv #(not (contains? existing-article-keys (db/normalize-key (:canonical-name %)))) articles-edn)
+          final-articles (vec (concat existing-articles new-articles))
+          ;; Merge mappings: keep existing entries, append only new alias-ids
+          existing-mappings (or (read-existing-edn (f "mappings-suggested.edn")) [])
+          existing-alias-ids (set (map :alias-id existing-mappings))
+          new-mappings (filterv #(not (contains? existing-alias-ids (:alias-id %))) all-mappings)
+          final-mappings (vec (concat existing-mappings new-mappings))]
+      (when merge?
+        (log "  [--merge] articles: kept" (count existing-articles) "+ added" (count new-articles))
+        (log "  [--merge] mappings: kept" (count existing-mappings) "+ added" (count new-mappings)))
+      (spit (f "articles-suggested.edn")  (with-out-str (pprint/pprint final-articles)))
+      (spit (f "mappings-suggested.edn")  (with-out-str (pprint/pprint final-mappings)))
       (spit (f "noise-candidates.edn")    (with-out-str (pprint/pprint noise-edn)))
       (spit (f "research-summary.edn")    (with-out-str (pprint/pprint summary)))
 
@@ -805,8 +925,8 @@
 
       (log "")
       (log "Output written to tmp/")
-      (log (str "  " file-prefix "articles-suggested.edn  (" (count articles-edn) " articles)"))
-      (log (str "  " file-prefix "mappings-suggested.edn  (" (count all-mappings) " mappings)"))
+      (log (str "  " file-prefix "articles-suggested.edn  (" (count final-articles) " articles)"))
+      (log (str "  " file-prefix "mappings-suggested.edn  (" (count final-mappings) " mappings)"))
       (log (str "  " file-prefix "noise-candidates.edn    (" (count noise-edn) " noise entries)"))
       (when (seq duplicates)
         (log (str "  " file-prefix "duplicate-warnings.edn  (" (count duplicates) " groups)")))

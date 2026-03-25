@@ -1,0 +1,114 @@
+;; Brand → parent-company mappings for the Perplexity system prompt.
+;; When Perplexity sees any of these brands in a receipt label, it should
+;; use the mapped parent company as the `mfr` value.
+;;
+;; Maintained by the create-articles- workflow (Phase 1c quality review).
+;; Format: {"BrandName" "Parent Company", ...}
+
+{"Dunhill"     "BAT"
+ "Pall Mall"   "BAT"
+ "Lucky Strike" "BAT"
+ "Rothmans"    "BAT"
+
+ "Milka"       "Mondelez International"
+ "Toblerone"   "Mondelez International"
+ "Oreo"        "Mondelez International"
+
+ "Coca-Cola"   "The Coca-Cola Company"
+ "Fanta"       "The Coca-Cola Company"
+ "Sprite"      "The Coca-Cola Company"
+ "Schweppes"   "The Coca-Cola Company"
+
+ "Sensodyne"   "Haleon"
+ "Parodontax"  "Haleon"
+
+ "Balea"       "dm"
+ "Alverde"     "dm"
+ "Profissimo"  "dm"
+ "Denkmit"     "dm"
+ "Mivolis"     "dm"
+
+ "Dove"        "Unilever"
+ "Axe"         "Unilever"
+ "Rexona"      "Unilever"
+ "Domestos"    "Unilever"
+ "Knorr"       "Unilever"
+
+ "Nescafé"     "Nestlé"
+ "Maggi"       "Nestlé"
+ "Nesquik"     "Nestlé"
+ "KitKat"      "Nestlé"
+
+ "Cedevita"    "Atlantic Grupa"
+ "Argeta"      "Atlantic Grupa"
+ "Barcaffè"    "Atlantic Grupa"
+ "Grand Kafa"  "Atlantic Grupa"
+ "Donat"       "Atlantic Grupa"
+
+ "Vegeta"      "Podravka"
+ "Lino"        "Podravka"
+ "Eva"         "Podravka"
+ "Dolcela"     "Podravka"
+
+ "Marlboro"    "Philip Morris International"
+ "L&M"         "Philip Morris International"
+
+ "Winston"     "Japan Tobacco International"
+ "Camel"       "Japan Tobacco International"
+
+ "Nivea"       "Beiersdorf"
+ "Eucerin"     "Beiersdorf"
+
+ "Pampers"     "Procter & Gamble"
+ "Ariel"       "Procter & Gamble"
+ "Fairy"       "Procter & Gamble"
+ "Gillette"    "Procter & Gamble"
+ "Oral-B"      "Procter & Gamble"
+ "Always"      "Procter & Gamble"
+ "Naturella"   "Procter & Gamble"
+
+ "Persil"      "Henkel"
+ "Perwoll"     "Henkel"
+ "Bref"        "Henkel"
+ "Pritt"       "Henkel"
+ "Somat"       "Henkel"
+
+ "Nutella"     "Ferrero"
+ "Kinder"      "Ferrero"
+ "Tic Tac"     "Ferrero"
+ "Raffaello"   "Ferrero"
+
+ "Orbit"       "Mars"
+ "M&M's"       "Mars"
+ "Snickers"    "Mars"
+ "Twix"        "Mars"
+ "Bounty"      "Mars"
+ "Whiskas"     "Mars"
+
+ "Colgate"     "Colgate-Palmolive"
+ "Palmolive"   "Colgate-Palmolive"
+ "Ajax"        "Colgate-Palmolive"
+
+ "Rauch"       "Rauch"
+ "Dr. Oetker"  "Dr Oetker"
+ "Kotányi"     "Kotanyi"
+ "Barilla"     "Barilla"
+ "McCain"      "McCain"
+
+ "Aspirin"     "Bayer"
+
+ ;; Batch 2025-07 additions
+ "Happy Day"   "Rauch"
+ "Aqua Viva"   "Knjaz Miloš"
+ "Jana"        "Jamnica"
+ "Prima"       "Grand Prom"
+ "Coccolino"   "Unilever"
+ "Libresse"    "Essity"
+ "Bananica"    "STARK"
+ "Chipsy"      "Marbo Product"
+ "Syoss"       "Henkel"
+ "Schauma"     "Henkel"
+ "Maybelline"  "L'Oréal"
+ "Bourjois"    "Coty"
+ "Zvijezda"    "Podravka"
+ "ABC"         "Belje"}

@@ -70,6 +70,7 @@
       (fn []
         (rf/dispatch [::list-ui-state-events/set-pagination-mode entity-name :server])
         (rf/dispatch [::list-ui-state-events/set-refresh-event entity-name [:user-expenses/refresh-article-aliases-list]])
+        (rf/dispatch [::list-ui-state-events/set-per-page entity-name 50])
         (refresh-list)
         js/undefined)
       [refresh-list])

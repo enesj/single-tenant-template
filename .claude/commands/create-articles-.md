@@ -140,12 +140,21 @@ canonical names become article keys in the database.
 | Zlatna Džezva | Vispak | Coffee |
 | Zvijezda | Podravka | Condiments/oil |
 | Argeta | Atlantic Grupa | Pâté |
-| Dunhill | BAT | Tobacco |
-| Nescafé, Nescafe | Nestlé | Coffee |
+| Dunhill, DUNHIL | BAT | Tobacco |
+| Nescafé, Nescafe, NESTLE | Nestlé | Coffee |
 | Dolcela | Podravka | Baking |
 | Balea, Alverde | dm | Drugstore brands |
 | Nivea | Beiersdorf | Personal care |
 | Dove, Axe, Domestos | Unilever | Personal care/cleaning |
+| Haribo, HARIBO | Haribo | Confectionery |
+| Roshen, ROSHE | Roshen | Confectionery |
+| Aspirin, Bayer | Bayer | Pharma |
+| Voltaren | GSK / Novartis | Pharma |
+| Babybel, Leerdammer | Bel | Dairy/cheese |
+| Zanetti | Zanetti | Dairy/cheese |
+| Profissimo, Mivolis | dm | dm-exclusive house brands (like Balea/Alverde) |
+| Milka, MILKA, MILKA CHOCO | Mondelez | Confectionery |
+| Sensodyne | Haleon | Formerly GSK Consumer Healthcare (2022 spinoff) |
 
 ---
 
@@ -213,98 +222,106 @@ bb articles-research dev --supplier "APOTEKE" --output-prefix apoteke --pretty
 > **create articles and map aliases immediately after each supplier batch** before
 > running the next. The workflow per supplier is:
 > 1. `bb articles-research dev --supplier "X" --pretty`
-> 2. Review + correct `tmp/articles-suggested.edn`
-> 3. Create articles (Phase 4a-4b)
-> 4. Map aliases (Phase 4c)
+> 2. Review + correct `tmp/articles-suggested.edn` (Phase 2 quality review)
+> 3. Create articles (Phase 3a)
+> 4. Map aliases (Phase 3b)
 > 5. Then proceed to next supplier
 
-### Step 1c — Review the suggestions
+### Step 1c — Quality review (single pass over both files)
 
-Read and summarise `tmp/articles-suggested.edn`:
-- Verify canonical names are sensible (especially for Đ/đ names — check normalized keys)
-- Verify manufacturer assignments (branded vs Generic)
-- Verify category/subcategory assignments match the DB taxonomy
-- Look for variant conflicts (different sizes that should be separate articles)
+Read `tmp/articles-suggested.edn` and `tmp/mappings-suggested.edn` once. Apply **all**
+checks below in a single editing pass. Do not re-read the files between checks.
 
-**Quality audit checklist** (run after every research pass):
+> **DB context (fetch once, reuse):** Before starting the checklist, run one query to get
+> the full category→subcategory taxonomy. Keep the result in working memory for all checks:
+> ```sql
+> SELECT c.name AS category, array_agg(s.name ORDER BY s.name) AS subcategories
+> FROM categories c
+> LEFT JOIN subcategories s ON s.category_id = c.id
+> GROUP BY c.name ORDER BY c.name;
+> ```
 
-1. **Manufacturer coverage**: Count articles with `Generic` vs branded manufacturers.
-   Target: >40% branded for consumer product backlogs. Services, parking, lab tests
-   are exempt (legitimately Generic).
+#### A. Names — scan `:canonical-name` values
 
-2. **Category/subcategory validation**: Cross-check suggested categories against:
-   ```bash
-   bb list-categories dev --with-subcategories --pretty
+| Check | Pattern | Fix |
+|-------|---------|-----|
+| All-lowercase | Entire name lowercase (`"indijaner"`) | Capitalize first word |
+| Double-letter typo | Doubled vowel not in raw label (`"Foliija"`, `"Tjeestenina"`) | Remove extra letter |
+| Fragmented words (Perplexity only) | Short 2–4 char fragments after space (`"Bombo ni"`, `"Det erđent"`) | Rejoin: `"Bomboni"`, `"Deterdžent"` |
+| OCR merge artifact | Two product names joined by hex token (`"PRODUCT 2f5 PRODUCT"`) | Delete from articles + mappings; schedule alias for noise deletion |
+| Trailing hex/numbers | `[0-9a-f]{3,4}` at end, not a weight unit | Remove suffix |
+
+#### B. Manufacturers — scan `:manufacturer-name` values
+
+| Check | Pattern | Fix |
+|-------|---------|-----|
+| nil/Generic for branded product | Name contains known brand (see manufacturer table above) | Assign correct manufacturer |
+| Short OCR fragment | ≤ 2 chars, all-caps no-vowel fragments | Set nil |
+| Truncated from raw label | Value appears verbatim in raw label (`"DUNHIL"`, `"HARIBO BE"`) | Resolve to canonical manufacturer name |
+| Product attribute as mfr | `"BIOFIT"`, `"LIGHT"`, `"CLASSIC"`, `"RINFU"` | Set nil |
+
+After sweep: branded should be >40% of consumer-product articles. Services/produce/parking
+are legitimately Generic.
+
+> **New brand→manufacturer discovered?** Add it to the appropriate taxonomy file:
+> - `scripts/bb/articles/taxonomy/brand-parent-mappings.edn` — brand→parent-company map
+>   (when brand name differs from manufacturer, e.g. `"Milka" "Mondelez International"`)
+> - `scripts/bb/articles/taxonomy/self-named-brands.edn` — vector of brands where brand = manufacturer
+>   (e.g. `"Meggle"`, `"Haribo"`)
+>
+> These are injected into the Perplexity system prompt via `{{BRAND_MAPPINGS}}`
+> so future research runs will get them right automatically.
+
+#### C. Categories & subcategories — validate against DB taxonomy (fetched above)
+
+1. Every category must exist in DB. **Never create new top-level categories.**
+2. Subcategories: prefer existing DB match. Accept auto-create only if it's a legitimate
+   Bosnian-language name and the category exists.
+3. Diacritics: verify exact string match (Ž not Z, Š not S, Č not C, Ć not C, Đ not D).
+4. Language: all subcategories must be Bosnian (not English).
+5. Proliferation: watch for near-duplicates (`"Maramice"` vs `"Maramice i papirni proizvodi"`) — pick DB match.
+
+**Hard classification rules** (Perplexity commonly gets these wrong):
+
+| Context | Category | Subcategory | Common mistake |
+|---------|----------|-------------|----------------|
+| Carbonated soft drinks (Coca-Cola, Pepsi, Sprite, Fanta) | Pakovana hrana i pića | Bezalkoholna pića | ~~Voćni sokovi~~ |
+| Plastic/carrier bags (vreća, tregerica, kesa PE) | Jednokratno posuđe i pakovanje | Kese | ~~Ostalo/Kese i vreće~~ |
+| Beauty/salon services (laminiranje, farbanje, waxing) | Lična njega | Usluge ljepote | ~~Ostalo/Usluge~~ |
+| Popcorn (kokičar, kokice) | Pakovana hrana i pića | Grickalice | ~~Mliječni proizvodi/Maslac~~ |
+| Carob, vanilla sugar, baking additives (rogač, vanilin šećer) | Pakovana hrana i pića | Dodaci za pečenje | ~~Žitarice i tjestenina~~ |
+
+#### D. Duplicates — within-batch + cross-batch
+
+1. **Within-batch**: same product from different suppliers (e.g. "Kefa Potrosacka" vs
+   "Kesa Potrosacka") → merge into one article, redirect mappings.
+2. **Cross-batch (multi-batch sessions only)**: check recently created articles:
+   ```sql
+   SELECT canonical_name, normalized_key FROM articles
+   ORDER BY created_at DESC LIMIT 50;
    ```
-   Common mistakes: coffee capsules → "Zdravlje i apoteka", soap → "Mliječni proizvodi".
+   For any semantic match (same product, different name), remove the proposed article
+   and redirect its mappings to the existing `normalized_key`.
+3. **Variant risk**: different sizes must be separate articles. If >20 unmapped aliases,
+   also run `bb group-aliases-by-brand dev --min-group 2` and check `VARIANT RISK` clusters.
+4. **Fresh-produce merge**: aliases like `LIMUN /KG` and `SVJEZI LIMUN` are the same
+   product — keep one, redirect mappings for the other.
 
-3. **OCR artifact detection**: Search for trailing hex/numbers that aren't weight/volume:
-   - Trailing hex patterns: `[0-9a-f]{3,4}` at end of name (e.g., "Meggle Mlijeko 6f93")
-   - Trailing bare numbers: not preceded by weight units (g, kg, ml, l, kom)
-   - Short manufacturer names (≤ 2 chars): likely OCR fragments ("DJ", "MA", "RK")
+#### E. Noise cleanup in mappings
 
-4. **Near-duplicate detection**: Look for same product from different suppliers:
-   - "Kefa Potrosacka Pvc" vs "Kesa Potrosacka Pvc /ko" → should be one article
-   - Multiple Meggle Mlijeko 3.2% variants → merge into one
+For every noise alias identified above (OCR artifacts, confirmed noise):
+1. Remove its entry from `tmp/mappings-suggested.edn`.
+2. Add its `raw-label` to the noise deletion list for Phase 4.
 
-5. **Subcategory language check**: All subcategories must be in Bosnian.
-   If Perplexity returned English (e.g., "Jams & Marmalades"), translate before proceeding.
+This prevents `map_aliases.clj` from failing on missing articles.
 
-**Edit `tmp/articles-suggested.edn` directly** to correct any issues before proceeding.
-The file is standard EDN — same format as `create_articles.clj --articles-file` expects.
-
-### Step 1d — Post-Perplexity quality gate (after Step 1b only)
-
-When Perplexity was used, run these additional checks before proceeding:
-
-- **English category names**: Perplexity sometimes returns English. Scan for non-Bosnian
-  category/subcategory values and translate them.
-- **Subcategory proliferation**: Check for near-duplicate subcategories
-  (e.g., "Maramice" vs "Maramice i papirni proizvodi", "Čokolada i bomboni" vs
-  "Čokolada i slatkiši"). Pick the existing one from the DB taxonomy.
-- **Hallucinated manufacturers**: Verify manufacturer names against known brands.
-  Short/nonsensical manufacturer values (≤ 2 chars, all-caps fragments) are likely
-  OCR artifacts that Perplexity treated as brand names — set to "Generic".
+**Edit both `.edn` files directly.** After all fixes, proceed to Phase 3.
 
 ---
 
-## Phase 2: Check existing categories
+## Phase 3: Create articles + map aliases
 
-Always verify categories before creating articles.
-
-```bash
-bb list-categories dev --with-subcategories --pretty
-```
-
-Default mappings by context:
-
-| Context | Category | Subcategory |
-|---------|----------|-------------|
-| Pharmacy | Zdravlje i apoteka | (descriptive) |
-| Clothing/shoes | Odjeća i modni dodaci | Opste |
-| Drugstore (dm, Bipa) | Lična njega | (descriptive) |
-| Dairy (mlijeko, jogurt, sir) | Mliječni proizvodi i jaja | (descriptive) |
-| Bread/pastry | Pekara i deserti | (descriptive) |
-| Drinks (voda, sok, pivo) | Pakovana hrana i pića | Bezalkoholna pića |
-| Unknown / no fit | Ostalo | Opste |
-
----
-
-## Phase 3: Variant risk check
-
-Before creating articles, detect size/variant clusters.
-
-```bash
-bb group-aliases-by-brand dev --min-group 2
-```
-
-Look for `VARIANT RISK` clusters. Create **separate articles** per distinct size.
-
----
-
-## Phase 4: Create articles + map aliases
-
-### Step 4a — Dry-run articles (REQUIRED)
+### Step 3a — Dry-run + create
 
 ```bash
 bb scripts/bb/articles/create_articles.clj dev \
@@ -312,43 +329,32 @@ bb scripts/bb/articles/create_articles.clj dev \
   --dry-run --pretty | tee tmp/articles-planned.edn
 ```
 
-> **Inspect `normalized_key` values carefully.** Diacritics are transliterated via NFD
-> decomposition (Š→S, Đ→D, č→c, ž→z, ć→c), not dropped. See "Key normalization reference"
-> section above for the full algorithm. Always verify from dry-run output — never derive
-> keys mentally or write your own normalize-key function.
+If any article shows `already_exists: true`:
+1. Remove it from `tmp/articles-suggested.edn`.
+2. In `tmp/mappings-suggested.edn`, redirect its mappings to the existing `normalized_key`.
+3. Re-run dry-run until 0 conflicts.
 
-### Step 4b — Create articles for real
-
+Then create for real:
 ```bash
 bb scripts/bb/articles/create_articles.clj dev \
   --articles-file tmp/articles-suggested.edn \
   --pretty | tee tmp/created-articles.edn
 ```
 
-### Step 4c — Map aliases
-
-If the research script generated `tmp/mappings-suggested.edn`, use it directly:
+### Step 3b — Map aliases
 
 ```bash
 bb scripts/bb/articles/map_aliases.clj dev \
   --mappings-file tmp/mappings-suggested.edn \
-  --pretty | tee tmp/mapped.edn
+  --skip-mapped --pretty | tee tmp/mapped.edn
 ```
 
-> **Large backlog (> 150 mappings)**: Split into batches of ~80. Each run is safe to re-run.
+> Always use `--skip-mapped` — it's safe for single and multi-batch sessions.
+> For large backlogs (>150 mappings), split into batches of ~80.
 
-> **Already-mapped aliases:** By default `map_aliases.clj` throws on the first alias
-> where `article_id IS NOT NULL`. Use `--skip-mapped` to silently skip them:
-> ```bash
-> bb scripts/bb/articles/map_aliases.clj dev \
->   --mappings-file tmp/mappings-suggested.edn \
->   --skip-mapped --pretty | tee tmp/mapped.edn
-> ```
-> The output will include a `:skipped_count` field showing how many were skipped.
+### Step 3c — Manual corrections (if needed)
 
-### Step 4d — Manual mappings (for corrections)
-
-For aliases the script missed or got wrong, write a manual `tmp/mappings-extra.edn`:
+For aliases the script missed or got wrong, write `tmp/mappings-extra.edn`:
 
 ```clojure
 [{:alias-id "uuid-1"  :article-key "meggle-mlijeko-1l"}
@@ -357,30 +363,25 @@ For aliases the script missed or got wrong, write a manual `tmp/mappings-extra.e
 
 ```bash
 bb scripts/bb/articles/map_aliases.clj dev \
-  --mappings-file tmp/mappings-extra.edn \
-  --pretty
+  --mappings-file tmp/mappings-extra.edn --pretty
 ```
 
 ---
 
-## Phase 5: Handle noise + remaining unmapped
+## Phase 4: Finalize
 
 ### Noise deletion
 
-Review `tmp/noise-candidates.edn`, then delete confirmed noise:
+Review `tmp/noise-candidates.edn` plus aliases flagged during Phase 2 review:
 
 ```bash
-# Dry-run first (default)
+# Dry-run first
 bb scripts/bb/articles/delete_unmapped_aliases.clj dev \
-  --raw-label "0 ML 4f92" \
-  --raw-label "----" \
-  --pretty
+  --raw-label "0 ML 4f92" --raw-label "----" --pretty
 
 # Apply after confirming
 bb scripts/bb/articles/delete_unmapped_aliases.clj dev \
-  --raw-label "0 ML 4f92" \
-  --raw-label "----" \
-  --apply --yes --pretty
+  --raw-label "0 ML 4f92" --raw-label "----" --apply --yes --pretty
 ```
 
 ### Remaining unmapped
@@ -389,44 +390,44 @@ bb scripts/bb/articles/delete_unmapped_aliases.clj dev \
 bb scripts/bb/articles/unmapped_aliases_counts.clj dev --pretty
 ```
 
-Classify each remaining alias:
-- **Mappable** → re-run `articles-research` with `--supplier` filter, or research with Perplexity manually
-- **OCR noise** → delete
-- **Ambiguous** → document and leave unmapped
+Classify: **Mappable** → re-run research with `--supplier` filter | **Noise** → delete | **Ambiguous** → document.
 
-For manual Perplexity research on specific items:
-```bash
-bb scripts/bb/perplexity_search.clj "Product identification: 'RAW_LABEL' sold at SUPPLIER. Give: canonical name with size, manufacturer, product category"
-```
-
----
-
-## Phase 6: Verify and report
+### Verify coverage
 
 ```bash
 bb scripts/bb/articles/report_progress.clj dev --pretty | tee tmp/progress-report.edn
 ```
 
-Check:
-- **Coverage**: what % of aliases are now mapped
-- **By-category**: `Ostalo` should be a small slice
-- **By-manufacturer**: Generic < ~30% of branded-product articles
-  (lab tests, services, parking, bulk produce are exempt)
+Check: coverage %, `Ostalo` slice (<20%), Generic manufacturer (<30% of branded products).
+
+### Prompt improvement (conditional — only after Perplexity runs)
+
+If you fixed the same class of mistake on **≥ 2 articles**, update the appropriate file:
+
+| Mistake class | File to update |
+|--------------|----------------|
+| Brand→manufacturer missing/wrong | `scripts/bb/articles/taxonomy/brand-parent-mappings.edn` (brand→parent map) |
+| Brand = manufacturer not recognized | `scripts/bb/articles/taxonomy/self-named-brands.edn` (add brand name) |
+| Category/subcategory wrong | Hard classification rules in this file |
+| Prompt wording flaw | `scripts/bb/articles/perplexity-system-prompt.txt` |
+
+The brand mapping files are loaded at research time and injected into the Perplexity
+system prompt via `{{BRAND_MAPPINGS}}`. Editing them improves future runs automatically.
+
+Also record any new hard classification rules discovered during Phase 2 by adding rows
+to the tables in this file.
 
 ---
 
-## Completion gate (must pass before finishing)
+## Completion gate
 
-- [ ] **Pre-phase done**: review_required receipts retried; mismatches fixed; stuck receipts documented.
-- [ ] Requested backlog slice: articles created + aliases mapped.
-- [ ] Variant risks addressed: no different sizes mapped to the same article.
-- [ ] Taxonomy linked (manufacturer + subcategory where known).
-- [ ] No subcategory named `"General"` — all subcategories are descriptive.
-- [ ] `Generic` manufacturer <= ~30% of **branded-product** articles.
-- [ ] `Ostalo` category used sparingly (< ~20%).
+- [ ] Pre-phase done (review_required receipts resolved or documented).
+- [ ] Articles created + aliases mapped for requested backlog slice.
+- [ ] No variant/size conflation. No subcategory named `"General"`.
+- [ ] `Generic` ≤ ~30% of branded-product articles; `Ostalo` < ~20%.
 - [ ] Progress verified via `report_progress.clj`.
-- [ ] Remaining unmapped aliases documented (noise vs ambiguity).
-- [ ] Suggested new categories listed in Bosnian with justification.
+- [ ] Remaining unmapped documented (noise vs ambiguity).
+- [ ] Prompt files updated if recurring patterns found (or stated "no changes needed").
 
 ---
 
@@ -434,13 +435,16 @@ Check:
 
 Report after each run:
 
-0. **Receipt resolution** — review_required count, resolved vs stuck.
-1. **Summary counts** — new articles/manufacturers/subcategories created vs existing reused.
-2. What was created (articles + taxonomy) and mapped (aliases -> articles).
-3. How variant/size conflation was prevented.
-4. Where evidence lives in `tmp/`.
-5. What remains unmapped and why.
-6. **Suggested new categories** (in Bosnian, with justification).
+1. **Receipt resolution** — review_required count, resolved vs stuck.
+2. **Summary counts** — articles created, aliases mapped, manufacturers/subcategories added.
+3. **EDN corrections** — grouped by type:
+   - *Manufacturers*: `"DUNHIL"→BAT`, `"HARIBO BE"→Haribo`, …
+   - *Names*: `"Bombo ne"→"Bomboni"`, `"Foliija"→"Folija"`, …
+   - *Categories*: Profissimo Salvete: Sredstva za čišćenje → Papirna galanterija, …
+   - *Duplicates/redirects*: LIMUN SVJEŽI → existing `limun`, …
+   - *Noise*: deleted aliases and reasons
+4. **Remaining unmapped** and classification (mappable / noise / ambiguous).
+5. **Prompt changes** — list files changed with one-line reasons, or "No changes needed."
 
 ---
 
@@ -456,15 +460,31 @@ bb clear-folder
 
 | Script | Command | Purpose |
 |--------|---------|---------|
-| `articles_research.clj` | `bb articles-research dev [--skip-research] [--supplier X]` | **NEW** — batch heuristics + Perplexity research |
-| `runner/run-by-ids!` | REPL | Re-process review_required receipts |
-| `approval/save-review!` | REPL | Fix items/status without re-OCR |
-| `list_review_required_receipts.clj` | `bb list-review-required-receipts dev [--full]` | List review_required receipts |
-| `list_categories.clj` | `bb list-categories dev [--with-subcategories]` | List categories |
-| `unmapped_aliases_counts.clj` | `bb scripts/bb/articles/unmapped_aliases_counts.clj dev` | Grouped counts |
-| `group_aliases_by_brand.clj` | `bb group-aliases-by-brand dev` | Variant risk detection |
+| `articles_research.clj` | `bb articles-research dev [--skip-research] [--supplier X]` | Batch heuristics + Perplexity research |
 | `create_articles.clj` | `bb scripts/bb/articles/create_articles.clj dev` | Create/upsert articles |
 | `map_aliases.clj` | `bb scripts/bb/articles/map_aliases.clj dev` | Batch alias mapping |
 | `delete_unmapped_aliases.clj` | `bb scripts/bb/articles/delete_unmapped_aliases.clj dev` | Noise deletion |
 | `report_progress.clj` | `bb scripts/bb/articles/report_progress.clj dev` | Coverage report |
+| `group_aliases_by_brand.clj` | `bb group-aliases-by-brand dev` | Variant risk detection |
+| `list_categories.clj` | `bb list-categories dev [--with-subcategories]` | List categories |
+| `unmapped_aliases_counts.clj` | `bb scripts/bb/articles/unmapped_aliases_counts.clj dev` | Grouped counts |
+| `runner/run-by-ids!` | REPL | Re-process review_required receipts |
+| `approval/save-review!` | REPL | Fix items/status without re-OCR |
 | `perplexity_search.clj` | `bb scripts/bb/perplexity_search.clj "query"` | Manual web research (fallback) |
+
+### Taxonomy data files (editable by this workflow)
+
+| File | Format | Injected as | Purpose |
+|------|--------|-------------|---------|
+| `taxonomy/brand-parent-mappings.edn` | `{"Brand" "Parent"}` map | `{{BRAND_MAPPINGS}}` | Brand→parent-company for Perplexity prompt |
+| `taxonomy/self-named-brands.edn` | `["Brand" ...]` vector | `{{BRAND_MAPPINGS}}` | Brands where brand name = manufacturer |
+| `taxonomy/brand-rules.edn` | `[regex mfr cat subcat]` tuples | Local heuristics | Auto-learned brand patterns for offline matching |
+| `taxonomy/keyword-category-hints.edn` | keyword→category map | Local heuristics | Keyword-based category hints |
+| `taxonomy/supplier-hints.edn` | regex→category pairs | Local heuristics | Supplier-based category defaults |
+| `taxonomy/english-bosnian-categories.edn` | EN→BS map | Local heuristics | English-to-Bosnian category translation |
+| `taxonomy/meat-words.edn` | word set | Local heuristics | Meat product keyword detection |
+
+All taxonomy files live under `scripts/bb/articles/taxonomy/` and are loaded by
+`articles_research.clj` at research time. Brand mapping files (`brand-parent-mappings.edn`
+and `self-named-brands.edn`) are formatted and injected into the Perplexity system prompt
+via the `{{BRAND_MAPPINGS}}` placeholder.

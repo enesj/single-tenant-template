@@ -1,0 +1,17 @@
+;; Self-named brands: the brand name IS the manufacturer name.
+;; When Perplexity sees these, it should set mfr to the brand name itself
+;; (not leave it null).
+;;
+;; Maintained by the create-articles- workflow (Phase 1c quality review).
+;; Format: ["Brand1" "Brand2" ...]
+
+["Meggle" "Podravka" "Haribo" "Red Bull" "Barilla" "Roshen"
+ "Violeta" "Vindija" "Dukat" "Bimal" "Vispak" "Swisslion"
+ "Kraš" "Koestlin" "Franck" "Banini" "Zvečevo" "Gavrilović"
+ "Natura" "Saponia" "Labud" "DON DON" "Marbo Product" "STARK"
+ "Marcaffe" "Marlenka" "Fiamma" "Jamnica" "Sarajevska Pivara"
+ "VISOCKA" "Kotanyi" "Rauch" "McCain" "Dr Oetker" "Tuborg"
+ "Essity" "Bosnalijek"
+ ;; Batch 2025-07 additions
+ "Seti" "Galas" "Belje" "Lasta" "Rodolfi" "Grand Prom"
+ "Bingo" "Knjaz Miloš" "L'Oréal" "Coty"]
