@@ -123,6 +123,68 @@
                 {:raw_label "ITEM B" :qty 1.0 :unit_price 5.0 :line_total 5.0}]
               (mapv normalize-item stored-items)))))))
 
+(deftest persist-extract-result-overlays-structured-response-items-onto-bad-provider-items
+  (let [receipt-id (java.util.UUID/randomUUID)
+        mapped-supplier-id (java.util.UUID/randomUUID)
+        alias-id (java.util.UUID/randomUUID)
+        stored (atom nil)]
+    (with-redefs [receipt-queries/get-receipt (fn [_db _rid]
+                                                {:id receipt-id
+                                                 :status "uploaded"})
+                  receipt-status/store-extraction-results!
+                  (fn [_db _rid payload]
+                    (reset! stored payload)
+                    nil)
+                  receipt-status/update-status! (fn [& _] nil)
+                  supplier-aliases/find-or-create-alias!
+                  (fn [_db _raw-label]
+                    {:id alias-id
+                     :supplier_id mapped-supplier-id})
+                  suppliers/resolve-or-create-supplier-with-places!
+                  (fn [& _]
+                    (throw (ex-info "Should not be called" {})))
+                  article-aliases/find-or-create-alias!
+                  (fn [& _]
+                    {:id (java.util.UUID/randomUUID)})]
+      (let [extract-result {:parsed-markdown nil
+                            :raw {:items {:pages [{:items [{:type "table"
+                                                            :rows [["CIG DUNHILL ESSENCE BRONZE" "3,000x" "6,60" "19,80E"]
+                                                                   ["CHIPSY XCUT SALTED 140G" "" "" "3,60E"]]}]}]}}
+                            :extraction {:merchant {:name "AMKO KOMERC"}
+                                         :totals {:total 23.40}
+                                         :items [{:raw_label "CIG DUNHILL ESSENCE BRONZE" :qty 1 :unit_price 3.00 :line_total 19.80}
+                                                 {:raw_label "CHIPSY XCUT SALTED 140G" :qty 1 :unit_price 3.60 :line_total 3.60}]}}
+            res (extraction/persist-extract-result!
+                  ::db
+                  receipt-id
+                  extract-result
+                  {:default-currency "BAM"
+                   :places-cfg {}
+                   :user-region "BA"
+                   :defer-refine? true})
+            stored-items (get-in @stored [:raw_extract_json :extraction :items])
+            structured-merge (get-in @stored [:raw_extract_json :structured_response_merge])
+            normalize-item (fn [m]
+                             (-> m
+                               (select-keys [:raw_label :qty :unit_price :line_total])
+                               (update :qty common/parse-money)
+                               (update :unit_price common/parse-money)
+                               (update :line_total common/parse-money)))
+            normalized-items (mapv normalize-item stored-items)]
+        (is (= receipt-id (:receipt-id res)))
+        (is (= "extracted" (:status res)))
+        (is (= [{:raw_label "CIG DUNHILL ESSENCE BRONZE"
+                 :qty 3.000M
+                 :unit_price 6.60M
+                 :line_total 19.80M}
+                {:raw_label "CHIPSY XCUT SALTED 140G"
+                 :qty 1M
+                 :unit_price 3.60M
+                 :line_total 3.60M}]
+              normalized-items))
+        (is (= 1 (:repaired-count structured-merge)))
+        (is (= 2 (:matched-count structured-merge)))))))
+
 (deftest persist-extract-result-does-not-replace-refined-total-with-markdown-payment-total
   (let [receipt-id (java.util.UUID/randomUUID)
         mapped-supplier-id (java.util.UUID/randomUUID)

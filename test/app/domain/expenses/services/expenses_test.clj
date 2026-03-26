@@ -147,6 +147,59 @@
       (is (= 1 (count (:items expense))))
       (is (= "Item" (-> expense :items first :raw_label))))))
 
+(deftest expenses-create-repairs-inconsistent-unit-price-from-line-total
+  (when-let [db fixtures/*test-db*]
+    (let [supplier-result (suppliers/find-or-create-supplier! db "Repair Supplier" {})
+          supplier (:supplier supplier-result)
+          payer (th/create-payer! db {:type "cash" :label "Cash"})
+          expense (expenses/create-expense! db
+                    {:supplier_id (:id supplier)
+                     :payer_id (:id payer)
+                     :purchased_at (now)
+                     :total_amount (bigdec "19.80")
+                     :currency "BAM"}
+                    [{:raw_label "CIG DUNHILL ESSENCE BRONZE"
+                      :qty "1"
+                      :unit_price "3.00"
+                      :line_total "19.80"}])
+          item (-> expense :items first)]
+      (is (= 1M (bigdec (:qty item))))
+      (is (= 19.80M (bigdec (:unit_price item))))
+      (is (= 19.80M (bigdec (:line_total item)))))))
+
+(deftest expenses-update-repairs-inconsistent-unit-price-from-line-total
+  (when-let [db fixtures/*test-db*]
+    (let [supplier (:supplier (suppliers/find-or-create-supplier! db (str "Update Repair Supplier " (UUID/randomUUID)) {}))
+          payer (th/create-payer! db {:type "cash" :label "Cash"})
+          created (expenses/create-expense! db
+                    {:supplier_id (:id supplier)
+                     :payer_id (:id payer)
+                     :purchased_at (now)
+                     :total_amount (bigdec "3.00")
+                     :currency "BAM"}
+                    [{:raw_label "CIG DUNHILL ESSENCE BRONZE"
+                      :qty (bigdec "1")
+                      :unit_price (bigdec "3.00")
+                      :line_total (bigdec "3.00")}])
+          item-id (-> created :items first :id)
+          updated (expenses/update-expense! db
+                    (:id created)
+                    {:supplier_id (str (:id supplier))
+                     :payer_id (str (:id payer))
+                     :purchased_at "2026-01-10T12:01"
+                     :total_amount 19.8
+                     :currency "BAM"
+                     :items [{:id (str item-id)
+                              :raw_label "CIG DUNHILL ESSENCE BRONZE"
+                              :qty 1
+                              :unit_price 3.0
+                              :line_total 19.8}]})
+          item (-> updated :items first)]
+      (is (= item-id (:id item)))
+      (is (= 1M (bigdec (:qty item))))
+      (is (= 19.80M (bigdec (:unit_price item))))
+      (is (= 19.80M (bigdec (:line_total item)))))))
+
 (deftest expenses-update-keeps-items-with-valid-not-in-sql
   (when-let [db fixtures/*test-db*]
     (let [supplier (:supplier (suppliers/find-or-create-supplier! db (str "Update Expense Supplier " (UUID/randomUUID)) {}))

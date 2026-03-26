@@ -121,6 +121,39 @@
       (or qty-one? (nil? (:unit_price prev-item)))
       (assoc :unit_price disc-total))))
 
+(defn- price-mismatch?
+  [qty unit-price line-total]
+  (let [qty (common/parse-money qty)
+        unit-price (common/parse-money unit-price)
+        line-total (common/parse-money line-total)
+        expected (when (and qty unit-price)
+                   (.multiply ^java.math.BigDecimal (bigdec unit-price)
+                     ^java.math.BigDecimal (bigdec qty)))
+        diff (when (and expected line-total)
+               (shape/abs-decimal-diff expected line-total))]
+    (and qty
+      unit-price
+      line-total
+      (pos? (.signum ^java.math.BigDecimal (bigdec qty)))
+      (some? diff)
+      (> diff 0.01))))
+
+(defn- repair-item-prices
+  "When unit_price × qty differs from line_total, trust line_total and recalculate unit_price."
+  [item]
+  (let [qty (common/parse-money (:qty item))
+        line-total (common/parse-money (:line_total item))]
+    (if-not (price-mismatch? qty (:unit_price item) line-total)
+      [item false]
+      (let [repaired-unit-price (.divide ^java.math.BigDecimal (bigdec line-total)
+                                  ^java.math.BigDecimal (bigdec qty)
+                                  2
+                                  java.math.RoundingMode/HALF_UP)]
+        [(assoc item
+           :unit_price repaired-unit-price
+           :price_repaired true)
+         true]))))
+
 (defn clean-extraction-items
   [items {:keys [items-count grand-total] :as ctx}]
   (let [label-sample-limit 5
@@ -160,15 +193,29 @@
            :dropped-labels-sample {}
            :discount-overrides 0}
           (or items []))
+        [items price-repairs]
+        (reduce
+          (fn [[kept-items repairs] item]
+            (let [[item repaired?] (repair-item-prices item)]
+              [(conj kept-items item)
+               (if repaired?
+                 (inc repairs)
+                 repairs)]))
+          [[] 0]
+          items)
+        items (vec items)
         original-count (long (or items-count (count (or items []))))
         kept-count (count items)
         dropped-count (->> dropped-by-reason vals (reduce + 0))
         post-processing
-        (when (or (pos? dropped-count) (pos? (long discount-overrides)))
+        (when (or (pos? dropped-count)
+                (pos? (long discount-overrides))
+                (pos? (long price-repairs)))
           {:original-count original-count
            :kept-count kept-count
            :dropped-count dropped-count
            :discount-overrides (long (or discount-overrides 0))
+           :price-repairs (long (or price-repairs 0))
            :dropped-by-reason dropped-by-reason
            :dropped-labels-sample (not-empty dropped-labels-sample)
            :grand-total (when grand-total (str grand-total))})]

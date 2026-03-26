@@ -196,6 +196,25 @@
     (is (= 4.80M (bigdec (get-in items [1 :unit_price]))))
     (is (= 9.60M (bigdec (get-in items [1 :line_total]))))))
 
+(deftest receipt-extraction-parses-no-header-four-column-table-rows
+  (let [resp {:items {:pages [{:items [{:type "table"
+                                        :rows [["CIG DUNHILL ESSENCE BRONZE" "3,000x" "6,60" "19,80E"]
+                                               ["CHIPSY XCUT SALTED 140G" "" "" "3,60E"]]}]}]}}
+        extraction (receipt-extract/response->extraction resp)
+        items (:items extraction)]
+    (is (= 2 (count items)))
+    (is (= {:raw_label "CIG DUNHILL ESSENCE BRONZE"
+            :qty 3.000M
+            :unit_price 6.60M
+            :line_total 19.80M}
+          (first items)))
+    (is (= {:raw_label "CHIPSY XCUT SALTED 140G"
+            :qty 1M
+            :unit_price 3.60M
+            :line_total 3.60M}
+          (second items)))
+    (is (= 23.40M (bigdec (get-in extraction [:totals :total]))))))
+
 (deftest receipt-extraction-parses-inline-discount-unit-row
   (let [resp {:items {:pages [{:items [{:type "header"
                                         :md (str "\"Pepco B-H\" d.o.o.\n"

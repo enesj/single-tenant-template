@@ -352,19 +352,43 @@
                     mapping
                     (let [n (count cells)
                           label (normalize-item-label (nth cells (:label-idx mapping) nil))
-                          label-norm (text/normalize-text label)]
-                      (if (and (not header?)
-                            (not unit?)
-                            (nil? discount)
-                            (nil? q)
-                            (nil? (:unit-idx mapping))
-                            (= 1 (:total-idx mapping))
-                            (>= n 3)
-                            (re-find #"\p{L}" (or label ""))
-                            (common/parse-money (nth cells 1 nil))
-                            (common/parse-money (last cells))
-                            (not (summary-label? label-norm)))
+                          label-norm (text/normalize-text label)
+                          qty-cell (nth cells 1 nil)
+                          unit-cell (nth cells 2 nil)
+                          qty-token? (fn [s]
+                                       (boolean
+                                         (and (string? (text/safe-trim s))
+                                           (re-matches #"(?i)^[0-9][0-9,\.]*x$" (text/safe-trim s)))))]
+                      (cond
+                        (and (not header?)
+                          (not unit?)
+                          (nil? discount)
+                          (nil? q)
+                          (nil? (:qty-idx mapping))
+                          (nil? (:unit-idx mapping))
+                          (= 1 (:total-idx mapping))
+                          (>= n 4)
+                          (re-find #"\p{L}" (or label ""))
+                          (qty-token? qty-cell)
+                          (common/parse-money unit-cell)
+                          (common/parse-money (last cells))
+                          (not (summary-label? label-norm)))
+                        (assoc mapping :qty-idx 1 :unit-idx 2 :total-idx (dec n))
+
+                        (and (not header?)
+                          (not unit?)
+                          (nil? discount)
+                          (nil? q)
+                          (nil? (:unit-idx mapping))
+                          (= 1 (:total-idx mapping))
+                          (>= n 3)
+                          (re-find #"\p{L}" (or label ""))
+                          (common/parse-money (nth cells 1 nil))
+                          (common/parse-money (last cells))
+                          (not (summary-label? label-norm)))
                         (assoc mapping :unit-idx 1 :total-idx (dec n))
+
+                        :else
                         mapping))]
                 (cond
                   (empty? cells)
@@ -411,8 +435,6 @@
                     :else
                     (recur (rest remaining) mapping nil items total-lines))
 
-                  ;; Price-continuation row: pending-label set, no label in this row,
-                  ;; price appears in the last column only (e.g. [empty][empty][empty][7,40E]).
                   (and pending-label
                     (nil? (some-> (nth cells (:label-idx mapping) nil) text/safe-trim not-empty))
                     (common/parse-money (last cells)))

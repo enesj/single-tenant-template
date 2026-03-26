@@ -5,6 +5,7 @@
     [app.domain.backend.expenses.services.receipts.queries :as receipt-queries]
     [app.domain.backend.expenses.services.receipts.status :as receipt-status]
     [app.domain.backend.expenses.workers.receipt-ocr.common :as common]
+    [app.domain.backend.expenses.workers.receipt-ocr.extraction.hybrid-items :as hybrid-items]
     [app.domain.backend.expenses.workers.receipt-ocr.extraction.item-aliases :as item-aliases]
     [app.domain.backend.expenses.workers.receipt-ocr.extraction.items :as extraction-items]
     [app.domain.backend.expenses.workers.receipt-ocr.extraction.merchant :as extraction-merchant]
@@ -111,6 +112,9 @@
                       (seq markdown-items) (assoc extraction0 :items markdown-items)
                       (sequential? (:items extraction0)) extraction0
                       :else (assoc extraction0 :items []))
+        structured-merge (hybrid-items/merge-structured-items (:items extraction0) (:raw extract-result))
+        structured-merge-meta (:meta structured-merge)
+        extraction0 (assoc extraction0 :items (:items structured-merge))
         provider-total0 (common/parse-money (get-in extraction0 [:totals :total]))
         extraction0 (cond-> extraction0
                       (shape/prefer-markdown-total? provider-total0 markdown-total (:items extraction0))
@@ -185,11 +189,6 @@
                  "review_required")
         lines-total-mismatch (and (= status "extracted")
                                (lines-total-mismatch? (:items extraction) (:total_amount_guess guesses)))
-        ;; Write review_required to DB when lines/total mismatch so the raw DB
-        ;; status is consistent with the effective status returned by the API.
-        ;; Previously the mismatch override only happened at query time via
-        ;; effective_status_sql, causing DB "extracted" vs app-db "review_required"
-        ;; discrepancies after the Cerebras refine step cleared refine_pending.
         db-status (if lines-total-mismatch "review_required" status)
         llm-refine (:llm_refine extract-result)
         item-aliases-snapshot (if (= :unknown source)
@@ -227,6 +226,9 @@
                            changed?
                            (assoc :reconciliation {:changes changes
                                                    :source :parsed_markdown})
+
+                           (map? structured-merge-meta)
+                           (assoc :structured_response_merge structured-merge-meta)
 
                            (map? post-processing)
                            (assoc :post_processing post-processing))]

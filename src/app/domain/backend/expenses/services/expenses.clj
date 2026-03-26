@@ -141,6 +141,21 @@
               {:qty qty :line-total line-total})
             nil)))
 
+(defn- inconsistent-item-unit-price?
+  [{:keys [qty unit_price line_total]}]
+  (let [expected (when (and qty unit_price)
+                   (.multiply ^java.math.BigDecimal qty
+                     ^java.math.BigDecimal unit_price))
+        diff (when (and expected line_total)
+               (.abs (.subtract ^java.math.BigDecimal expected
+                       ^java.math.BigDecimal line_total)))]
+    (and qty
+      unit_price
+      line_total
+      (pos? (.signum ^java.math.BigDecimal qty))
+      diff
+      (pos? (.compareTo ^java.math.BigDecimal diff (bigdec "0.01"))))))
+
 (defn- normalize-expense-item
   [item]
   (let [item* (-> item
@@ -151,9 +166,13 @@
                 (update-if-present :unit_price #(parse-bigdec! :unit_price %))
                 (update-if-present :line_total #(parse-bigdec! :line_total %)))
         derived-unit-price (when (nil? (:unit_price item*))
-                             (derive-unit-price (:qty item*) (:line_total item*)))]
+                             (derive-unit-price (:qty item*) (:line_total item*)))
+        repaired-unit-price (when (and (:unit_price item*)
+                                    (inconsistent-item-unit-price? item*))
+                              (derive-unit-price (:qty item*) (:line_total item*)))]
     (cond-> item*
-      derived-unit-price (assoc :unit_price derived-unit-price))))
+      derived-unit-price (assoc :unit_price derived-unit-price)
+      repaired-unit-price (assoc :unit_price repaired-unit-price))))
 
 (def ^:private min-alias-normalized-length
   "Minimum length of a normalized alias label to be considered valid.
