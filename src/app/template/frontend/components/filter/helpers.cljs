@@ -142,6 +142,70 @@
           pad2 (fn [n] (.padStart (str n) 2 "0"))]
       (str year "-" (pad2 month) "-" (pad2 day)))))
 
+(defn- select-option-label
+  [{:keys [field-spec raw-value display-value]}]
+  (let [options (:options field-spec)]
+    (or (when (map? options)
+          (get options raw-value))
+      (when (sequential? options)
+        (some (fn [option]
+                (when (= (:value option) raw-value)
+                  (:label option)))
+          options))
+      (when (some? display-value)
+        (str display-value))
+      (when (some? raw-value)
+        (str raw-value)))))
+
+(defn cell-filter-value
+  "Build a filter payload that represents equality for a clicked cell value."
+  [{:keys [field-spec item value display-value]}]
+  (let [raw-value (if (some? value)
+                    value
+                    (get-item-field-value item (:id field-spec)))
+        filter-type (get-filter-type {:field-spec field-spec})]
+    (case filter-type
+      :text
+      (let [text-value (some-> raw-value str)]
+        (when (and text-value (not (str/blank? text-value)))
+          text-value))
+
+      :number-range
+      (when-let [numeric-value (parse-field-value {:value raw-value
+                                                   :field-type :number-range})]
+        {:min numeric-value
+         :max numeric-value})
+
+      :date-range
+      (when-let [from-date (local-start-of-day raw-value)]
+        {:from from-date
+         :to (local-end-of-day raw-value)})
+
+      :select
+      (cond
+        (nil? raw-value)
+        nil
+
+        (and (coll? raw-value) (not (map? raw-value)))
+        (let [selected-values (vec raw-value)]
+          (when (seq selected-values)
+            (mapv (fn [selected-value]
+                    {:value selected-value
+                     :label (or (select-option-label {:field-spec field-spec
+                                                      :raw-value selected-value
+                                                      :display-value selected-value})
+                              (str selected-value))})
+              selected-values)))
+
+        :else
+        [{:value raw-value
+          :label (or (select-option-label {:field-spec field-spec
+                                           :raw-value raw-value
+                                           :display-value display-value})
+                   (str raw-value))}])
+
+      nil)))
+
 (defn matches-filter?
   "Checks if an item matches a filter value based on field type.
   Uses tolerant field resolution so it works with namespaced entity maps

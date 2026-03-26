@@ -78,6 +78,48 @@
           filter-type (filter-helpers/get-filter-type {:field-spec enum-field})]
       (is (= :select filter-type) "Should detect select filter type for enum"))))
 
+(deftest cell-filter-value-test
+  (testing "clicked text cells use their string value as the filter"
+    (is (= "Apple Product"
+          (filter-helpers/cell-filter-value
+            {:field-spec {:id "description" :input-type "text"}
+             :item {:description "Apple Product"}}))))
+
+  (testing "clicked numeric cells become exact min/max range filters"
+    (is (= {:min 42 :max 42}
+          (filter-helpers/cell-filter-value
+            {:field-spec {:id "amount" :input-type "number"}
+             :item {:amount 42}}))))
+
+  (testing "clicked date cells become same-day date range filters"
+    (let [value (js/Date. "2026-03-12T14:35:00")
+          result (filter-helpers/cell-filter-value
+                   {:field-spec {:id "created_at" :input-type "datetime-local"}
+                    :item {:created_at value}})]
+      (is (= (filter-helpers/local-start-of-day value) (:from result)))
+      (is (= (filter-helpers/local-end-of-day value) (:to result)))))
+
+  (testing "clicked select cells keep the raw value and the visible label"
+    (is (= [{:value "active" :label "Active"}]
+          (filter-helpers/cell-filter-value
+            {:field-spec {:id "status"
+                          :input-type "select"
+                          :options [{:value "active" :label "Active"}
+                                    {:value "pending" :label "Pending"}]}
+             :item {:status "active"}
+             :display-value "Active"}))))
+
+  (testing "blank text cells do not create a filter payload"
+    (is (nil? (filter-helpers/cell-filter-value
+                {:field-spec {:id "notes" :input-type "text"}
+                 :item {:notes "   "}}))))
+
+  (testing "falsey non-nil values still produce filters"
+    (is (= [{:value false :label "false"}]
+          (filter-helpers/cell-filter-value
+            {:field-spec {:id "enabled" :input-type "select"}
+             :item {:enabled false}})))))
+
 (deftest text-filter-test
   (testing "Text filtering functionality"
     (reset! rf-db/app-db {})

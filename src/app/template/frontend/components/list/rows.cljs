@@ -4,14 +4,16 @@
    This module uses reactive cell components from the cells module for selection
    and actions."
   (:require
+    [app.template.frontend.components.filter.helpers :as filter-helpers]
     [app.template.frontend.utils.id :as id-utils]
     [app.shared.keywords :as kw]
     [app.shared.model-naming :as model-naming]
     [app.template.frontend.components.form :refer [form]]
     [app.template.frontend.components.list.cells :as cells]
-    [app.template.frontend.components.list.fields :refer [get-field-display-value]] ;; Import reactive cell components from the cells module
+    [app.template.frontend.components.list.fields :refer [get-field-display-value]]
     [app.template.frontend.events.form :as form-events]
     [app.template.frontend.events.list.crud :as crud-events]
+    [app.template.frontend.events.list.filters :as filter-events]
     [app.template.frontend.utils.column-config :as column-config]
     [app.template.frontend.utils.timestamp :as timestamp]
     [re-frame.core :as rf]
@@ -21,12 +23,42 @@
 ;; Row Content Generation
 ;; =============================================================================
 
+(defn- normalize-column-id
+  [col]
+  (model-naming/ensure-app-keyword (kw/ensure-name col)))
+
+(defn- normalize-filterable-fields
+  [filterable-fields]
+  (cond
+    (map? filterable-fields)
+    (into {}
+      (keep (fn [[k v]]
+              (when-let [normalized-id (normalize-column-id k)]
+                [normalized-id v])))
+      filterable-fields)
+
+    (coll? filterable-fields)
+    (let [normalized-ids (into [] (keep normalize-column-id) filterable-fields)]
+      (when (seq normalized-ids)
+        (set normalized-ids)))
+
+    :else nil))
+
 (defn- row-content
   "Generates the content for a table row."
-  [{:keys [entity-spec item actions visible-columns entity-name selected-ids on-select-change column-order]}]
+  [{:keys [entity-spec
+           item
+           actions
+           visible-columns
+           entity-name
+           selected-ids
+           on-select-change
+           column-order
+           show-filtering?
+           filterable-fields
+           user-filterable-settings]}]
 
-  (let [;; Safely get field values from entity-spec - FIXED: Check :fields key first
-        entity-fields (cond
+  (let [entity-fields (cond
                         (and (map? entity-spec) (:fields entity-spec))
                         (let [fields (:fields entity-spec)]
                           (if (sequential? fields)
@@ -37,41 +69,74 @@
                         (->> (vals entity-spec)
                           (filter map?)
                           (filter #(contains? % :id))
-                          ;; CRITICAL FIX: Sort by display-order to match header ordering
                           (sort-by #(or (get-in % [:admin :display-order]) 999)))
 
                         (sequential? entity-spec) entity-spec
                         :else [])
 
         ordered-entity-fields (column-config/order-fields entity-fields column-order)
+        normalized-user-filterable-settings
+        (into {}
+          (keep (fn [[k v]]
+                  (when-let [normalized-id (normalize-column-id k)]
+                    [normalized-id v])))
+          (or user-filterable-settings {}))
+        normalized-filterable-fields (normalize-filterable-fields filterable-fields)
+        field-filterable?
+        (fn [field-id]
+          (let [normalized-field-id (normalize-column-id field-id)
+                user-setting (get normalized-user-filterable-settings normalized-field-id ::not-found)]
+            (if (not= user-setting ::not-found)
+              user-setting
+              (cond
+                (map? normalized-filterable-fields)
+                (boolean (get normalized-filterable-fields normalized-field-id true))
 
-        normalize-col (fn [col]
-                        ;; Canonicalize to a simple app keyword (no namespace).
-                        ;; Example: :admins/email -> :email, :created_at -> :created-at
-                        (model-naming/ensure-app-keyword (kw/ensure-name col)))
+                (set? normalized-filterable-fields)
+                (contains? normalized-filterable-fields normalized-field-id)
 
+                :else true))))
+        field-specs-by-id (into {}
+                            (map (fn [field]
+                                   [(normalize-column-id (:id field)) field]))
+                            (filter map? ordered-entity-fields))
         timestamp-field-ids (into #{}
-                              (keep (comp normalize-col :id))
+                              (keep (comp normalize-column-id :id))
                               (filter map? ordered-entity-fields))
-
-        ;; Filter out the raw timestamp fields to avoid duplication.
-        ;; Timestamp columns are rendered via the timestamp cell helpers below,
-        ;; and are controlled solely by Column Visibility.
         filtered-entity-fields (remove (fn [field]
                                          (contains? #{:created-at :updated-at}
-                                           (normalize-col (:id field))))
+                                           (normalize-column-id (:id field))))
                                  ordered-entity-fields)
-
-        ;; Process field values, but only for visible columns
+        build-filterable-cell
+        (fn [{:keys [field raw-value display-value rendered-content]}]
+          (let [field-id (normalize-column-id (:id field))
+                filter-value (when (and show-filtering?
+                                     (field-filterable? field-id))
+                               (filter-helpers/cell-filter-value
+                                 {:field-spec field
+                                  :item item
+                                  :value raw-value
+                                  :display-value display-value}))]
+            (if filter-value
+              (fn []
+                ($ :div {:class "w-full cursor-pointer"
+                         :title "Double-click to filter by this value"
+                         :on-double-click (fn [e]
+                                            (.stopPropagation e)
+                                            (rf/dispatch [::filter-events/apply-filter
+                                                          entity-name
+                                                          field-id
+                                                          filter-value
+                                                          false]))}
+                  rendered-content))
+              rendered-content)))
         field-values (mapv (fn [field]
                              (let [raw-id (:id field)
-                                   ;; Canonical (non-namespaced) column key used by config/prefs.
-                                   ;; Example: :admins/email -> :email
-                                   field-id (normalize-col raw-id)
-                                   ;; Use vector-config driven visibility map directly.
+                                   field-id (normalize-column-id raw-id)
                                    is-column-visible? (let [user-setting (get visible-columns field-id ::not-found)]
-                                                        (if (not= user-setting ::not-found) user-setting true))]
-                               ;; Only include this field if the column is visible
+                                                        (if (not= user-setting ::not-found)
+                                                          user-setting
+                                                          true))]
                                (when is-column-visible?
                                  (let [entity-ns (kw/ensure-name entity-name)
                                        raw-name (kw/ensure-name raw-id)
@@ -80,18 +145,20 @@
                                                         (keyword entity-ns raw-name))
                                        namespaced-canonical (when (and entity-ns (kw/ensure-name field-id))
                                                               (keyword entity-ns (kw/ensure-name field-id)))
-                                       ;; Try canonical + raw (namespaced) keys for resilience.
                                        value (or (get item field-id)
                                                (when raw-kw (get item raw-kw))
                                                (when namespaced-raw (get item namespaced-raw))
-                                               (when namespaced-canonical (get item namespaced-canonical)))]
-                                   (get-field-display-value field value item)))))
+                                               (when namespaced-canonical (get item namespaced-canonical)))
+                                       display-value (or (some-> (:display-source-field field)
+                                                           (filter-helpers/get-item-field-value item))
+                                                       value)
+                                       rendered-content (get-field-display-value field value item)]
+                                   (build-filterable-cell {:field field
+                                                           :raw-value value
+                                                           :display-value display-value
+                                                           :rendered-content rendered-content})))))
                        filtered-entity-fields)
-
-        ;; Filter out nil values (from columns that should be hidden)
         filtered-field-values (filterv some? field-values)
-
-        ;; Timestamp values for created_at and updated_at - controlled solely by Column Visibility
         timestamps (let [created-key :created-at
                          updated-key :updated-at
                          legacy-map {created-key :created-at
@@ -123,19 +190,24 @@
                          render-timestamp (fn [value]
                                             (timestamp/render-timestamp value {:show-seconds? true
                                                                                :highlight-seconds? true}))
+                         timestamp-cell (fn [field-id raw-value]
+                                          (let [field-spec (or (get field-specs-by-id field-id)
+                                                             {:id field-id
+                                                              :input-type "datetime"})]
+                                            (build-filterable-cell {:field field-spec
+                                                                    :raw-value raw-value
+                                                                    :display-value raw-value
+                                                                    :rendered-content (render-timestamp raw-value)})))
                          has-created? (contains? timestamp-field-ids created-key)
                          has-updated? (contains? timestamp-field-ids updated-key)]
                      [(when (and has-created? (column-visible? created-key))
-                        (render-timestamp (fetch-value item created-key)))
+                        (let [raw-value (fetch-value item created-key)]
+                          (timestamp-cell created-key raw-value)))
                       (when (and has-updated? (column-visible? updated-key))
-                        (render-timestamp (fetch-value item updated-key)))])
-
-        ;; Filter out nil values from timestamps (from timestamps that should be hidden)
+                        (let [raw-value (fetch-value item updated-key)]
+                          (timestamp-cell updated-key raw-value)))])
         filtered-timestamps (filterv some? timestamps)]
 
-    ;; Return all cell values in the same order as headers: select checkbox (if enabled), base fields, timestamps, actions
-    ;; Use the reactive-selection-cell component which subscribes to show-select? directly
-    ;; This ensures the checkbox visibility updates immediately when the user toggles the setting
     (vec (concat [(fn [] ($ cells/reactive-selection-cell
                            {:entity-name entity-name
                             :item item
@@ -151,24 +223,30 @@
 
 (defn render-row
   "Renders a single row in the list, either as a form or as a table row."
-  [{:keys [entity-spec editing set-editing! entity-name recently-updated-ids recently-created-ids selected-ids on-select-change visible-columns column-order] :as props} {:keys [item]}]
+  [{:keys [entity-spec
+           editing
+           set-editing!
+           entity-name
+           recently-updated-ids
+           recently-created-ids
+           selected-ids
+           on-select-change
+           visible-columns
+           column-order
+           show-filtering?
+           filterable-fields
+           user-filterable-settings]
+    :as props}
+   {:keys [item]}]
   (let [props-map (js->clj props :keywordize-keys true)
-        ;; Use the explicit entity-spec (vector-config) for table rows.
-        ;; Do not fall back to form-entity-spec to avoid label drift.
         effective-entity-spec entity-spec
-
-        ;; Use the edit form spec (from form-fields config) when available.
         form-entity-spec-edit (or (:form-entity-spec-edit props-map)
                                 (:form-entity-spec props-map))
         effective-form-entity-spec (or form-entity-spec-edit effective-entity-spec)
-
-        ;; FIX: Keep item as ClojureScript data structure instead of converting to JS
         item-clj (if (map? item) item (js->clj item :keywordize-keys true))
-
         row-props (merge props-map
                     {:initial-values (into {}
                                        (map (fn [[k v]]
-                                              ;; Convert namespaced keys to simple keys for form fields
                                               (let [simple-key (if (and (keyword? k) (namespace k))
                                                                  (keyword (name k))
                                                                  k)]
@@ -178,51 +256,36 @@
                      :on-cancel #(do
                                    (rf/dispatch [::crud-events/clear-error (keyword (:entity-name props))])
                                    (rf/dispatch [::form-events/clear-form-errors (keyword (:entity-name props))])
-                                   ;; Clear the editing state to hide the inline edit form
                                    (set-editing! nil))
                      :item item-clj})
-        ;; Use the generic ID extraction utility
         item-id (id-utils/extract-entity-id item-clj)
         item-id-int (if (string? item-id) (js/parseInt item-id) item-id)
         item-id-str (str item-id)
-
-        ;; Helper function to check if a string looks like a UUID
-        is-uuid? (fn [s] (and (string? s) (re-matches #"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" s)))
-
-        ;; Smart comparison that handles both UUIDs and numeric IDs
-        ;; IMPORTANT: Only show edit form if both item-id and editing are non-null and equal
+        is-uuid? (fn [s]
+                   (and (string? s)
+                     (re-matches #"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$" s)))
         is-editing (and (some? item-id)
                      (some? editing)
                      (cond
-                       ;; If both are UUIDs, compare as strings
                        (and (is-uuid? item-id) (is-uuid? editing))
                        (= item-id editing)
 
-                       ;; If both are numbers, compare as numbers
                        (and (number? item-id) (number? editing))
                        (= item-id editing)
 
-                       ;; If one is string and one is number, try to convert and compare
                        (and (string? item-id) (number? editing))
                        (= (js/parseInt item-id) editing)
 
                        (and (number? item-id) (string? editing))
                        (= item-id (js/parseInt editing))
 
-                       ;; If both are strings but not UUIDs, compare as strings
                        (and (string? item-id) (string? editing))
                        (= item-id editing)
 
-                       ;; Default case: direct comparison
                        :else
                        (= item-id editing)))
-
-        ;; Ensure recently-updated-ids and recently-created-ids are sets, not nil
         updated-ids (or recently-updated-ids #{})
         created-ids (or recently-created-ids #{})
-
-        ;; Check if this item ID is in the set of recently updated or created IDs
-        ;; Try both string and integer versions for comparison
         recently-updated? (and (set? updated-ids)
                             (or (contains? updated-ids item-id)
                               (contains? updated-ids item-id-int)
@@ -247,10 +310,7 @@
         delete-disabled? (and policy-show-delete? disable-mode? (not allowed-delete?))]
 
     (if is-editing
-      ;; If the item is being edited, render the edit form
       (if-let [custom-render-edit (:render-edit-form props)]
-        ;; Use custom edit form renderer if provided (inline mode with custom form)
-        ;; Return as a single cell that spans all columns
         [(custom-render-edit item-clj
            {:entity-name entity-name
             :entity-spec entity-spec
@@ -259,22 +319,15 @@
                           (when-let [on-success (:on-edit-success props)]
                             (on-success)))
             :on-cancel #(set-editing! nil)})]
-        ;; Otherwise use the default form
         ($ form (assoc row-props :editing editing)))
-      ;; Otherwise, render the table row with action buttons and select checkbox
       {:cells (row-content {:entity-spec effective-entity-spec
-                            :item item                      ; Keep using original item for display
-                            ;; If a full actions override is provided (e.g., on admin pages),
-                            ;; use it exclusively. Otherwise, fall back to the template defaults
-                            ;; which can optionally include custom actions.
+                            :item item
                             :actions (if-let [override (:actions-override props)]
                                        (override (assoc item-clj
                                                    :show-edit? show-edit?
                                                    :show-delete? show-delete?
                                                    :edit-disabled? edit-disabled?
                                                    :delete-disabled? delete-disabled?
-                                                   ;; Allow action overrides to trigger modal edit when list-view
-                                                   ;; is in :form-display :modal mode (list-view passes :on-edit-click).
                                                    :on-edit-click (:on-edit-click props)))
                                        ($ cells/action-buttons
                                          {:item item-clj
@@ -285,13 +338,14 @@
                                           :delete-disabled? delete-disabled?
                                           :custom-actions (:custom-actions props)
                                           :on-edit-click (:on-edit-click props)}))
-
                             :visible-columns visible-columns
                             :column-order column-order
                             :entity-name entity-name
-                            ;; Pass selected-ids and on-select-change for reactive-selection-cell
                             :selected-ids (or selected-ids #{})
-                            :on-select-change on-select-change})
+                            :on-select-change on-select-change
+                            :show-filtering? show-filtering?
+                            :filterable-fields filterable-fields
+                            :user-filterable-settings user-filterable-settings})
        :recently-updated? recently-updated?
        :recently-created? recently-created?
        :selected? selected?
