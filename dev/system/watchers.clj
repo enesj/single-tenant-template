@@ -51,18 +51,24 @@
   (let [file-name (.getName file)
         file-path (.getPath file)
         matches-extension? (boolean (re-matches #"[^.].*(\.clj|\.edn|\.cljc)$" file-name))
+  test-file? (boolean (re-find #"(^|/)test/" file-path))
         admin-ui-config-edn? (boolean (re-find #"/src/app/admin/frontend/config/[^/]+\.edn$" file-path))
         domain-ui-config-edn? (boolean (re-find #"/src/app/domain/frontend/.+/config/[^/]+\.edn$" file-path))
         excluded-edn? (or admin-ui-config-edn? domain-ui-config-edn?)
+  excluded-path? test-file?
         ;; These EDN files are edited at runtime via /admin/admin-settings and /admin/user-settings;
         ;; restarting the dev system on each save causes disruptive full page reloads.
-        passes? (and matches-extension? (not excluded-edn?))]
+  ;; Test namespaces are not part of the dev app refresh dirs, so restarting the live
+  ;; backend for `test/` edits only creates noisy/pointless restarts.
+  passes? (and matches-extension? (not excluded-edn?) (not excluded-path?))]
        {:file-name file-name
         :file-path file-path
         :matches-extension? matches-extension?
+  :test-file? test-file?
         :admin-ui-config-edn? admin-ui-config-edn?
         :domain-ui-config-edn? domain-ui-config-edn?
         :excluded-edn? excluded-edn?
+  :excluded-path? excluded-path?
         :passes? passes?}))
 
 (defn- clojure-file? [_ event]
@@ -105,7 +111,7 @@
 (defn watch-backend
   "Automatically restarts the system if backend related files are changed."
   [callback]
-  (let [paths ["src/app" "dev" "config" "vendor" "test"]
+  (let [paths ["src/app" "dev" "config" "vendor"]
         cwd (System/getProperty "user.dir")
         path-info (mapv (fn [p]
                           (let [f (java.io.File. p)]

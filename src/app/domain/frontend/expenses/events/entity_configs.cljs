@@ -89,6 +89,12 @@
                         :supplier-id :supplier-id
                         :article-id  :article-id}})
 
+(def unmapped-aliases-config
+  {:entity-key :unmapped-aliases
+   :base-path [:admin :expenses :unmapped-aliases]
+   :api-endpoint "/admin/api/expenses/articles/unmapped-aliases"
+   :has-forms? false})
+
 (def supplier-aliases-config
   {:entity-key :supplier-aliases
    :base-path [:admin :expenses :supplier-aliases]

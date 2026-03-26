@@ -31,11 +31,14 @@
                                            (:supplier_id qp)))
                            limit (utils/parse-int-param qp :limit 50)
                            offset (utils/parse-int-param qp :offset 0)
-                           rows (aliases/list-unmapped-aliases
-                                  db
-                                  (cond-> {:limit limit :offset offset}
-                                    supplier-id (assoc :supplier-id supplier-id)))]
-                       (utils/success-response {:unmapped-aliases (factory/to-app rows)})))
+                           opts (cond-> {:limit limit :offset offset}
+                                  supplier-id (assoc :supplier-id supplier-id))
+                           rows (aliases/list-unmapped-aliases db opts)
+                           total (long (or (aliases/count-unmapped-aliases db opts) 0))]
+                       (utils/success-response {:unmapped-aliases (factory/to-app rows)
+                                                :total total
+                                                :limit limit
+                                                :offset offset})))
                    "Failed to list unmapped aliases")
                  request))}]
 
