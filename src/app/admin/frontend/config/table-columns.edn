@@ -491,13 +491,12 @@
   :removed-fields {:available-columns ["preferred-name"]}}
 
  :backlog
- {:available-columns ["number" "description" "status" "type" "priority" "created_at" "updated_at"],
-  :default-visible-columns ["number" "description" "status" "type" "priority"],
-  :filterable-columns ["number" "description" "status" "type" "priority"],
-  :sortable-columns ["number" "status" "type" "priority"],
+ {:available-columns ["number" "description" "status" "type" "created_at" "updated_at"],
+  :default-visible-columns ["number" "description" "status" "type"],
+  :filterable-columns ["number" "description" "status" "type"],
+  :sortable-columns ["number" "status" "type"],
   :always-visible ["number"],
   :computed-fields {},
   :column-config
   {:status {:width "120px", :formatter "backlog-status-badge"}
-   :type {:width "130px", :formatter "backlog-type-badge"}
-   :priority {:width "100px", :formatter "backlog-priority-badge"}}}}
+   :type {:width "130px", :formatter "backlog-type-badge"}}}}

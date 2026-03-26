@@ -1,1 +1,0 @@
-{"version":3,"file":"\/Users\/enes\/Projects\/single-tenant-template\/.cljs_node_repl\/app\/template\/frontend\/events\/auth\/fx.js","sources":["fx.cljs"],"lineCount":9,"mappings":";AAAA;;;AASA,+BAAA,\/BAACA,6FAEC,WAAKC;AAAL,AACE,QAAM,AAAQC,uBAAoBD","names":["re-frame.core\/reg-fx","path","js\/window.location"]}
