@@ -35,6 +35,21 @@
               btn))
       (array-seq buttons))))
 
+(deftest rows-override-server-mode-skips-local-transforms
+  (let [apply-transforms @#'list/apply-rows-override-transforms
+        rows [{:id 1 :status "posted"}
+              {:id 2 :status "review_required"}
+              {:id 3 :status "failed"}]
+        entity-spec {:fields [{:id :status :label "Status" :type :text}]}
+        result (apply-transforms {:rows rows
+                                  :active-filters {}
+                                  :sort-config {:field :status :direction :asc}
+                                  :server-pagination? true
+                                  :entity-name :receipts
+                                  :entity-spec entity-spec})]
+    (is (= rows result)
+      "Server-paginated rows-override lists should preserve backend ordering")))
+
 (deftest admin-routes-bypass-action-gates
   (let [gate-allows? @#'list/gate-allows-action?]
     (is (true? (gate-allows? :expenses/articles.manage

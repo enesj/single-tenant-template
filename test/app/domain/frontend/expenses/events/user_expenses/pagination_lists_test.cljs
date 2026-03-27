@@ -111,6 +111,27 @@
         (finally
           (rf/reg-fx :dispatch rf/dispatch))))))
 
+(deftest receipts-refresh-list-forwards-sort-config
+  (testing "refresh wrapper forwards the current template sort config to fetch params"
+    (sup/reset-db!)
+    (swap! rf-db/app-db assoc-in (paths/list-per-page :receipts) 25)
+    (swap! rf-db/app-db assoc-in (paths/list-current-page :receipts) 1)
+    (swap! rf-db/app-db assoc-in (paths/list-filters :receipts) {})
+    (rf/dispatch-sync [::list-ui-state-events/set-sort-field :receipts :status])
+    (let [dispatches (atom [])]
+      (rf/reg-fx :dispatch (fn [event]
+                             (swap! dispatches conj event)))
+      (try
+        (rf/dispatch-sync [:user-expenses/refresh-receipts-list])
+        (let [[event-id params] (first @dispatches)]
+          (is (= :user-expenses/fetch-receipts event-id))
+          (is (= "status" (:order-by params)))
+          (is (= "asc" (:order-dir params)))
+          (is (= {:limit 25 :offset 0}
+                (select-keys params [:limit :offset]))))
+        (finally
+          (rf/reg-fx :dispatch rf/dispatch))))))
+
 (deftest receipts-toggle-show-purged-resets-to-first-page-and-refreshes
   (testing "toggling purged receipts resets pagination and schedules a refresh"
     (sup/reset-db!)

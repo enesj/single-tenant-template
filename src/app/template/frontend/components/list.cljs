@@ -33,12 +33,14 @@
     [uix.re-frame :refer [use-subscribe]]))
 
 (defn- apply-rows-override-transforms
-  [{:keys [rows active-filters sort-config entity-name entity-spec]}]
-  (overrides/apply-rows-override-transforms {:rows rows
-                                             :active-filters active-filters
-                                             :sort-config sort-config
-                                             :entity-name entity-name
-                                             :entity-spec entity-spec}))
+  [{:keys [rows active-filters sort-config entity-name entity-spec server-pagination?]}]
+  (if server-pagination?
+    (vec rows)
+    (overrides/apply-rows-override-transforms {:rows rows
+                                               :active-filters active-filters
+                                               :sort-config sort-config
+                                               :entity-name entity-name
+                                               :entity-spec entity-spec})))
 
 (defn- selected-item?
   [selected-ids item]
@@ -155,6 +157,7 @@
         active-filters (use-subscribe [::list-subs/active-filters entity-name])
         batch-edit-inline-state (use-subscribe [::list-subs/batch-edit-inline entity-name])
         ui-state (use-subscribe [::list-subs/entity-ui-state entity-name])
+        server-pagination? (list-subs/server-pagination? ui-state)
         ;; Keep form-entity-specs for add/edit forms only. Table rendering
         ;; uses the provided entity-spec (vector-config) exclusively.
         form-entity-spec (use-subscribe [:form-entity-specs/by-name (keyword entity-name)])
@@ -189,6 +192,7 @@
                             {:rows raw-items
                              :active-filters active-filters
                              :sort-config sort-config
+                             :server-pagination? server-pagination?
                              :entity-name entity-kw
                              :entity-spec entity-spec})
                           raw-items)
