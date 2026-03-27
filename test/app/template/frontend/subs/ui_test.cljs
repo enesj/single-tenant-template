@@ -197,6 +197,22 @@
 ;; Admin Lock Propagation to User Routes (Step 2 of User Settings Optimization)
 ;; =============================================================================
 
+(deftest admin-config-lock-propagation-display-locks-test
+  (testing "admin config display-locks cascade to user routes via overlay"
+    (reset-db!
+      {:domain {:config {:view-options {:items {:display-defaults {:show-edit? true
+                                                                   :show-delete? true}}}}}
+       :admin {:config {:view-options {:items {:display-locks {:show-delete? false}}}}}
+       :ui {}})
+    (let [effective @(rf/subscribe [::ui-subs/entity-display-settings :items])
+          locked @(rf/subscribe [::ui-subs/locked-display-settings :items])]
+      (is (false? (:show-delete? effective))
+        "Admin config lock should override domain default on user route")
+      (is (true? (:show-edit? effective))
+        "Non-locked settings should retain domain defaults")
+      (is (contains? locked :show-delete?)
+        "Admin config lock should appear in locked settings map"))))
+
 (deftest admin-lock-propagation-display-locks-test
   (testing "admin display-locks cascade to user routes via overlay"
     ;; User route (no admin route in :current-route), domain config has no locks,

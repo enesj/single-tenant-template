@@ -21,6 +21,20 @@
   (dispatch-sync! [::ui-state/set-refresh-event :unmapped-aliases [::unmapped-aliases-events/load-list]])
   (dispatch! [::unmapped-aliases-events/load-list {:page 1 :per-page 50}]))
 
+(defn admin-unmapped-aliases-list-props
+  [entity-name entity-spec]
+  {:entity-name entity-name
+   :entity-spec entity-spec
+   :title "Unmapped Aliases"
+   :allow-add? false
+   :allow-edit? false
+   :allow-delete? false
+   :display-settings {:show-add-button? false
+                      :show-edit? false
+                      :show-delete? false
+                      :show-batch-edit? false
+                      :show-batch-delete? false}})
+
 (defui admin-unmapped-aliases-page
   "Admin route: /admin/unmapped-aliases"
   []
@@ -38,7 +52,4 @@
 
     ($ layout/admin-layout
       ($ :div {:class "p-6 min-h-screen"}
-        ($ list-view
-          {:entity-name entity-name
-           :entity-spec entity-spec
-           :title "Unmapped Aliases"})))))
+        ($ list-view (admin-unmapped-aliases-list-props entity-name entity-spec))))))

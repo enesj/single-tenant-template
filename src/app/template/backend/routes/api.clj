@@ -9,6 +9,7 @@
     [app.shared.specs.view-options :as view-options-spec]
     [app.template.backend.email.service :as email-svc]
     [app.template.backend.middleware.user :as user-middleware]
+    [app.template.backend.routes.admin.settings-io :as settings-io]
     [app.template.backend.routes.entities :as entities]
     [app.template.backend.routes.onboarding :as onboarding-routes]
     [app.template.backend.routes.tenant :as tenant-routes]
@@ -57,19 +58,33 @@
     (or paths {})))
 
 (defn- load-domain-ui-config
-  "Load user-facing UI config from template defaults plus all enabled domains.
+  "Load user-facing UI config from template defaults plus enabled domains.
 
-   Single-domain mode returns a flat merged structure for backwards compatibility:
-   template-user defaults < primary domain defaults.
+   In the common single-domain case, prefer the runtime-aware settings readers
+   so saved admin changes survive hard refreshes of user pages. If runtime
+   config cannot be read, fall back to the file-backed defaults instead of
+   breaking /api/v1/config.
 
-   Multi-domain mode keeps the existing nested domain shape and exposes the template
-   bundle under :template."
-  []
+   Multi-domain mode keeps the existing nested domain shape and exposes the
+   template bundle under :template. Runtime user config is currently stored as a
+   flat single-domain snapshot, so nested multi-domain responses still fall back
+   to file-backed defaults."
+  [db]
   (let [template-config (load-config-path-map template-user/paths)
-        all-paths (domain-registry/get-ui-config-paths)]
-    (if (= 1 (count all-paths))
-      (merge template-config
-        (load-config-path-map (domain-registry/primary-user-ui-config-paths)))
+        all-paths (domain-registry/get-ui-config-paths)
+        file-backed-single-domain-config
+        (fn []
+          (merge template-config
+            (load-config-path-map (domain-registry/primary-user-ui-config-paths))))]
+    (if (<= (count all-paths) 1)
+      (try
+        {:entities (settings-io/read-user-entities db)
+         :view-options (settings-io/read-user-view-options db)
+         :form-fields (settings-io/read-user-form-fields db)
+         :table-columns (settings-io/read-user-table-columns db)}
+        (catch Exception e
+          (log/warn e "Falling back to file-backed user UI config for /api/v1/config")
+          (file-backed-single-domain-config)))
       (assoc
         (into {}
           (map (fn [[domain-id paths]]
@@ -211,7 +226,7 @@
                                                            ;; Domain-owned UI config (user-facing list pages).
                                                            ;; This is loaded dynamically so editing these EDNs via the
                                                            ;; admin settings UI does not trigger shadow rebuilds.
-                                                           :domain-ui-config (load-domain-ui-config)}]
+                                                           :domain-ui-config (load-domain-ui-config db)}]
                                       (response/response frontend-config))
                                     (catch Exception e
                                       (log/error e "ERROR in config handler")

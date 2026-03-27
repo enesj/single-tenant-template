@@ -155,6 +155,48 @@
       (is (= "A1" (:raw_label (first rows))))
       (is (string? (:supplier_display_name (first rows)))))))
 
+(deftest articles-list-unmapped-aliases-scopes-to-tenant-occurrences
+  (when-let [db fixtures/*test-db*]
+    (let [user-a (th/ensure-test-user! db {:email (str "unmapped-tenant-a-" (UUID/randomUUID) "@example.com")})
+          user-b (th/ensure-test-user! db {:email (str "unmapped-tenant-b-" (UUID/randomUUID) "@example.com")})
+          {:keys [tenant-id] :as _tenant-a} (th/ensure-test-tenant! db user-a)
+          tenant-a-id tenant-id
+          {:keys [tenant-id] :as _tenant-b} (th/ensure-test-tenant! db user-b)
+          tenant-b-id tenant-id
+          supplier (:supplier (suppliers/find-or-create-supplier! db (str "Tenant Scoped Supplier " (UUID/randomUUID)) {}))
+          payer-a (th/create-payer! db {:type "cash"
+                                        :label (str "Cash A " (UUID/randomUUID))
+                                        :tenant_id tenant-a-id})
+          payer-b (th/create-payer! db {:type "cash"
+                                        :label (str "Cash B " (UUID/randomUUID))
+                                        :tenant_id tenant-b-id})
+          _exp-a (expenses/create-expense!
+                   db
+                   {:tenant_id tenant-a-id
+                    :supplier_id (:id supplier)
+                    :payer_id (:id payer-a)
+                    :purchased_at (now)
+                    :total_amount (bigdec "1.00")
+                    :currency "BAM"}
+                   [{:raw_label "TENANT-A-ONLY" :line_total (bigdec "1.00")}])
+          _exp-b (expenses/create-expense!
+                   db
+                   {:tenant_id tenant-b-id
+                    :supplier_id (:id supplier)
+                    :payer_id (:id payer-b)
+                    :purchased_at (now)
+                    :total_amount (bigdec "1.00")
+                    :currency "BAM"}
+                   [{:raw_label "TENANT-B-ONLY" :line_total (bigdec "1.00")}])
+          tenant-a-rows (aliases/list-unmapped-aliases db {:tenant-id tenant-a-id :limit 50 :offset 0})
+          tenant-b-rows (aliases/list-unmapped-aliases db {:tenant-id tenant-b-id :limit 50 :offset 0})]
+      (is (= #{"TENANT-A-ONLY"}
+            (set (map :raw_label tenant-a-rows))))
+      (is (= #{"TENANT-B-ONLY"}
+            (set (map :raw_label tenant-b-rows))))
+      (is (= 1 (aliases/count-unmapped-aliases db {:tenant-id tenant-a-id})))
+      (is (= 1 (aliases/count-unmapped-aliases db {:tenant-id tenant-b-id}))))))
+
 (deftest articles-list-related-records-resolves-alias-linked-expense-items
   (when-let [db fixtures/*test-db*]
     (let [supplier (:supplier (suppliers/find-or-create-supplier! db (str "Related Alias Supplier " (UUID/randomUUID)) {}))

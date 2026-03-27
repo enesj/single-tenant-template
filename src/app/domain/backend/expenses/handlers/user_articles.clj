@@ -190,12 +190,14 @@
                            "Role assignment required")]
         forbidden
         (try
-          (let [qp (:query-params request)
+          (let [tenant-id (h/get-tenant-id request)
+                qp (:query-params request)
                 supplier-id (h/try-parse-uuid (h/get-param qp :supplier_id))
                 limit (h/parse-page-limit qp 50)
                 offset (h/parse-page-offset qp)
                 opts (cond-> {:limit limit :offset offset}
-                       supplier-id (assoc :supplier-id supplier-id))
+                       supplier-id (assoc :supplier-id supplier-id)
+                       tenant-id (assoc :tenant-id tenant-id))
                 rows (h/to-app (aliases/list-unmapped-aliases db opts))
                 total (long (or (aliases/count-unmapped-aliases db opts) 0))]
             (h/json-response {:data rows

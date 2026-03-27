@@ -127,3 +127,46 @@
                        false]]
                     @dispatched)
                 "Double-click should dispatch an exact-match filter event"))))))))
+
+(deftest display-source-field-uses-item-and-field-in-correct-order
+  (testing "rows resolve display-source-field values without crashing"
+    (let [row-props {:entity-spec {:fields [{:id :status
+                                             :label "Status"
+                                             :type :select
+                                             :input-type "select"
+                                             :display-source-field :status-label
+                                             :options [{:value "active" :label "Active"}
+                                                       {:value "pending" :label "Pending"}]}]}
+                     :editing nil
+                     :set-editing! (fn [_] nil)
+                     :entity-name :items
+                     :recently-updated-ids #{}
+                     :recently-created-ids #{}
+                     :selected-ids #{}
+                     :on-select-change (fn [& _] nil)
+                     :visible-columns {:status true}
+                     :column-order nil
+                     :show-filtering? false
+                     :filterable-fields []
+                     :user-filterable-settings {}
+                     :show-edit? false
+                     :show-delete? false}
+          render-row-fn (fn [item _]
+                          (list-rows/render-row row-props {:item item}))]
+      (with-redefs [display-settings/use-display-settings (fn [_]
+                                                            {:show-select? false})]
+        (mount-component!
+          ($ table/table
+            {:headers ["Select" "Status" "Actions"]
+             :rows [{:id "1" :status "active" :status-label "Active"}]
+             :row-key :id
+             :render-row render-row-fn
+             :entity-name :items})
+          (fn [container]
+            (is (some? (.querySelector container "tbody tr"))
+              "Row should render successfully")
+            (is (some? (.querySelector container ".ds-badge"))
+              "Status badge should render when display-source-field is present")
+            (is (re-find #"Active" (.-textContent container))
+              "Display-source field value should be rendered")))))))
+

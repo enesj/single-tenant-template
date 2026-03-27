@@ -1,9 +1,8 @@
 (ns app.domain.frontend.expenses.events.unmapped-items
-  "Power-user UX for mapping many aliases to a single article."
+  "Admin UX for mapping many aliases to a single article."
   (:require
     [ajax.core :as ajax]
-    [app.domain.frontend.expenses.events.user-expenses.endpoints :as endpoints]
-    [app.domain.frontend.expenses.events.user-expenses.xhrio :as x]
+    [app.admin.frontend.utils.http :as admin-http]
     [app.template.frontend.api.http :as http]
     [app.template.frontend.db.paths :as paths]
     [clojure.string :as str]
@@ -11,6 +10,9 @@
     [taoensso.timbre :as log]))
 
 (def ^:private base-path [:admin :expenses :unmapped-items])
+(def ^:private suppliers-endpoint "/admin/api/expenses/suppliers")
+(def ^:private articles-endpoint "/admin/api/expenses/articles")
+(def ^:private unmapped-aliases-endpoint "/admin/api/expenses/articles/unmapped-aliases")
 
 (defn- begin-load [db]
   (-> db
@@ -60,19 +62,15 @@
   (fn [{:keys [db]} _]
     {:db (begin-lookups-load db)
      :fx [[:http-xhrio
-           (x/xhrio db
-             {:method :get
-              :uri endpoints/suppliers-endpoint
-
+           (admin-http/admin-get
+             {:uri suppliers-endpoint
               :params {:limit 200 :offset 0}
               :response-format (ajax/json-response-format {:keywords? true})
               :on-success [::lookups-suppliers-loaded]
               :on-failure [::lookups-suppliers-failed]})]
           [:http-xhrio
-           (x/xhrio db
-             {:method :get
-              :uri endpoints/articles-endpoint
-
+           (admin-http/admin-get
+             {:uri articles-endpoint
               :params {:limit 200 :offset 0}
               :response-format (ajax/json-response-format {:keywords? true})
               :on-success [::lookups-articles-loaded]
@@ -81,7 +79,7 @@
 (rf/reg-event-db
   ::lookups-suppliers-loaded
   (fn [db [_ response]]
-    (let [items (vec (or (:data response) []))]
+    (let [items (vec (or (:suppliers response) (:data response) []))]
       (-> db
         (assoc-in (conj base-path :lookups :suppliers) items)
         (finish-lookups-step :suppliers nil)))))
@@ -94,7 +92,7 @@
 (rf/reg-event-db
   ::lookups-articles-loaded
   (fn [db [_ response]]
-    (let [items (vec (or (:data response) []))]
+    (let [items (vec (or (:articles response) (:data response) []))]
       (-> db
         (assoc-in (conj base-path :lookups :articles) items)
         (finish-lookups-step :articles nil)))))
@@ -120,10 +118,8 @@
                       :offset (or offset 0)}
                supplier-id (assoc :supplier_id supplier-id))]
       {:db (begin-load db)
-       :http-xhrio (x/xhrio db
-                     {:method :get
-                      :uri endpoints/articles-unmapped-aliases-endpoint
-
+       :http-xhrio (admin-http/admin-get
+                     {:uri unmapped-aliases-endpoint
                       :params qp
                       :response-format (ajax/json-response-format {:keywords? true})
                       :on-success [::unmapped-items-loaded]
@@ -132,7 +128,7 @@
 (rf/reg-event-db
   ::unmapped-items-loaded
   (fn [db [_ response]]
-    (let [items (vec (or (:data response) []))
+    (let [items (vec (or (:unmapped-aliases response) (:data response) []))
           total (or (:total response) (count items))]
       (-> db
         (finish-load nil)
@@ -217,10 +213,8 @@
                                                                      :failed 0}))]
           (if (= mode :new)
             {:db db*
-             :http-xhrio (x/xhrio db*
-                           {:method :post
-                            :uri endpoints/articles-endpoint
-
+             :http-xhrio (admin-http/admin-post
+                           {:uri articles-endpoint
                             :params {:canonical_name (str/trim new-article-name)}
                             :response-format (ajax/json-response-format {:keywords? true})
                             :on-success [::create-article-success {:alias-ids alias-ids}]
@@ -232,7 +226,8 @@
 (rf/reg-event-fx
   ::create-article-success
   (fn [{:keys [db]} [_ ctx response]]
-    (let [article-id (get-in response [:data :id])]
+    (let [article-id (or (get-in response [:article :id])
+                       (get-in response [:data :id]))]
       (if (seq article-id)
         {:db db
          :dispatch [::map-with-article (assoc ctx :article-id article-id)]}
@@ -268,10 +263,8 @@
     (let [requests (mapv
                      (fn [alias-id]
                        [:http-xhrio
-                        (x/xhrio db
-                          {:method :post
-                           :uri (str endpoints/articles-endpoint "/aliases/" alias-id "/map")
-
+                        (admin-http/admin-post
+                          {:uri (str articles-endpoint "/aliases/" alias-id "/map")
                            :params {:article_id article-id}
                            :response-format (ajax/json-response-format {:keywords? true})
                            :on-success [::map-item-success]

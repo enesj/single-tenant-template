@@ -93,20 +93,37 @@
 (defn- resolve-field-value
   "Resolve a field value from an item while being tolerant to:
    - namespaced keys (e.g., :users/full-name)
-   - hyphen vs underscore differences (:full-name vs :full-name)
+   - hyphen vs underscore differences (:full-name vs :full_name)
    - whitespace differences in labels
-  Tries direct lookup first, then scans keys by normalized local name."
+  Tries direct lookup first, then scans keys by normalized local name.
+
+  Invalid field identifiers should degrade to nil instead of crashing the
+  whole table render path."
   [item field-id]
-  (let [fld (if (keyword? field-id) field-id (keyword field-id))
-        direct (get item fld)
-        target (normalize-field-name (name fld))]
-    (if (some? direct)
-      direct
-      (some (fn [[k v]]
-              (when (and (keyword? k)
-                      (= (normalize-field-name (name k)) target))
-                v))
-        item))))
+  (let [fld (cond
+              (keyword? field-id) field-id
+              (string? field-id) (keyword field-id)
+              (symbol? field-id) (keyword (name field-id))
+              :else nil)]
+    (if-not fld
+      (do
+        (js/console.error
+          "[filter.helpers/resolve-field-value] Invalid field-id"
+          #js {:fieldId (pr-str field-id)
+               :fieldIdType (pr-str (type field-id))
+               :itemType (pr-str (type item))
+               :itemKeys (when (map? item)
+                           (pr-str (vec (keys item))))})
+        nil)
+      (let [direct (get item fld)
+            target (normalize-field-name (name fld))]
+        (if (some? direct)
+          direct
+          (some (fn [[k v]]
+                  (when (and (keyword? k)
+                          (= (normalize-field-name (name k)) target))
+                    v))
+            item))))))
 
 (defn get-item-field-value
   "Return a field value using the same tolerant resolution as filter matching."

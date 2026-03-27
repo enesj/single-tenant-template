@@ -396,6 +396,19 @@
                                   :filter-value "test"
                                   :filter-type :text}))))
 
+(deftest invalid-field-id-safe-test
+  (testing "Invalid field identifiers do not crash shared lookup helpers"
+    (is (nil? (helpers/get-item-field-value {:name "Test"} nil)))
+    (is (nil? (helpers/get-item-field-value {:name "Test"} false)))
+    (is (helpers/matches-filter? {:item {:name "Test"}
+                                  :field-id 'name
+                                  :filter-value "test"
+                                  :filter-type :text}))
+    (is (not (helpers/matches-filter? {:item {:name "Test"}
+                                       :field-id nil
+                                       :filter-value "test"
+                                       :filter-type :text})))))
+
 (defn run-all-tests []
   (test-helpers/log-test-start "Filter Helpers Tests")
   (run-tests))

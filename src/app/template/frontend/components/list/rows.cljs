@@ -149,8 +149,8 @@
                                                (when raw-kw (get item raw-kw))
                                                (when namespaced-raw (get item namespaced-raw))
                                                (when namespaced-canonical (get item namespaced-canonical)))
-                                       display-value (or (some-> (:display-source-field field)
-                                                           (filter-helpers/get-item-field-value item))
+                                       display-value (or (when-let [display-source-field (:display-source-field field)]
+                                                           (filter-helpers/get-item-field-value item display-source-field))
                                                        value)
                                        rendered-content (get-field-display-value field value item)]
                                    (build-filterable-cell {:field field

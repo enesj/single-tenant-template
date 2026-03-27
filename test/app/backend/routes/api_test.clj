@@ -4,6 +4,8 @@
    Tests metrics, config, and health endpoints."
   (:require
     [app.backend.test-helpers :as h]
+    [app.domain.backend.registry :as domain-registry]
+    [app.template.backend.routes.admin.settings-io :as settings-io]
     [clojure.string :as str]
     [clojure.test :refer [deftest is testing]]
     [ring.mock.request :as mock]))
@@ -48,6 +50,28 @@
       (is (h/ok? resp))
       (let [body (h/parse-json-body resp)]
         (is (map? body))))))
+
+(deftest config-endpoint-loads-runtime-user-ui-config-in-single-domain-mode
+  (testing "config endpoint returns runtime-aware user UI config on refresh"
+    (clojure.core/with-redefs-fn
+      {#'domain-registry/get-ui-config-paths (constantly {:expenses {:entities "ignored"}})
+       #'settings-io/read-user-entities (fn [_db] {:expenses {:title "Runtime Expenses"}})
+       #'settings-io/read-user-view-options (fn [_db] {:unmapped-aliases {:display-locks {}
+                                                                          :display-defaults {}
+                                                                          :list-config {:form-display :modal}}})
+       #'settings-io/read-user-form-fields (fn [_db] {:expenses {:create-fields [:amount]}})
+       #'settings-io/read-user-table-columns (fn [_db] {:expenses {:available-columns [:amount]}})}
+      (fn []
+        (let [handler (h/build-handler)
+              resp (handler (mock/request :get "/api/v1/config"))
+              body (h/parse-json-body resp)]
+          (is (h/ok? resp))
+          (is (= {:expenses {:title "Runtime Expenses"}}
+                (get-in body [:domain-ui-config :entities])))
+          (is (= {}
+                (get-in body [:domain-ui-config :view-options :unmapped-aliases :display-locks])))
+          (is (= {:form-display "modal"}
+                (get-in body [:domain-ui-config :view-options :unmapped-aliases :list-config]))))))))
 
 ;; ============================================================================
 ;; Home Route Tests

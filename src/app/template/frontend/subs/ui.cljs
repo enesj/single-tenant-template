@@ -93,12 +93,13 @@
   (let [admin-route?          (paths/admin-route? db)
         settings-view-options (get-in db [:admin :settings :view-options entity-kw])
         config-view-options   (get-in db [:admin :config :view-options entity-kw])
+        admin-view-options    (merge config-view-options settings-view-options)
         domain-view-options   (get-in db [:domain :config :view-options entity-kw])
         registered-config     (get @admin-entity-registry/registered-entities entity-kw)
 
         view-options   (if admin-route?
-                         (merge config-view-options settings-view-options)
-                         (overlay-admin-locks domain-view-options settings-view-options))
+                         admin-view-options
+                         (overlay-admin-locks domain-view-options admin-view-options))
 
         entity-config  (if admin-route?
                          (or (get-in db [:admin :config :entities entity-kw])
@@ -122,10 +123,11 @@
   (let [admin-route?          (paths/admin-route? db)
         settings-view-options (get-in db [:admin :settings :view-options entity-kw])
         config-view-options   (get-in db [:admin :config :view-options entity-kw])
+        admin-view-options    (merge config-view-options settings-view-options)
         domain-view-options   (get-in db [:domain :config :view-options entity-kw])]
     (if admin-route?
-      (merge config-view-options settings-view-options)
-      (overlay-admin-locks domain-view-options settings-view-options))))
+      admin-view-options
+      (overlay-admin-locks domain-view-options admin-view-options))))
 
 (defn- normalize-col
   [k]

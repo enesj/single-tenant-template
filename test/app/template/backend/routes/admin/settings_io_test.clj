@@ -56,6 +56,49 @@
             (is (= false (get-in resolved [:receipts :display-locks :show-edit?])))
             (is (= true (get-in resolved [:receipts :display-locks :show-delete?])))))))))
 
+(deftest read-view-options-runtime-snapshot-can-clear-default-locks
+  (testing "runtime snapshots can remove nested default locks for an entity"
+    (clojure.core/with-redefs-fn
+      {#'settings-io/read-default-config-or-throw (fn [_path _config-key _scope _label _validate-fn]
+                                                    {:unmapped-aliases {:display-defaults {:show-highlights? false}
+                                                                        :display-locks {:show-edit? false
+                                                                                        :show-delete? false}}})
+       #'domain-registry/get-admin-ui-config-paths (constantly [])
+       #'settings-io/read-runtime-override (fn [_db _scope _config-key]
+                                             {:unmapped-aliases {:display-defaults {}
+                                                                 :display-locks {}
+                                                                 :column-defaults {}
+                                                                 :column-locks {}
+                                                                 :list-config {:form-display :modal}}})
+       #'view-options-spec/validate-view-options-strict (constantly {:valid? true})}
+      (fn []
+        (let [resolved (settings-io/read-view-options :mock-db)]
+          (is (= {} (get-in resolved [:unmapped-aliases :display-locks])))
+          (is (= {} (get-in resolved [:unmapped-aliases :display-defaults])))
+          (is (= {:form-display :modal}
+                (get-in resolved [:unmapped-aliases :list-config]))))))))
+
+(deftest read-user-view-options-runtime-snapshot-can-clear-default-locks
+  (testing "user runtime snapshots can remove nested default locks for an entity"
+    (clojure.core/with-redefs-fn
+      {#'settings-io/read-user-default-config (fn [_config-key _label _validate-fn]
+                                                {:unmapped-aliases {:display-defaults {:show-highlights? false}
+                                                                    :display-locks {:show-edit? false
+                                                                                    :show-delete? false}}})
+       #'settings-io/read-runtime-override (fn [_db _scope _config-key]
+                                             {:unmapped-aliases {:display-defaults {}
+                                                                 :display-locks {}
+                                                                 :column-defaults {}
+                                                                 :column-locks {}
+                                                                 :list-config {:form-display :modal}}})
+       #'view-options-spec/validate-view-options-strict (constantly {:valid? true})}
+      (fn []
+        (let [resolved (settings-io/read-user-view-options :mock-db)]
+          (is (= {} (get-in resolved [:unmapped-aliases :display-locks])))
+          (is (= {} (get-in resolved [:unmapped-aliases :display-defaults])))
+          (is (= {:form-display :modal}
+                (get-in resolved [:unmapped-aliases :list-config]))))))))
+
 (deftest read-form-fields-admin-overrides-domain
   (testing "admin defaults override domain defaults for the same entity"
     (let [dir (temp-dir)

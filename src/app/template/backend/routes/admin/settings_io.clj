@@ -164,6 +164,22 @@
          :warnings (:warnings validation)}))
     merged))
 
+(defn- overlay-runtime-snapshot-and-validate
+  "Overlay a persisted runtime snapshot over merged defaults.
+
+   Runtime config rows are written from full-editor payloads, so each top-level
+   entity key should replace the default entity map wholesale. That preserves
+   explicit removals of nested keys (for example clearing a :display-locks entry
+   that exists in source-controlled defaults) across reloads."
+  [label validate-fn defaults runtime-snapshot]
+  (let [merged (merge (or defaults {}) (or runtime-snapshot {}))
+        validation (validate-fn merged)]
+    (when-not (:valid? validation)
+      (log/warn (str label " validation issues")
+        {:errors (:errors validation)
+         :warnings (:warnings validation)}))
+    merged))
+
 (defn- read-user-default-config
   [config-key label validate-fn]
   (apply merge-and-validate
@@ -203,21 +219,23 @@
     legacy-admin-default-visible-columns))
 
 (defn read-view-options
-  "Read admin view-options defaults and merge persisted runtime overrides."
+  "Read admin view-options defaults and overlay persisted runtime snapshots."
   [db]
-  (let [admin-data (read-default-config-or-throw
+  (let [defaults (merge-and-validate
+                   "merged default view-options"
+                   view-options-spec/validate-view-options-strict
+                   (read-domain-admin-configs :view-options)
+                   (read-default-config-or-throw
                      view-options-path
                      :view-options
                      :admin-settings
                      "admin view-options"
-                     view-options-spec/validate-view-options-strict)
-        domain-data (read-domain-admin-configs :view-options)
+                     view-options-spec/validate-view-options-strict))
         runtime-override (read-runtime-override db admin-scope :view-options)]
-    (merge-and-validate
+    (overlay-runtime-snapshot-and-validate
       "merged view-options"
       view-options-spec/validate-view-options-strict
-      domain-data
-      admin-data
+      defaults
       runtime-override)))
 
 (defn write-view-options!
@@ -230,21 +248,23 @@
   (write-runtime-override! db admin-scope :view-options view-options))
 
 (defn read-form-fields
-  "Read admin form-fields defaults and merge persisted runtime overrides."
+  "Read admin form-fields defaults and overlay persisted runtime snapshots."
   [db]
-  (let [admin-data (read-default-config-or-throw
+  (let [defaults (merge-and-validate
+                   "merged default form-fields"
+                   form-fields-spec/validate-form-fields-strict
+                   (read-domain-admin-configs :form-fields)
+                   (read-default-config-or-throw
                      form-fields-path
                      :form-fields
                      :admin-settings
                      "admin form-fields"
-                     form-fields-spec/validate-form-fields-strict)
-        domain-data (read-domain-admin-configs :form-fields)
+                     form-fields-spec/validate-form-fields-strict))
         runtime-override (read-runtime-override db admin-scope :form-fields)]
-    (merge-and-validate
+    (overlay-runtime-snapshot-and-validate
       "merged form-fields"
       form-fields-spec/validate-form-fields-strict
-      domain-data
-      admin-data
+      defaults
       runtime-override)))
 
 (defn write-form-fields!
@@ -257,22 +277,24 @@
   (write-runtime-override! db admin-scope :form-fields form-fields))
 
 (defn read-table-columns
-  "Read admin table-columns defaults and merge persisted runtime overrides."
+  "Read admin table-columns defaults and overlay persisted runtime snapshots."
   [db]
-  (let [admin-data (read-default-config-or-throw
+  (let [defaults (merge-and-validate
+                   "merged default table-columns"
+                   table-columns-spec/validate-table-columns-strict
+                   (read-domain-admin-configs :table-columns)
+                   (read-default-config-or-throw
                      table-columns-path
                      :table-columns
                      :admin-settings
                      "admin table-columns"
-                     table-columns-spec/validate-table-columns-strict)
-        domain-data (read-domain-admin-configs :table-columns)
+                     table-columns-spec/validate-table-columns-strict))
         runtime-override (some-> (read-runtime-override db admin-scope :table-columns)
                            promote-legacy-admin-table-columns-override)]
-    (merge-and-validate
+    (overlay-runtime-snapshot-and-validate
       "merged table-columns"
       table-columns-spec/validate-table-columns-strict
-      domain-data
-      admin-data
+      defaults
       runtime-override)))
 
 (defn write-table-columns!
@@ -285,14 +307,14 @@
   (write-runtime-override! db admin-scope :table-columns table-columns))
 
 (defn read-user-entities
-  "Read user-facing entities defaults and merge persisted runtime overrides."
+  "Read user-facing entities defaults and overlay persisted runtime snapshots."
   [db]
   (let [defaults (read-user-default-config
                    :entities
                    "user entities"
                    entities-spec/validate-user-entities)
         runtime-override (read-runtime-override db user-scope :entities)]
-    (merge-and-validate
+    (overlay-runtime-snapshot-and-validate
       "merged user entities"
       entities-spec/validate-user-entities
       defaults
@@ -306,14 +328,14 @@
   (write-runtime-override! db user-scope :entities entities))
 
 (defn read-user-view-options
-  "Read user-facing view-options defaults and merge persisted runtime overrides."
+  "Read user-facing view-options defaults and overlay persisted runtime snapshots."
   [db]
   (let [defaults (read-user-default-config
                    :view-options
                    "user view-options"
                    view-options-spec/validate-view-options-strict)
         runtime-override (read-runtime-override db user-scope :view-options)]
-    (merge-and-validate
+    (overlay-runtime-snapshot-and-validate
       "merged user view-options"
       view-options-spec/validate-view-options-strict
       defaults
@@ -328,14 +350,14 @@
   (write-runtime-override! db user-scope :view-options view-options))
 
 (defn read-user-form-fields
-  "Read user-facing form-fields defaults and merge persisted runtime overrides."
+  "Read user-facing form-fields defaults and overlay persisted runtime snapshots."
   [db]
   (let [defaults (read-user-default-config
                    :form-fields
                    "user form-fields"
                    form-fields-spec/validate-form-fields-strict)
         runtime-override (read-runtime-override db user-scope :form-fields)]
-    (merge-and-validate
+    (overlay-runtime-snapshot-and-validate
       "merged user form-fields"
       form-fields-spec/validate-form-fields-strict
       defaults
@@ -350,14 +372,14 @@
   (write-runtime-override! db user-scope :form-fields form-fields))
 
 (defn read-user-table-columns
-  "Read user-facing table-columns defaults and merge persisted runtime overrides."
+  "Read user-facing table-columns defaults and overlay persisted runtime snapshots."
   [db]
   (let [defaults (read-user-default-config
                    :table-columns
                    "user table-columns"
                    table-columns-spec/validate-table-columns-strict)
         runtime-override (read-runtime-override db user-scope :table-columns)]
-    (merge-and-validate
+    (overlay-runtime-snapshot-and-validate
       "merged user table-columns"
       table-columns-spec/validate-table-columns-strict
       defaults

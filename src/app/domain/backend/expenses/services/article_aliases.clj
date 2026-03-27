@@ -165,40 +165,64 @@
       ((:count service) db {:search search}))))
 
 (defn list-unmapped-aliases
-  "List unmapped article aliases (article_id IS NULL) with occurrence counts."
-  [db {:keys [limit offset supplier-id]
+  "List unmapped article aliases (article_id IS NULL) with occurrence counts.
+   When :tenant-id is provided, only includes aliases seen in that tenant's
+   expense items and counts occurrences within that tenant."
+  [db {:keys [limit offset supplier-id supplier_id tenant-id tenant_id]
        :or {limit 100 offset 0}}]
-  (let [supplier-uuid (try-uuid supplier-id)
-        base-query {:select [[:aa.id]
-                             [:aa.raw_label]
-                             [:aa.raw_label_normalized]
-                             [:aa.supplier_id]
-                             [:s.display_name :supplier_display_name]
-                             [[:count :ei.id] :occurrence_count]]
-                    :from [[:article_aliases :aa]]
-                    :left-join [[:suppliers :s] [:= :aa.supplier_id :s.id]
-                                [:expense_items :ei] [:= :ei.alias_id :aa.id]]
-                    :where [:and
-                            [:is :aa.article_id nil]]
-                    :group-by [:aa.id :s.display_name]
-                    :order-by [[[:count :ei.id] :desc]]
-                    :limit limit
-                    :offset offset}
-        query (cond-> base-query
-                supplier-uuid
-                (update :where conj [:= :aa.supplier_id supplier-uuid]))]
+  (let [supplier-uuid (try-uuid (or supplier-id supplier_id))
+        tenant-uuid (try-uuid (or tenant-id tenant_id))
+        expense-items-join-clause (if tenant-uuid
+                                    [[:expense_items :ei]
+                                     [:and
+                                      [:= :ei.alias_id :aa.id]
+                                      [:= :ei.tenant_id tenant-uuid]]]
+                                    [[:expense_items :ei]
+                                     [:= :ei.alias_id :aa.id]])
+        query (cond-> {:select [[:aa.id]
+                                [:aa.raw_label]
+                                [:aa.raw_label_normalized]
+                                [:aa.supplier_id]
+                                [:s.display_name :supplier_display_name]
+                                [[:count :ei.id] :occurrence_count]]
+                       :from [[:article_aliases :aa]]
+                       :left-join (into [[:suppliers :s]
+                                         [:= :aa.supplier_id :s.id]]
+                                    expense-items-join-clause)
+                       :where [:and
+                               [:is :aa.article_id nil]]
+                       :group-by [:aa.id :s.display_name]
+                       :order-by [[[:count :ei.id] :desc]]
+                       :limit limit
+                       :offset offset}
+                supplier-uuid (update :where conj [:= :aa.supplier_id supplier-uuid])
+                tenant-uuid (assoc :having [:> [[:count :ei.id]] 0]))]
     (jdbc/execute! db (sql/format query) {:builder-fn rs/as-unqualified-lower-maps})))
 
 (defn count-unmapped-aliases
-  "Count unmapped article aliases (article_id IS NULL), optionally by supplier."
-  [db {:keys [supplier-id supplier_id]}]
+  "Count unmapped article aliases (article_id IS NULL), optionally by supplier and tenant.
+   When :tenant-id is provided, only counts aliases with at least one expense item
+   in that tenant."
+  [db {:keys [supplier-id supplier_id tenant-id tenant_id]}]
   (let [supplier-uuid (try-uuid (or supplier-id supplier_id))
-        query (cond-> {:select [[[:count :aa.id] :total]]
-                       :from [[:article_aliases :aa]]
-                       :where [:is :aa.article_id nil]}
-                supplier-uuid (assoc :where [:and
-                                             [:is :aa.article_id nil]
-                                             [:= :aa.supplier_id supplier-uuid]]))]
+        tenant-uuid (try-uuid (or tenant-id tenant_id))
+        expense-items-join-clause [[:expense_items :ei]
+                                   [:and
+                                    [:= :ei.alias_id :aa.id]
+                                    [:= :ei.tenant_id tenant-uuid]]]
+        query (if tenant-uuid
+                (cond-> {:select [[[:raw "COUNT(DISTINCT aa.id)"] :total]]
+                         :from [[:article_aliases :aa]]
+                         :join expense-items-join-clause
+                         :where [:and
+                                 [:is :aa.article_id nil]]}
+                  supplier-uuid (update :where conj [:= :aa.supplier_id supplier-uuid]))
+                (cond-> {:select [[[:count :aa.id] :total]]
+                         :from [[:article_aliases :aa]]
+                         :where [:is :aa.article_id nil]}
+                  supplier-uuid (assoc :where [:and
+                                               [:is :aa.article_id nil]
+                                               [:= :aa.supplier_id supplier-uuid]])))]
     (:total (jdbc/execute-one! db (sql/format query) {:builder-fn rs/as-unqualified-lower-maps}))))
 
 (defn map-alias-to-article!

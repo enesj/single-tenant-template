@@ -183,7 +183,8 @@
         articles-search (atom nil)
         unmapped-opts (atom nil)
         unmapped-count-opts (atom nil)
-        supplier-id (UUID/randomUUID)]
+        supplier-id (UUID/randomUUID)
+        tenant-id (UUID/randomUUID)]
     (with-redefs [articles/list-articles
                   (fn [_db opts]
                     (reset! articles-opts opts)
@@ -200,8 +201,9 @@
                   (fn [_db opts]
                     (reset! unmapped-count-opts opts)
                     4)
-                  h/json-response (fn [body & [status]] {:status (or status 200)
-                                                         :body body})]
+                  h/json-response (fn [body & [status]]
+                                    {:status (or status 200)
+                                     :body body})]
       (testing "articles list clamps and includes envelope"
         (let [handler (user-articles/list-articles-handler db)
               resp (handler (req "owner" {:limit "5000"
@@ -214,16 +216,21 @@
           (is (= {:limit 500 :offset 0 :search "abc"} @articles-opts))
           (is (= {:search "abc"} @articles-search))))
 
-      (testing "unmapped aliases list includes envelope and supplier filter"
+      (testing "unmapped aliases list includes envelope, supplier filter, and tenant scope"
         (let [handler (user-articles/list-unmapped-aliases-handler db)
-              resp (handler (req "owner" {:limit "2"
-                                          :offset "3"
-                                          :supplier_id (str supplier-id)}))]
+              resp (handler (assoc (req "owner" {:limit "2"
+                                                 :offset "3"
+                                                 :supplier_id (str supplier-id)})
+                              :session {:auth-session {:tenant {:id tenant-id}}}))]
           (is (= 200 (:status resp)))
           (is (= 4 (get-in resp [:body :total])))
           (is (= 2 (get-in resp [:body :limit])))
           (is (= 3 (get-in resp [:body :offset])))
-          (is (= {:limit 2 :offset 3 :supplier-id supplier-id} @unmapped-opts))
+          (is (= {:limit 2
+                  :offset 3
+                  :supplier-id supplier-id
+                  :tenant-id tenant-id}
+                @unmapped-opts))
           (is (= @unmapped-opts @unmapped-count-opts)))))))
 
 (deftest catalog-list-handlers-return-standard-envelope
