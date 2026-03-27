@@ -31,6 +31,8 @@ Extract and honor:
 - Save test output once under `tmp/`.
 - Do not use ad-hoc one-off `tmp/` runners when the reusable scripts in `scripts/bb/expenses/` are sufficient.
 - Prefer a direct Clojure MCP eval path when available for one-off inspection, but use the repo scripts for repeatable batch execution.
+- When the OCR workflow is `llamaparse`, load `.env` before running the repo scripts so the API key is available in the shell environment.
+- LlamaParse reads its API key from `LLAMA_CLOUD_API_KEY` (preferred) or `LLAMAPARSE_API_KEY` (fallback).
 
 ## Recommended workflow
 
@@ -78,6 +80,7 @@ Important notes:
 
 - Keep concurrency bounded.
 - Reuse the repo script rather than rebuilding the runner inline.
+- For `llamaparse`, confirm `.env` exports `LLAMA_CLOUD_API_KEY` before concluding the provider is misconfigured.
 - If the user only wants inspection and the client exposes a direct Clojure MCP eval tool, you may inspect state via eval — but the final batch execution should still use the script so the run is reproducible.
 
 ### 4. Update the root markdown report after every batch

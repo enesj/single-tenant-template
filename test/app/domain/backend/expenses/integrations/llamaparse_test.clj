@@ -604,6 +604,23 @@
     (is (= "GALAS HERPEGAL MAST 10 G 5122" (-> items second :raw_label)))
     (is (= 31.65M (-> ext :totals :total)))))
 
+(deftest receipt-extraction-combines-split-text-labels-and-prefers-fallback-total-consensus
+  (let [resp {:text {:pages [{:text (str "\"PENNY PLUS\" d.o.o. Sarajevo\n"
+                                      "16.03.2026. 13:06\n"
+                                      "VRECA VAKUM ZA ODJECU HENGER XL 70\n"
+                                      "x145cm            8,95E\n"
+                                      "TOTAL:        ME98,95\n"
+                                      "Gotovina:                8,95\n"
+                                      "Ukupno:                  8,95\n")}]}}
+        ext (receipt-extract/response->extraction resp)
+        items (:items ext)]
+    (is (= 1 (count items)))
+    (is (= "VRECA VAKUM ZA ODJECU HENGER XL 70 x145cm" (-> items first :raw_label)))
+    (is (= 8.95M (-> items first :line_total bigdec)))
+    (is (= 8.95M (-> items first :unit_price bigdec)))
+    (is (= 1M (-> items first :qty bigdec)))
+    (is (= 8.95M (-> ext :totals :total bigdec)))))
+
 (deftest receipt-extraction-fallback-prefers-text-before-combined-to-avoid-duplicates
   (let [resp {:text {:pages [{:text "CORTIX\n04.02.2026. 19:41\n357 35924792904 ZENSKA PIDZAMA\n24,00E\nTOTAL: 24,00"}]}
               :items {:pages [{:items [{:type "header"

@@ -34,7 +34,8 @@
                   (text-items/parse-text-items combined)
                   [])
                 items)
-        total (or (totals/extract-total (concat (when combined (str/split-lines combined)) total-lines))
+        total-lines* (concat (when combined (str/split-lines combined)) total-lines)
+        total (or (totals/extract-total total-lines* items)
                 (totals/items-total items))]
     {:merchant (not-empty merchant)
      :purchased_at purchased-at

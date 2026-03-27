@@ -185,6 +185,68 @@
         (is (= 1 (:repaired-count structured-merge)))
         (is (= 2 (:matched-count structured-merge)))))))
 
+(deftest persist-extract-result-prefers-structured-qty-and-unit-price-when-provider-collapses-line-total
+  (let [receipt-id (java.util.UUID/randomUUID)
+        mapped-supplier-id (java.util.UUID/randomUUID)
+        alias-id (java.util.UUID/randomUUID)
+        stored (atom nil)]
+    (with-redefs [receipt-queries/get-receipt (fn [_db _rid]
+                                                {:id receipt-id
+                                                 :status "uploaded"})
+                  receipt-status/store-extraction-results!
+                  (fn [_db _rid payload]
+                    (reset! stored payload)
+                    nil)
+                  receipt-status/update-status! (fn [& _] nil)
+                  supplier-aliases/find-or-create-alias!
+                  (fn [_db _raw-label]
+                    {:id alias-id
+                     :supplier_id mapped-supplier-id})
+                  suppliers/resolve-or-create-supplier-with-places!
+                  (fn [& _]
+                    (throw (ex-info "Should not be called" {})))
+                  article-aliases/find-or-create-alias!
+                  (fn [& _]
+                    {:id (java.util.UUID/randomUUID)})]
+      (let [extract-result {:parsed-markdown nil
+                            :raw {:items {:pages [{:items [{:type "table"
+                                                            :rows [["100640 CIGARETE DUNHILL DISTINCT BLE" "4,000x 6,90" "27,60E"]
+                                                                   ["000004 VRECICA SA RUCKOM" "1,000x 0,20" "0,20E"]]}]}]}}
+                            :extraction {:merchant {:name "BINGO"}
+                                         :totals {:total 27.80}
+                                         :items [{:raw_label "CIGARETE DUNHILL DISTINCT BLE" :qty 1 :unit_price 27.60 :line_total 27.60}
+                                                 {:raw_label "VRECICA SA RUCKOM" :qty 1 :unit_price 0.20 :line_total 0.20}]}}
+            res (extraction/persist-extract-result!
+                  ::db
+                  receipt-id
+                  extract-result
+                  {:default-currency "BAM"
+                   :places-cfg {}
+                   :user-region "BA"
+                   :defer-refine? true})
+            stored-items (get-in @stored [:raw_extract_json :extraction :items])
+            structured-merge (get-in @stored [:raw_extract_json :structured_response_merge])
+            normalize-item (fn [m]
+                             (-> m
+                               (select-keys [:raw_label :qty :unit_price :line_total])
+                               (update :qty common/parse-money)
+                               (update :unit_price common/parse-money)
+                               (update :line_total common/parse-money)))
+            normalized-items (mapv normalize-item stored-items)]
+        (is (= receipt-id (:receipt-id res)))
+        (is (= "extracted" (:status res)))
+        (is (= [{:raw_label "CIGARETE DUNHILL DISTINCT BLE"
+                 :qty 4.000M
+                 :unit_price 6.90M
+                 :line_total 27.60M}
+                {:raw_label "VRECICA SA RUCKOM"
+                 :qty 1.000M
+                 :unit_price 0.20M
+                 :line_total 0.20M}]
+              normalized-items))
+        (is (= 1 (:repaired-count structured-merge)))
+        (is (= 2 (:matched-count structured-merge)))))))
+
 (deftest persist-extract-result-does-not-replace-refined-total-with-markdown-payment-total
   (let [receipt-id (java.util.UUID/randomUUID)
         mapped-supplier-id (java.util.UUID/randomUUID)

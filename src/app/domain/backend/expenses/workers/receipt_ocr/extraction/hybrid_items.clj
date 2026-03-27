@@ -100,18 +100,43 @@
   (let [provider-item (fill-missing-fields provider-item structured-item)
         provider-consistent? (item-consistent? provider-item)
         structured-consistent? (item-consistent? structured-item)
-        repaired? (and (not provider-consistent?) structured-consistent?)
-        merged-item (if repaired?
+        provider-qty (common/parse-money (:qty provider-item))
+        provider-unit-price (common/parse-money (:unit_price provider-item))
+        provider-line-total (common/parse-money (:line_total provider-item))
+        structured-qty (common/parse-money (:qty structured-item))
+        structured-unit-price (common/parse-money (:unit_price structured-item))
+        structured-line-total (common/parse-money (:line_total structured-item))
+        collapsed-total-as-unit-price?
+        (and (some? (label-score provider-item structured-item))
+          provider-consistent?
+          structured-consistent?
+          provider-qty
+          provider-unit-price
+          provider-line-total
+          structured-qty
+          structured-unit-price
+          structured-line-total
+          (zero? (.compareTo ^java.math.BigDecimal provider-qty (bigdec 1)))
+          (pos? (.compareTo ^java.math.BigDecimal structured-qty provider-qty))
+          (zero? (.compareTo ^java.math.BigDecimal provider-unit-price provider-line-total))
+          (zero? (.compareTo ^java.math.BigDecimal structured-line-total provider-line-total))
+          (neg? (.compareTo ^java.math.BigDecimal structured-unit-price provider-unit-price)))
+        prefer-structured-values?
+        (or (and (not provider-consistent?) structured-consistent?)
+          collapsed-total-as-unit-price?)
+        merged-item (if prefer-structured-values?
                       (-> provider-item
                         (assoc :qty (:qty structured-item))
                         (assoc :unit_price (:unit_price structured-item))
                         (assoc :line_total (or (:line_total structured-item) (:line_total provider-item)))
                         (cond-> (seq (:raw_label structured-item))
                           (assoc :raw_label (:raw_label structured-item))))
-                      provider-item)]
+                      provider-item)
+        changed? (not= provider-item merged-item)
+        repaired? (and prefer-structured-values? changed?)]
     {:item merged-item
      :repaired? repaired?
-     :filled? (not= provider-item merged-item)}))
+     :filled? (and changed? (not repaired?))}))
 
 (defn merge-structured-items
   [provider-items raw-response]

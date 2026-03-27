@@ -40,12 +40,49 @@
       (pick (if (seq preferred) preferred candidates)))))
 
 (defn extract-total
-  [lines]
-  (when (seq lines)
-    (->> lines
-      (keep line->total-candidate)
-      vec
-      pick-best-total)))
+  ([lines]
+   (when (seq lines)
+     (->> lines
+       (keep line->total-candidate)
+       vec
+       pick-best-total)))
+  ([lines items]
+   (when (seq lines)
+     (let [candidates (->> lines
+                        (keep line->total-candidate)
+                        vec)
+           picked-total (pick-best-total candidates)
+           items-total*
+           (when (sequential? items)
+             (let [amounts (->> items
+                             (keep (fn [{:keys [line_total]}]
+                                     (common/parse-money line_total)))
+                             (map bigdec)
+                             vec)]
+               (when (seq amounts)
+                 (reduce #(.add %1 %2) 0M amounts))))
+           fallback-matches-items-count
+           (if items-total*
+             (->> candidates
+               (filter (fn [{:keys [kind amount]}]
+                         (and (= :fallback kind)
+                           (zero? (.compareTo (bigdec amount) (bigdec items-total*))))))
+               count)
+             0)
+           prefer-items-total?
+           (and picked-total
+             items-total*
+             (>= fallback-matches-items-count 2)
+             (> (.abs (.subtract (bigdec picked-total) (bigdec items-total*))) 0.05M))]
+       (cond
+         prefer-items-total?
+         items-total*
+
+         (seq candidates)
+         picked-total
+
+         :else
+         nil)))))
 
 (defn items-total
   [items]
