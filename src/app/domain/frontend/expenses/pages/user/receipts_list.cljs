@@ -14,6 +14,12 @@
     [uix.core :refer [$ defui use-callback use-effect use-state]]
     [uix.re-frame :refer [use-subscribe]]))
 
+(def ^:private stable-receipt-status-filter-options
+  [{:value "extracted" :label :receipts/status-extracted}
+   {:value "review_required" :label :receipts/status-review-required}
+   {:value "posted" :label :receipts/status-posted}
+   {:value "failed" :label :receipts/status-failed}])
+
 (defn- receipts-entity-spec
   [t]
   {:id :receipts
@@ -25,16 +31,10 @@
              :type :select
              :input-type "select"
              :display-source-field :receipt-status-display
-             :options [{:value "uploaded" :label (t :receipts/status-uploaded)}
-                       {:value "parsing" :label (t :receipts/status-parsing)}
-                       {:value "parsed" :label (t :receipts/status-parsed)}
-                       {:value "extracting" :label (t :receipts/status-extracting)}
-                       {:value "extracted" :label (t :receipts/status-extracted)}
-                       {:value "refining" :label (t :receipts/status-refining)}
-                       {:value "review_required" :label (t :receipts/status-review-required)}
-                       {:value "approved" :label (t :receipts/status-approved)}
-                       {:value "posted" :label (t :receipts/status-posted)}
-                       {:value "failed" :label (t :receipts/status-failed)}]}
+             :options (mapv (fn [{:keys [value label]}]
+                              {:value value
+                               :label (t label)})
+                        stable-receipt-status-filter-options)}
             {:id :supplier-guess
              :label (t :common/supplier-guess)
              :type :text}
@@ -219,12 +219,36 @@
       :else
       (str amount-str suffix))))
 
+(def ^:private receipt-status->label-key
+  {"uploaded" :receipts/status-uploaded
+   "parsing" :receipts/status-parsing
+   "parsed" :receipts/status-parsed
+   "extracting" :receipts/status-extracting
+   "extracted" :receipts/status-extracted
+   "refining" :receipts/status-refining
+   "review_required" :receipts/status-review-required
+   "approved" :receipts/status-approved
+   "posted" :receipts/status-posted
+   "failed" :receipts/status-failed
+   "purged" :receipts/show-purged})
+
+(defn- receipt-status-display
+  [t receipt]
+  (let [status (cond
+                 (receipt-purged? receipt) "purged"
+                 (receipt-refine-pending? receipt) "refining"
+                 :else (or (:status receipt)
+                         (:receipts/status receipt)))]
+    (or (some-> (get receipt-status->label-key status) t)
+      status)))
+
 (defn- present-receipt
-  [receipt]
-  (let [total-display (receipt-total-display receipt)]
+  [t receipt]
+  (let [total-display (receipt-total-display receipt)
+        status-display (receipt-status-display t receipt)]
     (cond-> receipt
-      (receipt-purged? receipt)
-      (assoc :receipt-status-display "purged")
+      (some? status-display)
+      (assoc :receipt-status-display status-display)
 
       (some? total-display)
       (assoc :total-display total-display))))
@@ -235,7 +259,7 @@
         error (use-subscribe [:user-expenses/receipts-error])
         form-error (use-subscribe [:user-expenses/form-error])
         receipts (vec (or (use-subscribe [:user-expenses/receipts]) []))
-        display-receipts (mapv present-receipt receipts)
+        display-receipts (mapv #(present-receipt t %) receipts)
         show-purged? (use-subscribe [:user-expenses/show-purged-receipts?])
         purged-count (long (or (use-subscribe [:user-expenses/purged-receipts-total]) 0))
         show-purged-toggle? (pos? purged-count)

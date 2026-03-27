@@ -31,3 +31,30 @@
     (let [entity-spec (#'app.domain.frontend.expenses.pages.user.receipts-list/receipts-entity-spec (fn [k] (name k)))
           field-ids (mapv :id (:fields entity-spec))]
       (is (some #{:purchased-at-guess} field-ids)))))
+
+(deftest receipts-entity-spec-status-filter-keeps-only-stable-options
+  (testing "receipts status filter exposes only stable user-facing states"
+    (let [entity-spec (#'app.domain.frontend.expenses.pages.user.receipts-list/receipts-entity-spec (fn [k] (name k)))
+          status-field (some #(when (= :status (:id %)) %) (:fields entity-spec))
+          option-values (mapv :value (:options status-field))]
+      (is (= ["extracted" "review_required" "posted" "failed"]
+            option-values))
+      (is (not-any? #{"uploaded" "parsing" "parsed" "extracting" "refining" "approved"}
+            option-values)))))
+
+(deftest present-receipt-populates-translated-status-display
+  (testing "presented receipts carry translated status labels for badge rendering"
+    (let [t (fn [k] ({:receipts/status-review-required "Potrebna provjera"
+                      :receipts/status-refining "Poboljšanje"
+                      :receipts/show-purged "Prikaži obrisane"} k))]
+      (is (= "Potrebna provjera"
+            (:receipt-status-display
+             (#'app.domain.frontend.expenses.pages.user.receipts-list/present-receipt
+              t
+              {:status "review_required"}))))
+      (is (= "Poboljšanje"
+            (:receipt-status-display
+             (#'app.domain.frontend.expenses.pages.user.receipts-list/present-receipt
+              t
+              {:status "review_required"
+               :refine-pending true})))))))

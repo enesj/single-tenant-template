@@ -170,3 +170,48 @@
             (is (re-find #"Active" (.-textContent container))
               "Display-source field value should be rendered")))))))
 
+(deftest display-source-field-status-badges-keep-raw-colors-and-translated-labels
+  (testing "status badges use display-source-field for labels but raw values for badge colors"
+    (let [row-props {:entity-spec {:fields [{:id :status
+                                             :label "Status"
+                                             :type :select
+                                             :input-type "select"
+                                             :display-source-field :receipt-status-display
+                                             :options [{:value "review_required" :label "Review Required"}
+                                                       {:value "posted" :label "Posted"}]}]}
+                     :editing nil
+                     :set-editing! (fn [_] nil)
+                     :entity-name :receipts
+                     :recently-updated-ids #{}
+                     :recently-created-ids #{}
+                     :selected-ids #{}
+                     :on-select-change (fn [& _] nil)
+                     :visible-columns {:status true}
+                     :column-order nil
+                     :show-filtering? false
+                     :filterable-fields []
+                     :user-filterable-settings {}
+                     :show-edit? false
+                     :show-delete? false}
+          render-row-fn (fn [item _]
+                          (list-rows/render-row row-props {:item item}))]
+      (with-redefs [display-settings/use-display-settings (fn [_]
+                                                            {:show-select? false})]
+        (mount-component!
+          ($ table/table
+            {:headers ["Select" "Status" "Actions"]
+             :rows [{:id "1"
+                     :status "review_required"
+                     :receipt-status-display "Potrebna provjera"}]
+             :row-key :id
+             :render-row render-row-fn
+             :entity-name :receipts})
+          (fn [container]
+            (let [badge (.querySelector container ".ds-badge")]
+              (is (some? badge)
+                "Status badge should render")
+              (is (.contains (.-classList badge) "ds-badge-warning")
+                "Badge variant should still come from the raw status value")
+              (is (re-find #"Potrebna provjera" (.-textContent badge))
+                "Badge label should come from the translated display-source field"))))))))
+

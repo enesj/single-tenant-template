@@ -183,10 +183,14 @@
          value-lower (some-> display-value str str/trim str/lower-case)
          formatter-id (normalize-formatter-id (:formatter field))
          formatter-badge (resolve-backlog-badge (:formatter field) display-value)
+         raw-status-str (some-> value str str/trim not-empty)
+         raw-status-lower (some-> raw-status-str str/lower-case)
+         badge-label (or (some-> display-value str str/trim not-empty)
+                       raw-status-str)
          status-badge (when (= formatter-id "status-badge")
-                        (when-let [value-str (some-> display-value str str/trim not-empty)]
-                          {:label (titleize-status value-str)
-                           :variant (status->badge-variant (some-> value-str str/lower-case))}))
+                        (when badge-label
+                          {:label badge-label
+                           :variant (status->badge-variant raw-status-lower)}))
          status-field-id? (or (= field-id :status)
                             (= field-id "status")
                             (= (name field-id) "status"))
@@ -219,8 +223,8 @@
 
                                   :else
                                   nil)
-         status-str (when status-field-id? (some-> text-value str/trim not-empty))
-         status-lower (some-> status-str str/lower-case)
+         status-str (when status-field-id? raw-status-str)
+         status-lower raw-status-lower
          is-json-field? (or (= field-type "json")
                           (= field-type "jsonb"))
          is-datetime-field? (or (= field-type :datetime)
@@ -265,7 +269,7 @@
        (render-badge status-badge)
 
        status-str
-       (render-badge {:label (titleize-status status-str)
+       (render-badge {:label (or badge-label (titleize-status status-str))
                       :variant (status->badge-variant status-lower)})
 
        (and (= field-type "select")
@@ -283,4 +287,4 @@
                                 :field-id field-id})
 
        :else
-       ($ :span text-value)))))
+       text-value))))
