@@ -286,8 +286,19 @@
         unit-price0 (or (when unit-idx (common/parse-money (nth cells unit-idx nil)))
                       (:unit_price merged-qty-cell)
                       (:unit_price merged-second-cell))
-        line-total (or (when total-idx (common/parse-money (nth cells total-idx nil)))
-                     (common/parse-money (last cells)))
+        money-cells (->> cells
+                      (map-indexed vector)
+                      (keep (fn [[idx cell]]
+                              (when (not= idx label-idx)
+                                (when-let [money (common/parse-money cell)]
+                                  {:idx idx
+                                   :money money}))))
+                      vec)
+        line-total0 (or (when total-idx (common/parse-money (nth cells total-idx nil)))
+                      (common/parse-money (last cells)))
+        line-total (or line-total0
+                     (when (= 1 (count money-cells))
+                       (:money (first money-cells))))
         unit-price (or unit-price0
                      (when (and qty line-total (pos? (.compareTo (bigdec qty) 0M)))
                        (.divide (bigdec line-total) (bigdec qty) 4 RoundingMode/HALF_UP)))]

@@ -388,6 +388,49 @@
     (lookup-tenant-id db :receipts receipt_id)
     (lookup-tenant-id db :payers payer_id)))
 
+(defn- existing-expense-id-for-receipt
+  "Return the already-linked expense id for a receipt, if any.
+   Throws 404 when the referenced receipt does not exist."
+  [tx receipt-id]
+  (let [receipt (jdbc/execute-one!
+                  tx
+                  (sql/format {:select [:id :expense_id]
+                               :from [:receipts]
+                               :where [:= :id receipt-id]
+                               :limit 1})
+                  {:builder-fn rs/as-unqualified-lower-maps})]
+    (when-not receipt
+      (throw (ex-info "Receipt not found"
+               {:status 404
+                :field :receipt_id
+                :receipt-id receipt-id})))
+    (or (:expense_id receipt)
+      (:id (jdbc/execute-one!
+             tx
+             (sql/format {:select [:id]
+                          :from [:expenses]
+                          :where [:= :receipt_id receipt-id]
+                          :limit 1})
+             {:builder-fn rs/as-unqualified-lower-maps})))))
+
+(declare throw-receipt-link-conflict!)
+
+(defn- ensure-receipt-link-available!
+  "Prevent creating a second expense for the same receipt.
+   Callers must explicitly unlink first (for example by deleting the linked expense)."
+  [tx {:keys [receipt_id]}]
+  (when receipt_id
+    (when-let [expense-id (existing-expense-id-for-receipt tx receipt_id)]
+      (throw-receipt-link-conflict! receipt_id expense-id))))
+
+(defn- throw-receipt-link-conflict!
+  [receipt-id expense-id]
+  (throw (ex-info "Receipt already linked to an expense. Unlink it first before creating another expense"
+           {:status 409
+            :field :receipt_id
+            :receipt-id receipt-id
+            :expense-id expense-id})))
+
 (defn create-expense!
   "Create an expense and its line items.
 
@@ -404,108 +447,117 @@
    (create-expense! db (dissoc body :items) items))
   ([db expense-data items]
    (let [expense-data* (normalize-expense-data expense-data)
-         items* (mapv normalize-expense-item (or items []))
-         article-id (:article_id expense-data*)]
+         normalized-items (mapv normalize-expense-item (or items []))
+         article-id (:article_id expense-data*)
+         items* (if (and article-id (empty? normalized-items))
+                  (let [article (jdbc/execute-one!
+                                  db
+                                  (sql/format {:select [:canonical_name]
+                                               :from [:articles]
+                                               :where [:= :id article-id]
+                                               :limit 1})
+                                  {:builder-fn rs/as-unqualified-lower-maps})
+                        article-name (or (:canonical_name article) "Item")]
+                    [{:raw_label article-name
+                      :qty (bigdec 1)
+                      :unit_price (:total_amount expense-data*)
+                      :line_total (:total_amount expense-data*)}])
+                  normalized-items)]
 
-     ;; When article_id is provided and no items, create an implicit single line item
-     (let [items* (if (and article-id (empty? items*))
-                    (let [article (jdbc/execute-one!
-                                    db
-                                    (sql/format {:select [:canonical_name]
-                                                 :from [:articles]
-                                                 :where [:= :id article-id]
-                                                 :limit 1})
-                                    {:builder-fn rs/as-unqualified-lower-maps})
-                          article-name (or (:canonical_name article) "Item")]
-                      [{:raw_label article-name
-                        :qty (bigdec 1)
-                        :unit_price (:total_amount expense-data*)
-                        :line_total (:total_amount expense-data*)}])
-                    items*)]
-
-       (jdbc/with-transaction [tx db]
-         (let [expense-data* (if (and (nil? (:supplier_id expense-data*))
-                                   (:store_id expense-data*))
-                               (if-let [store (jdbc/execute-one!
-                                                tx
-                                                (sql/format {:select [:supplier_id]
-                                                             :from [:stores]
-                                                             :where [:= :id (:store_id expense-data*)]
-                                                             :limit 1})
-                                                {:builder-fn rs/as-unqualified-lower-maps})]
-                                 (assoc expense-data* :supplier_id (:supplier_id store))
-                                 expense-data*)
+     (jdbc/with-transaction [tx db]
+       (let [expense-data* (if (and (nil? (:supplier_id expense-data*))
+                                 (:store_id expense-data*))
+                             (if-let [store (jdbc/execute-one!
+                                              tx
+                                              (sql/format {:select [:supplier_id]
+                                                           :from [:stores]
+                                                           :where [:= :id (:store_id expense-data*)]
+                                                           :limit 1})
+                                              {:builder-fn rs/as-unqualified-lower-maps})]
+                               (assoc expense-data* :supplier_id (:supplier_id store))
                                expense-data*)
-               expense-data* (if-let [inferred-tenant-id (infer-expense-tenant-id tx expense-data*)]
-                               (assoc expense-data* :tenant_id inferred-tenant-id)
-                               expense-data*)
-               _ (require-keys! expense-data* [:payer_id :purchased_at :total_amount])
+                             expense-data*)
+             expense-data* (if-let [inferred-tenant-id (infer-expense-tenant-id tx expense-data*)]
+                             (assoc expense-data* :tenant_id inferred-tenant-id)
+                             expense-data*)
+             _ (require-keys! expense-data* [:payer_id :purchased_at :total_amount])
+             _ (ensure-receipt-link-available! tx expense-data*)
                ;; Context validation: at least one of supplier, store, category, or article
-               _ (when-not (or (:supplier_id expense-data*)
-                             (:store_id expense-data*)
-                             (:expense_category_id expense-data*)
-                             article-id)
-                   (throw (ex-info "At least one context is required: supplier, store, category, or article"
-                            {:status 400 :field :context})))
-               expense-id (UUID/randomUUID)
-               expense-row (-> expense-data*
-                             (select-keys [:tenant_id
-                                           :store_id
-                                           :supplier_id
-                                           :payer_id
-                                           :expense_category_id
-                                           :user_id
-                                           :created_by
-                                           :receipt_id
-                                           :purchased_at
-                                           :total_amount
-                                           :original_amount
-                                           :bam_amount
-                                           :exchange_rate
-                                           :rate_fetched_at
-                                           :currency
-                                           :notes
-                                           :is_posted])
-                             (update-if-present :currency #(when % [:cast % :currency]))
-                             (assoc :id expense-id))
-               expense (jdbc/execute-one!
+             _ (when-not (or (:supplier_id expense-data*)
+                           (:store_id expense-data*)
+                           (:expense_category_id expense-data*)
+                           article-id)
+                 (throw (ex-info "At least one context is required: supplier, store, category, or article"
+                          {:status 400 :field :context})))
+             expense-id (UUID/randomUUID)
+             expense-row (-> expense-data*
+                           (select-keys [:tenant_id
+                                         :store_id
+                                         :supplier_id
+                                         :payer_id
+                                         :expense_category_id
+                                         :user_id
+                                         :created_by
+                                         :receipt_id
+                                         :purchased_at
+                                         :total_amount
+                                         :original_amount
+                                         :bam_amount
+                                         :exchange_rate
+                                         :rate_fetched_at
+                                         :currency
+                                         :notes
+                                         :is_posted])
+                           (update-if-present :currency #(when % [:cast % :currency]))
+                           (assoc :id expense-id))
+             expense (try
+                       (jdbc/execute-one!
                          tx
                          (sql/format {:insert-into :expenses
                                       :values [expense-row]
                                       :returning [:*]})
                          {:builder-fn rs/as-unqualified-lower-maps})
-               supplier-id (:supplier_id expense)]
+                       (catch org.postgresql.util.PSQLException e
+                         (let [message (or (.getMessage e) "")]
+                           (if (and (:receipt_id expense-row)
+                                 (= "23505" (.getSQLState e))
+                                 (or (str/includes? message "uniq_expenses_receipt_id")
+                                   (str/includes? message "expenses_receipt_id")))
+                             (throw-receipt-link-conflict! (:receipt_id expense-row)
+                               (existing-expense-id-for-receipt tx (:receipt_id expense-row)))
+                             (throw e)))))
+             supplier-id (:supplier_id expense)]
 
            ;; Insert line items (if any — empty items is valid for minimal entry)
-           (when (seq items*)
-             (let [resolved-items (mapv (fn [item]
-                                          (require-keys! item [:line_total])
-                                          (let [alias (resolve-alias! tx supplier-id item)
-                                                resolved-article-id (:article_id alias)]
-                                            (assoc item
-                                              :resolved_alias alias
-                                              :resolved_alias_id (some-> alias :id)
-                                              :resolved_article_id resolved-article-id)))
-                                    items*)
-                   tenant-id (:tenant_id expense)
-                   item-rows (mapv (fn [{:keys [resolved_alias_id qty unit_price line_total price_modified]}]
-                                     (cond-> {:id (UUID/randomUUID)
-                                              :expense_id expense-id
-                                              :alias_id resolved_alias_id
-                                              :qty qty
-                                              :unit_price unit_price
-                                              :line_total line_total}
-                                       tenant-id (assoc :tenant_id tenant-id)
-                                       (some? price_modified) (assoc :price_modified price_modified)))
-                               resolved-items)]
-               (jdbc/execute!
-                 tx
-                 (sql/format {:insert-into :expense_items
-                              :values item-rows
-                              :returning [:*]})
-                 {:builder-fn rs/as-unqualified-lower-maps})))
+         (when (seq items*)
+           (let [resolved-items (mapv (fn [item]
+                                        (require-keys! item [:line_total])
+                                        (let [alias (resolve-alias! tx supplier-id item)
+                                              resolved-article-id (:article_id alias)]
+                                          (assoc item
+                                            :resolved_alias alias
+                                            :resolved_alias_id (some-> alias :id)
+                                            :resolved_article_id resolved-article-id)))
+                                  items*)
+                 tenant-id (:tenant_id expense)
+                 item-rows (mapv (fn [{:keys [resolved_alias_id qty unit_price line_total price_modified]}]
+                                   (cond-> {:id (UUID/randomUUID)
+                                            :expense_id expense-id
+                                            :alias_id resolved_alias_id
+                                            :qty qty
+                                            :unit_price unit_price
+                                            :line_total line_total}
+                                     tenant-id (assoc :tenant_id tenant-id)
+                                     (some? price_modified) (assoc :price_modified price_modified)))
+                             resolved-items)]
+             (jdbc/execute!
+               tx
+               (sql/format {:insert-into :expense_items
+                            :values item-rows
+                            :returning [:*]})
+               {:builder-fn rs/as-unqualified-lower-maps})))
 
-           (get-expense-with-items tx expense-id)))))))
+         (get-expense-with-items tx expense-id))))))
 
 (defn update-expense!
   "Update an expense and optionally upsert its items.
@@ -615,14 +667,14 @@
                                               :line_total line_total}
                                        exp-tenant-id (assoc :tenant_id exp-tenant-id)))
                                resolved-inserts)
-                   inserted-items (if (seq item-rows)
-                                    (jdbc/execute!
-                                      tx
-                                      (sql/format {:insert-into :expense_items
-                                                   :values item-rows
-                                                   :returning [:*]})
-                                      {:builder-fn rs/as-unqualified-lower-maps})
-                                    [])])))
+                   _inserted-items (if (seq item-rows)
+                                     (jdbc/execute!
+                                       tx
+                                       (sql/format {:insert-into :expense_items
+                                                    :values item-rows
+                                                    :returning [:*]})
+                                       {:builder-fn rs/as-unqualified-lower-maps})
+                                     [])])))
 
          (get-expense-with-items tx id*))))))
 

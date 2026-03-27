@@ -14,6 +14,7 @@
     [app.domain.backend.expenses.services.receipts.approval :as receipt-approval]
     [app.domain.backend.expenses.services.receipts.image-preprocess :as image-preprocess]
     [app.domain.backend.expenses.services.receipts.queries :as receipt-queries]
+    [app.domain.backend.expenses.services.receipts.status :as receipt-status]
     [app.domain.backend.expenses.services.receipts.storage :as receipt-storage]
     [app.domain.backend.expenses.services.supplier-aliases :as supplier-aliases]
     [app.domain.backend.expenses.services.suppliers :as suppliers]
@@ -444,11 +445,25 @@
 ;; OCR Handlers (UI-triggered)
 ;; ---------------------------------------------------------------------------
 
+(defn- linked-receipt-for-reparse-error
+  [db receipt]
+  (when-let [expense-id (receipt-status/linked-expense-id db (:id receipt))]
+    {:error "Receipt already linked to an expense. Unlink it first before reparsing"
+     :details {:receipt-id (str (:id receipt))
+               :expense-id (str expense-id)}}))
+
+(defn- block-reparse-response
+  [db receipt]
+  (when-let [body (linked-receipt-for-reparse-error db receipt)]
+    (h/json-response body 409)))
+
 (defn ocr-single-receipt-handler
   "POST /api/v1/expenses/receipts/:id/ocr
 
   Trigger OCR for a single receipt. Admin users can OCR any receipt;
-  regular users can only OCR their own receipts."
+  regular users can only OCR their own receipts.
+
+  Receipts already linked to an expense must be explicitly unlinked first."
   [db app-config]
   (with-error-handling
     (fn [request]
@@ -457,28 +472,29 @@
           forbidden
           (let [tenant-id (h/get-tenant-id request)]
             (if-let [id (try-parse-uuid (get-in request [:path-params :id]))]
-              ;; Check access: admin can OCR any, users only their own
               (let [receipt (if (h/tenant-elevated? request)
                               (receipt-queries/get-receipt db id)
                               (receipt-queries/get-user-receipt db user-id id tenant-id))]
                 (if receipt
-                  (let [{:keys [enabled? api-key] :as ocr-cfg}
-                        (ocr-provider/build-provider app-config)]
-                    (cond
-                      (not enabled?)
-                      (h/json-response {:error (ocr-provider/disabled-message ocr-cfg)}
-                        409)
+                  (if-let [blocked (block-reparse-response db receipt)]
+                    blocked
+                    (let [{:keys [enabled? api-key] :as ocr-cfg}
+                          (ocr-provider/build-provider app-config)]
+                      (cond
+                        (not enabled?)
+                        (h/json-response {:error (ocr-provider/disabled-message ocr-cfg)}
+                          409)
 
-                      (not (seq api-key))
-                      (h/json-response {:error (ocr-provider/missing-api-key-message ocr-cfg)}
-                        409)
+                        (not (seq api-key))
+                        (h/json-response {:error (ocr-provider/missing-api-key-message ocr-cfg)}
+                          409)
 
-                      :else
-                      (do
-                        (receipt-ocr/queue-ui-ocr! db app-config [id] {:source :user-ui :user-id user-id})
-                        (h/json-response {:data {:queued true
-                                                 :receipt_ids [(str id)]}}
-                          202))))
+                        :else
+                        (do
+                          (receipt-ocr/queue-ui-ocr! db app-config [id] {:source :user-ui :user-id user-id})
+                          (h/json-response {:data {:queued true
+                                                   :receipt_ids [(str id)]}}
+                            202)))))
                   (h/json-response {:error "Receipt not found"} 404)))
               (h/json-response {:error "Invalid id"} 400))))
         (h/unauthorized-response)))
@@ -494,7 +510,9 @@
   {:receipt_ids [<uuid> ...]}
 
   Returns:
-  {:data {:queued true :receipt_ids [<uuid-string> ...]}}"
+  {:data {:queued true :receipt_ids [<uuid-string> ...]}}
+
+  Receipts already linked to expenses are blocked until explicitly unlinked."
   [db app-config]
   (with-error-handling
     (fn [request]
@@ -521,19 +539,33 @@
               (h/json-response {:error "One or more receipt ids are invalid"} 400)
 
               :else
-              (let [accessible-ids (->> ids
-                                     (filter (fn [id]
-                                               (some? (if (h/tenant-elevated? request)
-                                                        (receipt-queries/get-receipt db id)
-                                                        (receipt-queries/get-user-receipt db user-id id tenant-id)))))
-                                     vec)
-                    accessible-id-set (set accessible-ids)
+              (let [accessible-receipts (->> ids
+                                          (keep (fn [id]
+                                                  (if (h/tenant-elevated? request)
+                                                    (receipt-queries/get-receipt db id)
+                                                    (receipt-queries/get-user-receipt db user-id id tenant-id))))
+                                          vec)
+                    accessible-id-set (set (map :id accessible-receipts))
                     skipped-ids (->> ids
                                   (remove accessible-id-set)
                                   (map str)
-                                  vec)]
-                (if (empty? accessible-ids)
+                                  vec)
+                    grouped (group-by #(boolean (receipt-status/linked-expense-id db (:id %)))
+                              accessible-receipts)
+                    blocked-receipts (vec (get grouped true []))
+                    allowed-receipts (vec (get grouped false []))
+                    blocked-ids (mapv (comp str :id) blocked-receipts)
+                    allowed-ids (mapv :id allowed-receipts)]
+                (cond
+                  (and (empty? accessible-receipts) (empty? blocked-ids))
                   (h/json-response {:error "No accessible receipts found"} 404)
+
+                  (and (empty? allowed-ids) (seq blocked-ids))
+                  (h/json-response {:error "One or more receipts are already linked to expenses. Unlink them first before reparsing"
+                                    :details {:blocked_receipt_ids blocked-ids}}
+                    409)
+
+                  :else
                   (let [{:keys [enabled? api-key] :as ocr-cfg}
                         (ocr-provider/build-provider app-config)]
                     (cond
@@ -547,11 +579,12 @@
 
                       :else
                       (do
-                        (receipt-ocr/queue-ui-ocr! db app-config accessible-ids {:source :user-ui :user-id user-id})
+                        (receipt-ocr/queue-ui-ocr! db app-config allowed-ids {:source :user-ui :user-id user-id})
                         (h/json-response
                           {:data (cond-> {:queued true
-                                          :receipt_ids (mapv str accessible-ids)}
-                                   (seq skipped-ids) (assoc :skipped_receipt_ids skipped-ids))}
+                                          :receipt_ids (mapv str allowed-ids)}
+                                   (seq skipped-ids) (assoc :skipped_receipt_ids skipped-ids)
+                                   (seq blocked-ids) (assoc :blocked_receipt_ids blocked-ids))}
                           202)))))))))
         (h/unauthorized-response)))
     "Failed to trigger batch OCR"))

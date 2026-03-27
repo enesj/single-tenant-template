@@ -1,0 +1,4 @@
+({:action :create-index,
+  :index-name :uniq-expenses-receipt-id,
+  :model-name :expenses,
+  :options {:fields [:receipt_id], :unique true, :type :btree}})

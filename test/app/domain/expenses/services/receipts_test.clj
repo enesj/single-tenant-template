@@ -3,7 +3,6 @@
   (:require
     [app.backend.fixtures :as fixtures]
     [app.domain.backend.expenses.services.expenses :as expenses]
-
     [app.domain.backend.expenses.services.receipts.approval :as receipt-approval]
     [app.domain.backend.expenses.services.receipts.queries :as receipt-queries]
     [app.domain.backend.expenses.services.receipts.status :as receipt-status]
@@ -11,9 +10,7 @@
     [app.domain.backend.expenses.services.suppliers :as suppliers]
     [app.domain.expenses.test-helpers :as th]
     [clojure.java.io :as io]
-    [clojure.test :refer [deftest is use-fixtures]]
-    [honey.sql :as hsql]
-    [next.jdbc :as jdbc])
+    [clojure.test :refer [deftest is use-fixtures]])
   (:import
     (java.nio.file Files)
     (java.util UUID)))
@@ -86,6 +83,100 @@
       (let [after (receipt-queries/get-receipt db receipt-id)]
         (is (= "extracted" (:status after)))
         (is (nil? (:expense_id after)))))))
+
+(deftest receipts-approve-rejects-second-post-until-explicitly-unlinked
+  (when-let [db fixtures/*test-db*]
+    (let [{:keys [tenant-id]} (create-test-context! db "no-duplicate-post")
+          supplier (:supplier (suppliers/find-or-create-supplier! db "Duplicate Guard Supplier" {}))
+          payer (th/create-payer! db {:type "cash"
+                                      :label "Cash"
+                                      :tenant_id tenant-id})
+          upload (receipt-storage/upload-receipt! db {:tenant_id tenant-id
+                                                      :storage_key (str "s3://bucket/r-dup-" (UUID/randomUUID) ".jpg")
+                                                      :bytes (.getBytes (str "dup-" (UUID/randomUUID)))})
+          receipt-id (:id (:receipt upload))
+          _ (receipt-status/update-status! db receipt-id "extracted")
+          review {:supplier_id (:id supplier)
+                  :payer_id (:id payer)
+                  :purchased_at (now)
+                  :total_amount (bigdec "11.11")
+                  :currency "BAM"
+                  :items [{:raw_label "Item" :line_total (bigdec "11.11")}]}
+          expense (receipt-approval/approve-and-post! db receipt-id review)]
+      ;; Simulate OCR/reset bringing the receipt back to an approvable-looking status
+      ;; while it is still linked to an expense.
+      (receipt-status/update-status! db receipt-id "extracted")
+
+      (try
+        (receipt-approval/approve-and-post! db receipt-id review)
+        (is false "Expected duplicate receipt approval to throw")
+        (catch clojure.lang.ExceptionInfo e
+          (let [data (ex-data e)]
+            (is (= 409 (:status data)))
+            (is (= receipt-id (:receipt-id data)))
+            (is (= (:id expense) (:expense-id data))))))
+
+      (let [stored (receipt-queries/get-receipt db receipt-id)]
+        (is (= (:id expense) (:expense_id stored)))
+        (is (= (:id expense) (receipt-status/linked-expense-id db receipt-id)))))))
+
+(deftest receipts-reset-for-ocr-rejects-linked-receipt
+  (when-let [db fixtures/*test-db*]
+    (let [{:keys [tenant-id]} (create-test-context! db "reset-linked-receipt")
+          supplier (:supplier (suppliers/find-or-create-supplier! db "Reset Guard Supplier" {}))
+          payer (th/create-payer! db {:type "cash"
+                                      :label "Cash"
+                                      :tenant_id tenant-id})
+          upload (receipt-storage/upload-receipt! db {:tenant_id tenant-id
+                                                      :storage_key (str "s3://bucket/r-reset-" (UUID/randomUUID) ".jpg")
+                                                      :bytes (.getBytes (str "reset-" (UUID/randomUUID)))})
+          receipt-id (:id (:receipt upload))
+          _ (receipt-status/update-status! db receipt-id "extracted")
+          review {:supplier_id (:id supplier)
+                  :payer_id (:id payer)
+                  :purchased_at (now)
+                  :total_amount (bigdec "9.99")
+                  :currency "BAM"
+                  :items [{:raw_label "Item" :line_total (bigdec "9.99")}]}
+          expense (receipt-approval/approve-and-post! db receipt-id review)]
+      (try
+        (receipt-status/reset-for-ocr! db receipt-id)
+        (is false "Expected OCR reset on linked receipt to throw")
+        (catch clojure.lang.ExceptionInfo e
+          (let [data (ex-data e)]
+            (is (= 409 (:status data)))
+            (is (= receipt-id (:receipt-id data)))
+            (is (= (:id expense) (:expense-id data)))))))))
+
+(deftest receipts-approve-allows-repost-after-explicit-unlink
+  (when-let [db fixtures/*test-db*]
+    (let [{:keys [tenant-id]} (create-test-context! db "repost-after-unlink")
+          supplier (:supplier (suppliers/find-or-create-supplier! db "Repost Supplier" {}))
+          payer (th/create-payer! db {:type "cash"
+                                      :label "Cash"
+                                      :tenant_id tenant-id})
+          upload (receipt-storage/upload-receipt! db {:tenant_id tenant-id
+                                                      :storage_key (str "s3://bucket/r-repost-" (UUID/randomUUID) ".jpg")
+                                                      :bytes (.getBytes (str "repost-" (UUID/randomUUID)))})
+          receipt-id (:id (:receipt upload))
+          _ (receipt-status/update-status! db receipt-id "extracted")
+          review {:supplier_id (:id supplier)
+                  :payer_id (:id payer)
+                  :purchased_at (now)
+                  :total_amount (bigdec "13.13")
+                  :currency "BAM"
+                  :items [{:raw_label "Item" :line_total (bigdec "13.13")}]}
+          first-expense (receipt-approval/approve-and-post! db receipt-id review)]
+      (expenses/delete-expense! db (:id first-expense))
+
+      (let [after-unlink (receipt-queries/get-receipt db receipt-id)
+            second-expense (receipt-approval/approve-and-post! db receipt-id review)
+            stored (receipt-queries/get-receipt db receipt-id)]
+        (is (= "extracted" (:status after-unlink)))
+        (is (nil? (:expense_id after-unlink)))
+        (is (not= (:id first-expense) (:id second-expense)))
+        (is (= "posted" (:status stored)))
+        (is (= (:id second-expense) (:expense_id stored)))))))
 
 (deftest receipts-delete-expense-clears-link-even-if-receipt-already-reverted
   (when-let [db fixtures/*test-db*]

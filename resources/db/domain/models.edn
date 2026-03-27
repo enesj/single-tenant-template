@@ -239,6 +239,7 @@
             :types [[:currency :enum {:choices ["BAM" "EUR" "USD" "GBP" "CHF" "HRK" "RSD" "TRY"]}]]
             :indexes [[:idx_expenses_tenant :btree {:fields [:tenant_id]}]
                       [:idx_expenses_user :btree {:fields [:user_id]}]
+                      [:uniq_expenses_receipt_id :btree {:fields [:receipt_id] :unique true}]
                       [:idx_expenses_store :btree {:fields [:store_id]}]
                       [:idx_expenses_supplier :btree {:fields [:supplier_id]}]
                       [:idx_expenses_payer :btree {:fields [:payer_id]}]

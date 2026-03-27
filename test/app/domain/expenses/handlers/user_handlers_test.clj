@@ -8,6 +8,8 @@
     [app.domain.backend.expenses.handlers.user-articles :as user-articles]
     [app.domain.backend.expenses.handlers.user-receipts :as user-receipts]
     [app.domain.backend.expenses.services.receipts.queries :as receipt-queries]
+    [app.domain.backend.expenses.services.receipts.status :as receipt-status]
+    [app.domain.backend.expenses.workers.receipt-ocr.core :as receipt-ocr]
     [cheshire.core :as json]
     [clojure.test :refer [deftest is testing]])
   (:import
@@ -122,3 +124,55 @@
               body (parse-json-body resp)]
           (is (= 400 (:status resp)))
           (is (= "No receipt ids provided" (:error body))))))))
+
+(deftest user-receipts-single-ocr-blocks-linked-receipt
+  (testing "single OCR returns 409 when a receipt is already linked to an expense"
+    (let [handler (user-receipts/ocr-single-receipt-handler :mock-db :mock-app)
+          receipt-id (UUID/randomUUID)
+          expense-id (UUID/randomUUID)
+          queued? (atom false)]
+      (with-redefs [receipt-queries/get-receipt
+                    (fn [_db actual-id & _]
+                      {:id actual-id})
+                    receipt-status/linked-expense-id
+                    (fn [_db actual-id]
+                      (is (= receipt-id actual-id))
+                      expense-id)
+                    receipt-ocr/queue-ui-ocr!
+                    (fn [& _]
+                      (reset! queued? true)
+                      {:queued true})]
+        (let [resp (handler {:identity {:id (UUID/randomUUID)
+                                        :role "member"}
+                             :path-params {:id (str receipt-id)}})
+              body (parse-json-body resp)]
+          (is (= 409 (:status resp)))
+          (is (= "Receipt already linked to an expense. Unlink it first before reparsing" (:error body)))
+          (is (= (str receipt-id) (get-in body [:details :receipt-id])))
+          (is (= (str expense-id) (get-in body [:details :expense-id])))
+          (is (false? @queued?)))))))
+
+(deftest user-receipts-batch-ocr-blocks-when-all-selected-receipts-are-linked
+  (testing "batch OCR returns 409 when every accessible receipt is already linked"
+    (let [handler (user-receipts/ocr-batch-receipts-handler :mock-db :mock-app)
+          id-a (UUID/randomUUID)
+          id-b (UUID/randomUUID)
+          queued? (atom false)]
+      (with-redefs [receipt-queries/get-receipt
+                    (fn [_db actual-id & _]
+                      {:id actual-id})
+                    receipt-status/linked-expense-id
+                    (fn [_db _receipt-id]
+                      (UUID/randomUUID))
+                    receipt-ocr/queue-ui-ocr!
+                    (fn [& _]
+                      (reset! queued? true)
+                      {:queued true})]
+        (let [resp (handler {:identity {:id (UUID/randomUUID)
+                                        :role "member"}
+                             :body-params {:receipt_ids [(str id-a) (str id-b)]}})
+              body (parse-json-body resp)]
+          (is (= 409 (:status resp)))
+          (is (= "One or more receipts are already linked to expenses. Unlink them first before reparsing" (:error body)))
+          (is (= #{(str id-a) (str id-b)} (set (get-in body [:details :blocked_receipt_ids]))))
+          (is (false? @queued?)))))))

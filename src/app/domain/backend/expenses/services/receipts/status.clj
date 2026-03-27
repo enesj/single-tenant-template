@@ -70,12 +70,47 @@
   [db receipt-id]
   (update-status! db receipt-id "uploaded" {:retry_count [:+ :retry_count 1]}))
 
+(defn linked-expense-id
+  "Return the linked expense id for a receipt, if any.
+   Checks the receipt pointer first, then falls back to expenses.receipt_id for
+   defensive consistency when data drift exists."
+  [db receipt-id]
+  (let [receipt (jdbc/execute-one!
+                  db
+                  (sql/format {:select [:expense_id]
+                               :from [:receipts]
+                               :where [:= :id receipt-id]
+                               :limit 1})
+                  {:builder-fn rs/as-unqualified-lower-maps})]
+    (or (:expense_id receipt)
+      (:id (jdbc/execute-one!
+             db
+             (sql/format {:select [:id]
+                          :from [:expenses]
+                          :where [:= :receipt_id receipt-id]
+                          :limit 1})
+             {:builder-fn rs/as-unqualified-lower-maps})))))
+
+(defn ensure-reset-for-ocr-allowed!
+  "Reject OCR reset when a receipt is already linked to an expense.
+   The caller must explicitly unlink the expense first."
+  [db receipt-id]
+  (when-let [expense-id (linked-expense-id db receipt-id)]
+    (throw (ex-info "Receipt already linked to an expense. Unlink it first before reparsing"
+             {:status 409
+              :field :receipt_id
+              :receipt-id receipt-id
+              :expense-id expense-id}))))
+
 (defn reset-for-ocr!
   "Force-reset a receipt for OCR re-processing.
 
   Unlike `retry-extraction!`, this also clears OCR-related fields so the
   receipt can be cleanly re-parsed/extracted. Use when the user explicitly
   requests a fresh OCR pass.
+
+  Linked receipts are not eligible for reparse; callers must explicitly unlink
+  the expense first.
 
   Clears: error_message, error_details, raw_extract_json,
           parsed_markdown, supplier_guess, total_amount_guess, currency_guess,
@@ -85,6 +120,7 @@
 
   Returns the updated receipt row."
   [db receipt-id]
+  (ensure-reset-for-ocr-allowed! db receipt-id)
   (jdbc/execute-one!
     db
     (sql/format {:update :receipts

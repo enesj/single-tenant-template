@@ -477,6 +477,37 @@
     (is (= [19.95M 19.95M] (mapv (comp bigdec :unit_price) items)))
     (is (= [19.95M 19.95M] (mapv (comp bigdec :line_total) items)))))
 
+(deftest receipt-extraction-keeps-single-row-priced-items-around-split-qty-rows
+  (let [resp {:text {:pages [{:text "TROPIC MALOPRODAJA\n25.03.2026. 13:29\nTOTAL: 23,58\n"}]}
+              :items {:pages [{:items [{:type "table"
+                                        :rows [["HLJEB KARINGTON SA Z/KG" "" "3,50" "E"]
+                                               ["VEGETARIAN PAELLA /KG" "" "" ""]
+                                               ["0,226x" "24,95" "5,64" "E"]
+                                               ["TELECA DZIGERICA /KG" "" "" ""]
+                                               ["0,353x" "10,95" "3,87" "E"]
+                                               ["Salata RK 1kg RK /KG" "" "" ""]
+                                               ["0,096x" "22,45" "2,16" "E"]
+                                               ["Kukuruza 210 tk RK /KG" "" "1,35" "E"]
+                                               ["Krompir kuvani 1kg K/KG" "" "" ""]
+                                               ["0,462x" "15,98" "7,06" "E"]]}]}]}}
+        extraction (receipt-extract/response->extraction resp)
+        items (:items extraction)]
+    (is (= 6 (count items)))
+    (is (= 23.58M (bigdec (get-in extraction [:totals :total]))))
+    (is (= ["HLJEB KARINGTON SA Z/KG"
+            "VEGETARIAN PAELLA /KG"
+            "TELECA DZIGERICA /KG"
+            "Salata RK 1kg RK /KG"
+            "Kukuruza 210 tk RK /KG"
+            "Krompir kuvani 1kg K/KG"]
+          (mapv :raw_label items)))
+    (is (= [3.50M 5.64M 3.87M 2.16M 1.35M 7.06M]
+          (mapv (comp bigdec :line_total) items)))
+    (is (= [1M 0.226M 0.353M 0.096M 1M 0.462M]
+          (mapv (comp bigdec :qty) items)))
+    (is (= [3.50M 24.95M 10.95M 22.45M 1.35M 15.98M]
+          (mapv (comp bigdec :unit_price) items)))))
+
 (deftest receipt-extraction-parses-popust-row-with-pct-in-second-cell
   (let [resp {:text {:pages [{:text "MY STORE\n10.01.2026. 12:01\nTOTAL: 6,75\n"}]}
               :items {:pages [{:items [{:type "table"

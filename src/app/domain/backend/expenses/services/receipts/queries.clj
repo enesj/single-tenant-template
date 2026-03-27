@@ -236,10 +236,12 @@
                                 :receipts.original_filename
                                 [[:raw effective-status-sql] :status]
                                 :receipts.supplier_guess
+                                :receipts.purchased_at_guess
                                 :receipts.total_amount_guess
                                 [[:raw lines-total-sql] :lines_total_amount_guess]
                                 :receipts.currency_guess
                                 :receipts.payer_id
+                                :receipts.expense_id
                                 :receipts.created_by
                                 [[:coalesce :cb.full_name :cb.email] :created_by_name]
                                 :receipts.file_purged_at
@@ -287,10 +289,12 @@
                             :receipts.original_filename
                             [[:raw effective-status-sql] :status]
                             :receipts.supplier_guess
+                            :receipts.purchased_at_guess
                             :receipts.total_amount_guess
                             [[:raw lines-total-sql] :lines_total_amount_guess]
                             :receipts.currency_guess
                             :receipts.payer_id
+                            :receipts.expense_id
                             :receipts.created_by
                             [[:coalesce :cb.full_name :cb.email] :created_by_name]
                             :receipts.file_purged_at

@@ -38,6 +38,9 @@
             {:id :supplier-guess
              :label (t :common/supplier-guess)
              :type :text}
+            {:id :purchased-at-guess
+             :label (t :common/purchased-at-guess)
+             :type :datetime}
             {:id :total-display
              :label (t :common/total)
              :type :text}
@@ -111,13 +114,21 @@
     {:id "user-receipt-detail-modal"
      :ctx receipt-detail-ctx}))
 
+(defn- receipt-linked?
+  [receipt]
+  (some? (or (:expense-id receipt)
+           (:expense_id receipt)
+           (:receipts/expense-id receipt)
+           (:receipts/expense_id receipt))))
+
 (defn- receipt-ocr-allowed?
   "Check if OCR action should be shown for a receipt.
-  Returns true for statuses where OCR makes sense."
+   Returns true for statuses where OCR makes sense and the receipt is not already linked to an expense."
   [receipt]
   (let [status (or (:status receipt) (:receipts/status receipt))]
-    (contains? #{"uploaded" "failed" "review_required" "extracted" "parsing" "parsed" "extracting"}
-      status)))
+    (and (not (receipt-linked? receipt))
+      (contains? #{"uploaded" "failed" "review_required" "extracted" "parsing" "parsed" "extracting"}
+        status))))
 
 (defn- receipt-actions
   [t can-ocr? receipt]
@@ -152,11 +163,71 @@
            (:receipts/file-purged-at receipt)
            (:receipts/file_purged_at receipt))))
 
+(defn- ->number
+  [value]
+  (cond
+    (number? value) value
+    (string? value) (let [n (js/parseFloat (.replace value "," "."))]
+                      (when-not (js/isNaN n) n))
+    :else nil))
+
+(defn- fmt-amount
+  [amount]
+  (cond
+    (nil? amount) nil
+    (number? amount) (.toFixed (js/Number. amount) 2)
+    (string? amount) (let [n (->number amount)]
+                       (if (some? n)
+                         (.toFixed (js/Number. n) 2)
+                         amount))
+    :else (str amount)))
+
+(defn- amounts-different?
+  [a b]
+  (let [a* (->number a)
+        b* (->number b)]
+    (and (some? a*)
+      (some? b*)
+      (> (js/Math.abs (- a* b*)) 0.009))))
+
+(defn receipt-total-display
+  [receipt]
+  (let [total (or (:total-amount-guess receipt)
+                (:total_amount_guess receipt)
+                (:receipts/total-amount-guess receipt)
+                (:receipts/total_amount_guess receipt))
+        lines-total (or (:lines-total-amount-guess receipt)
+                      (:lines_total_amount_guess receipt)
+                      (:receipts/lines-total-amount-guess receipt)
+                      (:receipts/lines_total_amount_guess receipt))
+        currency (or (:currency-guess receipt)
+                   (:currency_guess receipt)
+                   (:receipts/currency-guess receipt)
+                   (:receipts/currency_guess receipt))
+        display-amount (or total lines-total)
+        amount-str (fmt-amount display-amount)
+        lines-str (fmt-amount lines-total)
+        currency-str (when (and (string? currency) (not (empty? currency))) currency)
+        suffix (when currency-str (str " " currency-str))]
+    (cond
+      (nil? amount-str) nil
+      (and (some? total)
+        (some? lines-str)
+        (amounts-different? total lines-total))
+      (str amount-str suffix " (lines " lines-str ")")
+
+      :else
+      (str amount-str suffix))))
+
 (defn- present-receipt
   [receipt]
-  (cond-> receipt
-    (receipt-purged? receipt)
-    (assoc :receipt-status-display "purged")))
+  (let [total-display (receipt-total-display receipt)]
+    (cond-> receipt
+      (receipt-purged? receipt)
+      (assoc :receipt-status-display "purged")
+
+      (some? total-display)
+      (assoc :total-display total-display))))
 
 (defui receipts-list-page
   []
