@@ -102,6 +102,7 @@ bb list-review-required-receipts dev --full --pretty  # verbose, for mismatch di
 - **Do not create new categories** — pick from the existing `categories` table only.
 - **Do not use `psql` directly** — scripts call it internally; run via `bb`.
 - **Subcategory names must be in Bosnian.**
+- **Reuse existing DB subcategory wording whenever an equivalent already exists.** Never create ASCII, diacritic-stripped, or lightly reworded variants of an existing Bosnian subcategory.
 - **Each distinct size/volume/weight = a separate article.** Never conflate variants.
 - **Batch-first**: no alias-by-alias loops. Use batch scripts and files.
 - **Temporary files** go under `tmp/`; delete them after use (`bb clear-folder`).
@@ -280,6 +281,7 @@ are legitimately Generic.
 3. Diacritics: verify exact string match (Ž not Z, Š not S, Č not C, Ć not C, Đ not D).
 4. Language: all subcategories must be Bosnian (not English).
 5. Proliferation: watch for near-duplicates (`"Maramice"` vs `"Maramice i papirni proizvodi"`) — pick DB match.
+6. Equivalent wording: if DB already has the same subcategory with Bosnian diacritics or an obviously equivalent spelling, reuse the exact DB wording instead of introducing a new variant.
 
 **Hard classification rules** (Perplexity commonly gets these wrong):
 

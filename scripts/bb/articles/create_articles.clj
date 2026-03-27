@@ -374,6 +374,27 @@
             "WHERE name = " (db/sql-literal category-name) "\n"
             "LIMIT 1"))))))
 
+(defn- normalize-subcategory-name
+  [value]
+  (some-> value db/normalize-key))
+
+(defn- find-equivalent-subcategory
+  [db category-id subcategory-name]
+  (when (and category-id subcategory-name)
+    (let [normalized-name (normalize-subcategory-name subcategory-name)]
+      (some->> (db/query
+                 db
+                 (str
+                   "SELECT id, category_id, name, description\n"
+                   "FROM subcategories\n"
+                   "WHERE category_id = " (db/sql-literal category-id) "\n"
+                   "ORDER BY created_at ASC"))
+        (some (fn [{existing-name :name :as row}]
+                (when (or (= subcategory-name existing-name)
+                        (= (str/lower-case subcategory-name) (str/lower-case (or existing-name "")))
+                        (= normalized-name (normalize-subcategory-name existing-name)))
+                  row)))))))
+
 (defn- ensure-subcategory!
   "Finds or creates a subcategory under the given category.
   Resolution order for category-id:
@@ -396,26 +417,38 @@
           _ (when-not category-id
               (throw (ex-info "Category could not be found or created"
                        {:category-name category-name})))
-          id (db/uuid)
-          inserted (db/query1
-                     db
-                     (str
-                       "INSERT INTO subcategories (id, category_id, name, description)\n"
-                       "VALUES (" (db/sql-literal id) ", " (db/sql-literal category-id) ", " (db/sql-literal subcategory-name) ", " (db/sql-literal subcategory-description) ")\n"
-                       "ON CONFLICT (category_id, name)\n"
-                       (if update-subcategory-description?
-                         "DO UPDATE SET description = COALESCE(EXCLUDED.description, subcategories.description)\n"
-                         "DO NOTHING\n")
-                       "RETURNING id, category_id, name, description"))]
-      (or inserted
-        (db/query1
-          db
-          (str
-            "SELECT id, category_id, name, description\n"
-            "FROM subcategories\n"
-            "WHERE category_id = " (db/sql-literal category-id) "\n"
-            "  AND name = " (db/sql-literal subcategory-name) "\n"
-            "LIMIT 1"))))))
+          existing (find-equivalent-subcategory db category-id subcategory-name)]
+      (if existing
+        (if (and update-subcategory-description? subcategory-description)
+          (or (db/query1
+                db
+                (str
+                  "UPDATE subcategories\n"
+                  "SET description = COALESCE(" (db/sql-literal subcategory-description) ", description)\n"
+                  "WHERE id = " (db/sql-literal (:id existing)) "\n"
+                  "RETURNING id, category_id, name, description"))
+            existing)
+          existing)
+        (let [id (db/uuid)
+              inserted (db/query1
+                         db
+                         (str
+                           "INSERT INTO subcategories (id, category_id, name, description)\n"
+                           "VALUES (" (db/sql-literal id) ", " (db/sql-literal category-id) ", " (db/sql-literal subcategory-name) ", " (db/sql-literal subcategory-description) ")\n"
+                           "ON CONFLICT (category_id, name)\n"
+                           (if update-subcategory-description?
+                             "DO UPDATE SET description = COALESCE(EXCLUDED.description, subcategories.description)\n"
+                             "DO NOTHING\n")
+                           "RETURNING id, category_id, name, description"))]
+          (or inserted
+            (db/query1
+              db
+              (str
+                "SELECT id, category_id, name, description\n"
+                "FROM subcategories\n"
+                "WHERE category_id = " (db/sql-literal category-id) "\n"
+                "  AND name = " (db/sql-literal subcategory-name) "\n"
+                "LIMIT 1"))))))))
 
 (defn- find-article-by-key!
   [db normalized-key]

@@ -2,9 +2,11 @@
   "Entity configuration maps for expenses services."
   (:require
     [app.domain.backend.expenses.services.articles :as articles]
-
     [app.domain.backend.expenses.services.service-configs.normalization :as normalize]
-    [clojure.string :as str])
+    [clojure.string :as str]
+    [honey.sql :as sql]
+    [next.jdbc :as jdbc]
+    [next.jdbc.result-set :as rs])
   (:import
     [java.util UUID]))
 
@@ -253,6 +255,45 @@
    :has-search? true
    :has-count? true})
 
+(defn- normalize-subcategory-name-key
+  [value]
+  (some-> value
+    normalize/unescape-html-entities
+    str
+    str/trim
+    not-empty
+    normalize/normalize-store-key))
+
+(defn- find-equivalent-subcategory
+  [db category-id name exclude-id]
+  (when (and category-id (seq (str (or name ""))))
+    (let [normalized-name (normalize-subcategory-name-key name)]
+      (when normalized-name
+        (->> (jdbc/execute!
+               db
+               (sql/format
+                 (cond-> {:select [:id :name]
+                          :from [:subcategories]
+                          :where [:= :category_id category-id]}
+                   exclude-id (assoc :where [:and
+                                             [:= :category_id category-id]
+                                             [:<> :id exclude-id]])))
+               {:builder-fn rs/as-unqualified-lower-maps})
+          (some (fn [{existing-name :name :as row}]
+                  (when (= normalized-name
+                          (normalize-subcategory-name-key existing-name))
+                    row))))))))
+
+(defn- assert-unique-subcategory-name!
+  [db category-id name exclude-id]
+  (when-let [existing (find-equivalent-subcategory db category-id name exclude-id)]
+    (throw (ex-info "subcategory with equivalent name already exists in this category"
+             {:status 400
+              :field :name
+              :category-id category-id
+              :conflicting-id (:id existing)
+              :conflicting-name (:name existing)}))))
+
 (def subcategory-config
   {:table-name "subcategories"
    :table-alias :sc
@@ -264,16 +305,44 @@
                       :updated-at :sc/updated_at}
    :default-order-by :sc/name
    :search-fields [:sc/name :sc/description]
+   :text-filter-columns {:category-name :c.name}
    :joins [[:categories :c] [:= :c/id :sc/category_id]]
    :select-fields [[:sc.*]
                    [:c/name :category_name]]
-   :before-insert (fn [data]
-                    (when-not (:category_id data)
-                      (throw (ex-info "category_id is required" {:data data})))
-                    (-> data
-                      (assoc :id (UUID/randomUUID))))
-   :before-update (fn [_id updates]
-                    updates)
+   :before-insert (fn [db data]
+                    (let [category-id (:category_id data)
+                          name (some-> (:name data) normalize/unescape-html-entities str str/trim not-empty)]
+                      (when-not category-id
+                        (throw (ex-info "category_id is required" {:status 400 :field :category_id :data data})))
+                      (when-not name
+                        (throw (ex-info "name is required" {:status 400 :field :name :data data})))
+                      (assert-unique-subcategory-name! db category-id name nil)
+                      (-> data
+                        (assoc :id (UUID/randomUUID))
+                        (assoc :name name))))
+   :before-update (fn [db id updates]
+                    (if (or (contains? updates :name)
+                          (contains? updates :category_id))
+                      (let [current (jdbc/execute-one!
+                                      db
+                                      (sql/format {:select [:id :category_id :name]
+                                                   :from [:subcategories]
+                                                   :where [:= :id id]})
+                                      {:builder-fn rs/as-unqualified-lower-maps})
+                            category-id (if (contains? updates :category_id)
+                                          (:category_id updates)
+                                          (:category_id current))
+                            name (if (contains? updates :name)
+                                   (some-> (:name updates) normalize/unescape-html-entities str str/trim)
+                                   (:name current))]
+                        (when-not category-id
+                          (throw (ex-info "category_id is required" {:status 400 :field :category_id :id id})))
+                        (when (str/blank? name)
+                          (throw (ex-info "name is required" {:status 400 :field :name :id id})))
+                        (assert-unique-subcategory-name! db category-id name id)
+                        (cond-> updates
+                          (contains? updates :name) (assoc :name name)))
+                      updates))
    :has-search? true
    :has-count? true})
 

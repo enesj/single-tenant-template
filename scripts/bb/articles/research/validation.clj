@@ -2,6 +2,7 @@
   "Category validation, manufacturer sanitization, English→Bosnian translation,
   and near-duplicate detection."
   (:require
+    [articles.db :as db]
     [articles.research.heuristics :as heuristics]
     [clojure.string :as str]))
 
@@ -43,6 +44,10 @@
 ;; Subcategory sanitization
 ;; ============================================================
 
+(defn- normalize-subcategory-name
+  [value]
+  (some-> value db/normalize-key))
+
 (defn sanitize-subcategory
   "Try to match a subcategory against existing subcategories for a category.
   Returns the best DB match, or the original if no match found."
@@ -50,12 +55,15 @@
   (if-not (and subcat-name cat-name)
     (or subcat-name "Opste")
     (let [existing (get subcategory-map cat-name)
-          lower (str/lower-case subcat-name)]
+          lower (str/lower-case subcat-name)
+          normalized (normalize-subcategory-name subcat-name)]
       (or
         ;; Exact match
         (some #(when (= subcat-name %) %) existing)
         ;; Case-insensitive match
         (some #(when (= lower (str/lower-case %)) %) existing)
+        ;; Accent/ASCII-insensitive normalized match
+        (some #(when (= normalized (normalize-subcategory-name %)) %) existing)
         ;; Substring match (subcat contained in existing, or vice versa)
         (some #(when (or (str/includes? (str/lower-case %) lower)
                        (str/includes? lower (str/lower-case %)))

@@ -56,7 +56,7 @@
    :default-order-by "name"
    :required-fields [:category-id :name]
    :has-search? true
-   :filter-params [:search]})
+   :filter-params [:search :category-name]})
 
 (def supplier-config
   {:entity-key :supplier

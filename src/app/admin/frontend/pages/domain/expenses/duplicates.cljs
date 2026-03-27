@@ -18,7 +18,8 @@
   [{:key "suppliers"     :label "Suppliers"}
    {:key "articles"      :label "Articles"}
    {:key "stores"        :label "Stores"}
-   {:key "manufacturers" :label "Manufacturers"}])
+   {:key "manufacturers" :label "Manufacturers"}
+   {:key "subcategories" :label "Subcategories"}])
 
 (defui entity-tabs []
   (let [current (use-subscribe [::dup-events/entity-type])]
@@ -75,7 +76,8 @@
   [entity-type]
   (case entity-type
     "articles" "Prices"
-    "stores"   "Supplier"
+    "stores" "Supplier"
+    "subcategories" "Category"
     "Normalized Key"))
 
 (defn- article-price-labels
@@ -88,6 +90,12 @@
   [member]
   (or (:supplier-display-name member)
     (:supplier_display_name member)
+    "—"))
+
+(defn- subcategory-category-label
+  [member]
+  (or (:category-name member)
+    (:category_name member)
     "—"))
 
 (defui candidate-context-cell [{:keys [entity-type member normalized-key]}]
@@ -107,40 +115,45 @@
     ($ :td {:class "p-2 text-sm text-base-content/70"}
       (store-supplier-label member))
 
+    "subcategories"
+    ($ :td {:class "p-2 text-sm text-base-content/70"}
+      (subcategory-category-label member))
+
     ($ :td {:class "p-2 text-base-content/60 text-sm font-mono"}
       normalized-key)))
 
 (defui cluster-member [{:keys [member cluster-idx entity-type is-primary? is-secondary? on-select-primary on-toggle-secondary]}]
-  (let [member-id     (or (:id member) (str (:id member)))
-        display-name  (or (:display-name member)
-                        (:canonical-name member)
-                        (:display_name member)
-                        (:canonical_name member)
-                        "—")
+  (let [member-id (or (:id member) (str (:id member)))
+        display-name (or (:display-name member)
+                       (:canonical-name member)
+                       (:display_name member)
+                       (:canonical_name member)
+                       (:name member)
+                       "—")
         normalized-key (or (:normalized-key member)
                          (:normalized_key member)
                          "—")
-        usage-count   (or (:usage-count member)
-                        (:usage_count member)
-                        0)]
+        usage-count (or (:usage-count member)
+                      (:usage_count member)
+                      0)]
     ($ :tr {:class (when is-primary? "bg-primary/10")}
       ($ :td {:class "p-2"}
-        ($ :input {:type      "radio"
-                   :id        (str "dedup-primary-" cluster-idx "-" member-id)
-                   :name      (str "primary-" cluster-idx)
-                   :class     "ds-radio ds-radio-primary ds-radio-sm"
-                   :checked   is-primary?
+        ($ :input {:type "radio"
+                   :id (str "dedup-primary-" cluster-idx "-" member-id)
+                   :name (str "primary-" cluster-idx)
+                   :class "ds-radio ds-radio-primary ds-radio-sm"
+                   :checked is-primary?
                    :on-change (fn [_] (on-select-primary member-id))}))
       ($ :td {:class "p-2"}
         (when-not is-primary?
-          ($ :input {:type      "checkbox"
-                     :id        (str "dedup-secondary-" cluster-idx "-" member-id)
-                     :class     "ds-checkbox ds-checkbox-sm"
-                     :checked   (boolean is-secondary?)
+          ($ :input {:type "checkbox"
+                     :id (str "dedup-secondary-" cluster-idx "-" member-id)
+                     :class "ds-checkbox ds-checkbox-sm"
+                     :checked (boolean is-secondary?)
                      :on-change (fn [_] (on-toggle-secondary member-id))})))
       ($ :td {:class "p-2 font-medium"} display-name)
-      ($ candidate-context-cell {:entity-type   entity-type
-                                 :member        member
+      ($ candidate-context-cell {:entity-type entity-type
+                                 :member member
                                  :normalized-key normalized-key})
       ($ :td {:class "p-2 text-center"}
         ($ :span {:class "ds-badge ds-badge-sm ds-badge-ghost"} (str usage-count))))))

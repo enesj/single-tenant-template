@@ -113,10 +113,12 @@
   "Build a generic list function for an entity.
    When config has :tenant-scoped? true, accepts :tenant-id in opts to scope by tenant.
    Accepts :extra-filters in opts — a seq of HoneySQL WHERE clauses to append."
-  [{:keys [table-name primary-key joins select-fields allowed-order-by search-fields table-alias base-filters]
+  [{:keys [table-name primary-key joins select-fields allowed-order-by search-fields
+           table-alias base-filters text-filter-columns]
     :as config}]
   (fn list-entity
     [db {:keys [limit offset order-by order-dir search tenant-id extra-filters]
+         :as opts
          :or {limit 50 offset 0 order-dir :asc}}]
     (let [default-order-by (get config :default-order-by primary-key)
           effective-filters (into (vec (inject-tenant-filter config tenant-id base-filters))
@@ -134,9 +136,12 @@
                         :offset offset
                         :order-by order-by
                         :order-dir order-dir})
-          final-query (if (and search search-fields)
-                        (apply-search-filter base-query search-fields search)
-                        base-query)]
+          final-query (cond-> base-query
+                        (seq text-filter-columns)
+                        (shared-qb/apply-text-filters text-filter-columns opts)
+
+                        (and search search-fields)
+                        (apply-search-filter search-fields search))]
       (jdbc/execute! db (sql/format final-query)
         {:builder-fn rs/as-unqualified-lower-maps}))))
 
@@ -263,7 +268,7 @@
   "Build a generic count function for an entity.
    When config has :tenant-scoped? true, accepts :tenant-id in opts map.
    Accepts :extra-filters in opts — a seq of HoneySQL WHERE clauses to append."
-  [{:keys [table-name search-fields joins table-alias base-filters]
+  [{:keys [table-name search-fields joins table-alias base-filters text-filter-columns]
     :as config}]
   (fn count-entity
     [db & [opts]]
@@ -283,7 +288,12 @@
                                       [(keyword table-name)])}
                        joins (assoc :left-join joins)
                        where (assoc :where where))
-          final-query (apply-search-filter base-query search-fields search)]
+          final-query (cond-> base-query
+                        (seq text-filter-columns)
+                        (shared-qb/apply-text-filters text-filter-columns opts)
+
+                        (and search search-fields)
+                        (apply-search-filter search-fields search))]
       (:total
        (jdbc/execute-one! db
          (sql/format final-query)

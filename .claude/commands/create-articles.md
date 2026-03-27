@@ -172,7 +172,7 @@ bb scripts/bb/articles/phase1_triage_report.clj
 Scan for:
 - OCR noise (blank labels, digits-only, punctuation-only, < 3 alnum chars)
 - High-frequency aliases that should become articles quickly
-- Supplier context clues (pharmacy → Health, clothing → Clothing & Accessories, etc.)
+- Supplier context clues (pharmacy → Zdravlje i apoteka, clothing → Odjeća i modni dodaci, etc.)
 
 ---
 
@@ -205,13 +205,13 @@ Then pick subcategory defaults per supplier/keyword (Bosnian names):
 
 | Context | Category | Subcategory |
 |---------|----------|-------------|
-| Pharmacy supplier | Health & Pharmacy | Opšte |
-| Clothing/shoes retailer | Clothing & Accessories | Opšte |
-| Drugstore (dm, Bipa) | Personal Care | Opšte |
-| Dairy keywords (mlijeko, jogurt, sir) | Dairy & Eggs | (descriptive) |
-| Bread/pastry keywords (hljeb, pecivo) | Bakery & Desserts | (descriptive) |
-| Drinks (voda, sok, pivo) | Beverages | Opšte |
-| Unknown / no fit | Other | Opšte |
+| Pharmacy supplier | Zdravlje i apoteka | Opšte |
+| Clothing/shoes retailer | Odjeća i modni dodaci | Opšte |
+| Drugstore (dm, Bipa) | Lična njega | Opšte |
+| Dairy keywords (mlijeko, jogurt, sir) | Mliječni proizvodi i jaja | (descriptive) |
+| Bread/pastry keywords (hljeb, pecivo) | Pekara i deserti | (descriptive) |
+| Drinks (voda, sok, pivo) | Pića | Opšte |
+| Unknown / no fit | Ostalo | Opšte |
 
 ---
 
@@ -244,7 +244,7 @@ bb serper-search "Meggle Mlijeko 1L" --format pretty
 bb scripts/bb/articles/create_articles.clj dev \
   --canonical-name "Meggle Mlijeko 1L" \
   --manufacturer-name "Meggle" \
-  --category-name "Dairy & Eggs" \
+  --category-name "Mliječni proizvodi i jaja" \
   --subcategory-name "Mlijeko" \
   --pretty
 ```
@@ -257,17 +257,17 @@ Write `tmp/articles.edn` as an EDN vector of maps:
 [{:canonical-name "Meggle Mlijeko 1L"
   :manufacturer-name "Meggle"
   :manufacturer-key "meggle"
-  :category-name "Dairy & Eggs"
+  :category-name "Mliječni proizvodi i jaja"
   :subcategory-name "Mlijeko"}
 
  {:canonical-name "Balea Shower Gel 250ml"
   :manufacturer-name "Balea"
   :manufacturer-key "balea"
-  :category-name "Personal Care"
+  :category-name "Lična njega"
   :subcategory-name "Gel za tuširanje"}
 
  {:canonical-name "Hljeb Bijeli 500g"
-  :category-name "Bakery & Desserts"
+  :category-name "Pekara i deserti"
   :subcategory-name "Hljeb"}]
 ```
 

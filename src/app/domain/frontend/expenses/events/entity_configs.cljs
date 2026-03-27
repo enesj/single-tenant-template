@@ -162,4 +162,6 @@
    :api-endpoint "/admin/api/expenses/subcategories"
    :detail-response-key :subcategory
    :has-forms? false
-   :server-search-keys #{:name}})
+   :server-filter-keys {:name :search
+                        :description :search
+                        :category-name :category-name}})

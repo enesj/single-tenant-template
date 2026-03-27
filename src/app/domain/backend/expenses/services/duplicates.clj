@@ -1,5 +1,5 @@
 (ns app.domain.backend.expenses.services.duplicates
-  "Duplicate detection across canonical entities (Suppliers, Articles, Stores, Manufacturers).
+  "Duplicate detection across canonical entities (Suppliers, Articles, Stores, Manufacturers, Subcategories).
 
   Strategies:
   - :exact       — Group by identical normalized_key values (no threshold, always precise).
@@ -13,8 +13,10 @@
 
   Each strategy returns clusters: vectors of entity maps belonging together."
   (:require
+    [app.domain.backend.expenses.services.service-configs.normalization :as normalize]
     [buddy.core.codecs :as codecs]
     [buddy.core.hash :as hash]
+    [clojure.set :as set]
     [clojure.string :as str]
     [honey.sql :as sql]
     [next.jdbc :as jdbc]
@@ -29,7 +31,10 @@
 
   :group-col (optional) — when set, candidates are only compared within the
   same group (e.g. stores must share the same supplier_id to be considered
-  duplicates). Applies to all strategies."
+  duplicates). Applies to all strategies.
+
+  :normalize-fn (optional) — derive a detection key from the display name when
+  the entity does not persist a normalized_key column."
   {:suppliers     {:table "suppliers"
                    :name-col :display_name
                    :key-col :normalized_key
@@ -51,7 +56,11 @@
    :manufacturers {:table "manufacturers"
                    :name-col :display_name
                    :key-col :normalized_key
-                   :fk-tables {:articles {:col :manufacturer_id}}}})
+                   :fk-tables {:articles {:col :manufacturer_id}}}
+   :subcategories {:table "subcategories"
+                   :name-col :name
+                   :normalize-fn normalize/normalize-store-key
+                   :fk-tables {:articles {:col :subcategory_id}}}})
 
 (def ^:private default-prefix-fetch-limit
   5000)
@@ -81,20 +90,45 @@
 ;; Helpers
 ;; ============================================================================
 
+(defn- detection-key-col
+  [{:keys [key-col]}]
+  (or key-col :normalized_key))
+
+(defn- in-memory-detection?
+  [{:keys [normalize-fn key-col]}]
+  (or (some? normalize-fn)
+    (nil? key-col)))
+
+(defn- prepare-detection-row
+  [{:keys [name-col key-col normalize-fn] :as config} row]
+  (let [detection-col (detection-key-col config)
+        detection-key (or (get row detection-col)
+                        (when key-col (get row key-col))
+                        (when normalize-fn
+                          (some-> (get row name-col) normalize-fn)))]
+    (cond-> (assoc row :normalized_key detection-key)
+      (keyword? detection-col) (assoc detection-col detection-key))))
+
+(defn- detection-select-cols
+  [{:keys [name-col key-col group-col]}]
+  (cond-> [:id name-col :created_at]
+    key-col (conj key-col)
+    group-col (conj group-col)))
+
 (defn- fetch-all-rows
-  "Fetch rows for an entity (id, name-col, key-col, and group-col when present).
+  "Fetch rows for an entity (id, name-col, detection key, and group-col when present).
   `fetch-limit` is always normalized and bounded to avoid unbounded scans."
-  [db {:keys [table name-col key-col group-col]} fetch-limit]
+  [db config fetch-limit]
   (let [fetch-limit* (normalize-fetch-limit fetch-limit)
-        select-cols  (cond-> [:id name-col key-col :created_at]
-                       group-col (conj group-col))]
-    (jdbc/execute!
-      db
-      (sql/format {:select   select-cols
-                   :from     [(keyword table)]
-                   :order-by [[:created_at :asc]]
-                   :limit    fetch-limit*})
-      {:builder-fn rs/as-unqualified-lower-maps})))
+        select-cols  (detection-select-cols config)]
+    (->> (jdbc/execute!
+           db
+           (sql/format {:select   select-cols
+                        :from     [(keyword (:table config))]
+                        :order-by [[:created_at :asc]]
+                        :limit    fetch-limit*})
+           {:builder-fn rs/as-unqualified-lower-maps})
+      (mapv #(prepare-detection-row config %)))))
 
 (defn- prefix-tokens
   "Extract first `n` hyphen-delimited tokens from a normalized key."
@@ -187,6 +221,111 @@
 ;; Strategy: Prefix Grouping
 ;; ============================================================================
 
+(defn- fetch-rows-by-ids
+  [db config ids]
+  (when (seq ids)
+    (->> (jdbc/execute!
+           db
+           (sql/format {:select   (detection-select-cols config)
+                        :from     [(keyword (:table config))]
+                        :where    [:in :id ids]
+                        :order-by [[:created_at :asc]]})
+           {:builder-fn rs/as-unqualified-lower-maps})
+      (mapv #(prepare-detection-row config %)))))
+
+(defn- clusters-from-pairs
+  [rows pairs {:keys [limit max-cluster-size] :or {limit 50 max-cluster-size 10}}]
+  (let [all-ids (distinct (concat (map :id_a pairs) (map :id_b pairs)))
+        uf (make-union-find all-ids)]
+    (doseq [{:keys [id_a id_b]} pairs]
+      (uf-union uf id_a id_b))
+    (let [clusters (uf-clusters uf)
+          id->row (zipmap (map :id rows) rows)]
+      (->> clusters
+        (filter #(<= (count %) max-cluster-size))
+        (mapv (fn [ids]
+                {:members (->> ids
+                            (mapv id->row)
+                            (remove nil?)
+                            vec)
+                 :count   (count ids)}))
+        (sort-by #(- (:count %)))
+        (take limit)
+        vec))))
+
+(defn- same-group?
+  [group-col row-a row-b]
+  (or (nil? group-col)
+    (= (get row-a group-col) (get row-b group-col))))
+
+(defn- trigram-set
+  [s]
+  (let [value (str "  " (or s "") "  ")]
+    (if (<= (count value) 3)
+      #{value}
+      (->> (range 0 (- (count value) 2))
+        (map (fn [idx] (subs value idx (+ idx 3))))
+        set))))
+
+(defn- trigram-similarity
+  [a b]
+  (let [ta (trigram-set a)
+        tb (trigram-set b)
+        denom (+ (count ta) (count tb))]
+    (if (zero? denom)
+      0.0
+      (/ (* 2.0 (count (set/intersection ta tb))) denom))))
+
+(defn- levenshtein-distance
+  [a b]
+  (let [a (vec (or a ""))
+        b (vec (or b ""))
+        n (count a)
+        m (count b)]
+    (cond
+      (zero? n) m
+      (zero? m) n
+      :else
+      (loop [i 1
+             prev (vec (range (inc m)))]
+        (if (> i n)
+          (peek prev)
+          (let [curr (loop [j 1
+                            row [i]]
+                       (if (> j m)
+                         (vec row)
+                         (let [cost (if (= (nth a (dec i)) (nth b (dec j))) 0 1)
+                               deletion (inc (nth prev j))
+                               insertion (inc (peek row))
+                               substitution (+ (nth prev (dec j)) cost)]
+                           (recur (inc j) (conj row (min deletion insertion substitution))))))]
+            (recur (inc i) curr)))))))
+
+(defn- detect-similar-pairs-in-memory
+  [rows group-col score-fn matches?]
+  (let [rows* (vec rows)
+        total (count rows*)]
+    (reduce
+      (fn [acc idx]
+        (let [row-a (nth rows* idx)
+              key-a (:normalized_key row-a)]
+          (if-not key-a
+            acc
+            (reduce
+              (fn [acc2 jdx]
+                (let [row-b (nth rows* jdx)
+                      key-b (:normalized_key row-b)
+                      score (when (and key-b (same-group? group-col row-a row-b))
+                              (score-fn key-a key-b))]
+                  (if (and score (matches? score))
+                    (conj acc2 {:id_a (:id row-a)
+                                :id_b (:id row-b)})
+                    acc2)))
+              acc
+              (range (inc idx) total)))))
+      []
+      (range total))))
+
 (defn detect-prefix-duplicates
   "Group entities by first N hyphen-tokens of normalized_key.
 
@@ -201,18 +340,17 @@
                    :or {prefix-words 2 limit 50 fetch-limit default-prefix-fetch-limit}}]
   (let [config    (get-entity-config! entity-type)
         rows      (fetch-all-rows db config fetch-limit)
-        key-col   (:key-col config)
         group-col (:group-col config)
         grouped   (->> rows
-                    (filter #(get % key-col))
+                    (filter :normalized_key)
                     (group-by (fn [row]
-                                [(prefix-tokens (get row key-col) prefix-words)
+                                [(prefix-tokens (:normalized_key row) prefix-words)
                                  (when group-col (get row group-col))]))
                     (remove (fn [[[prefix _]]] (nil? prefix)))
                     (filter (fn [[_ members]] (> (count members) 1)))
                     (sort-by (fn [[_ members]] (- (count members))))
                     (take limit))]
-    (mapv (fn [[_key members]]
+    (mapv (fn [[_ members]]
             {:members (vec members)
              :count   (count members)})
       grouped)))
@@ -233,51 +371,39 @@
   - :limit (default 50) — max clusters to return
   - :max-cluster-size (default 10) — discard clusters larger than this;
     giant clusters almost always result from shared address tokens, not real duplicates"
-  [db entity-type {:keys [threshold limit max-cluster-size]
-                   :or {threshold 0.6 limit 50 max-cluster-size 10}}]
-  (let [config    (get-entity-config! entity-type)
-        table     (keyword (:table config))
-        group-col (:group-col config)
-        group-condition (when group-col
-                          [:= (keyword (str "a." (name group-col)))
-                           (keyword (str "b." (name group-col)))])
-        join-cond (cond-> [:and
-                           [:< :a.id :b.id]
-                           [:> [:similarity :a.normalized_key :b.normalized_key] threshold]]
-                    group-condition (conj group-condition))
-        pairs     (jdbc/execute!
+  [db entity-type {:keys [threshold limit max-cluster-size fetch-limit]
+                   :or {threshold 0.6 limit 50 max-cluster-size 10
+                        fetch-limit default-prefix-fetch-limit}}]
+  (let [config (get-entity-config! entity-type)]
+    (if (in-memory-detection? config)
+      (let [rows (fetch-all-rows db config fetch-limit)
+            pairs (detect-similar-pairs-in-memory rows (:group-col config) trigram-similarity #(> % threshold))]
+        (clusters-from-pairs rows pairs {:limit limit :max-cluster-size max-cluster-size}))
+      (let [table (keyword (:table config))
+            group-col (:group-col config)
+            key-col (:key-col config)
+            group-condition (when group-col
+                              [:= (keyword (str "a." (name group-col)))
+                               (keyword (str "b." (name group-col)))])
+            join-cond (cond-> [:and
+                               [:< :a.id :b.id]
+                               [:> [:similarity (keyword (str "a." (name key-col)))
+                                    (keyword (str "b." (name key-col)))] threshold]]
+                        group-condition (conj group-condition))
+            pairs (jdbc/execute!
                     db
                     (sql/format
-                      {:select   [[:a.id :id_a] [:b.id :id_b]
-                                  [[:similarity :a.normalized_key :b.normalized_key] :sim]]
-                       :from     [[table :a]]
-                       :join     [[table :b] join-cond]
+                      {:select [[:a.id :id_a]
+                                [:b.id :id_b]
+                                [[:similarity (keyword (str "a." (name key-col)))
+                                  (keyword (str "b." (name key-col)))] :sim]]
+                       :from [[table :a]]
+                       :join [[table :b] join-cond]
                        :order-by [[:sim :desc]]
-                       :limit    (* limit 10)})
+                       :limit (* limit 10)})
                     {:builder-fn rs/as-unqualified-lower-maps})
-        all-ids   (distinct (concat (map :id_a pairs) (map :id_b pairs)))
-        uf        (make-union-find all-ids)]
-    (doseq [{:keys [id_a id_b]} pairs]
-      (uf-union uf id_a id_b))
-    (let [clusters      (uf-clusters uf)
-          clustered-ids (set (apply concat clusters))]
-      (if (empty? clustered-ids)
-        []
-        (let [rows    (jdbc/execute!
-                        db
-                        (sql/format {:select [:id (:name-col config) (:key-col config) :created_at]
-                                     :from   [table]
-                                     :where  [:in :id clustered-ids]})
-                        {:builder-fn rs/as-unqualified-lower-maps})
-              id->row (zipmap (map :id rows) rows)]
-          (->> clusters
-            (filter #(<= (count %) max-cluster-size))
-            (mapv (fn [ids]
-                    {:members (mapv id->row ids)
-                     :count   (count ids)}))
-            (sort-by #(- (:count %)))
-            (take limit)
-            vec))))))
+            rows (fetch-rows-by-ids db config (distinct (concat (map :id_a pairs) (map :id_b pairs))))]
+        (clusters-from-pairs rows pairs {:limit limit :max-cluster-size max-cluster-size})))))
 
 ;; ============================================================================
 ;; Strategy: Levenshtein Distance
@@ -294,51 +420,39 @@
     short keys like 'pj-3' vs 'pj-57' (distance 2, but unrelated stores)
   - :limit (default 50) — max clusters to return
   - :max-cluster-size (default 10) — discard clusters larger than this"
-  [db entity-type {:keys [max-distance limit max-cluster-size]
-                   :or {max-distance 1 limit 50 max-cluster-size 10}}]
-  (let [config    (get-entity-config! entity-type)
-        table     (keyword (:table config))
-        group-col (:group-col config)
-        group-condition (when group-col
-                          [:= (keyword (str "a." (name group-col)))
-                           (keyword (str "b." (name group-col)))])
-        join-cond (cond-> [:and
-                           [:< :a.id :b.id]
-                           [:<= [:levenshtein :a.normalized_key :b.normalized_key] max-distance]]
-                    group-condition (conj group-condition))
-        pairs     (jdbc/execute!
+  [db entity-type {:keys [max-distance limit max-cluster-size fetch-limit]
+                   :or {max-distance 1 limit 50 max-cluster-size 10
+                        fetch-limit default-prefix-fetch-limit}}]
+  (let [config (get-entity-config! entity-type)]
+    (if (in-memory-detection? config)
+      (let [rows (fetch-all-rows db config fetch-limit)
+            pairs (detect-similar-pairs-in-memory rows (:group-col config) levenshtein-distance #(<= % max-distance))]
+        (clusters-from-pairs rows pairs {:limit limit :max-cluster-size max-cluster-size}))
+      (let [table (keyword (:table config))
+            group-col (:group-col config)
+            key-col (:key-col config)
+            group-condition (when group-col
+                              [:= (keyword (str "a." (name group-col)))
+                               (keyword (str "b." (name group-col)))])
+            join-cond (cond-> [:and
+                               [:< :a.id :b.id]
+                               [:<= [:levenshtein (keyword (str "a." (name key-col)))
+                                     (keyword (str "b." (name key-col)))] max-distance]]
+                        group-condition (conj group-condition))
+            pairs (jdbc/execute!
                     db
                     (sql/format
-                      {:select   [[:a.id :id_a] [:b.id :id_b]
-                                  [[:levenshtein :a.normalized_key :b.normalized_key] :dist]]
-                       :from     [[table :a]]
-                       :join     [[table :b] join-cond]
+                      {:select [[:a.id :id_a]
+                                [:b.id :id_b]
+                                [[:levenshtein (keyword (str "a." (name key-col)))
+                                  (keyword (str "b." (name key-col)))] :dist]]
+                       :from [[table :a]]
+                       :join [[table :b] join-cond]
                        :order-by [[:dist :asc]]
-                       :limit    (* limit 10)})
+                       :limit (* limit 10)})
                     {:builder-fn rs/as-unqualified-lower-maps})
-        all-ids   (distinct (concat (map :id_a pairs) (map :id_b pairs)))
-        uf        (make-union-find all-ids)]
-    (doseq [{:keys [id_a id_b]} pairs]
-      (uf-union uf id_a id_b))
-    (let [clusters      (uf-clusters uf)
-          clustered-ids (set (apply concat clusters))]
-      (if (empty? clustered-ids)
-        []
-        (let [rows    (jdbc/execute!
-                        db
-                        (sql/format {:select [:id (:name-col config) (:key-col config) :created_at]
-                                     :from   [table]
-                                     :where  [:in :id clustered-ids]})
-                        {:builder-fn rs/as-unqualified-lower-maps})
-              id->row (zipmap (map :id rows) rows)]
-          (->> clusters
-            (filter #(<= (count %) max-cluster-size))
-            (mapv (fn [ids]
-                    {:members (mapv id->row ids)
-                     :count   (count ids)}))
-            (sort-by #(- (:count %)))
-            (take limit)
-            vec))))))
+            rows (fetch-rows-by-ids db config (distinct (concat (map :id_a pairs) (map :id_b pairs))))]
+        (clusters-from-pairs rows pairs {:limit limit :max-cluster-size max-cluster-size})))))
 
 ;; ============================================================================
 ;; Dispatcher
@@ -360,46 +474,62 @@
 
   Options:
   - :limit (default 50) — max clusters to return"
-  [db entity-type {:keys [limit] :or {limit 50}}]
-  (let [config    (get-entity-config! entity-type)
-        table     (keyword (:table config))
-        key-col   (:key-col config)
-        group-col (:group-col config)
-        group-by-cols (cond-> [key-col] group-col (conj group-col))
-        select-cols   (cond-> [key-col [[:count :*] :cnt]] group-col (conj group-col))
-        dupes     (jdbc/execute!
-                    db
-                    (sql/format {:select   select-cols
-                                 :from     [table]
-                                 :where    [:is-not key-col nil]
-                                 :group-by group-by-cols
-                                 :having   [:> [:count :*] 1]
-                                 :order-by [[:cnt :desc]]
-                                 :limit    limit})
-                    {:builder-fn rs/as-unqualified-lower-maps})]
-    (if (empty? dupes)
-      []
-      (let [dupe-keys (mapv key-col dupes)
-            rows      (jdbc/execute!
-                        db
-                        (sql/format {:select   (cond-> [:id (:name-col config) key-col :created_at]
-                                                 group-col (conj group-col))
-                                     :from     [table]
-                                     :where    [:in key-col dupe-keys]
-                                     :order-by [key-col [:created_at :asc]]})
-                        {:builder-fn rs/as-unqualified-lower-maps})
-            group-fn  (if group-col
-                        (juxt key-col group-col)
-                        key-col)]
+  [db entity-type {:keys [limit fetch-limit]
+                   :or {limit 50 fetch-limit default-prefix-fetch-limit}}]
+  (let [config (get-entity-config! entity-type)]
+    (if (in-memory-detection? config)
+      (let [group-col (:group-col config)
+            rows (fetch-all-rows db config fetch-limit)]
         (->> rows
-          (group-by group-fn)
+          (filter :normalized_key)
+          (group-by (fn [row]
+                      [(:normalized_key row)
+                       (when group-col (get row group-col))]))
           (filter (fn [[_ members]] (> (count members) 1)))
           (mapv (fn [[_ members]]
                   {:members (vec members)
-                   :count   (count members)}))
+                   :count (count members)}))
           (sort-by #(- (:count %)))
           (take limit)
-          vec)))))
+          vec))
+      (let [table (keyword (:table config))
+            key-col (:key-col config)
+            group-col (:group-col config)
+            group-by-cols (cond-> [key-col] group-col (conj group-col))
+            select-cols (cond-> [key-col [[:count :*] :cnt]] group-col (conj group-col))
+            dupes (jdbc/execute!
+                    db
+                    (sql/format {:select select-cols
+                                 :from [table]
+                                 :where [:is-not key-col nil]
+                                 :group-by group-by-cols
+                                 :having [:> [:count :*] 1]
+                                 :order-by [[:cnt :desc]]
+                                 :limit limit})
+                    {:builder-fn rs/as-unqualified-lower-maps})]
+        (if (empty? dupes)
+          []
+          (let [dupe-keys (mapv key-col dupes)
+                rows (->> (jdbc/execute!
+                            db
+                            (sql/format {:select (detection-select-cols config)
+                                         :from [table]
+                                         :where [:in key-col dupe-keys]
+                                         :order-by [key-col [:created_at :asc]]})
+                            {:builder-fn rs/as-unqualified-lower-maps})
+                       (mapv #(prepare-detection-row config %)))
+                group-fn (if group-col
+                           (juxt key-col group-col)
+                           key-col)]
+            (->> rows
+              (group-by group-fn)
+              (filter (fn [[_ members]] (> (count members) 1)))
+              (mapv (fn [[_ members]]
+                      {:members (vec members)
+                       :count (count members)}))
+              (sort-by #(- (:count %)))
+              (take limit)
+              vec)))))))
 
 (defn detect-duplicates
   "Detect duplicates for an entity type using the specified strategy.
@@ -483,6 +613,20 @@
               (assoc acc entity_id {:supplier-display-name supplier_display_name}))
       {})))
 
+(defn- subcategory-category-names-by-id
+  [db all-ids]
+  (->> (jdbc/execute!
+         db
+         (sql/format {:select [[:sc.id :entity_id]
+                               [:c.name :category_name]]
+                      :from [[:subcategories :sc]]
+                      :join [[:categories :c] [:= :c.id :sc.category_id]]
+                      :where [:in :sc.id all-ids]})
+         {:builder-fn rs/as-unqualified-lower-maps})
+    (reduce (fn [acc {:keys [entity_id category_name]}]
+              (assoc acc entity_id {:category-name category_name}))
+      {})))
+
 (defn- contextual-info-by-id
   [db entity-type all-ids]
   (case entity-type
@@ -494,6 +638,9 @@
 
     :stores
     (store-supplier-names-by-id db all-ids)
+
+    :subcategories
+    (subcategory-category-names-by-id db all-ids)
 
     {}))
 

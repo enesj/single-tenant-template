@@ -20,7 +20,7 @@
     (let [k (cond
               (keyword? x) x
               :else (keyword (str x)))]
-      (when (#{:suppliers :articles :stores :manufacturers} k)
+      (when (#{:suppliers :articles :stores :manufacturers :subcategories} k)
         k))))
 
 (defn- parse-strategy

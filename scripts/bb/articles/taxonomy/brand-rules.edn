@@ -126,7 +126,7 @@
  ["(?i)^logilink\\b" "Logilink" "Elektronika i dodaci" "Baterije"]
  ["(?i)^\\Qneofen\\E\\b" "Neofen" "Zdravlje i apoteka" nil]
  ["(?i)^\\Qbulldog\\E\\b" "Bulldog" "Pića" nil]
- ["(?i)^\\Qcoca-cola\\E\\b" "Coca-Cola" "Beverages" nil]
+ ["(?i)^\\Qcoca-cola\\E\\b" "Coca-Cola" "Pića" nil]
  ["(?i)^\\Qmellow\\E\\b" "Mellow Spirit" "Odjeća i modni dodaci" nil]
  ["(?i)^\\Qherpegal\\E\\b" "Galas" "Zdravlje i apoteka" nil]
  ["(?i)^\\Qodmaciivac\\E\\b" "Diplo" "Sredstva za čišćenje" nil]

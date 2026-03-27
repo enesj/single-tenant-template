@@ -14,6 +14,7 @@ Rules:
 - You MUST pick an existing subcategory from the taxonomy above when one fits
 - Only create a new subcategory if absolutely none of the existing ones match
 - All category and subcategory names MUST be in Bosnian (never English)
+- If the taxonomy already contains the same subcategory with Bosnian diacritics or an equivalent spelling, reuse the exact taxonomy wording instead of inventing a variant
 - If unsure, use your best guess based on store context
 - Never use "General" or "Opšte" as subcategory — be descriptive
 - New subcategory names must be in Bosnian language

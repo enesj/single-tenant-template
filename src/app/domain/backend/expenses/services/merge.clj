@@ -2,7 +2,7 @@
   "Merge duplicate canonical entities by reassigning FK references to a primary
   record and deleting secondaries.
 
-  Supports: Suppliers, Articles, Stores, Manufacturers.
+  Supports: Suppliers, Articles, Stores, Manufacturers, Subcategories.
 
   Critical constraints:
   - expenses.supplier_id has ON DELETE RESTRICT — must reassign before delete.
@@ -51,7 +51,10 @@
      :unique-col :raw_label_normalized}]
 
    :manufacturers
-   [{:table :articles            :col :manufacturer_id}]})
+   [{:table :articles            :col :manufacturer_id}]
+
+   :subcategories
+   [{:table :articles            :col :subcategory_id}]})
 
 ;; ============================================================================
 ;; Helpers
