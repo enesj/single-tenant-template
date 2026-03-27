@@ -2,7 +2,7 @@
 ;; When Perplexity sees any of these brands in a receipt label, it should
 ;; use the mapped parent company as the `mfr` value.
 ;;
-;; Maintained by the create-articles- workflow (Phase 1c quality review).
+;; Maintained by the create-articles workflow (Phase 1c quality review).
 ;; Format: {"BrandName" "Parent Company", ...}
 
 {"Dunhill"     "BAT"
@@ -38,6 +38,7 @@
  "Maggi"       "Nestlé"
  "Nesquik"     "Nestlé"
  "KitKat"      "Nestlé"
+ "Thomy"       "Nestlé"
 
  "Cedevita"    "Atlantic Grupa"
  "Argeta"      "Atlantic Grupa"
@@ -77,6 +78,7 @@
  "Kinder"      "Ferrero"
  "Tic Tac"     "Ferrero"
  "Raffaello"   "Ferrero"
+ "Merci"       "Storck"
 
  "Orbit"       "Mars"
  "M&M's"       "Mars"

@@ -1,5 +1,5 @@
 ---
-description: "Run the Claude create-articles command"
+description: "Run the streamlined Claude create-articles command"
 agent: "agent"
 ---
 

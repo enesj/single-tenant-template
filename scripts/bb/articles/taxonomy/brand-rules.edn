@@ -145,4 +145,41 @@
  ["(?i)^\\Qfoliija\\E\\b" "Bingo" "Kuhinjske potrepštine" nil]
  ["(?i)^\\Qdžemper\\E\\b" "Amisu" "Odjeća i modni dodaci" nil]
  ["(?i)^\\Qčokolada\\E\\b" "Dol" "Pakovana hrana i pića" nil]
- ["(?i)^\\Qkotanyi\\E\\b" "Kotanyi" "Pakovana hrana i pića" nil]]
+ ["(?i)^\\Qkotanyi\\E\\b" "Kotanyi" "Pakovana hrana i pića" nil]
+ ["(?i)^\\Qkrem\\E\\b" "BINGO" "Mliječni proizvodi i jaja" nil]
+ ["(?i)^\\Qdeo\\E\\b" "Garnier" "Lična njega" nil]
+ ["(?i)^\\Qvero\\E\\b" "Vero Moda" "Odjeća i modni dodaci" nil]
+ ["(?i)^\\Qubrus\\E\\b" "VIOLET" "Papirna galanterija" nil]
+ ["(?i)^\\Qbiskvit\\E\\b"
+  "Mondelez International"
+  "Pakovana hrana i pića"
+  nil]
+ ["(?i)^\\Qmajoneza\\E\\b"
+  "Mondelez International"
+  "Pakovana hrana i pića"
+  nil]
+ ["(?i)^\\Qmerci\\E\\b"
+  "Storck"
+  "Pakovana hrana i pića"
+  nil]
+ ["(?i)^\\Qvajkrem\\E\\b" "Meggle" "Mliječni proizvodi i jaja" nil]
+ ["(?i)^\\Qdomestos\\E\\b" "Unilever" "Sredstva za čišćenje" nil]
+ ["(?i)^\\Qcips\\E\\b" "Marbo Product" "Pakovana hrana i pića" nil]
+ ["(?i)^\\Qgel\\E\\b" "Beiersdorf" "Lična njega" nil]
+ ["(?i)^\\Qčokoladna\\E\\b" "STARK" "Pekara i deserti" nil]
+ ["(?i)^\\Qsmrznuti\\E\\b" "Bingo" "Pakovana hrana i pića" nil]
+ ["(?i)^\\Qdatulja\\E\\b" "Bingo" "Pakovana hrana i pića" nil]
+ ["(?i)^\\Qfructal\\E\\b" "Rauch" "Pića" nil]
+ ["(?i)^\\Qvreće\\E\\b" "Hoex" "Jednokratno posuđe i pakovanje" nil]
+["(?i)^\\Qlokum\\E\\b" "Klas" "Pakovana hrana i pića" nil]
+ ["(?i)^\\Qmaramice\\E\\b" "Violeta" "Papirna galanterija" nil]
+ ["(?i)^\\Qnapolitanke\\E\\b" "Jadro" "Pekara i deserti" nil]
+ ["(?i)^\\Qpantene\\E\\b" "Procter & Gamble" "Lična njega" nil]
+ ["(?i)^\\Qasepsoleta\\E\\b" "Asepsoleta" "Papirna galanterija" nil]
+ ["(?i)^\\Qgrissini\\E\\b" "Amore" "Pakovana hrana i pića" nil]
+ ["(?i)^\\Qfeferoni\\E\\b" "Njam" "Pakovana hrana i pića" nil]
+ ["(?i)^\\Qčips\\E\\b" "Mars" "Pakovana hrana i pića" nil]
+ ["(?i)^\\Qjufka\\E\\b" "Merak" "Pekara i deserti" nil]
+ ["(?i)^\\Qhaše\\E\\b" "Podravka" "Pakovana hrana i pića" nil]
+ ["(?i)^\\Qbananice\\E\\b" "STARK" "Pekara i deserti" nil]
+ ["(?i)^\\Qtrokutici\\E\\b" "Bingo" "Pekara i deserti" nil]]

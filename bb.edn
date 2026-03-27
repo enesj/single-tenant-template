@@ -508,14 +508,6 @@
          {:doc "Group unmapped article aliases by detected brand/product family.\n\nShows size tokens and supplier type (restaurant vs retail) to help spot variant\nconflicts BEFORE creating articles.\n\nUsage:\n  bb group-aliases-by-brand [dev|test|prod] [--mapped] [--min-group N] [--json]",
           :task (apply shell {:extra-env (dotenv)} "bb" "scripts/bb/expenses/group_aliases_by_brand.clj" *command-line-args*)},
 
-         articles-phase1-triage
-         {:doc "Build Phase 1 triage summary from pre-generated backlog + brand grouping artifacts.\n\nInputs (must exist):\n  - tmp/phase1-backlog.edn (from list_unmapped_aliases)\n  - tmp/phase1-variant-groups.json (from group-aliases-by-brand --json)\n\nOutputs:\n  - tmp/phase1-triage-summary.edn\n\nUsage:\n  bb articles-phase1-triage",
-          :task (apply shell {:extra-env (dotenv)} "bb" "scripts/bb/articles/phase1_triage.clj" *command-line-args*)},
-
-         articles-phase1-triage-report
-         {:doc "Render Phase 1 triage report Markdown.\n\nInputs (must exist):\n  - tmp/phase1-triage-summary.edn\n\nOutputs:\n  - tmp/phase1-triage-report.md\n\nUsage:\n  bb articles-phase1-triage-report",
-          :task (apply shell {:extra-env (dotenv)} "bb" "scripts/bb/articles/phase1_triage_report.clj" *command-line-args*)},
-
          articles-research
          {:doc "Batch article research: local heuristics + optional Perplexity web search.\n\nReads unmapped aliases from DB, deduplicates across suppliers, applies local\nheuristic resolution (brand patterns, supplier context, product keywords),\nand optionally batches unresolved items to Perplexity sonar-pro.\n\nOutputs draft articles.edn + mappings.edn + noise-candidates.edn to tmp/.\n\nRequires env (sourced from .env automatically):\n  - PERPLEXITY_API_KEY (only when not using --skip-research)\n\nUsage:\n  bb articles-research [dev|test|prod] [--skip-research] [--batch-size N] [--supplier PATTERN] [--limit N] [--pretty]",
           :task (apply shell {:extra-env (dotenv)} "bb" "scripts/bb/articles/articles_research.clj" *command-line-args*)},

@@ -2,7 +2,7 @@
 ;; When Perplexity sees these, it should set mfr to the brand name itself
 ;; (not leave it null).
 ;;
-;; Maintained by the create-articles- workflow (Phase 1c quality review).
+;; Maintained by the create-articles workflow (Phase 1c quality review).
 ;; Format: ["Brand1" "Brand2" ...]
 
 ["Meggle" "Podravka" "Haribo" "Red Bull" "Barilla" "Roshen"

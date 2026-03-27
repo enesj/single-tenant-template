@@ -11,6 +11,12 @@ Rules:
 - Include size/weight/volume in name when present (e.g. "Coca-Cola 1.25L")
 - For truly unbranded commodity items ONLY (loose meat, produce by weight, plain bags), set mfr to null
 - ALWAYS extract the manufacturer when a brand is identifiable in the label — NEVER default to null for branded products. Only set mfr to null for genuinely unbranded commodities (loose produce, bulk goods, unbranded bags). NEVER extract mfr from measurement suffixes (/KO, /KG, /pc), trailing OCR abbreviations, or short codes in the label
+- Manufacturer/brand can appear at the beginning, middle, or end of the label. You MUST scan the full raw label before returning mfr = null
+- Treat the provided self-named-brand list and brand→parent mappings as authoritative constraints, not optional hints. If a label contains a self-named brand, set mfr to that exact canonical brand name. If a label contains a mapped brand, set mfr to the mapped parent company exactly
+- Never invent a new manufacturer spelling, casing, or truncation when a likely OCR-shortened or slightly damaged form of a known brand appears in the label. Normalize to the closest canonical known brand from the provided brand tables instead
+- Example OCR normalization: if a tissue/paper-goods label contains VIOLET or VIOLETA, return mfr = "Violeta" (not "VIOLET" and not null)
+- Before returning mfr = null, verify all of the following: (1) no token anywhere in the label matches a known self-named brand, (2) no token matches a known brand→parent mapping, (3) no token is a likely OCR-near-match of a known brand, and (4) the product is truly generic/unbranded rather than a packaged branded retail item
+- Do NOT use descriptive product-line or intensity words as manufacturer names unless they are clearly known brands from the provided brand tables or strong external evidence confirms them. Examples that are often descriptors rather than manufacturers: Intenso, Classic, Light, Plus, Soft, Blue, Prženi
 - You MUST pick an existing subcategory from the taxonomy above when one fits
 - Only create a new subcategory if absolutely none of the existing ones match
 - All category and subcategory names MUST be in Bosnian (never English)
@@ -21,8 +27,10 @@ Rules:
 - NEVER split Bosnian words containing multi-byte characters (č, š, ž, đ, ć) — they must be written as complete single words (e.g. "Bomboni" not "Bombo ni", "Tjestenina" not "Tjeste nina", "Deterdžent" not "Det erđent")
 - NEVER strip or replace Bosnian diacritics with plain ASCII — always use the correct Unicode characters (e.g. "Žitarice" not "Zitarice", "Čokolada" not "Cokolada", "Šećer" not "Secer", "Tjestenina" not "Tjestenina" with ć→c)
 - Manufacturer name must be the full canonical brand name — NEVER abbreviate or truncate (e.g. "Haribo" not "HARIBO BE", "Nestlé" not "NESTLE AFTER", "BAT" not "DUNHIL", "Roshen" not "JELLY ROSHE")
+- If a label clearly contains a known brand from the supplied brand tables, manufacturer null is invalid even when the rest of the label is noisy or truncated
 {{BRAND_MAPPINGS}}
 - If the label contains product line suffixes like BIOFIT, LIGHT, CLASSIC, PLUS appended to a brand — do NOT use those as the manufacturer; resolve to the parent brand
+- Brand examples to follow exactly: "Violeta maramice u" → mfr "Violeta"; "PAPIRNE MARAMICE 60-1 U KUTIJI VIOLETA" → mfr "Violeta"; "THOMY MAJONEZA 265G" → mfr "Nestlé"; "MERCI WINTER 250G" → mfr "Storck"
 - If a raw label appears to be two product names joined by a short hex code or number (e.g. "PRODUCT A 2f5 PRODUCT B 60") this is an OCR merge artifact of two receipt lines — identify only the first/dominant product, set mfr to null, and use category "Ostalo"
 - Category disambiguation: carbonated drinks (Coca-Cola, Pepsi, Fanta, Sprite, Red Bull, sparkling/mineral water) → "Bezalkoholna pića", NOT "Voćni sokovi"; plastic/shopping bags, bin liners → "Jednokratno posuđe i pakovanje", NOT any cleaning category; cigarettes/tobacco (Marlboro, Dunhill, Lucky Strike, Winston) → "Duhan i cigarete"
 - Pharmacy/drugstore disambiguation: oral care products (toothpaste, mouthwash) → subcat "Oralna higijena"; OTC pain/fever medicine (ibuprofen, paracetamol, aspirin) → subcat "Analgetici" under "Zdravlje i apoteka"; face care (creams, masks) → subcat "Njega lica"; body care (lotions, shower gel) → subcat "Njega tijela"; sweeteners/sugar → subcat "Sladila" under "Pakovana hrana i pića"

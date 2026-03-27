@@ -61,6 +61,7 @@ DATABASE_PUBLIC_URL="postgresql://user:pass@gondola.proxy.rlwy.net:12386/railway
 | `list_aliases_from_receipts.clj` | Extract raw labels from `receipts.raw_extract_json` (fallback) |
 | `list_review_required_receipts.clj` | Receipts in `review_required` status with mismatch diagnosis |
 | `report_progress.clj` | Coverage stats + breakdowns by category and manufacturer |
+| `backfill_brand_rule_manufacturers.clj` | Backfill NULL article manufacturers from dynamic brand taxonomy |
 | `create_articles.clj` | Create/upsert articles with optional taxonomy (idempotent) |
 | `ensure_taxonomy.clj` | Ensure manufacturers/categories/subcategories exist |
 | `map_aliases.clj` | Map `article_aliases` rows to canonical articles |
