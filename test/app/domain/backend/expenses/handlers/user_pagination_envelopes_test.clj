@@ -162,21 +162,37 @@
           (is (= @supplier-aliases-opts @supplier-aliases-count-opts)))))))
 
 (deftest expense-items-list-handler-includes-standard-envelope
-  (with-redefs [jdbc/execute! (fn [_db _sql _opts]
-                                [{:id (UUID/randomUUID)}])
-                jdbc/execute-one! (fn [_db _sql _opts]
-                                    {:total 9})
-                h/json-response (fn [body & [status]] {:status (or status 200)
-                                                       :body body})]
-    (let [handler (expense-items/list-expense-items-handler db)
-          resp (handler (req "admin" {:limit "-4"
-                                      :offset "-9"
-                                      :search "milk"}))]
-      (is (= 200 (:status resp)))
-      (is (= 9 (get-in resp [:body :total])))
-      (is (= 1 (get-in resp [:body :limit])))
-      (is (= 0 (get-in resp [:body :offset])))
-      (is (vector? (get-in resp [:body :data]))))))
+  (let [list-sql (atom nil)
+        count-sql (atom nil)]
+    (with-redefs [jdbc/execute! (fn [_db sql _opts]
+                                  (reset! list-sql sql)
+                                  [{:id (UUID/randomUUID)}])
+                  jdbc/execute-one! (fn [_db sql _opts]
+                                      (reset! count-sql sql)
+                                      {:total 9})
+                  h/json-response (fn [body & [status]] {:status (or status 200)
+                                                         :body body})]
+      (let [handler (expense-items/list-expense-items-handler db)
+            resp (handler (req "admin" {:limit "-4"
+                                        :offset "-9"
+                                        :search "milk"
+                                        :raw-label "jagoda"
+                                        :qty-min "0.35"
+                                        :qty-max "0.35"
+                                        :expense-purchased-at-from "2026-03-01T00:00:00Z"}))]
+        (is (= 200 (:status resp)))
+        (is (= 9 (get-in resp [:body :total])))
+        (is (= 1 (get-in resp [:body :limit])))
+        (is (= 0 (get-in resp [:body :offset])))
+        (is (vector? (get-in resp [:body :data])))
+        (is (= 2 (count (filter #(= 0.35M %) (rest @list-sql)))))
+        (is (some #(= "%jagoda%" %) (rest @list-sql)))
+        (is (some #(= "%milk%" %) (rest @list-sql)))
+        (is (some #(instance? java.time.Instant %) (rest @list-sql)))
+        (is (= 2 (count (filter #(= 0.35M %) (rest @count-sql)))))
+        (is (some #(= "%jagoda%" %) (rest @count-sql)))
+        (is (some #(= "%milk%" %) (rest @count-sql)))
+        (is (some #(instance? java.time.Instant %) (rest @count-sql)))))))
 
 (deftest user-articles-list-handlers-return-standard-envelope
   (let [articles-opts (atom nil)

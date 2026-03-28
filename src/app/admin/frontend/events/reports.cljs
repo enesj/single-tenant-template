@@ -172,10 +172,11 @@
 
 (rf/reg-event-fx
   :admin/fetch-article-breakdown-detail
-  (fn [{:keys [db]} [_ detail-id {:keys [alias-id currency]}]]
+  (fn [{:keys [db]} [_ detail-id {:keys [alias-id currency unit]}]]
     (fetch-report-detail db :article-breakdown detail-id (str "/top-items/" alias-id "/breakdown")
-      {:currency currency
-       :limit detail-limit})))
+      (cond-> {:currency currency
+               :limit detail-limit}
+        unit (assoc :unit unit)))))
 
 ;; --- Load all / refresh ---
 

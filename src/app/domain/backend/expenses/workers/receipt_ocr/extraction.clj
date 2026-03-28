@@ -13,9 +13,9 @@
     [app.domain.backend.expenses.workers.receipt-ocr.extraction.review :as review]
     [app.domain.backend.expenses.workers.receipt-ocr.extraction.shape :as shape]
     [app.domain.backend.expenses.workers.receipt-ocr.extraction.supplier-store :as supplier-store]
+    [app.domain.backend.expenses.workers.receipt-ocr.extraction.units :as extraction-units]
     [app.domain.backend.expenses.workers.receipt-ocr.markdown.header :as markdown-header]
     [app.domain.backend.expenses.workers.receipt-ocr.markdown.items :as markdown-items]
-
     [app.domain.backend.expenses.workers.receipt-ocr.markdown.totals :as markdown-totals]
     [clojure.string :as str]
     [malli.core :as m]
@@ -85,7 +85,8 @@
       (let [items (:items extraction)
             ctx {:items-count (count items)
                  :grand-total (common/parse-money (get-in extraction [:totals :total]))}
-            {:keys [items post-processing]} (extraction-items/clean-extraction-items items ctx)]
+            {:keys [items post-processing]} (extraction-items/clean-extraction-items items ctx)
+            items (extraction-units/process-items-units items)]
         {:extraction (assoc extraction :items items)
          :post-processing post-processing}))))
 
@@ -225,8 +226,8 @@
                                   :extraction extraction
                                   :valid_shape? valid-shape?
                                   :resolution_snapshot resolution-snapshot}
-                                      (map? provider-confidence)
-                                      (assoc :provider_confidence provider-confidence)
+                           (map? provider-confidence)
+                           (assoc :provider_confidence provider-confidence)
 
                            (map? llm-refine)
                            (assoc :llm_refine (dissoc llm-refine :extraction))

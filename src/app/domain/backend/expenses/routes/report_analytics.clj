@@ -16,7 +16,7 @@
     [app.template.backend.routes.admin.utils :as utils]
     [clojure.string :as str])
   (:import
-    [java.time Instant LocalDate LocalDateTime OffsetDateTime YearMonth ZoneId ZoneOffset]
+    [java.time Instant LocalDate LocalDateTime OffsetDateTime ZoneId ZoneOffset]
     [java.util UUID]))
 
 (def ^:private to-app shared-db/to-app)
@@ -27,6 +27,9 @@
 
 (def ^:private month-pattern
   #"^\d{4}-(0[1-9]|1[0-2])$")
+
+(def ^:private allowed-units
+  #{"kom" "kg" "g" "l" "pak"})
 
 (defn- try-parse-uuid [s]
   (try (UUID/fromString (str s)) (catch Exception _ nil)))
@@ -61,6 +64,12 @@
     (when (and (seq raw) (re-matches month-pattern raw))
       raw)))
 
+(defn- parse-unit-param
+  [qp k]
+  (let [raw (some-> (get qp (name k) (get qp k)) str str/trim str/lower-case)]
+    (when (contains? allowed-units raw)
+      raw)))
+
 (defn- parse-opts
   [qp]
   (let [from (parse-instant-param (get qp "from" (get qp :from)))
@@ -73,6 +82,7 @@
         expense-category-id (parse-uuid-csv qp :expense_category_id)
         manufacturer-id (parse-uuid-csv qp :manufacturer_id)
         month (parse-month-param qp :month)
+        unit (parse-unit-param qp :unit)
         currency-raw (some-> (get qp "currency" (get qp :currency)) str str/trim str/upper-case)
         currency (when (seq currency-raw) currency-raw)]
     (cond-> {}
@@ -86,6 +96,7 @@
       expense-category-id (assoc :expense-category-id expense-category-id)
       manufacturer-id (assoc :manufacturer-id manufacturer-id)
       month (assoc :month month)
+      unit (assoc :unit unit)
       currency (assoc :currency currency))))
 
 ;; ---------------------------------------------------------------------------

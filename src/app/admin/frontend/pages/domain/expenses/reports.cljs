@@ -54,12 +54,13 @@
 
 (defn- top-item-unit-label
   [row]
-  (let [label (str (or (:article-canonical-name row) (:alias-label row) ""))]
-    (cond
-      (re-find #"(?i)(?:/|\b)(?:kg|kilogram(?:a)?)(?:\b|$)" label) "kg"
-      (re-find #"(?i)(?:/|\b)(?:l|lt|ltr|lit|litar|litra)(?:\b|$)" label) "l"
-      (re-find #"(?i)(?:/|\b)(?:ko|kom|komad|komada|pc)(?:\b|$)" label) "kom"
-      :else nil)))
+  (or (:unit row)
+    (let [label (str (or (:article-canonical-name row) (:alias-label row) ""))]
+      (cond
+        (re-find #"(?i)(?:/|\b)(?:kg|kilogram(?:a)?)(?:\b|$)" label) "kg"
+        (re-find #"(?i)(?:/|\b)(?:l|lt|ltr|lit|litar|litra)(?:\b|$)" label) "l"
+        (re-find #"(?i)(?:/|\b)(?:ko|kom|komad|komada|pc)(?:\b|$)" label) "kom"
+        :else nil))))
 
 (defn- top-item-unit-price
   [row]
@@ -96,7 +97,7 @@
 
 (defn- article-row-id
   [row]
-  (str (:alias-id row) "::" (or (:currency row) "all")))
+  (str (:alias-id row) "::" (or (:currency row) "all") "::" (or (:unit row) "any")))
 
 ;; ---------------------------------------------------------------------------
 ;; Shared UI
@@ -312,7 +313,7 @@
                   ($ sortable-th {:label "Share" :column :share-pct :report-key :top-suppliers :class "text-right"})))
               ($ :tbody
                 (map-indexed
-                  (fn [idx row]
+                  (fn [_idx row]
                     (let [detail-id (supplier-row-id row)
                           expandable? (some? (:supplier-id row))
                           expanded? (contains? expanded detail-id)]
@@ -381,7 +382,7 @@
                   ($ sortable-th {:label "Stores" :column :store-count :report-key :top-items :class "text-right"})))
               ($ :tbody
                 (map-indexed
-                  (fn [idx row]
+                  (fn [_idx row]
                     (let [detail-id (article-row-id row)
                           expandable? (some? (:alias-id row))
                           expanded? (contains? expanded detail-id)
@@ -401,7 +402,8 @@
                                                   (rf/dispatch [:admin/fetch-article-breakdown-detail
                                                                 detail-id
                                                                 {:alias-id (:alias-id row)
-                                                                 :currency (:currency row)}])))))}
+                                                                 :currency (:currency row)
+                                                                 :unit (:unit row)}])))))}
                           ($ :td {:class "text-center text-base-content/50"}
                             (if expandable?
                               (if expanded? "▾" "▸")

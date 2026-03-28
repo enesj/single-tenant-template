@@ -1,0 +1,4 @@
+({:action :add-column,
+  :field-name :unit,
+  :model-name :expense_items,
+  :options {:type [:varchar 10]}})

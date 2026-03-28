@@ -1,0 +1,100 @@
+-- allium: 1
+-- Receipt OCR unit extraction from article labels
+--
+-- Scope:
+-- - Extracting the measurement unit from OCR-captured article labels
+-- - Stripping unit suffixes from labels before alias creation
+-- - Defaulting to "kom" (komad/piece) when no unit suffix is present
+--
+-- Context:
+-- Bosnian POS receipt labels often append a unit suffix after a slash:
+--   "TUBORG 0,33 NEPOVRATNI/KO"     → unit: kom (piece)
+--   "Narandza grcka rinf /KG"       → unit: kg  (kilogram)
+--   "PAPIR ZA PAKOVANJE 70X150/KOM" → unit: kom (piece)
+--   "Espresso kafa/kom"             → unit: kom (piece)
+--   "Torba papirna .../pc"          → unit: kom (piece)
+--   "So turisticka 250g T/KO (E)"   → unit: kom (piece), tax marker "(E)" ignored
+--
+-- The unit suffix is never part of the article identity. Aliases must
+-- store the base label without the suffix so "ITEM/KO" and "ITEM/KOM"
+-- resolve to a single alias.
+--
+-- Excludes:
+-- - Database schema changes (unit is stored in extraction JSON only for now)
+-- - Price-per-unit calculation (future work consuming the extracted unit)
+
+value UnitSuffix {
+    raw_suffix: String
+    canonical_unit: String
+}
+
+value ParsedLabel {
+    base_label: String
+    unit: String
+}
+
+config {
+    default_unit: String = "kom"
+}
+
+-- Known unit abbreviations and their canonical forms.
+-- Case-insensitive matching. The canonical form is always lowercase.
+
+default UnitSuffix kom_short   = { raw_suffix: "ko",  canonical_unit: "kom" }
+default UnitSuffix kom_full    = { raw_suffix: "kom",  canonical_unit: "kom" }
+default UnitSuffix piece_en    = { raw_suffix: "pc",   canonical_unit: "kom" }
+default UnitSuffix kilogram    = { raw_suffix: "kg",   canonical_unit: "kg" }
+default UnitSuffix gram        = { raw_suffix: "gr",   canonical_unit: "g" }
+default UnitSuffix gram_full   = { raw_suffix: "g",    canonical_unit: "g" }
+default UnitSuffix liter       = { raw_suffix: "lit",  canonical_unit: "l" }
+default UnitSuffix liter_short = { raw_suffix: "l",    canonical_unit: "l" }
+default UnitSuffix pak         = { raw_suffix: "pak",  canonical_unit: "pak" }
+default UnitSuffix meter       = { raw_suffix: "m",    canonical_unit: "m" }
+
+rule ExtractUnitFromLabel {
+    when: ParseArticleLabel(raw_label)
+
+    -- Match pattern: optional whitespace, "/" , unit abbreviation,
+    -- optional whitespace and tax marker like "(E)", end of string.
+    -- The match is case-insensitive.
+
+    let suffix_match = match_trailing_unit_suffix(raw_label)
+
+    ensures:
+        if suffix_match != null:
+            ParsedLabel.created(
+                base_label: strip_suffix(raw_label, suffix_match),
+                unit: suffix_match.canonical_unit
+            )
+        else:
+            ParsedLabel.created(
+                base_label: raw_label,
+                unit: config.default_unit
+            )
+}
+
+rule StripUnitBeforeAliasCreation {
+    when: CreateArticleAliasFromExtraction(item)
+
+    -- The alias raw_label must use the base label (unit stripped).
+    -- This ensures "ITEM/KO" and "ITEM/KOM" and "ITEM" all
+    -- normalize to the same alias.
+
+    let parsed = ParseArticleLabel(item.raw_label)
+
+    ensures: AliasCreatedWithBaseLabel(
+        raw_label: parsed.base_label,
+        unit: parsed.unit
+    )
+}
+
+invariant UnitAlwaysPresent {
+    -- Every extracted item has a non-null unit after processing.
+    for item in Extraction.items:
+        item.unit != null
+}
+
+deferred match_trailing_unit_suffix(raw_label)
+deferred strip_suffix(raw_label, suffix_match)
+
+open question "Should single-letter units like /L and /M be extracted, or are they too ambiguous in Bosnian POS labels?"

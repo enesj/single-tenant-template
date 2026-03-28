@@ -30,8 +30,12 @@
 (defn- normalize-filter-value
   [value]
   (cond
-    (map? value) (or (normalize-filter-value (:value value))
-                   (normalize-filter-value (get value "value")))
+    (map? value)
+    (when (or (contains? value :value)
+            (contains? value "value"))
+      (or (normalize-filter-value (:value value))
+        (normalize-filter-value (get value "value"))))
+
     (keyword? value) (name value)
     (string? value) (some-> value str/trim not-empty)
     (vector? value) (let [items (->> value
@@ -52,10 +56,30 @@
   [filters]
   (reduce-kv
     (fn [acc k v]
-      (let [normalized (normalize-filter-value v)]
-        (if (nil? normalized)
-          acc
-          (assoc acc k normalized))))
+      (let [field-name (name k)]
+        (cond
+          (and (map? v)
+            (or (contains? v :from)
+              (contains? v :to)))
+          (let [from* (normalize-filter-value (:from v))
+                to* (normalize-filter-value (:to v))]
+            (cond-> acc
+              (some? from*) (assoc (keyword (str field-name "-from")) from*)
+              (some? to*) (assoc (keyword (str field-name "-to")) to*)))
+
+          (and (map? v)
+            (or (contains? v :min)
+              (contains? v :max)))
+          (let [min* (normalize-filter-value (:min v))
+                max* (normalize-filter-value (:max v))]
+            (cond-> acc
+              (some? min*) (assoc (keyword (str field-name "-min")) min*)
+              (some? max*) (assoc (keyword (str field-name "-max")) max*)))
+
+          :else
+          (if-let [normalized (normalize-filter-value v)]
+            (assoc acc k normalized)
+            acc))))
     {}
     (or filters {})))
 

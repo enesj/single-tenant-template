@@ -6,11 +6,14 @@
   (:require
     [app.domain.backend.expenses.handlers.user-expenses.helpers :as h]
     [app.domain.backend.expenses.services.article-aliases :as aliases]
+    [app.shared.query-builders :as shared-qb]
     [clojure.string :as str]
     [honey.sql :as sql]
     [next.jdbc :as jdbc]
     [next.jdbc.result-set :as rs]
-    [taoensso.timbre :as log]))
+    [taoensso.timbre :as log])
+  (:import
+    [java.time Instant LocalDate OffsetDateTime]))
 
 (def ^:private power-user-roles
   "Roles allowed to access the expense items power page."
@@ -65,6 +68,30 @@
     (max 1)
     (min 500)))
 
+(def ^:private expense-item-text-filter-columns
+  {:raw-label :aa.raw_label
+   :raw-label-normalized :aa.raw_label_normalized
+   :article-canonical-name :a.canonical_name})
+
+(defn- parse-instant-param
+  "Lenient parse of a date/time string into java.time.Instant.
+   Accepts ISO 8601 instants, offset date-times, or plain dates.
+   Returns nil for nil, blank, or unparseable input."
+  [raw]
+  (when-not (str/blank? (str (or raw "")))
+    (or (when (instance? Instant raw) raw)
+      (try
+        (Instant/parse (str raw))
+        (catch Exception _ nil))
+      (try
+        (-> (OffsetDateTime/parse (str raw)) .toInstant)
+        (catch Exception _ nil))
+      (try
+        (-> (LocalDate/parse (str raw))
+          (.atStartOfDay java.time.ZoneOffset/UTC)
+          .toInstant)
+        (catch Exception _ nil)))))
+
 (defn list-expense-items-handler
   "GET /api/v1/expenses/expense-items
 
@@ -89,9 +116,25 @@
                   offset (max 0 (long (or (some-> (h/get-param params :offset) parse-long) 0)))
                   search (some-> (h/get-param params :search) str)
                   expense-id (some-> (h/get-param params :expense_id) h/try-parse-uuid)
+                  raw-label (some-> (h/get-param params :raw-label) str str/trim not-empty)
+                  raw-label-normalized (some-> (h/get-param params :raw-label-normalized) str str/trim not-empty)
+                  article-canonical-name (some-> (h/get-param params :article-canonical-name) str str/trim not-empty)
+                  qty-min (parse-decimal! :qty-min (h/get-param params :qty-min))
+                  qty-max (parse-decimal! :qty-max (h/get-param params :qty-max))
+                  unit-price-min (parse-decimal! :unit-price-min (h/get-param params :unit-price-min))
+                  unit-price-max (parse-decimal! :unit-price-max (h/get-param params :unit-price-max))
+                  line-total-min (parse-decimal! :line-total-min (h/get-param params :line-total-min))
+                  line-total-max (parse-decimal! :line-total-max (h/get-param params :line-total-max))
+                  expense-purchased-at-from (parse-instant-param (h/get-param params :expense-purchased-at-from))
+                  expense-purchased-at-to (parse-instant-param (h/get-param params :expense-purchased-at-to))
+                  created-at-from (parse-instant-param (h/get-param params :created-at-from))
+                  created-at-to (parse-instant-param (h/get-param params :created-at-to))
                   order-by (h/parse-order-by params)
                   order-dir (or (h/parse-order-dir params) :desc)
                   order-col (get allowed-expense-items-order-by order-by :ei.created_at)
+                  text-filters {:raw-label raw-label
+                                :raw-label-normalized raw-label-normalized
+                                :article-canonical-name article-canonical-name}
                   ;; Stable tie-breaker to prevent jumping rows when values match.
                   order-by-clause [[order-col order-dir]
                                    [:ei.id :asc]]
@@ -103,29 +146,42 @@
                           (some? effective-user-id) (conj [:= :e.user_id effective-user-id])
                           tenant-id (conj [:= :e.tenant_id tenant-id])
                           expense-id (conj [:= :ei.expense_id expense-id])
+                          (some? qty-min) (conj [:>= :ei.qty qty-min])
+                          (some? qty-max) (conj [:<= :ei.qty qty-max])
+                          (some? unit-price-min) (conj [:>= :ei.unit_price unit-price-min])
+                          (some? unit-price-max) (conj [:<= :ei.unit_price unit-price-max])
+                          (some? line-total-min) (conj [:>= :ei.line_total line-total-min])
+                          (some? line-total-max) (conj [:<= :ei.line_total line-total-max])
+                          expense-purchased-at-from (conj [:>= :e.purchased_at expense-purchased-at-from])
+                          expense-purchased-at-to (conj [:<= :e.purchased_at expense-purchased-at-to])
+                          created-at-from (conj [:>= :ei.created_at created-at-from])
+                          created-at-to (conj [:<= :ei.created_at created-at-to])
                           search*
                           (conj [:or
                                  [:ilike :aa.raw_label search*]
                                  [:ilike :a.canonical_name search*]]))
-                  query {:select [[:ei.*]
-                                  [:aa.raw_label :raw_label]
-                                  [:aa.raw_label_normalized :raw_label_normalized]
-                                  [:e.purchased_at :expense_purchased_at]
-                                  [:a.canonical_name :article_canonical_name]]
-                         :from [[:expense_items :ei]]
-                         :left-join [[:expenses :e] [:= :e.id :ei.expense_id]
-                                     [:article_aliases :aa] [:= :aa.id :ei.alias_id]
-                                     [:articles :a] [:= :a.id :aa.article_id]]
-                         :where where
-                         :order-by order-by-clause
-                         :limit limit
-                         :offset offset}
-                  count-query {:select [[[:count :ei.id] :total]]
-                               :from [[:expense_items :ei]]
-                               :left-join [[:expenses :e] [:= :e.id :ei.expense_id]
-                                           [:article_aliases :aa] [:= :aa.id :ei.alias_id]
-                                           [:articles :a] [:= :a.id :aa.article_id]]
-                               :where where}
+                  base-query {:select [[:ei.*]
+                                       [:aa.raw_label :raw_label]
+                                       [:aa.raw_label_normalized :raw_label_normalized]
+                                       [:e.purchased_at :expense_purchased_at]
+                                       [:a.canonical_name :article_canonical_name]]
+                              :from [[:expense_items :ei]]
+                              :left-join [[:expenses :e] [:= :e.id :ei.expense_id]
+                                          [:article_aliases :aa] [:= :aa.id :ei.alias_id]
+                                          [:articles :a] [:= :a.id :aa.article_id]]
+                              :where where}
+                  query (-> base-query
+                          (shared-qb/apply-text-filters expense-item-text-filter-columns text-filters)
+                          (assoc :order-by order-by-clause
+                            :limit limit
+                            :offset offset))
+                  count-query (-> {:select [[[:count :ei.id] :total]]
+                                   :from [[:expense_items :ei]]
+                                   :left-join [[:expenses :e] [:= :e.id :ei.expense_id]
+                                               [:article_aliases :aa] [:= :aa.id :ei.alias_id]
+                                               [:articles :a] [:= :a.id :aa.article_id]]
+                                   :where where}
+                                (shared-qb/apply-text-filters expense-item-text-filter-columns text-filters))
                   items (jdbc/execute! db (sql/format query)
                           {:builder-fn rs/as-unqualified-lower-maps})
                   total (or (:total (jdbc/execute-one! db (sql/format count-query)

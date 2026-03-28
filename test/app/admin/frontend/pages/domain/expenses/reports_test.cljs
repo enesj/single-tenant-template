@@ -7,12 +7,16 @@
 (def top-item-unit-price @#'reports/top-item-unit-price)
 (def enrich-top-item-row @#'reports/enrich-top-item-row)
 (def sort-data @#'reports/sort-data)
+(def article-row-id @#'reports/article-row-id)
 
 (defn- approx=
   [expected actual]
   (< (js/Math.abs (- expected actual)) 1.0e-6))
 
 (deftest top-items-report-detects-common-unit-labels
+  (testing "stored unit takes precedence over label heuristics"
+    (is (= "kg" (top-item-unit-label {:unit "kg"
+                                      :alias-label "BULLDOG GIN SA ČAŠOM 0,7/KO"}))))
   (testing "item labels map to the intended display units"
     (is (= "kg" (top-item-unit-label {:article-canonical-name "Juneci vrat/kg"})))
     (is (= "kom" (top-item-unit-label {:alias-label "BULLDOG GIN SA ČAŠOM 0,7/KO"})))
@@ -52,3 +56,8 @@
           sorted (sort-data rows {:column :total-amount :direction :asc})]
       (is (= [2 "7" "10,5"]
             (mapv :total-amount sorted))))))
+
+(deftest top-items-report-row-id-distinguishes-units
+  (testing "same alias/currency with different units gets distinct detail ids"
+    (is (not= (article-row-id {:alias-id "a1" :currency "BAM" :unit "kg"})
+          (article-row-id {:alias-id "a1" :currency "BAM" :unit "kom"})))))

@@ -6,7 +6,7 @@
 (def ^:private default-breakdown-limit 50)
 
 (defn top-spending
-  "Top product/item spending grouped by canonical article (merging aliases)."
+  "Top product/item spending grouped by canonical article and stored unit."
   [db user-id {:keys [limit] :as opts}]
   (let [user-id (shared/ensure-uuid user-id)
         limit* (-> (or limit default-item-report-limit) long (max 1) (min 100))
@@ -18,6 +18,7 @@
       {:select [[resolved-item-id-sql :alias_id]
                 [item-label-sql :alias_label]
                 [item-label-sql :article_canonical_name]
+                [:ei.unit :unit]
                 :e.currency
                 [[:sum :ei.line_total] :total_amount]
                 [[:sum :ei.qty] :qty_total]
@@ -37,23 +38,29 @@
        :where (shared/item-base-where user-id opts)
        :group-by [resolved-item-id-sql
                   item-label-sql
+                  :ei.unit
                   :e.currency]
        :order-by [[[:sum :ei.line_total] :desc]
-                  [item-label-sql :asc]]
+                  [item-label-sql :asc]
+                  [:ei.unit :asc]]
        :limit limit*})))
 
 (defn top-breakdown
-  "Break down a top item (article alias) by suppliers and stores."
-  [db user-id alias-id {:keys [limit] :as opts}]
+  "Break down a top item (article alias) by suppliers and stores.
+
+  When `:unit` is provided in opts, the breakdown is scoped to that stored unit
+  so report drilldowns stay consistent with the selected top-items row."
+  [db user-id alias-id {:keys [limit unit] :as opts}]
   (let [user-id (shared/ensure-uuid user-id)
         alias-id (shared/ensure-uuid alias-id)
         limit* (-> (or limit default-breakdown-limit) long (max 1) (min 200))
         resolved-store-id-sql [:raw "COALESCE(e.store_id, sa_receipt.store_id)"]
         store-name-sql [:raw "COALESCE(st.display_name, 'Unmapped store')"]
-        where-clause (conj (shared/item-base-where user-id opts)
-                       [:or
-                        [:= :aa.article_id alias-id]
-                        [:= :ei.alias_id alias-id]])]
+        where-clause (cond-> (conj (shared/item-base-where user-id opts)
+                               [:or
+                                [:= :aa.article_id alias-id]
+                                [:= :ei.alias_id alias-id]])
+                       unit (conj [:= :ei.unit unit]))]
     (when-not alias-id
       (throw (ex-info "alias-id is required" {:status 400})))
     {:suppliers

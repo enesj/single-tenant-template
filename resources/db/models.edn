@@ -585,6 +585,7 @@
     :uuid
     {:foreign-key :articles/id, :on-delete :set-null}]
    [:qty [:decimal 10 3]]
+   [:unit [:varchar 10]]
    [:unit_price [:decimal 12 2]]
    [:line_total [:decimal 12 2] {:null false}]
    [:price_modified :boolean {:null false, :default false}]

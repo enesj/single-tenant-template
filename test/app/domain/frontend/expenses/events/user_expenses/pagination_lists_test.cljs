@@ -111,6 +111,40 @@
         (finally
           (rf/reg-fx :dispatch rf/dispatch))))))
 
+(deftest expense-items-refresh-list-expands-range-and-date-filters
+  (testing "expense items refresh expands number/date filters into backend query params"
+    (sup/reset-db!)
+    (swap! rf-db/app-db assoc-in (paths/list-per-page :expense-items) 20)
+    (swap! rf-db/app-db assoc-in (paths/list-current-page :expense-items) 3)
+    (swap! rf-db/app-db assoc-in (paths/list-filters :expense-items)
+      {:qty {:min 0.35 :max 0.35}
+       :expense-purchased-at {:from "2026-03-01T00:00:00.000Z"
+                              :to "2026-03-31T23:59:59.999Z"}
+       :raw-label "jagoda"})
+    (let [dispatches (atom [])]
+      (rf/reg-fx :dispatch (fn [event]
+                             (swap! dispatches conj event)))
+      (try
+        (rf/dispatch-sync [:user-expenses/refresh-expense-items-list])
+        (let [[event-id params] (first @dispatches)]
+          (is (= :user-expenses/fetch-expense-items event-id))
+          (is (= {:limit 20
+                  :offset 40
+                  :qty-min 0.35
+                  :qty-max 0.35
+                  :expense-purchased-at-from "2026-03-01T00:00:00.000Z"
+                  :expense-purchased-at-to "2026-03-31T23:59:59.999Z"
+                  :raw-label "jagoda"}
+                (select-keys params [:limit
+                                     :offset
+                                     :qty-min
+                                     :qty-max
+                                     :expense-purchased-at-from
+                                     :expense-purchased-at-to
+                                     :raw-label]))))
+        (finally
+          (rf/reg-fx :dispatch rf/dispatch))))))
+
 (deftest receipts-refresh-list-forwards-sort-config
   (testing "refresh wrapper forwards the current template sort config to fetch params"
     (sup/reset-db!)
