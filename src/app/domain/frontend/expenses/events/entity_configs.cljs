@@ -85,15 +85,21 @@
    :api-endpoint "/admin/api/expenses/article-aliases"
    :detail-response-key :article-alias
    :has-forms? false
-   :server-filter-keys {:raw-label   :raw-label
+   :server-filter-keys {:supplier-display-name :supplier-display-name
+                        :article-canonical-name :article-canonical-name
+                        :raw-label :raw-label
+                        :raw-label-normalized :raw-label-normalized
                         :supplier-id :supplier-id
-                        :article-id  :article-id}})
+                        :article-id :article-id}})
 
 (def unmapped-aliases-config
   {:entity-key :unmapped-aliases
    :base-path [:admin :expenses :unmapped-aliases]
    :api-endpoint "/admin/api/expenses/articles/unmapped-aliases"
-   :has-forms? false})
+   :has-forms? false
+   :server-filter-keys {:supplier-display-name :supplier-name
+                        :raw-label :raw-label
+                        :raw-label-normalized :raw-label-normalized}})
 
 (def supplier-aliases-config
   {:entity-key :supplier-aliases

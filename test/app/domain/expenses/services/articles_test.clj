@@ -197,6 +197,111 @@
       (is (= 1 (aliases/count-unmapped-aliases db {:tenant-id tenant-a-id})))
       (is (= 1 (aliases/count-unmapped-aliases db {:tenant-id tenant-b-id}))))))
 
+(deftest article-aliases-list-supports-visible-column-text-filters
+  (when-let [db fixtures/*test-db*]
+    (let [token (str (UUID/randomUUID))
+          supplier-a-name (str "Article Alias Filter Supplier A " token)
+          supplier-b-name (str "Article Alias Filter Supplier B " token)
+          article-a-name (str "Article Alias Filter Article A " token)
+          article-b-name (str "Article Alias Filter Article B " token)
+          supplier-a (:supplier (suppliers/find-or-create-supplier! db supplier-a-name {}))
+          supplier-b (:supplier (suppliers/find-or-create-supplier! db supplier-b-name {}))
+          article-a (articles/create-article! db {:canonical_name article-a-name})
+          article-b (articles/create-article! db {:canonical_name article-b-name})
+          alias-a (aliases/find-or-create-alias! db (:id supplier-a) (str token " Alpha Tea"))
+          alias-b (aliases/find-or-create-alias! db (:id supplier-b) (str token " Omega Coffee"))
+          _mapped-a (aliases/map-alias-to-article! db (:id alias-a) (:id article-a))
+          _mapped-b (aliases/map-alias-to-article! db (:id alias-b) (:id article-b))
+          by-supplier (aliases/list-article-aliases db {:supplier-display-name supplier-a-name
+                                                        :limit 50
+                                                        :offset 0})
+          by-article (aliases/list-article-aliases db {:article-canonical-name article-b-name
+                                                       :limit 50
+                                                       :offset 0})
+          by-raw-label (aliases/list-article-aliases db {:raw-label "Alpha Tea"
+                                                         :limit 50
+                                                         :offset 0})
+          by-normalized (aliases/list-article-aliases db {:raw-label-normalized "omega-coffee"
+                                                          :limit 50
+                                                          :offset 0})]
+      (is (= [(:id alias-a)] (mapv :id by-supplier)))
+      (is (= [(:id alias-b)] (mapv :id by-article)))
+      (is (= [(:id alias-a)] (mapv :id by-raw-label)))
+      (is (= [(:id alias-b)] (mapv :id by-normalized)))
+      (is (= 1 (aliases/count-article-aliases db {:supplier-display-name supplier-a-name})))
+      (is (= 1 (aliases/count-article-aliases db {:article-canonical-name article-b-name})))
+      (is (= 1 (aliases/count-article-aliases db {:raw-label "Alpha Tea"})))
+      (is (= 1 (aliases/count-article-aliases db {:raw-label-normalized "omega-coffee"}))))))
+
+(deftest articles-list-unmapped-aliases-supports-text-filters-and-sorting
+  (when-let [db fixtures/*test-db*]
+    (let [token (str (UUID/randomUUID))
+          supplier-a-name (str "Sort Filter Supplier A " token)
+          supplier-b-name (str "Sort Filter Supplier B " token)
+          raw-label-a (str token "-ALPHA")
+          raw-label-b (str token "-OMEGA")
+          supplier-a (:supplier (suppliers/find-or-create-supplier! db supplier-a-name {}))
+          supplier-b (:supplier (suppliers/find-or-create-supplier! db supplier-b-name {}))
+          payer (th/create-payer! db {:type "cash" :label "Cash"})
+          _exp-a-1 (expenses/create-expense!
+                     db
+                     {:supplier_id (:id supplier-a)
+                      :payer_id (:id payer)
+                      :purchased_at (now)
+                      :total_amount (bigdec "1.00")
+                      :currency "BAM"}
+                     [{:raw_label raw-label-a :line_total (bigdec "1.00")}])
+          _exp-a-2 (expenses/create-expense!
+                     db
+                     {:supplier_id (:id supplier-a)
+                      :payer_id (:id payer)
+                      :purchased_at (now)
+                      :total_amount (bigdec "1.00")
+                      :currency "BAM"}
+                     [{:raw_label raw-label-a :line_total (bigdec "1.00")}])
+          _exp-b (expenses/create-expense!
+                   db
+                   {:supplier_id (:id supplier-b)
+                    :payer_id (:id payer)
+                    :purchased_at (now)
+                    :total_amount (bigdec "1.00")
+                    :currency "BAM"}
+                   [{:raw_label raw-label-b :line_total (bigdec "1.00")}])
+          filtered-by-supplier (aliases/list-unmapped-aliases
+                                 db
+                                 {:supplier-name supplier-a-name
+                                  :limit 50
+                                  :offset 0})
+          filtered-by-normalized (aliases/list-unmapped-aliases
+                                   db
+                                   {:supplier-name supplier-b-name
+                                    :raw-label-normalized "omega"
+                                    :limit 50
+                                    :offset 0})
+          sorted-by-raw-label (aliases/list-unmapped-aliases
+                                db
+                                {:raw-label token
+                                 :order-by :raw-label
+                                 :order-dir :desc
+                                 :limit 50
+                                 :offset 0})
+          sorted-by-occurrences (aliases/list-unmapped-aliases
+                                  db
+                                  {:raw-label token
+                                   :order-by :occurrence-count
+                                   :order-dir :desc
+                                   :limit 50
+                                   :offset 0})]
+      (is (= [raw-label-a] (mapv :raw_label filtered-by-supplier)))
+      (is (= [raw-label-b] (mapv :raw_label filtered-by-normalized)))
+      (is (= [raw-label-b raw-label-a] (mapv :raw_label sorted-by-raw-label)))
+      (is (= [2 1] (mapv :occurrence_count sorted-by-occurrences)))
+      (is (= 1 (aliases/count-unmapped-aliases db {:supplier-name supplier-a-name})))
+      (is (= 1 (aliases/count-unmapped-aliases db {:supplier-name supplier-b-name
+                                                   :raw-label-normalized "omega"})))
+      (is (= 1 (aliases/count-unmapped-aliases db {:raw-label token
+                                                   :occurrence-count-min 2}))))))
+
 (deftest articles-list-related-records-resolves-alias-linked-expense-items
   (when-let [db fixtures/*test-db*]
     (let [supplier (:supplier (suppliers/find-or-create-supplier! db (str "Related Alias Supplier " (UUID/randomUUID)) {}))

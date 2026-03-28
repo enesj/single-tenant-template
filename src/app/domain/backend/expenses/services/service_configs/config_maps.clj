@@ -22,6 +22,10 @@
                       :article-canonical-name :a/canonical_name}
    :default-order-by :aa/created_at
    :search-fields [:aa/raw_label :aa/raw_label_normalized :s/display_name :a/canonical_name]
+   :text-filter-columns {:supplier-display-name :s.display_name
+                         :article-canonical-name :a.canonical_name
+                         :raw-label :aa.raw_label
+                         :raw-label-normalized :aa.raw_label_normalized}
    :joins [[:suppliers :s] [:= :s/id :aa/supplier_id]
            [:articles :a] [:= :a/id :aa/article_id]]
    :select-fields [[:aa.*]

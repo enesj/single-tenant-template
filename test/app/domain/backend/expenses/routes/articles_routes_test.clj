@@ -38,3 +38,40 @@
 								(:body response)))
 					(is (= {:limit 25 :offset 50} @list-opts))
 					(is (= @list-opts @count-opts)))))))
+
+(deftest unmapped-aliases-admin-route-forwards-sort-and-filter-params
+	(testing "admin unmapped aliases route forwards supported sort and filter params"
+		(let [list-opts (atom nil)
+					count-opts (atom nil)
+					handler (unmapped-aliases-handler)]
+			(with-redefs [aliases/list-unmapped-aliases (fn [_db opts]
+																						 (reset! list-opts opts)
+																						 [])
+										aliases/count-unmapped-aliases (fn [_db opts]
+																							(reset! count-opts opts)
+																							0)
+										factory/to-app identity
+										utils/success-response (fn [body & [_status]]
+																						 {:status 200
+																							:body body})]
+				(let [response (handler {:query-params {"limit" "25"
+																							"offset" "50"
+																							"order-by" "raw-label"
+																							"order-dir" "asc"
+																							"supplier-name" "Acme"
+																							"raw-label" "Tea"
+																							"raw-label-normalized" "tea"
+																							"occurrence-count-min" "2"
+																							"occurrence-count-max" "5"}})]
+					(is (= 200 (:status response)))
+					(is (= {:limit 25
+									:offset 50
+									:order-by :raw-label
+									:order-dir :asc
+									:supplier-name "Acme"
+									:raw-label "Tea"
+									:raw-label-normalized "tea"
+									:occurrence-count-min 2
+									:occurrence-count-max 5}
+							 @list-opts))
+					(is (= @list-opts @count-opts)))))))

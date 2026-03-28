@@ -201,8 +201,11 @@
    :default-order-by "raw_label"
    :required-fields [:supplier-id :raw-label :raw-label-normalized]
    :has-search? false
-   :filter-params {:supplier-id :uuid
+   :filter-params {:supplier-display-name :string
+                   :article-canonical-name :string
                    :raw-label :string
+                   :raw-label-normalized :string
+                   :supplier-id :uuid
                    :article-id :uuid}
 
    ;; Admin edit forms can send numeric fields as strings (HTML inputs always

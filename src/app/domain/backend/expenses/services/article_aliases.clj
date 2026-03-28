@@ -5,6 +5,8 @@
     [app.domain.backend.expenses.services.related-records :as rr]
     [app.domain.backend.expenses.services.service-configs :as configs]
     [app.domain.backend.expenses.services.services-factory :as factory]
+    [app.shared.model-naming :as model-naming]
+    [app.shared.query-builders :as shared-qb]
     [app.shared.type-conversion :as type-conv]
     [clojure.string :as str]
     [honey.sql :as sql]
@@ -32,6 +34,70 @@
 (def service (factory/build-entity-service config))
 
 (def ^:private try-uuid type-conv/try-parse-uuid)
+
+(def ^:private occurrence-count-expr [:count :ei.id])
+
+(def ^:private allowed-unmapped-aliases-order-by
+  {:supplier-display-name :s/display_name
+   :raw-label :aa/raw_label
+   :raw-label-normalized :aa/raw_label_normalized
+   :occurrence-count occurrence-count-expr})
+
+(defn- append-and-clause
+  [existing clause]
+  (cond
+    (nil? clause) existing
+    (nil? existing) clause
+    (and (vector? existing) (= :and (first existing))) (conj existing clause)
+    :else [:and existing clause]))
+
+(defn- add-having-clause
+  [query clause]
+  (if clause
+    (update query :having append-and-clause clause)
+    query))
+
+(defn- apply-unmapped-alias-filters
+  [query {:keys [supplier-name raw-label raw-label-normalized]}]
+  (cond-> query
+    (seq supplier-name)
+    (update :where shared-qb/merge-where-and
+      [:ilike :s.display_name (str "%" supplier-name "%")])
+
+    (seq raw-label)
+    (update :where shared-qb/merge-where-and
+      [:ilike :aa.raw_label (str "%" raw-label "%")])
+
+    (seq raw-label-normalized)
+    (update :where shared-qb/merge-where-and
+      [:ilike :aa.raw_label_normalized (str "%" raw-label-normalized "%")])))
+
+(defn- build-unmapped-aliases-query
+  [{:keys [supplier-id supplier_id tenant-id tenant_id supplier-name raw-label raw-label-normalized
+           occurrence-count-min occurrence-count-max]
+    :as _opts}]
+  (let [supplier-uuid (try-uuid (or supplier-id supplier_id))
+        tenant-uuid (try-uuid (or tenant-id tenant_id))
+        having-clause (cond-> nil
+                        tenant-uuid (append-and-clause [:> occurrence-count-expr 0])
+                        (some? occurrence-count-min) (append-and-clause [:>= occurrence-count-expr occurrence-count-min])
+                        (some? occurrence-count-max) (append-and-clause [:<= occurrence-count-expr occurrence-count-max]))]
+    (cond-> {:from [[:article_aliases :aa]]
+             :left-join [[:suppliers :s] [:= :aa.supplier_id :s.id]
+                         [:expense_items :ei]
+                         (if tenant-uuid
+                           [:and
+                            [:= :ei.alias_id :aa.id]
+                            [:= :ei.tenant_id tenant-uuid]]
+                           [:= :ei.alias_id :aa.id])]
+             :where [:and
+                     [:is :aa.article_id nil]]
+             :group-by [:aa.id :s.display_name]}
+      supplier-uuid (update :where conj [:= :aa.supplier_id supplier-uuid])
+      true (apply-unmapped-alias-filters {:supplier-name supplier-name
+                                          :raw-label raw-label
+                                          :raw-label-normalized raw-label-normalized})
+      having-clause (add-having-clause having-clause))))
 
 ;; ============================================================================
 ;; Unknown Supplier Helper
@@ -116,6 +182,7 @@
   "List article aliases with optional filters.
 
    Supports:
+   - :supplier-display-name / :article-canonical-name / :raw-label / :raw-label-normalized (ILIKE)
    - :supplier-id / :supplier_id
    - :article-id / :article_id
    - :unmapped-only (boolean, filters to article_id IS NULL)"
@@ -135,8 +202,14 @@
                       :offset offset
                       :order-by order-by
                       :order-dir order-dir})
-        final-query (factory/apply-search-filter base-query (:search-fields config*) search)]
-    (if (or supplier-uuid article-uuid unmapped-only)
+        final-query (cond-> base-query
+                      (seq (:text-filter-columns config*))
+                      (shared-qb/apply-text-filters (:text-filter-columns config*) opts)
+
+                      (and search (seq (:search-fields config*)))
+                      (factory/apply-search-filter (:search-fields config*) search))]
+    (if (or supplier-uuid article-uuid unmapped-only
+          (shared-qb/has-text-filters? (keys (:text-filter-columns config*)) opts))
       (jdbc/execute! db (sql/format final-query) {:builder-fn rs/as-unqualified-lower-maps})
       ((:list service) db opts))))
 
@@ -144,10 +217,11 @@
   "Count article aliases with optional filters.
 
    Supports:
+   - :supplier-display-name / :article-canonical-name / :raw-label / :raw-label-normalized (ILIKE)
    - :supplier-id / :supplier_id
    - :article-id / :article_id
    - :unmapped-only (boolean, filters to article_id IS NULL)"
-  [db {:keys [search supplier-id supplier_id article-id article_id unmapped-only] :as _opts}]
+  [db {:keys [search supplier-id supplier_id article-id article_id unmapped-only] :as opts}]
   (let [supplier-uuid (try-uuid (or supplier-id supplier_id))
         article-uuid (try-uuid (or article-id article_id))
         base-filters (cond-> (vec (or (:base-filters config) []))
@@ -155,12 +229,18 @@
                        article-uuid (conj [:= :aa/article_id article-uuid])
                        unmapped-only (conj [:is :aa/article_id nil]))
         config* (assoc config :base-filters base-filters)]
-    (if (or supplier-uuid article-uuid unmapped-only)
+    (if (or supplier-uuid article-uuid unmapped-only
+          (shared-qb/has-text-filters? (keys (:text-filter-columns config*)) opts))
       (let [base-query (factory/build-base-query config*)
             count-query (-> base-query
                           (dissoc :order-by :limit :offset)
                           (assoc :select [[[:count :*] :total]]))
-            final-query (factory/apply-search-filter count-query (:search-fields config*) search)]
+            final-query (cond-> count-query
+                          (seq (:text-filter-columns config*))
+                          (shared-qb/apply-text-filters (:text-filter-columns config*) opts)
+
+                          (and search (seq (:search-fields config*)))
+                          (factory/apply-search-filter (:search-fields config*) search))]
         (:total (jdbc/execute-one! db (sql/format final-query) {:builder-fn rs/as-unqualified-lower-maps})))
       ((:count service) db {:search search}))))
 
@@ -168,61 +248,34 @@
   "List unmapped article aliases (article_id IS NULL) with occurrence counts.
    When :tenant-id is provided, only includes aliases seen in that tenant's
    expense items and counts occurrences within that tenant."
-  [db {:keys [limit offset supplier-id supplier_id tenant-id tenant_id]
-       :or {limit 100 offset 0}}]
-  (let [supplier-uuid (try-uuid (or supplier-id supplier_id))
-        tenant-uuid (try-uuid (or tenant-id tenant_id))
-        expense-items-join-clause (if tenant-uuid
-                                    [[:expense_items :ei]
-                                     [:and
-                                      [:= :ei.alias_id :aa.id]
-                                      [:= :ei.tenant_id tenant-uuid]]]
-                                    [[:expense_items :ei]
-                                     [:= :ei.alias_id :aa.id]])
-        query (cond-> {:select [[:aa.id]
+  [db {:keys [limit offset order-by order-dir]
+       :or {limit 100 offset 0 order-dir :desc}
+       :as opts}]
+  (let [order-by* (some-> order-by model-naming/ensure-app-keyword)
+        order-col (get allowed-unmapped-aliases-order-by order-by* occurrence-count-expr)
+        order-dir* (shared-qb/normalize-order-direction order-dir {:default :desc})
+        query (-> (build-unmapped-aliases-query opts)
+                (assoc :select [[:aa.id]
                                 [:aa.raw_label]
                                 [:aa.raw_label_normalized]
                                 [:aa.supplier_id]
                                 [:s.display_name :supplier_display_name]
-                                [[:count :ei.id] :occurrence_count]]
-                       :from [[:article_aliases :aa]]
-                       :left-join (into [[:suppliers :s]
-                                         [:= :aa.supplier_id :s.id]]
-                                    expense-items-join-clause)
-                       :where [:and
-                               [:is :aa.article_id nil]]
-                       :group-by [:aa.id :s.display_name]
-                       :order-by [[[:count :ei.id] :desc]]
-                       :limit limit
-                       :offset offset}
-                supplier-uuid (update :where conj [:= :aa.supplier_id supplier-uuid])
-                tenant-uuid (assoc :having [:> [[:count :ei.id]] 0]))]
+                                [occurrence-count-expr :occurrence_count]])
+                (assoc :order-by [[order-col order-dir*]
+                                  [:aa.id :asc]])
+                (assoc :limit limit
+                  :offset offset))]
     (jdbc/execute! db (sql/format query) {:builder-fn rs/as-unqualified-lower-maps})))
 
 (defn count-unmapped-aliases
   "Count unmapped article aliases (article_id IS NULL), optionally by supplier and tenant.
    When :tenant-id is provided, only counts aliases with at least one expense item
    in that tenant."
-  [db {:keys [supplier-id supplier_id tenant-id tenant_id]}]
-  (let [supplier-uuid (try-uuid (or supplier-id supplier_id))
-        tenant-uuid (try-uuid (or tenant-id tenant_id))
-        expense-items-join-clause [[:expense_items :ei]
-                                   [:and
-                                    [:= :ei.alias_id :aa.id]
-                                    [:= :ei.tenant_id tenant-uuid]]]
-        query (if tenant-uuid
-                (cond-> {:select [[[:raw "COUNT(DISTINCT aa.id)"] :total]]
-                         :from [[:article_aliases :aa]]
-                         :join expense-items-join-clause
-                         :where [:and
-                                 [:is :aa.article_id nil]]}
-                  supplier-uuid (update :where conj [:= :aa.supplier_id supplier-uuid]))
-                (cond-> {:select [[[:count :aa.id] :total]]
-                         :from [[:article_aliases :aa]]
-                         :where [:is :aa.article_id nil]}
-                  supplier-uuid (assoc :where [:and
-                                               [:is :aa.article_id nil]
-                                               [:= :aa.supplier_id supplier-uuid]])))]
+  [db opts]
+  (let [grouped-query (-> (build-unmapped-aliases-query opts)
+                        (assoc :select [[:aa.id]]))
+        query {:select [[[:count :*] :total]]
+               :from [[grouped-query :unmapped_aliases]]}]
     (:total (jdbc/execute-one! db (sql/format query) {:builder-fn rs/as-unqualified-lower-maps}))))
 
 (defn map-alias-to-article!
@@ -339,4 +392,3 @@
     (throw (ex-info "alias-id is required" {:status 400})))
   {"expenses" (or (count-related-expenses db alias-id) 0)
    "receipts" (or (count-related-receipts db alias-id) 0)})
-
