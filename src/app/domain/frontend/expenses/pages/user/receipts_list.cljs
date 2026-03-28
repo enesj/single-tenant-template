@@ -3,9 +3,10 @@
   (:require
     [app.domain.frontend.expenses.components.receipt-detail-modal :as receipt-detail-ui]
     [app.domain.frontend.expenses.components.user-expense-form :refer [user-expense-add-form-modal]]
-    [app.template.frontend.components.action-components :refer [view-details-icon]]
+
     [app.template.frontend.components.dropdown.action :as dropdown]
     [app.template.frontend.components.list :refer [list-view]]
+    [app.template.frontend.components.list.cells :as list-cells]
     [app.template.frontend.events.list.ui-state :as list-ui-state-events]
     [app.template.frontend.i18n :refer [use-t]]
     [app.template.frontend.subs.list :as list-subs]
@@ -134,14 +135,7 @@
   [t can-ocr? receipt]
   (let [receipt-id (id-utils/extract-entity-id receipt)
         ocr-allowed? (receipt-ocr-allowed? receipt)
-        action-groups (cond-> [{:group-title (t :common/view)
-                                :items [{:id "view-details"
-                                         :icon ($ view-details-icon)
-                                         :label (t :receipts/view-details)
-                                         :on-click (fn [e]
-                                                     (.stopPropagation e)
-                                                     (rf/dispatch [:user-expenses/open-receipt-detail-modal receipt-id]))}]}]
-                        ;; Add OCR group when allowed
+        action-groups (cond-> []
                         (and can-ocr? ocr-allowed?)
                         (conj {:group-title (t :receipts/ocr-group)
                                :items [{:id "parse-ocr"
@@ -151,10 +145,28 @@
                                         :on-click (fn [e]
                                                     (.stopPropagation e)
                                                     (rf/dispatch [:user-expenses/ocr-receipt receipt-id]))}]}))]
-    ($ dropdown/action-dropdown
-      {:entity-id receipt-id
-       :actions action-groups
-       :position :portal})))
+    (when (seq action-groups)
+      ($ dropdown/action-dropdown
+        {:entity-id receipt-id
+         :actions action-groups
+         :position :portal}))))
+
+(defn- render-receipt-actions
+  [t can-ocr? open-receipt-detail! receipt]
+  ($ :div {:class "flex items-center gap-2"}
+    (when (not (false? (:show-edit? receipt)))
+      ($ list-cells/edit-button
+        {:entity-name :receipts
+         :item-id (id-utils/extract-entity-id receipt)
+         :item receipt
+         :disabled? (boolean (:edit-disabled? receipt))
+         :on-edit-click open-receipt-detail!}))
+    (when (not (false? (:show-delete? receipt)))
+      ($ list-cells/delete-button
+        {:entity-name :receipts
+         :item-id (id-utils/extract-entity-id receipt)
+         :disabled? (boolean (:delete-disabled? receipt))}))
+    (receipt-actions t can-ocr? receipt)))
 
 (defn- receipt-purged?
   [receipt]
@@ -299,7 +311,12 @@
                          (fn [e]
                            (.preventDefault e)
                            (rf/dispatch [:user-expenses/post-selected (vec selected-receipt-ids)]))
-                         [selected-receipt-ids])]
+                         [selected-receipt-ids])
+        open-receipt-detail-from-edit! (use-callback
+                                         (fn [receipt]
+                                           (when-let [receipt-id (id-utils/extract-entity-id receipt)]
+                                             (rf/dispatch [:user-expenses/open-receipt-detail-modal receipt-id])))
+                                         [])]
 
     (use-effect
       (fn []
@@ -426,7 +443,7 @@
                    :entity-spec (receipts-entity-spec t)
                    :rows-override display-receipts
 
-                   :custom-actions (fn [receipt]
-                                     (receipt-actions t can-ocr? receipt))
+                   :render-actions (fn [receipt]
+                                     (render-receipt-actions t can-ocr? open-receipt-detail-from-edit! receipt))
                    :on-add-click #(rf/dispatch [:navigate-to "/expenses/upload"])}))))))
       ($ receipt-detail-modal))))

@@ -8,6 +8,7 @@
     [app.domain.backend.expenses.integrations.llamaparse.receipt-extraction.text-items :as text-items]
     [app.domain.backend.expenses.integrations.llamaparse.receipt-extraction.totals :as totals]
     [app.domain.backend.expenses.workers.receipt-ocr.common :as common]
+    [app.domain.backend.expenses.workers.receipt-ocr.markdown.items :as markdown-items]
     [clojure.string :as str]))
 
 (def ^:private confidence-diff-threshold 0.01)

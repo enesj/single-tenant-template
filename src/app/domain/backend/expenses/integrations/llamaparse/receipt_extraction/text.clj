@@ -128,7 +128,7 @@
   [resp-json]
   (->> (response->all-items resp-json)
     (filter (fn [{:keys [type]}]
-              (= "text" (some-> type str/lower-case))))
+              (contains? #{"text" "code"} (some-> type str/lower-case))))
     (keep (fn [item]
             (sanitize-header-item-text
               (or (safe-trim (:value item))
