@@ -1,8 +1,10 @@
 (ns app.domain.backend.expenses.routes.duplicates-routes-test
   (:require
+    [app.domain.backend.expenses.handlers.search.entity-queries :as entity-queries]
     [app.domain.backend.expenses.routes.duplicates :as duplicates-routes]
     [app.domain.backend.expenses.services.dedup-ignored-clusters :as ignored-clusters]
     [app.domain.backend.expenses.services.duplicates :as duplicates-svc]
+    [cheshire.core :as json]
     [clojure.test :refer [deftest is testing]]))
 
 (deftest elevated-role-middleware-requires-admin-tier-test
@@ -35,3 +37,43 @@
                                                   "fetch-limit" raw-value}})]
             (is (= 200 (:status response)))
             (is (= expected (:fetch-limit @captured-opts)))))))))
+
+(deftest manual-search-handler-uses-entity-search-with-bounded-limit-test
+  (testing "manual search dispatches to the selected entity search function"
+    (let [captured-args (atom nil)
+          handler (#'duplicates-routes/manual-search-handler :db)]
+      (with-redefs [entity-queries/search-articles
+                    (fn [_db query limit tenant-id]
+                      (reset! captured-args [query limit tenant-id])
+                      [{:id #uuid "00000000-0000-0000-0000-0000000000aa"
+                        :canonical_name "Greek Yogurt"}])
+                    duplicates-svc/enrich-members-with-context
+                    (fn [_db _entity-type members]
+                      (mapv #(assoc % :price-labels ["1.99 BAM"]) members))]
+        (let [response (handler {:admin {:id #uuid "00000000-0000-0000-0000-000000000001"}
+                                 :query-params {"entity-type" "articles"
+                                                "q" "yog"
+                                                "limit" "999"}})
+              body (json/parse-string (:body response) true)]
+          (is (= 200 (:status response)))
+          (is (= ["yog" 50 nil] @captured-args))
+          (is (= [{:id "00000000-0000-0000-0000-0000000000aa"
+                   :canonical-name "Greek Yogurt"
+                   :price-labels ["1.99 BAM"]}]
+                (:results body))))))))
+
+(deftest manual-search-handler-returns-empty-results-for-short-queries-test
+  (testing "manual search does not hit the database until the query is long enough"
+    (let [search-called? (atom false)
+          handler (#'duplicates-routes/manual-search-handler :db)]
+      (with-redefs [entity-queries/search-suppliers
+                    (fn [& _]
+                      (reset! search-called? true)
+                      [])]
+        (let [response (handler {:admin {:id #uuid "00000000-0000-0000-0000-000000000001"}
+                                 :query-params {"entity-type" "suppliers"
+                                                "q" "a"}})
+              body (json/parse-string (:body response) true)]
+          (is (= 200 (:status response)))
+          (is (false? @search-called?))
+          (is (= [] (:results body))))))))

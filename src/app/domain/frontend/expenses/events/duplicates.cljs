@@ -13,6 +13,38 @@
 
 (def ^:private all-strategies ["exact" "prefix" "trigram" "levenshtein"])
 
+(defonce ^:private manual-search-timer (atom nil))
+
+(defn- empty-manual-selection []
+  {:primary-id nil
+   :secondary-ids []
+   :selected-items {}})
+
+(defn- reset-manual-state
+  [db]
+  (-> db
+    (assoc-in (conj state-path :manual-query) "")
+    (assoc-in (conj state-path :manual-results) [])
+    (assoc-in (conj state-path :manual-loading?) false)
+    (assoc-in (conj state-path :manual-selection) (empty-manual-selection))))
+
+(defn- normalize-id [id]
+  (some-> id str))
+
+(defn- normalize-entity
+  [entity]
+  (if-let [id (normalize-id (:id entity))]
+    (assoc entity :id id)
+    entity))
+
+(defn- upsert-manual-item
+  [db entity]
+  (let [entity* (normalize-entity entity)
+        id (:id entity*)]
+    (if id
+      (assoc-in db (conj state-path :manual-selection :selected-items id) entity*)
+      db)))
+
 ;; ============================================================================
 ;; UI State Events
 ;; ============================================================================
@@ -25,8 +57,19 @@
            (assoc-in (conj state-path :clusters-by-strategy) {})
            (assoc-in (conj state-path :loading-by-strategy) {})
            (assoc-in (conj state-path :error) nil)
-           (assoc-in (conj state-path :selections) {}))
+           (assoc-in (conj state-path :selections) {})
+           (reset-manual-state))
      :dispatch [::detect-all {:entity-type entity-type}]}))
+
+(rf/reg-event-db
+  ::set-mode
+  (fn [db [_ mode]]
+    (-> db
+      (assoc-in (conj state-path :mode) mode)
+      (assoc-in (conj state-path :error) nil)
+      (assoc-in (conj state-path :show-merge-modal?) false)
+      (assoc-in (conj state-path :merge-preview) nil)
+      (assoc-in (conj state-path :pending-merge) nil))))
 
 (rf/reg-event-db
   ::set-strategy
@@ -106,24 +149,30 @@
 
 (rf/reg-event-fx
   ::merge-preview
-  (fn [{:keys [db]} [_ {:keys [entity-type primary-id secondary-ids cluster-idx]}]]
-    {:db         (assoc-in db (conj state-path :merging?) true)
-     :http-xhrio (admin-http/admin-post
-                   {:uri       "/admin/api/expenses/duplicates/merge-preview"
-                    :params    {:entity-type  (name entity-type)
-                                :primary-id   (str primary-id)
-                                :secondary-ids (mapv str secondary-ids)}
-                    :on-success [::merge-preview-success cluster-idx]
-                    :on-failure [::merge-preview-failure]})}))
+  (fn [{:keys [db]} [_ {:keys [entity-type primary-id secondary-ids] :as merge-params}]]
+    (let [normalized-secondary-ids (mapv str secondary-ids)
+          pending-merge (-> merge-params
+                          (assoc :primary-id (str primary-id))
+                          (assoc :secondary-ids normalized-secondary-ids))]
+      {:db (-> db
+             (assoc-in (conj state-path :merging?) true)
+             (assoc-in (conj state-path :pending-merge) pending-merge)
+             (assoc-in (conj state-path :error) nil))
+       :http-xhrio (admin-http/admin-post
+                     {:uri "/admin/api/expenses/duplicates/merge-preview"
+                      :params {:entity-type (name entity-type)
+                               :primary-id (str primary-id)
+                               :secondary-ids normalized-secondary-ids}
+                      :on-success [::merge-preview-success]
+                      :on-failure [::merge-preview-failure]})})))
 
 (rf/reg-event-db
   ::merge-preview-success
-  (fn [db [_ cluster-idx response]]
+  (fn [db [_ response]]
     (-> db
       (assoc-in (conj state-path :merging?) false)
       (assoc-in (conj state-path :merge-preview) (:preview response))
-      (assoc-in (conj state-path :show-merge-modal?) true)
-      (assoc-in (conj state-path :pending-merge :cluster-idx) cluster-idx))))
+      (assoc-in (conj state-path :show-merge-modal?) true))))
 
 (rf/reg-event-db
   ::merge-preview-failure
@@ -131,6 +180,7 @@
     (log/error "Failed to get merge preview" {:error error})
     (-> db
       (assoc-in (conj state-path :merging?) false)
+      (assoc-in (conj state-path :pending-merge) nil)
       (assoc-in (conj state-path :error) (admin-http/extract-error-message error)))))
 
 ;; ============================================================================
@@ -152,11 +202,12 @@
 (rf/reg-event-fx
   ::execute-merge-success
   (fn [{:keys [db]} [_ _response]]
-    {:db       (-> db
-                 (assoc-in (conj state-path :merging?) false)
-                 (assoc-in (conj state-path :show-merge-modal?) false)
-                 (assoc-in (conj state-path :merge-preview) nil)
-                 (assoc-in (conj state-path :pending-merge) nil))
+    {:db (-> db
+           (assoc-in (conj state-path :merging?) false)
+           (assoc-in (conj state-path :show-merge-modal?) false)
+           (assoc-in (conj state-path :merge-preview) nil)
+           (assoc-in (conj state-path :pending-merge) nil)
+           (reset-manual-state))
      :dispatch [::detect-all {}]}))
 
 (rf/reg-event-db
@@ -199,6 +250,120 @@
     (-> db
       (assoc-in (conj state-path :flagging?) false)
       (assoc-in (conj state-path :error) (admin-http/extract-error-message error)))))
+
+;; ============================================================================
+;; Manual Search & Selection
+;; ============================================================================
+
+(rf/reg-event-fx
+  ::set-manual-query
+  (fn [{:keys [db]} [_ query]]
+    (when @manual-search-timer
+      (js/clearTimeout @manual-search-timer)
+      (reset! manual-search-timer nil))
+    (let [query* (or query "")]
+      (if (>= (count query*) 2)
+        (do
+          (reset! manual-search-timer
+            (js/setTimeout
+              #(rf/dispatch [::fetch-manual-results query*])
+              300))
+          {:db (-> db
+                 (assoc-in (conj state-path :manual-query) query*)
+                 (assoc-in (conj state-path :manual-loading?) true)
+                 (assoc-in (conj state-path :error) nil))})
+        {:db (-> db
+               (assoc-in (conj state-path :manual-query) query*)
+               (assoc-in (conj state-path :manual-loading?) false)
+               (assoc-in (conj state-path :manual-results) [])
+               (assoc-in (conj state-path :error) nil))}))))
+
+(rf/reg-event-fx
+  ::fetch-manual-results
+  (fn [{:keys [db]} [_ query]]
+    (let [entity-type (get-in db (conj state-path :entity-type) "suppliers")]
+      {:http-xhrio (admin-http/admin-get
+                     {:uri "/admin/api/expenses/duplicates/manual-search"
+                      :params {:entity-type entity-type
+                               :q query
+                               :limit 20}
+                      :on-success [::fetch-manual-results-success query entity-type]
+                      :on-failure [::fetch-manual-results-failure]})})))
+
+(rf/reg-event-db
+  ::fetch-manual-results-success
+  (fn [db [_ query entity-type response]]
+    (if (and (= query (get-in db (conj state-path :manual-query)))
+          (= entity-type (get-in db (conj state-path :entity-type))))
+      (-> db
+        (assoc-in (conj state-path :manual-loading?) false)
+        (assoc-in (conj state-path :manual-results) (mapv normalize-entity (or (:results response) []))))
+      db)))
+
+(rf/reg-event-db
+  ::fetch-manual-results-failure
+  (fn [db [_ error]]
+    (log/error "Failed to search manual merge candidates" {:error error})
+    (-> db
+      (assoc-in (conj state-path :manual-loading?) false)
+      (assoc-in (conj state-path :error) (admin-http/extract-error-message error)))))
+
+(rf/reg-event-db
+  ::manual-add-result
+  (fn [db [_ entity]]
+    (upsert-manual-item db entity)))
+
+(rf/reg-event-db
+  ::manual-remove-result
+  (fn [db [_ entity-id]]
+    (let [entity-id* (normalize-id entity-id)]
+      (if entity-id*
+        (-> db
+          (update-in (conj state-path :manual-selection :selected-items) dissoc entity-id*)
+          (update-in (conj state-path :manual-selection :secondary-ids)
+            (fn [ids]
+              (->> ids
+                (remove #(= entity-id* %))
+                vec)))
+          ((fn [db*]
+             (if (= entity-id* (get-in db* (conj state-path :manual-selection :primary-id)))
+               (assoc-in db* (conj state-path :manual-selection :primary-id) nil)
+               db*))))
+        db))))
+
+(rf/reg-event-db
+  ::manual-select-primary
+  (fn [db [_ entity]]
+    (let [entity* (normalize-entity entity)
+          entity-id (:id entity*)]
+      (if entity-id
+        (-> db
+          (upsert-manual-item entity*)
+          (assoc-in (conj state-path :manual-selection :primary-id) entity-id)
+          (update-in (conj state-path :manual-selection :secondary-ids)
+            (fn [ids]
+              (->> ids
+                (remove #(= entity-id %))
+                vec))))
+        db))))
+
+(rf/reg-event-db
+  ::manual-toggle-secondary
+  (fn [db [_ entity]]
+    (let [entity* (normalize-entity entity)
+          entity-id (:id entity*)
+          primary-id (get-in db (conj state-path :manual-selection :primary-id))
+          current (set (get-in db (conj state-path :manual-selection :secondary-ids) []))]
+      (cond
+        (nil? entity-id) db
+        (= entity-id primary-id) db
+        :else
+        (assoc-in
+         (upsert-manual-item db entity*)
+          (conj state-path :manual-selection :secondary-ids)
+          (vec (if (contains? current entity-id)
+                 (disj current entity-id)
+                 (conj current entity-id))))))))
 
 ;; ============================================================================
 ;; Subscriptions
@@ -246,3 +411,29 @@
 
 (rf/reg-sub ::pending-merge
   (fn [db _] (get-in db (conj state-path :pending-merge))))
+
+(rf/reg-sub ::mode
+  (fn [db _] (get-in db (conj state-path :mode) "automatic")))
+
+(rf/reg-sub ::manual-query
+  (fn [db _] (get-in db (conj state-path :manual-query) "")))
+
+(rf/reg-sub ::manual-results
+  (fn [db _] (get-in db (conj state-path :manual-results) [])))
+
+(rf/reg-sub ::manual-loading?
+  (fn [db _] (get-in db (conj state-path :manual-loading?) false)))
+
+(rf/reg-sub ::manual-selection
+  (fn [db _] (get-in db (conj state-path :manual-selection) (empty-manual-selection))))
+
+(rf/reg-sub ::manual-selected-members
+  (fn [db _]
+    (->> (get-in db (conj state-path :manual-selection :selected-items) {})
+      vals
+      (sort-by (juxt #(or (:display-name %)
+                        (:canonical-name %)
+                        (:name %)
+                        "")
+                 :id))
+      vec)))

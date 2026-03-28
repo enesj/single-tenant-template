@@ -644,6 +644,20 @@
 
     {}))
 
+(defn enrich-members-with-context
+  "Attach entity-specific display context to standalone candidate rows."
+  [db entity-type members]
+  (let [all-ids (->> members
+                  (map :id)
+                  distinct
+                  vec)]
+    (if (empty? all-ids)
+      (vec members)
+      (let [context-by-id (contextual-info-by-id db entity-type all-ids)]
+        (mapv (fn [member]
+                (merge member (get context-by-id (:id member) {})))
+          members)))))
+
 (defn enrich-with-usage-counts
   "For each member in each cluster, sum FK reference counts across referencing tables.
 

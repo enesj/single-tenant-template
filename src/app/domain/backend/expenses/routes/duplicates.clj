@@ -2,6 +2,7 @@
   "Admin API routes for duplicate detection and merging."
   (:require
     [app.admin.backend.services.admin.audit :as admin-audit]
+    [app.domain.backend.expenses.handlers.search.entity-queries :as entity-queries]
     [app.domain.backend.expenses.routes.routes-factory :as routes-factory]
     [app.domain.backend.expenses.services.dedup-ignored-clusters :as ignored-clusters]
     [app.domain.backend.expenses.services.duplicates :as duplicates]
@@ -44,6 +45,28 @@
   (-> fetch-limit
     (max 1)
     (min max-detect-fetch-limit)))
+
+(def ^:private default-manual-search-limit
+  20)
+
+(def ^:private max-manual-search-limit
+  50)
+
+(defn- clamp-manual-search-limit
+  [limit]
+  (-> limit
+    (max 1)
+    (min max-manual-search-limit)))
+
+(defn- manual-search
+  [db entity-type query limit]
+  (case entity-type
+    :suppliers (entity-queries/search-suppliers db query limit nil)
+    :articles (entity-queries/search-articles db query limit nil)
+    :stores (entity-queries/search-stores db query limit nil)
+    :manufacturers (entity-queries/search-manufacturers db query limit nil)
+    :subcategories (entity-queries/search-subcategories db query limit nil)
+    []))
 
 (defn- require-elevated-admin-role
   [handler]
@@ -89,6 +112,33 @@
                 enriched (duplicates/enrich-with-usage-counts db entity-type clusters*)]
             (admin-utils/success-response {:clusters (to-app enriched)})))))
     "Failed to detect duplicates"))
+
+(defn- manual-search-handler
+  [db]
+  (admin-utils/with-error-handling
+    (fn [request]
+      (let [qp (:query-params request)
+            admin-id (admin-utils/get-admin-id request)
+            entity-type (parse-entity-type (get qp "entity-type"))
+            query (some-> (get qp "q") str str/trim)
+            limit (-> (admin-utils/parse-int-param qp "limit" default-manual-search-limit)
+                    clamp-manual-search-limit)]
+        (cond
+          (nil? admin-id)
+          (admin-utils/error-response "Admin authentication required" :status 401)
+
+          (nil? entity-type)
+          (admin-utils/error-response "Missing or invalid entity-type" :status 400)
+
+          (or (str/blank? query) (< (count query) 2))
+          (admin-utils/success-response {:results []})
+
+          :else
+          (admin-utils/success-response
+            {:results (->> (manual-search db entity-type query limit)
+                        (duplicates/enrich-members-with-context db entity-type)
+                        to-app)}))))
+    "Failed to search manual merge candidates"))
 
 (defn- merge-preview-handler
   [db]
@@ -299,6 +349,7 @@
   [db]
   ["/duplicates"
    ["/detect" {:get {:handler (detect-handler db)}}]
+   ["/manual-search" {:get {:handler (manual-search-handler db)}}]
    ["/merge-preview"
     {:middleware [require-elevated-admin-role]
      :post {:handler (merge-preview-handler db)}}]
