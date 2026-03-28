@@ -46,10 +46,16 @@
                      {:id article-alias-id
                       :article_id nil}))
                   articles/find-or-create-article-by-canonical-name!
-                  (fn [_db canonical-name]
-                    (swap! calls update :create-article inc)
-                    (is (= "ITEM" canonical-name))
-                    {:id article-id})
+                  (fn
+                    ([_db canonical-name]
+                     (swap! calls update :create-article inc)
+                     (is (= "ITEM" canonical-name))
+                     {:id article-id})
+                    ([_db canonical-name unit]
+                     (swap! calls update :create-article inc)
+                     (is (= "ITEM" canonical-name))
+                     (is (= "kom" unit))
+                     {:id article-id}))
                   article-aliases/map-alias-to-article!
                   (fn [_db alias-id mapped-article-id]
                     (swap! calls update :map-alias inc)

@@ -107,11 +107,26 @@
       (is (= 1 (count (:reassigned reassigned))))
       (is (empty? (:conflicts reassigned))))))
 
+(deftest articles-find-or-create-distinguishes-unit
+  (when-let [db fixtures/*test-db*]
+    (let [canonical-name (str "Unit Distinct Article " (UUID/randomUUID))
+          kom-article (articles/find-or-create-article-by-canonical-name! db canonical-name)
+          kg-article (articles/find-or-create-article-by-canonical-name! db canonical-name "kg")
+          kom-again (articles/find-or-create-article-by-canonical-name! db canonical-name)
+          kg-again (articles/find-or-create-article-by-canonical-name! db canonical-name "kg")]
+      (is (= "kom" (:unit kom-article)))
+      (is (= "kg" (:unit kg-article)))
+      (is (not= (:id kom-article) (:id kg-article)))
+      (is (= (:id kom-article) (:id kom-again)))
+      (is (= (:id kg-article) (:id kg-again))))))
+
 (deftest articles-batch-create-aliases-distinguishes-units
   (when-let [db fixtures/*test-db*]
     (let [supplier (:supplier (suppliers/find-or-create-supplier! db (str "AliasUnit Supplier " (UUID/randomUUID)) {}))
-          article-kom (articles/create-article! db {:canonical_name (str "AliasUnit KOM " (UUID/randomUUID))})
-          article-kg (articles/create-article! db {:canonical_name (str "AliasUnit KG " (UUID/randomUUID))})
+          canonical-name (str "AliasUnit Article " (UUID/randomUUID))
+          article-kom (articles/create-article! db {:canonical_name canonical-name})
+          article-kg (articles/create-article! db {:canonical_name canonical-name
+                                                   :unit "kg"})
           kom-result (articles/batch-create-aliases!
                        db
                        {:supplier-id (:id supplier)

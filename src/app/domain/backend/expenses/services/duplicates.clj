@@ -45,6 +45,7 @@
    :articles      {:table "articles"
                    :name-col :canonical_name
                    :key-col :normalized_key
+                   :group-col :unit
                    :fk-tables {:expense_items {:col :article_id}
                                :article_aliases {:col :article_id}}}
    :stores        {:table "stores"

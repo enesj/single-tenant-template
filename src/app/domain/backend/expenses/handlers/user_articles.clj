@@ -31,15 +31,18 @@
                 limit (h/parse-page-limit qp 200)
                 offset (h/parse-page-offset qp)
                 search (h/get-param qp :search)
+              unit (some-> (h/get-param qp :unit) str str/trim not-empty)
                 order-by (h/parse-order-by qp)
                 order-dir (h/parse-order-dir qp)
                 opts (cond-> {:limit limit
                               :offset offset}
                        (some? search) (assoc :search search)
+                unit (assoc :unit unit)
                        order-by (assoc :order-by order-by)
                        order-dir (assoc :order-dir order-dir))
                 rows (h/to-app (articles/list-articles db opts))
-                total (long (or (:total (articles/count-articles db {:search search})) 0))]
+              total (long (or (:total (articles/count-articles db (cond-> {:search search}
+                            unit (assoc :unit unit)))) 0))]
             (h/json-response {:data rows
                               :total total
                               :limit limit
@@ -58,7 +61,9 @@
         (try
           (let [body (h/read-body-params request)
                 canonical-name (:canonical_name body)
-                article (h/to-app (articles/create-article! db {:canonical_name canonical-name}))]
+                unit (some-> (or (:unit body) (:item_unit body) (:item-unit body)) str str/trim not-empty)
+                article (h/to-app (articles/create-article! db {:canonical_name canonical-name
+                                                                :unit unit}))]
             (h/json-response {:data article} 201))
           (catch clojure.lang.ExceptionInfo e
             (log/warn "Validation error creating article" {:error (ex-message e) :data (ex-data e)})
@@ -80,6 +85,11 @@
             (try
               (let [body (h/read-body-params request)
                     canonical-provided? (contains? body :canonical_name)
+                  unit-provided? (or (contains? body :unit)
+                       (contains? body :item_unit)
+                       (contains? body :item-unit))
+                  unit (when unit-provided?
+                     (some-> (or (:unit body) (:item_unit body) (:item-unit body)) str str/trim not-empty))
 
                     manufacturer-id-provided? (or (contains? body :manufacturer_id)
                                                 (contains? body :manufacturer-id)
@@ -124,6 +134,9 @@
                 (let [updates (cond-> {}
                                 canonical-provided?
                                 (assoc :canonical_name (:canonical_name body))
+
+                                unit-provided?
+                                (assoc :unit unit)
 
                                 (contains? body :category)
                                 (assoc :category (:category body))

@@ -236,6 +236,7 @@
      :stringify-keys [:manufacturer_id :subcategory_id]
      :alias-keys {:canonical_name [:canonical-name]
                   :normalized_key [:normalized-key]
+                  :unit [:unit]
                   :category [:category]
                   :link [:link]
                   ;; manufacturer FK + display

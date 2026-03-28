@@ -46,10 +46,12 @@
   (testing "Snake_case field ids in form-fields config are normalized to kebab-case app keywords"
     (reset-db!
       {:admin {:config {:form-fields
-                        {:articles {:edit-fields ["manufacturer_id" "canonical_name" "normalized_key"]
+                        {:articles {:edit-fields ["manufacturer_id" "canonical_name" "unit" "normalized_key"]
                                     :field-config {"manufacturer_id" {"type" "select"
                                                                       "options" ["manufacturers" "display_name"]}
                                                    "canonical_name" {"type" "text"}
+                                                   "unit" {"type" "select"
+                                                           "options" ["kom" "kg"]}
                                                    "normalized_key" {"type" "text"}}}}}}})
 
     (let [spec @(rf/subscribe [:form-entity-specs/by-name :articles true])
@@ -57,7 +59,11 @@
           by-id (into {} (map (juxt :id identity)) spec)]
       (is (contains? ids :manufacturer-id))
       (is (contains? ids :canonical-name))
+      (is (contains? ids :unit))
       (is (contains? ids :normalized-key))
       (is (= [:manufacturers :display-name]
             (:options (get by-id :manufacturer-id)))
-        "Foreign-key options should be normalized to kebab-case keywords"))))
+        "Foreign-key options should be normalized to kebab-case keywords")
+      (is (= [:kom :kg]
+            (:options (get by-id :unit)))
+        "Static select options should be normalized to kebab-case keywords"))))

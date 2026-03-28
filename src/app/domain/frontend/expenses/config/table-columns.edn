@@ -121,6 +121,7 @@
  :articles
  {:available-columns
   ["canonical_name"
+   "unit"
    "category_name"
    "subcategory_id"
    "subcategory_name"
@@ -133,12 +134,14 @@
    "id"],
   :default-visible-columns
   ["canonical_name"
+    "unit"
    "category_name"
    "subcategory_name"
    "manufacturer_display_name"
    "created_at"],
   :filterable-columns
   ["canonical_name"
+    "unit"
    "category_name"
    "subcategory_name"
    "manufacturer_display_name"
@@ -148,6 +151,9 @@
    "updated_at"],
   :sortable-columns
   ["canonical_name"
+    "unit"
+    "category_name"
+    "subcategory_name"
    "manufacturer_display_name"
    "link"
    "normalized_key"
@@ -163,6 +169,7 @@
   {:manufacturer_display_name {:label-key :common/manufacturer},
    :manufacturer_id {:label-key :common/manufacturer-id},
    :normalized_key {:label-key :common/normalized-key},
+    :unit {:label-key :common/unit},
    :updated_at {:label-key :common/updated-at},
    :category_name {:label-key :common/category},
    :link {:label-key :common/link},

@@ -28,11 +28,13 @@
  {:edit-fields
   ["manufacturer_id"
    "canonical_name"
+   "unit"
    "subcategory_id"
    "link"
    "normalized_key"],
   :field-config
-  {:manufacturer_id
+  {:unit {:type "select", :label "Unit", :default "kom", :options ["kom" "kg" "g" "l" "pak"]}
+   :manufacturer_id
    {:type "select",
     :label "Manufacturer",
     :options ["manufacturers" "display_name"]}

@@ -13,7 +13,12 @@
     :type :text
     :label "Canonical name"
     :required true
-    :placeholder "e.g. Coffee Beans"}])
+    :placeholder "e.g. Coffee Beans"}
+   {:id :unit
+    :type :select
+    :label "Unit"
+    :required true
+    :options ["kom" "kg" "g" "l" "pak"]}])
 
 (defui user-article-add-form-modal
   [{:keys [on-success on-cancel]}]
@@ -27,7 +32,7 @@
         {:entity-name "user-article"
          :entity-spec article-form-spec
          :editing false
-         :initial-values {}
+         :initial-values {:unit "kom"}
          :on-cancel on-cancel
          :on-submit (fn [{:keys [values]}]
                       (rf/dispatch [:user-expenses/create-article-modal values on-success]))
@@ -39,6 +44,11 @@
     :label "Canonical name"
     :required true
     :placeholder "e.g. Coffee Beans"}
+   {:id :unit
+    :type :select
+    :label "Unit"
+    :required true
+    :options ["kom" "kg" "g" "l" "pak"]}
    {:id :subcategory_id
     :type :select
     :label "Subcategory"
@@ -63,6 +73,7 @@
         ;; Build initial values from item, covering all possible fields
         initial-values (-> {}
                          (assoc :canonical_name (or (:canonical-name item) (:canonicalName item) ""))
+                         (assoc :unit (or (:unit item) "kom"))
                          (assoc :category (or (:category item) ""))
                          (assoc :subcategory_id (or (some-> (or (:subcategory-id item)
                                                               (:subcategory_id item)

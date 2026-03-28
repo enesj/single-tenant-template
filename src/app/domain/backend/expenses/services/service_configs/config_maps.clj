@@ -420,21 +420,31 @@
 (def article-config
   {:table-name "articles"
    :primary-key :id
-   :required-fields [:canonical_name]
+   :required-fields [:canonical_name :unit]
    :allowed-order-by {:canonical-name :canonical_name
+                      :unit :unit
                       :normalized-key :normalized_key
                       :created-at :created_at
                       :updated-at :updated_at}
    :default-order-by :canonical_name
-   :search-fields [:canonical_name :normalized_key]
-   :field-transformers {:normalized_key articles/normalize-article-key}
+   :search-fields [:canonical_name :normalized_key :unit]
+   :text-filter-columns {:canonical-name :canonical_name
+                         :unit :unit
+                         :normalized-key :normalized_key}
+   :field-transformers {:normalized_key articles/normalize-article-key
+                        :unit normalize-unit-value}
    :before-insert (fn [data]
-                    (let [canonical-name (:canonical_name data)]
+                    (let [canonical-name (:canonical_name data)
+                          unit (or (normalize-unit-value (:unit data)) "kom")]
                       (-> data
                         (assoc :id (UUID/randomUUID))
+                        (assoc :unit unit)
                         (assoc :normalized_key (articles/normalize-article-key canonical-name)))))
    :before-update (fn [_id updates]
                     (cond-> updates
+                      (contains? updates :unit)
+                      (update :unit #(or (normalize-unit-value %) "kom"))
+
                       (:canonical_name updates)
                       (assoc :normalized_key (articles/normalize-article-key (:canonical_name updates)))))
    :has-search? true

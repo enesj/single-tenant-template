@@ -33,7 +33,7 @@
                         existing-article-id existing-article-id
 
                         (and auto-create-articles? alias-id)
-                        (let [article (articles/find-or-create-article-by-canonical-name! db raw-label*)
+                        (let [article (articles/find-or-create-article-by-canonical-name! db raw-label* unit)
                               article-id (:id article)]
                           (when article-id
                             (aliases/map-alias-to-article! db alias-id article-id))

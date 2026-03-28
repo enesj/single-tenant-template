@@ -11,15 +11,24 @@
   (:import
     [java.util UUID]))
 
+(def ^:private default-unit "kom")
+
+(defn- normalize-unit
+  [unit]
+  (or (some-> unit str str/trim str/lower-case not-empty)
+    default-unit))
+
 (defn create-article!
   "Create a canonical article."
-  [db {:keys [canonical_name link manufacturer_id subcategory_id] :as data}]
+  [db {:keys [canonical_name link manufacturer_id subcategory_id unit] :as data}]
   (when-not canonical_name
     (throw (ex-info "canonical_name is required" {:data data})))
   (let [normalized (normalization/normalize-article-key canonical_name)
+        unit* (normalize-unit unit)
         row (cond-> {:id (UUID/randomUUID)
                      :canonical_name canonical_name
-                     :normalized_key normalized}
+                     :normalized_key normalized
+                     :unit unit*}
 
               (contains? data :subcategory_id) (assoc :subcategory_id subcategory_id)
               (contains? data :link) (assoc :link link)
@@ -30,38 +39,61 @@
     (jdbc/execute-one! db (sql/format sql-map) {:builder-fn rs/as-unqualified-lower-maps})))
 
 (defn get-article-by-normalized-key
-  "Fetch an article by its `normalized_key`."
-  [db normalized-key]
-  (when (seq (some-> normalized-key str str/trim))
-    (jdbc/execute-one!
-      db
-      (sql/format {:select [:*]
-                   :from [:articles]
-                   :where [:= :normalized_key normalized-key]
-                   :limit 1})
-      {:builder-fn rs/as-unqualified-lower-maps})))
+  "Fetch an article by its `normalized_key` and unit."
+  ([db normalized-key]
+   (get-article-by-normalized-key db normalized-key nil))
+  ([db normalized-key unit]
+   (when (seq (some-> normalized-key str str/trim))
+     (let [unit* (normalize-unit unit)]
+       (jdbc/execute-one!
+         db
+         (sql/format {:select [:*]
+                      :from [:articles]
+                      :where [:and
+                              [:= :normalized_key normalized-key]
+                              [:= :unit unit*]]
+                      :limit 1})
+         {:builder-fn rs/as-unqualified-lower-maps})))))
+
+(defn- insert-article-if-absent!
+  "Insert an article row when it does not already exist for normalized-key + unit.
+
+  Returns the inserted row, or nil when an existing row already owns the unique key."
+  [db row]
+  (jdbc/execute-one!
+    db
+    (sql/format {:insert-into :articles
+                 :values [row]
+                 :on-conflict [:normalized_key :unit]
+                 :do-nothing true
+                 :returning [:*]})
+    {:builder-fn rs/as-unqualified-lower-maps}))
 
 (defn find-or-create-article-by-canonical-name!
-  "Find or create an article based on the normalized key derived from `canonical-name`.
+  "Find or create an article based on canonical name + unit.
 
-  This is safe under concurrency because the `articles.normalized_key` unique index
-  enforces deduplication.
+  This stays safe under concurrency by relying on `ON CONFLICT DO NOTHING`
+  against the `articles(normalized_key, unit)` unique index, then reading the
+  existing row when another transaction won the race.
 
   Notes:
   - We do not overwrite existing canonical data if the row already exists.
-  - When a unique violation happens, we fetch and return the existing row."
-  [db canonical-name]
-  (let [canonical-name* (some-> canonical-name str str/trim not-empty)]
-    (when-not canonical-name*
-      (throw (ex-info "canonical_name is required" {:canonical-name canonical-name})))
-    (let [normalized (normalization/normalize-article-key canonical-name*)]
-      (try
-        (create-article! db {:canonical_name canonical-name*})
-        (catch org.postgresql.util.PSQLException e
-          (if (= "23505" (.getSQLState e))
-            (or (get-article-by-normalized-key db normalized)
-              (throw e))
-            (throw e)))))))
+  - Blank/nil units normalize to the default `kom` unit."
+  ([db canonical-name]
+   (find-or-create-article-by-canonical-name! db canonical-name nil))
+  ([db canonical-name unit]
+   (let [canonical-name* (some-> canonical-name str str/trim not-empty)]
+     (when-not canonical-name*
+       (throw (ex-info "canonical_name is required" {:canonical-name canonical-name})))
+     (let [normalized (normalization/normalize-article-key canonical-name*)
+           unit* (normalize-unit unit)
+           row {:id (UUID/randomUUID)
+                :canonical_name canonical-name*
+                :normalized_key normalized
+                :unit unit*}]
+       (or (get-article-by-normalized-key db normalized unit*)
+         (insert-article-if-absent! db row)
+         (get-article-by-normalized-key db normalized unit*))))))
 
 (def ^:private allowed-articles-order-by
   "Whitelist of client-facing order-by keys -> SQL columns.
@@ -72,6 +104,7 @@
   supported subset of columns (including joined fields like manufacturer,
   category, and subcategory names)."
   {:canonical-name :a/canonical_name
+   :unit :a/unit
    :category-name :c/name
    :subcategory-name :s/name
    :manufacturer-display-name :m/display_name
@@ -83,13 +116,18 @@
 (defn- apply-column-filters
   "Apply optional per-column ILIKE filters to a HoneySQL query map.
   Each filter key maps to a qualified column on the joined article query."
-  [query {:keys [search category-name subcategory-name manufacturer-display-name]}]
+  [query {:keys [search unit category-name subcategory-name manufacturer-display-name]}]
   (cond-> query
     (seq search)
     (update :where shared-qb/merge-where-and
       [:or
        [:ilike :a.canonical_name (str "%" search "%")]
-       [:ilike :a.normalized_key (str "%" search "%")]])
+       [:ilike :a.normalized_key (str "%" search "%")]
+       [:ilike :a.unit (str "%" search "%")]])
+
+    (seq unit)
+    (update :where shared-qb/merge-where-and
+      [:ilike :a.unit (str "%" unit "%")])
 
     (seq category-name)
     (update :where shared-qb/merge-where-and
@@ -120,7 +158,7 @@
 
   Accepts :extra-filters — a seq of HoneySQL WHERE clauses injected by the
   routes factory (e.g. date-range filters)."
-  [db {:keys [search category-name subcategory-name manufacturer-display-name
+  [db {:keys [search unit category-name subcategory-name manufacturer-display-name
               extra-filters limit offset order-by order-dir]
        :or {limit 50 offset 0 order-by :canonical_name order-dir :asc}}]
   (let [order-by* (model-naming/ensure-app-keyword order-by)
@@ -141,6 +179,7 @@
         query (-> base
                 (apply-column-filters
                   {:search search
+                   :unit unit
                    :category-name category-name
                    :subcategory-name subcategory-name
                    :manufacturer-display-name manufacturer-display-name})
@@ -149,10 +188,12 @@
 
 (defn update-article!
   "Update a canonical article. Recomputes normalized_key when canonical_name is provided."
-  [db id {:keys [canonical_name subcategory_id link manufacturer_id] :as data}]
+  [db id {:keys [canonical_name subcategory_id link manufacturer_id unit] :as data}]
   (let [update-map (cond-> {}
                      canonical_name (assoc :canonical_name canonical_name
                                       :normalized_key (normalization/normalize-article-key canonical_name))
+
+                     (contains? data :unit) (assoc :unit (normalize-unit unit))
 
                      (contains? data :subcategory_id) (assoc :subcategory_id subcategory_id)
                      (contains? data :link) (assoc :link link)
@@ -190,7 +231,7 @@
   work identically to the list query. All JOINs are 1:1, so the count is correct.
 
   Accepts :extra-filters — a seq of HoneySQL WHERE clauses (e.g. date-range)."
-  [db {:keys [search category-name subcategory-name manufacturer-display-name
+  [db {:keys [search unit category-name subcategory-name manufacturer-display-name
               extra-filters]}]
   (let [base-query {:select [[[:count :*] :total]]
                     :from [[:articles :a]]
@@ -200,6 +241,7 @@
         final-query (-> base-query
                       (apply-column-filters
                         {:search search
+                         :unit unit
                          :category-name category-name
                          :subcategory-name subcategory-name
                          :manufacturer-display-name manufacturer-display-name})

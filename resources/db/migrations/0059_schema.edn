@@ -1,0 +1,9 @@
+({:action :add-column,
+  :field-name :unit,
+  :model-name :articles,
+  :options {:null false, :default "kom", :type [:varchar 10]}}
+ {:action :alter-index,
+  :index-name :idx-articles-normalized-key,
+  :model-name :articles,
+  :options
+  {:fields [:normalized_key :unit], :unique true, :type :btree}})

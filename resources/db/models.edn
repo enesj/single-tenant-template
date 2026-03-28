@@ -168,6 +168,7 @@
   [[:id :uuid {:primary-key true}]
    [:canonical_name [:varchar 255] {:null false}]
    [:normalized_key [:varchar 255] {:null false}]
+   [:unit [:varchar 10] {:null false, :default "kom"}]
    [:subcategory_id
     :uuid
     {:foreign-key :subcategories/id, :on-delete :set-null}]
@@ -180,7 +181,7 @@
   :indexes
   [[:idx_articles_normalized_key
     :btree
-    {:fields [:normalized_key], :unique true}]
+    {:fields [:normalized_key :unit], :unique true}]
    [:idx_articles_subcategory_id :btree {:fields [:subcategory_id]}]
    [:idx_articles_manufacturer_id
     :btree

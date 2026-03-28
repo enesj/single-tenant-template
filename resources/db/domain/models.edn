@@ -344,6 +344,7 @@
  :articles {:fields [[:id :uuid {:primary-key true}]
                      [:canonical_name [:varchar 255] {:null false}]
                      [:normalized_key [:varchar 255] {:null false}]
+                     [:unit [:varchar 10] {:null false :default "kom"}]
                      ;; Legacy free-text category (kept for Phase 1 backfill).
 
                      ;; New FK-driven categorization.
@@ -354,7 +355,7 @@
                      [:manufacturer_id :uuid {:foreign-key :manufacturers/id :on-delete :set-null}]
                      [:created_at :timestamptz {:default [:now]}]
                      [:updated_at :timestamptz {:default [:now]}]]
-            :indexes [[:idx_articles_normalized_key :btree {:fields [:normalized_key] :unique true}]
+            :indexes [[:idx_articles_normalized_key :btree {:fields [:normalized_key :unit] :unique true}]
 
                       [:idx_articles_subcategory_id :btree {:fields [:subcategory_id]}]
                       [:idx_articles_manufacturer_id :btree {:fields [:manufacturer_id]}]]}

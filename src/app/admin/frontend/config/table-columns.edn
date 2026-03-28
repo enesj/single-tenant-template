@@ -96,6 +96,7 @@
  :articles
  {:available-columns
   ["canonical_name"
+   "unit"
    "category_name"
    "subcategory_id"
    "subcategory_name"
@@ -108,12 +109,14 @@
    "id"],
   :default-visible-columns
   ["canonical_name"
+    "unit"
    "category_name"
    "subcategory_name"
    "manufacturer_display_name"
    "created_at"],
   :filterable-columns
   ["canonical_name"
+    "unit"
    "category_name"
    "subcategory_name"
    "manufacturer_display_name"
@@ -123,6 +126,7 @@
    "updated_at"],
   :sortable-columns
   ["canonical_name"
+    "unit"
    "category_name"
    "subcategory_name"
    "manufacturer_display_name"
@@ -141,7 +145,8 @@
    :manufacturer_id {:label-key :common/manufacturer-id},
    :subcategory_name {:label-key :common/subcategory},
    :subcategory_id {:label-key :common/subcategory-id},
-   :category_name {:label-key :common/category}}},
+   :category_name {:label-key :common/category},
+   :unit {:label-key :common/unit}}},
  :payer-types
  {:available-columns
   ["label" "is_default" "created_at" "updated_at" "id" "tenant_id"],
