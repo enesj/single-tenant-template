@@ -31,7 +31,7 @@
   - class - Optional extra classes for the modal box
   - content-class - Optional extra classes for the modal content container
   - draggable? - Boolean to enable dragging the modal via its header (default: false)
-  - initial-position - {:x n :y n} position used when draggable? is true
+  - initial-position - {:x n :y n} position used when draggable? is true; partial maps are allowed
   - width - Optional string width (e.g. 450px)
   - z-index - Optional number z-index for the modal overlay
   - backdrop-opacity - Optional number 0-100 to control backdrop darkness
@@ -65,14 +65,21 @@
                     id))
         resolved-backdrop-id (or backdrop-id
                                (when base-id (str base-id "-backdrop")))
-        initial-position-provided? (and (map? initial-position)
-                                     (number? (:x initial-position))
-                                     (number? (:y initial-position)))
+        initial-x (when (and (map? initial-position)
+                          (number? (:x initial-position)))
+                    (:x initial-position))
+        initial-y (when (and (map? initial-position)
+                          (number? (:y initial-position)))
+                    (:y initial-position))
 
         ;; Always call use-draggable unconditionally to avoid hooks violation.
         ;; Only apply its outputs when draggable? is true.
         {:keys [form-ref header-props drag-state set-position]} (use-draggable
-                                                                  {:initial-position (or initial-position {:x 100 :y 100})})
+                                                                  {:initial-x initial-x
+                                                                   :initial-y initial-y
+                                                                   :initial-position (when (and (number? initial-x)
+                                                                                             (number? initial-y))
+                                                                                       {:x initial-x :y initial-y})})
         actual-form-ref (when draggable? form-ref)
         actual-header-props (when draggable? header-props)
         actual-drag-state (when draggable? drag-state)
@@ -112,7 +119,6 @@
     (use-effect
       (fn []
         (when (and draggable?
-                (not initial-position-provided?)
                 (exists? js/window))
           (when-let [el (.-current form-ref)]
             (let [rect (.getBoundingClientRect el)
@@ -121,10 +127,12 @@
                   window-width (.-innerWidth js/window)
                   window-height (.-innerHeight js/window)
                   centered-x (max 20 (/ (- window-width modal-width) 2))
-                  centered-y (max 20 (/ (- window-height modal-height) 2))]
-              (set-position centered-x centered-y))))
+                  centered-y (max 20 (/ (- window-height modal-height) 2))
+                  resolved-x (or initial-x centered-x)
+                  resolved-y (or initial-y centered-y)]
+              (set-position resolved-x resolved-y))))
         js/undefined)
-      [draggable? initial-position-provided? set-position form-ref])
+      [draggable? initial-x initial-y set-position form-ref])
 
     ($ :div {:class "ds-modal ds-modal-open"
              :id resolved-backdrop-id

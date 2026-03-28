@@ -274,7 +274,7 @@
         js/undefined)
       [processing? processing-started-at last-checked])
 
-    ($ :div {:class "space-y-4"}
+    ($ :div {:class "space-y-4 flex-1 min-h-0 flex flex-col"}
       (when processing?
         ($ :div {:id (str "receipt-detail-processing-banner-" rid-str)
                  :class "ds-alert ds-alert-info"}
@@ -307,16 +307,16 @@
           "Receipt not found.")
 
         :else
-        ($ :div {:class "space-y-4"}
+        ($ :div {:class "space-y-4 flex-1 min-h-0 flex flex-col"}
           ($ receipt-problem-alert {:receipt receipt})
 
           ;; ROW 1: Two resizable columns (default 1/3 left, 2/3 right)
           ($ :div {:ref container-ref
-                   :class (str "flex gap-0 " (when is-resizing? "select-none cursor-col-resize"))}
+                   :class (str "flex gap-0 flex-1 min-h-0 " (when is-resizing? "select-none cursor-col-resize"))}
 
             ;; LEFT COLUMN: Tabs for Image, Extracted HTML, Raw Extract JSON
             (when show-left-column?
-              ($ :div {:class "flex flex-col space-y-3 overflow-hidden"
+              ($ :div {:class "flex flex-col space-y-3 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain pr-1"
                        :style {:width (str left-width-pct "%")
                                :minWidth "20%"
                                :maxWidth "60%"}}
@@ -343,7 +343,7 @@
                     "✕"))
 
                 ($ :div {:class "ds-card ds-card-bordered bg-base-100 flex-1 flex flex-col overflow-hidden"}
-                  ($ :div {:class "ds-card-body p-2 flex-1 overflow-hidden"}
+                  ($ :div {:class "ds-card-body p-2 flex-1 overflow-hidden min-h-0"}
                     (case left-tab
                       :image
                       ($ receipt-preview {:receipt receipt
@@ -364,7 +364,7 @@
                       :raw-json
                       (let [raw-extract (:raw-extract-json receipt)]
                         (if (seq raw-extract)
-                          ($ :div {:class "flex flex-col h-full -m-2"}
+                          ($ :div {:class "flex flex-col h-full min-h-0 -m-2"}
                             ($ :div {:class "flex items-center justify-between gap-2 px-2 py-1 mb-2"}
                               ($ :div {:class "flex items-center gap-2"}
                                 ($ :div {:class "w-1 h-4 rounded-full bg-primary"})
@@ -378,7 +378,7 @@
                                 ($ :svg {:class "w-3 h-3" :fill "none" :stroke "currentColor" :view-box "0 0 24 24"}
                                   ($ :path {:stroke-linecap "round" :stroke-linejoin "round" :stroke-width "2"
                                             :d "M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"}))))
-                            ($ :div {:class "flex-1 bg-base-200/50 rounded-md p-2 overflow-y-auto border border-base-200"}
+                            ($ :div {:class "flex-1 min-h-0 bg-base-200/50 rounded-md p-2 overflow-y-auto overscroll-contain border border-base-200"}
                               ($ json-viewer {:data raw-extract
                                               :class "text-xs leading-relaxed"})))
                           ($ :div {:class "text-sm text-base-content/60 p-4"}
@@ -391,7 +391,7 @@
                 ($ :div {:class "absolute inset-y-0 left-1/2 -translate-x-1/2 w-0.5 bg-base-300 group-hover:bg-primary/50 transition-colors"})))
 
             ;; RIGHT COLUMN: Approve & Post form (with split layout for line items below)
-            ($ :div {:class "flex-1 space-y-2 overflow-hidden pl-3"}
+            ($ :div {:class "flex-1 min-h-0 space-y-2 overflow-y-auto overflow-x-hidden overscroll-contain pl-3 pr-1"}
               ;; Show button banner (only visible when left column is hidden)
               (when (not show-left-column?)
                 ($ :button {:id (str "btn-show-left-column-" rid-str)
@@ -461,14 +461,15 @@
        :on-close #(dispatch! close-modal)
        :draggable? true
        :resizable? true
+       :initial-position {:y 24}
        :width "960px"
        :z-index 120
        :backdrop-opacity 20
-       :class "max-w-[95vw] max-h-[85vh] flex flex-col"
+       :class "max-w-[95vw] max-h-[85vh] h-[85vh] flex flex-col"
        :header header
        :header-class "p-0 border-0 bg-transparent mb-3"
-       :content-class "p-0 overflow-hidden"
+       :content-class "p-0 overflow-hidden min-h-0 flex flex-col"
        :close-button-id (str "btn-close-" (or id "receipt-detail-modal"))}
-      ($ :div {:class "flex-1 overflow-y-auto p-4"}
+      ($ :div {:class "flex flex-col flex-1 h-full min-h-0 overflow-hidden p-4"}
         ($ receipt-detail-body {:receipt-id receipt-id
                                 :ctx ctx})))))
