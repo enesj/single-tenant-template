@@ -37,8 +37,10 @@
   (shape/looks-like-json-schema? m))
 
 (defn- lines-total-mismatch?
-  [items total-amount]
-  (shape/lines-total-mismatch? items total-amount))
+  ([items total-amount]
+   (shape/lines-total-mismatch? items total-amount))
+  ([items total-amount provider-confidence]
+   (shape/lines-total-mismatch? items total-amount provider-confidence)))
 
 ^{:clj-kondo/ignore [:unused-private-var]
   :clojure-lsp/ignore [:unused-private-var]}
@@ -187,8 +189,11 @@
                      (not undefined-supplier?))
                  "extracted"
                  "review_required")
+        provider-confidence (:provider_confidence extraction)
         lines-total-mismatch (and (= status "extracted")
-                               (lines-total-mismatch? (:items extraction) (:total_amount_guess guesses)))
+                               (lines-total-mismatch? (:items extraction)
+                                 (:total_amount_guess guesses)
+                                 provider-confidence))
         db-status (if lines-total-mismatch "review_required" status)
         llm-refine (:llm_refine extract-result)
         item-aliases-snapshot (if (= :unknown source)
@@ -220,6 +225,9 @@
                                   :extraction extraction
                                   :valid_shape? valid-shape?
                                   :resolution_snapshot resolution-snapshot}
+                                      (map? provider-confidence)
+                                      (assoc :provider_confidence provider-confidence)
+
                            (map? llm-refine)
                            (assoc :llm_refine (dissoc llm-refine :extraction))
 

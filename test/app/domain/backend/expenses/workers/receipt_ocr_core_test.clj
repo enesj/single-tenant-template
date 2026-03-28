@@ -154,6 +154,45 @@
     (is (= {:receipt-id receipt-id :review-required? true} res))
     (is (= [receipt-id] @cleared))))
 
+(deftest maybe-refine-with-cerebras-preserves-provider-confidence
+  (let [receipt-id (java.util.UUID/randomUUID)
+        user-id (java.util.UUID/randomUUID)
+        extract-result {:parsed-markdown "TOTAL: 20,13"
+                        :raw {}
+                        :extraction {:provider_confidence {:line_total_reliability 0.98
+                                                           :selected_total_confidence 0.41}
+                                     :items [{:raw_label "A"
+                                              :qty 1.0
+                                              :unit_price 20.10
+                                              :line_total 20.10}]
+                                     :totals {:total 20.13}}}
+        res (clojure.core/with-redefs-fn
+              {#'cerebras/refine-receipt-markdown!
+               (fn [_cfg _markdown]
+                 {:model "test-model"
+                  :extraction {:merchant {:name "Store"}
+                               :items [{:raw_label "A"
+                                        :qty 1.0
+                                        :unit_price 20.10
+                                        :line_total 20.10}]
+                               :totals {:total 20.13}}})
+               #'receipt-queries/get-receipt-refine-context
+               (fn [_db _rid]
+                 nil)}
+              (fn []
+                (#'refine/maybe-refine-with-cerebras
+                 ::db
+                 {:id receipt-id
+                  :user_id user-id
+                  :original_filename "IMG_4117.jpeg"}
+                 extract-result
+                 {:cerebras-cfg {:api-key "k"}
+                  :force-refine? true})))]
+    (is (= {:line_total_reliability 0.98
+            :selected_total_confidence 0.41}
+          (get-in res [:extraction :provider_confidence])))
+    (is (= "test-model" (get-in res [:llm_refine :model])))))
+
 (deftest refine-review-required-results-times-out
   (let [opts {:cerebras-cfg {:refine-concurrency 1 :refine-timeout-ms 50}}
         results [{:receipt {:id (java.util.UUID/randomUUID)}

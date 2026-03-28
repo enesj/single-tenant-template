@@ -17,6 +17,7 @@
     [app.admin.frontend.components.tabs :as tabs]
     [app.domain.frontend.expenses.components.receipt-viewer :refer [receipt-preview]]
     [app.template.frontend.components.modal-wrapper :refer [modal-wrapper]]
+    [app.template.frontend.components.json-viewer :refer [json-copy-text json-viewer]]
     [app.template.frontend.utils.id :as id-utils]
     [clojure.string :as str]
     [re-frame.core :as rf]
@@ -373,14 +374,13 @@
                                  :title "Copy to clipboard"
                                  :on-click (fn [e]
                                              (.stopPropagation e)
-                                             (let [json-str (js/JSON.stringify (clj->js raw-extract) nil 2)]
-                                               (.writeText js/navigator.clipboard json-str)))}
+                                             (.writeText js/navigator.clipboard (json-copy-text raw-extract)))}
                                 ($ :svg {:class "w-3 h-3" :fill "none" :stroke "currentColor" :view-box "0 0 24 24"}
                                   ($ :path {:stroke-linecap "round" :stroke-linejoin "round" :stroke-width "2"
                                             :d "M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"}))))
                             ($ :div {:class "flex-1 bg-base-200/50 rounded-md p-2 overflow-y-auto border border-base-200"}
-                              ($ :pre {:class "text-xs leading-relaxed"}
-                                (js/JSON.stringify (clj->js raw-extract) nil 2))))
+                              ($ json-viewer {:data raw-extract
+                                              :class "text-xs leading-relaxed"})))
                           ($ :div {:class "text-sm text-base-content/60 p-4"}
                             "No raw extract JSON available for this receipt."))))))))
 

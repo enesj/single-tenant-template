@@ -68,12 +68,17 @@
       (not (contains? item :line-total)))
     (assoc :line-total (:line_total item))))
 
+(declare confidence-favors-items-total?)
+
 (defn lines-total-mismatch?
-  [items total-amount]
-  (let [items* (mapv normalize-line-item (or items []))
-        lines-total (receipt-parsing/lines-total items*)]
-    (when-let [abs-diff (abs-decimal-diff lines-total total-amount)]
-      (> abs-diff 0.01))))
+  ([items total-amount]
+   (lines-total-mismatch? items total-amount nil))
+  ([items total-amount provider-confidence]
+   (let [items* (mapv normalize-line-item (or items []))
+         lines-total (receipt-parsing/lines-total items*)]
+     (when-let [abs-diff (abs-decimal-diff lines-total total-amount)]
+       (and (> abs-diff 0.01)
+         (not (confidence-favors-items-total? provider-confidence items* total-amount)))))))
 
 (defn items-total-amount
   [items]
@@ -81,6 +86,39 @@
     (let [items* (mapv normalize-line-item items)]
       (when (seq items*)
         (receipt-parsing/lines-total items*)))))
+
+(defn- amount->cents-string
+  [amount]
+  (when-let [m (common/parse-money amount)]
+    (format "%.0f" (* 100.0 (double (bigdec m))))))
+
+(defn- single-digit-total-difference?
+  [a b]
+  (let [a* (amount->cents-string a)
+        b* (amount->cents-string b)]
+    (boolean
+      (and a*
+        b*
+        (= (count a*) (count b*))
+        (= 1 (count (filter not (map = a* b*))))))))
+
+(defn- confidence-favors-items-total?
+  [provider-confidence items total-amount]
+  (let [items-total (items-total-amount items)
+        abs-diff (abs-decimal-diff items-total total-amount)
+        line-total-reliability (some-> (:line_total_reliability provider-confidence) double)
+        total-confidence (some-> (:selected_total_confidence provider-confidence) double)]
+    (and provider-confidence
+      items-total
+      abs-diff
+      line-total-reliability
+      (single-digit-total-difference? items-total total-amount)
+      (> abs-diff 0.01)
+      (<= abs-diff 0.05)
+      (>= line-total-reliability 0.85)
+      (or (nil? total-confidence)
+        (and (<= total-confidence 0.8)
+          (< total-confidence line-total-reliability))))))
 
 (defn prefer-markdown-items?
   "Prefer markdown-derived items when they explain the final total much better."

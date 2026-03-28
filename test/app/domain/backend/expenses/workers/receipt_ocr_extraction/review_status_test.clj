@@ -118,4 +118,16 @@
     (testing "underage mismatch"
       (is (true? (mismatch? [{:raw_label "A" :line_total 8.00M}] 10.00M))))
     (testing "exact total"
-      (is (false? (mismatch? [{:raw_label "A" :line_total 10.00M}] 10.00M))))))
+      (is (false? (mismatch? [{:raw_label "A" :line_total 10.00M}] 10.00M))))
+    (testing "high line-total reliability does not force review for a small single-digit mismatch"
+      (is (false? (mismatch? [{:raw_label "A" :qty 1.00M :unit_price 10.00M :line_total 10.00M}
+                              {:raw_label "B" :qty 1.00M :unit_price 10.10M :line_total 10.10M}]
+                    20.13M
+                    {:line_total_reliability 1.0
+                     :selected_total_confidence 0.41}))))
+    (testing "high line-total reliability still requires review when mismatch is not single-digit"
+      (is (true? (mismatch? [{:raw_label "A" :qty 1.00M :unit_price 0.49M :line_total 0.49M}
+                             {:raw_label "B" :qty 1.00M :unit_price 0.50M :line_total 0.50M}]
+                   1.02M
+                   {:line_total_reliability 1.0
+                    :selected_total_confidence 0.41}))))))

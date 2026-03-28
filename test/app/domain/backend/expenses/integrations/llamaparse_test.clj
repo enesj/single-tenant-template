@@ -652,6 +652,43 @@
     (is (= 1M (-> items first :qty bigdec)))
     (is (= 8.95M (-> ext :totals :total bigdec)))))
 
+(deftest receipt-extraction-prefers-items-total-when-line-totals-are-high-reliability
+  (let [resp {:items {:pages [{:items [{:type "table"
+                                        :md (str "| ITEM A | 1,000x | 10,00 | 10,00E |\n"
+                                              "| ITEM B | 1,000x | 10,10 | 10,10E |")
+                                        :rows [["ITEM A" "1,000x" "10,00" "10,00E"]
+                                               ["ITEM B" "1,000x" "10,10" "10,10E"]]
+                                        :bbox [{:confidence 0.40}]}
+                                       {:type "table"
+                                        :md "| TOTAL: | 20,13 |"
+                                        :rows [["TOTAL:" "20,13"]]
+                                        :bbox [{:confidence 0.41}]}]}]}}
+        extraction (receipt-extract/response->extraction resp)
+        provider-confidence (:provider_confidence extraction)]
+    (is (= 20.10M (bigdec (get-in extraction [:totals :total]))))
+    (is (= 20.10M (bigdec (:items_total provider-confidence))))
+    (is (= 1.0 (:line_total_reliability provider-confidence)))
+    (is (= 0.41 (:selected_total_confidence provider-confidence)))
+    (is (= :items_total_high_line_total_reliability (:reconciliation_basis provider-confidence)))))
+
+(deftest receipt-extraction-keeps-provider-total-when-small-mismatch-is-not-single-digit
+  (let [resp {:items {:pages [{:items [{:type "table"
+                                        :md (str "| ITEM A | 1,000x | 0,49 | 0,49E |\n"
+                                              "| ITEM B | 1,000x | 0,50 | 0,50E |")
+                                        :rows [["ITEM A" "1,000x" "0,49" "0,49E"]
+                                               ["ITEM B" "1,000x" "0,50" "0,50E"]]
+                                        :bbox [{:confidence 0.40}]}
+                                       {:type "table"
+                                        :md "| TOTAL: | 1,02 |"
+                                        :rows [["TOTAL:" "1,02"]]
+                                        :bbox [{:confidence 0.41}]}]}]}}
+        extraction (receipt-extract/response->extraction resp)
+        provider-confidence (:provider_confidence extraction)]
+    (is (= 1.02M (bigdec (get-in extraction [:totals :total]))))
+    (is (= 0.99M (bigdec (:items_total provider-confidence))))
+    (is (= 1.0 (:line_total_reliability provider-confidence)))
+    (is (nil? (:reconciliation_basis provider-confidence)))))
+
 (deftest receipt-extraction-fallback-prefers-text-before-combined-to-avoid-duplicates
   (let [resp {:text {:pages [{:text "CORTIX\n04.02.2026. 19:41\n357 35924792904 ZENSKA PIDZAMA\n24,00E\nTOTAL: 24,00"}]}
               :items {:pages [{:items [{:type "header"

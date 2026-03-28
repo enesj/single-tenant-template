@@ -83,6 +83,15 @@
         (is (re-find #"Items table starts" content))
         (is (re-find #"Currency is usually" content))))))
 
+(deftest system-prompt-includes-total-reconciliation-guidance
+  (let [prompt receipt-refine/receipt-extraction-system-prompt]
+    (is (re-find #"sum of items\[\]\.line_total_cents" prompt))
+    (is (re-find #"missed item row, bag/deposit/fee row" prompt))
+    (is (re-find #"100% discount rows" prompt))
+    (is (re-find #"-100,00%: 0,00" prompt))
+    (is (re-find #"Quantity-only or price-only fragments like '2,000x 7,56' are not valid standalone item names" prompt))
+    (is (re-find #"do not invent phantom items" prompt))))
+
 (deftest llm-extraction-reconciles-payment-total-to-items-total
   (testing "When subtotal matches items but total looks like tendered payment, prefer subtotal as total"
     (let [raw {"merchant" {"name" "New Yorker BH" "address" nil "tax_id" nil}

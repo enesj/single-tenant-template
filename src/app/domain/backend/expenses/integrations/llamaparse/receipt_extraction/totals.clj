@@ -14,30 +14,43 @@
   ["bez porez" "без порез" "porez" "порез" "pdv" "пдв" "vat" "tax"])
 
 (defn line->total-candidate
-  [line]
-  (let [line (some-> line text/safe-trim)
-        norm (text/normalize-text line)
-        kind (cond
-               (and norm (some #(str/starts-with? norm %) total-preferred-prefixes)) :preferred
-               (and norm (some #(str/starts-with? norm %) total-fallback-prefixes)) :fallback
-               :else nil)
-        amount (common/parse-money line)]
-    (when (and kind amount norm
-            (not (some #(str/includes? norm %) total-exclude-substrings)))
-      {:kind kind :amount (bigdec amount)})))
+  ([line]
+   (line->total-candidate line nil))
+  ([line attrs]
+   (let [line (some-> line text/safe-trim)
+         norm (text/normalize-text line)
+         kind (cond
+                (and norm (some #(str/starts-with? norm %) total-preferred-prefixes)) :preferred
+                (and norm (some #(str/starts-with? norm %) total-fallback-prefixes)) :fallback
+                :else nil)
+         amount (common/parse-money line)]
+     (when (and kind amount norm
+             (not (some #(str/includes? norm %) total-exclude-substrings)))
+       (merge {:kind kind
+               :amount (bigdec amount)}
+         attrs)))))
 
-(defn- pick-best-total
+(defn pick-best-total-candidate
   [candidates]
   (let [non-zero? (fn [m]
                     (and (some? m)
                       (not (zero? (.compareTo (bigdec m) 0M)))))
         pick (fn [rows]
-               (let [amounts (mapv :amount rows)]
-                 (or (last (filter non-zero? amounts))
-                   (last amounts))))
+               (let [amounts (mapv :amount rows)
+                     amount (or (last (filter non-zero? amounts))
+                              (last amounts))]
+                 (some (fn [row]
+                         (when (and amount
+                                 (zero? (.compareTo (bigdec (:amount row)) (bigdec amount))))
+                           row))
+                   (reverse rows))))
         preferred (filterv #(= :preferred (:kind %)) candidates)]
     (when (seq candidates)
       (pick (if (seq preferred) preferred candidates)))))
+
+(defn- pick-best-total
+  [candidates]
+  (some-> (pick-best-total-candidate candidates) :amount))
 
 (defn extract-total
   ([lines]

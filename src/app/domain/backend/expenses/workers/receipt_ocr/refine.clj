@@ -79,6 +79,7 @@
         has-markdown? (boolean (seq (some-> markdown str str/trim)))
         cerebras-cfg? (map? cerebras-cfg)
         has-api-key? (boolean (and cerebras-cfg? (seq (:api-key cerebras-cfg))))
+        provider-confidence (get-in extract-result [:extraction :provider_confidence])
         reasons (cond-> []
                   (not user-enabled?) (conj :user-disabled)
                   (not cerebras-cfg?) (conj :missing-cerebras-config)
@@ -116,7 +117,10 @@
                 refine (if refine-opts
                          (cerebras/refine-receipt-markdown! cerebras-cfg markdown refine-opts)
                          (cerebras/refine-receipt-markdown! cerebras-cfg markdown))
-                duration-ms (/ (- (System/nanoTime) started) 1000000.0)]
+                duration-ms (/ (- (System/nanoTime) started) 1000000.0)
+                refined-extraction (cond-> (:extraction refine)
+                                     provider-confidence
+                                     (assoc :provider_confidence provider-confidence))]
             (log/info "Cerebras receipt refine applied"
               (cond-> {:receipt-id receipt-id
                        :user-id user-id
@@ -128,7 +132,7 @@
                 store-key (assoc :store-key store-key)
                 fingerprint (assoc :fingerprint fingerprint)))
             (cond-> extract-result
-              (:extraction refine) (assoc :extraction (:extraction refine))
+              (:extraction refine) (assoc :extraction refined-extraction)
               refine (assoc :llm_refine refine)))
           (catch Exception e
             (when db
