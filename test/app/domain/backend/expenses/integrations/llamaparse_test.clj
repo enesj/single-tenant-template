@@ -265,6 +265,105 @@
           (mapv (comp bigdec :line_total) items)))
     (is (= 7.50M (bigdec (get-in extraction [:totals :total]))))))
 
+(deftest receipt-extraction-prefers-structured-code-block-over-noisy-page-text
+  (let [resp {:items {:pages [{:items [{:type "header"
+                                        :md (str "\"Pepco B-H\" d.o.o.\n"
+                                              "Podružnica Sarajevo 2\n"
+                                              "ul. Kolodvorska br.12\n"
+                                              "71000 Sarajevo\n")}
+                                       {:type "code"
+                                        :value (str "62778401 Mirisna svijeca u staklu Premium Collec\n"
+                                                 "t/pc                                      10,00E\n"
+                                                 "                                          -50,00%:   5,00\n"
+                                                 "62778401 Mirisna svijeca u staklu Premium Collec\n"
+                                                 "t/pc                                      10,00E\n"
+                                                 "                                          -50,00%:   5,00\n"
+                                                 "TOTAL:                                    10,00")}]}]}
+              :text {:pages [{:text (str "Pepco B-H d.0.o.\n"
+                                      "25.12.2025. 19:46\n"
+                                      "62778401 Mirisna svijeca u stak lu Premium Collec\n"
+                                      "t/pc              -50,00%:                 10,00E\n"
+                                      "                                            TyooL\n"
+                                      "                                             5,00\n"
+                                      "62778401 Mirisna svijeca u staklu Premium Collec\n"
+                                      "t/pc              -50,00%:                 10,00E\n"
+                                      "                                             5,00\n"
+                                      "TOTAL:            10,00\n"
+                                      "unaPr             )\n"
+                                      "                                             0,00")}]}}
+        extraction (receipt-extract/response->extraction resp)
+        items (:items extraction)]
+    (is (= 2 (count items)))
+    (is (= ["Mirisna svijeca u staklu Premium Collec"
+            "Mirisna svijeca u staklu Premium Collec"]
+          (mapv :raw_label items)))
+    (is (= [5M 5M]
+          (mapv (comp bigdec :line_total) items)))
+    (is (= 10M (bigdec (get-in extraction [:totals :total]))))))
+
+(deftest receipt-extraction-parses-structured-text-label-followed-by-qty-line
+  (let [resp {:items {:pages [{:items [{:type "header"
+                                        :md (str "\"KONZUM\" d.o.o. Sarajevo\n"
+                                              "Podružnica br. 66\n"
+                                              "Prodavnica br. 90 Sarajevo\n"
+                                              "Braće Begić 3\n"
+                                              "71101 SARAJEVO CENTAR\n")}
+                                       {:type "text"
+                                        :value (str "BF: 394987\n"
+                                                 "06.01.2026. 15:53\n"
+                                                 "SECER BRAZILAS 1KG\n"
+                                                 "2,000x 1,50 3,00E\n"
+                                                 "SECER SMEDI 800G\n"
+                                                 "1,000x 3,25 3,25E\n"
+                                                 "TOTAL: 6,25")}]}]}
+              :text {:pages [{:text (str "KONZUM\n"
+                                      "06.01.2026. 15:53\n"
+                                      "TOTAL: 6,25\n")}]}}
+        extraction (receipt-extract/response->extraction resp)
+        items (:items extraction)]
+    (is (= 2 (count items)))
+    (is (= ["SECER BRAZILAS 1KG"
+            "SECER SMEDI 800G"]
+          (mapv :raw_label items)))
+    (is (= [2M 1M]
+          (mapv (comp bigdec :qty) items)))
+    (is (= [1.50M 3.25M]
+          (mapv (comp bigdec :unit_price) items)))
+    (is (= [3.00M 3.25M]
+          (mapv (comp bigdec :line_total) items)))
+    (is (= 6.25M (bigdec (get-in extraction [:totals :total]))))))
+
+(deftest receipt-extraction-parses-structured-text-split-qty-and-price-lines
+  (let [resp {:items {:pages [{:items [{:type "header"
+                                        :md (str "JU \"APOTEKE SARAJEVO\" SARAJEVO\n"
+                                              "APOTEKA \"KOSEVSKO BRDO\"\n"
+                                              "BRACE BEGIC br.4\n"
+                                              "71000 Sarajevo\n")}
+                                       {:type "text"
+                                        :value (str "BF: 234080\n"
+                                                 "06.01.2026. 15:48\n"
+                                                 "CASA_ZA_URIN_KLIK_125_ML_ROMED_48d7\n"
+                                                 "2,000x\n"
+                                                 "0,55 1,10E\n"
+                                                 "TOPLOMJER_DIGITALNI_UEBE_TH1_COLOR_CVRST_17e0 7,15E\n"
+                                                 "TOTAL: 8,25")}]}]}
+              :text {:pages [{:text (str "APOTEKE SARAJEVO\n"
+                                      "06.01.2026. 15:48\n"
+                                      "TOTAL: 8,25\n")}]}}
+        extraction (receipt-extract/response->extraction resp)
+        items (:items extraction)]
+    (is (= 2 (count items)))
+    (is (= ["CASA ZA URIN KLIK 125 ML ROMED 48d7"
+            "TOPLOMJER DIGITALNI UEBE TH1 COLOR CVRST 17e0"]
+          (mapv :raw_label items)))
+    (is (= [2M 1M]
+          (mapv (comp bigdec :qty) items)))
+    (is (= [0.55M 7.15M]
+          (mapv (comp bigdec :unit_price) items)))
+    (is (= [1.10M 7.15M]
+          (mapv (comp bigdec :line_total) items)))
+    (is (= 8.25M (bigdec (get-in extraction [:totals :total]))))))
+
 (deftest receipt-extraction-does-not-treat-product-percent-as-discount
   (let [resp {:items {:pages [{:items [{:type "header"
                                         :md (str "\"KONZUM\" d.o.o. Sarajevo\n"

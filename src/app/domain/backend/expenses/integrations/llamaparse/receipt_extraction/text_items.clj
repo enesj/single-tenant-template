@@ -102,6 +102,72 @@
         (not (merchant/separator-noise? line))
         (nil? (totals/line->total-candidate line))))))
 
+(defn- line->qty-unit-total
+  [line]
+  (let [tokens (->> (str/split (str/trim (or line "")) #"\s+")
+                 (remove str/blank?)
+                 vec)]
+    (when (seq tokens)
+      (or
+        (some (fn [i]
+                (let [t (get tokens i)
+                      qty (when (and (string? t)
+                                  (re-matches #"(?i)^[0-9][0-9,\\.]*x$" t))
+                            (common/parse-money t))]
+                  (when qty
+                    (let [unit-price (common/parse-money (get tokens (inc i)))
+                          line-total (common/parse-money (get tokens (+ i 2)))]
+                      (when unit-price
+                        {:qty qty
+                         :unit_price unit-price
+                         :line_total (or line-total
+                                       (.setScale
+                                         (.multiply (bigdec qty) (bigdec unit-price))
+                                         2
+                                         RoundingMode/HALF_UP))})))))
+          (range (count tokens)))
+        (some (fn [i]
+                (let [t (get tokens i)
+                      t0 (some-> t str/lower-case)
+                      prev2 (when (>= i 2) (some-> (get tokens (- i 2)) str/lower-case))]
+                  (when (and (= "x" t0) (pos? i) (not= "x" prev2))
+                    (let [qty (common/parse-money (get tokens (dec i)))
+                          unit-price (common/parse-money (get tokens (inc i)))
+                          line-total-token (get tokens (+ i 2))
+                          line-total (common/parse-money line-total-token)]
+                      (when (and qty unit-price (or (nil? line-total-token) line-total))
+                        {:qty qty
+                         :unit_price unit-price
+                         :line_total (or line-total
+                                       (.setScale
+                                         (.multiply (bigdec qty) (bigdec unit-price))
+                                         2
+                                         RoundingMode/HALF_UP))})))))
+          (range (count tokens)))))))
+
+(defn- line->qty-only
+  [line]
+  (let [line (some-> line text/safe-trim)]
+    (or
+      (when-let [[_ qty] (and line (re-matches #"(?i)^([0-9][0-9,\\.]*)x$" line))]
+        (common/parse-money qty))
+      (when-let [[_ qty] (and line (re-matches #"(?i)^([0-9][0-9,\\.]*)\s+x$" line))]
+        (common/parse-money qty)))))
+
+(defn- line->unit-and-total
+  [line]
+  (let [line (some-> line text/safe-trim)
+        amounts (when line
+                  (->> (re-seq #"-?\d{1,9}[\.,]\d{2}" line)
+                    (keep common/parse-money)
+                    vec))]
+    (when (and line
+            (seq amounts)
+            (not (re-find #"[%:]" line)))
+      {:unit_price (first amounts)
+       :line_total (or (second amounts)
+                     (first amounts))})))
+
 (defn parse-text-items
   [text-content]
   (when (string? text-content)
@@ -141,6 +207,7 @@
                 (assoc inline-item :raw_label (str pending " " raw-label)))))]
       (loop [remaining lines
              pending-label nil
+             pending-qty nil
              items []]
         (if-not (seq remaining)
           items
@@ -149,18 +216,58 @@
                 inline-item (when inline-item0
                               (combine-labels pending-label inline-item0))
                 amount-only (line->money-only line)
+                qty-line (line->qty-unit-total line)
+                qty-only (line->qty-only line)
+                unit-and-total (line->unit-and-total line)
                 pending-label (some-> pending-label table-items/normalize-item-label text/safe-trim)]
             (cond
               inline-item
-              (recur (rest remaining) nil (conj items inline-item))
+              (recur (rest remaining) nil nil (conj items inline-item))
+
+              (and pending-qty pending-label unit-and-total
+                (re-find #"\p{L}" pending-label)
+                (not (qty-price-fragment-label? pending-label))
+                (not (table-items/summary-label? (text/normalize-text pending-label))))
+              (recur (rest remaining)
+                nil
+                nil
+                (conj items {:raw_label pending-label
+                             :qty pending-qty
+                             :unit_price (:unit_price unit-and-total)
+                             :line_total (or (:line_total unit-and-total)
+                                           (.setScale
+                                             (.multiply (bigdec pending-qty) (bigdec (:unit_price unit-and-total)))
+                                             2
+                                             RoundingMode/HALF_UP))}))
+
+              (and qty-line pending-label
+                (re-find #"\p{L}" pending-label)
+                (not (qty-price-fragment-label? pending-label))
+                (not (table-items/summary-label? (text/normalize-text pending-label))))
+              (recur (rest remaining)
+                nil
+                nil
+                (conj items {:raw_label pending-label
+                             :qty (:qty qty-line)
+                             :unit_price (:unit_price qty-line)
+                             :line_total (:line_total qty-line)}))
+
+              (and qty-only pending-label
+                (re-find #"\p{L}" pending-label)
+                (not (qty-price-fragment-label? pending-label))
+                (not (table-items/summary-label? (text/normalize-text pending-label))))
+              (recur (rest remaining) pending-label qty-only items)
 
               (and amount-only pending-label
                 (re-find #"\p{L}" pending-label)
                 (not (table-items/summary-label? (text/normalize-text pending-label))))
               (let [line-total (bigdec amount-only)
-                    qty 1M
-                    unit-price line-total]
+                    qty (or pending-qty 1M)
+                    unit-price (if pending-qty
+                                 (.divide line-total (bigdec pending-qty) 4 RoundingMode/HALF_UP)
+                                 line-total)]
                 (recur (rest remaining)
+                  nil
                   nil
                   (conj items {:raw_label pending-label
                                :qty qty
@@ -174,7 +281,8 @@
                   (if (and label (re-find #"\p{L}" label) (not (table-items/summary-label? label-norm)))
                     label
                     pending-label)
+                  nil
                   items))
 
               :else
-              (recur (rest remaining) pending-label items))))))))
+              (recur (rest remaining) pending-label nil items))))))))

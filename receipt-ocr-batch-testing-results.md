@@ -2,7 +2,7 @@
 
 ## 2026-03-27 — Dunhill structured qty/unit fix
 
-### Scope
+### 2026-03-28 sweep scope
 
 - Profile: `dev`
 - OCR workflow: `llamaparse`
@@ -13,7 +13,7 @@
 - Focus receipt: `5b6bae69-dbc1-4e3a-b801-c11289c4f360` (`IMG_3985.jpeg`)
 - Goal: validate the structured-table qty/unit parsing + overlay fix against the real receipt batch containing the Dunhill example
 
-### Focused backend validation
+### 2026-03-28 validation evidence
 
 Artifact:
 
@@ -340,3 +340,132 @@ Interpretation:
 - The extraction fix appears localized and safe across the checked real-data sample.
 - It improved the `IMG_4043.jpeg` sibling case without pushing nearby or unrelated receipts into refinement or review.
 - The Dunhill fix and the new split-line-text fix coexist cleanly in the same regression set.
+
+## 2026-03-28 — Full LlamaParse corpus regression sweep
+
+### Sweep scope
+
+- Profile: `dev`
+- OCR workflow: `llamaparse`
+- Batch size: `20`
+- Requested coverage: all receipts currently in statuses `posted` + `extracted` in the dev database
+- Planner result: `157` receipts across `8` batches, spanning two tenants
+- Tenant split at plan time:
+  - `enes-jakic`: `149` receipts
+  - `jakic-enes-test`: `8` receipts
+- New execution rule used during this sweep: after each workflow modification, rerun all previously completed batches before moving to the next unseen batch
+
+### Validation evidence
+
+Artifact:
+
+- `tmp/receipt-ocr-extract-focused-tests.txt`
+
+Final focused result after the last parser change:
+
+- `40 tests, 189 assertions, 0 failures`
+
+### Batch plan artifacts
+
+- `tmp/receipt-ocr-batches.edn`
+- `tmp/receipt-ocr-batches.txt`
+
+Planner summary:
+
+- statuses included: `posted`, `extracted`
+- total receipts planned: `157` (database-wide, not scoped to `/t/enes-jakic/receipts`)
+- total batches: `8`
+
+### Parser improvements made during the sweep
+
+Only `batch-1` exposed real parsing regressions. Two targeted fixes were added to the structured-text fallback in `llamaparse/receipt_extraction/text_items.clj`:
+
+1. support for `pending label` + `qty/unit/total on next line`
+2. support for `pending label` + `qty-only line` + `unit/total on following line`
+
+These fixes were validated by focused tests and then by rerunning all previously completed batches before continuing.
+
+Receipts directly fixed by those changes:
+
+- `IMG_3620.jpg` → now extracts `MLIJEKO MEGGLE 3,2% 657` as `3 × 2.25 = 6.75`
+- `IMG_3812.jpg` → now extracts two sugar lines totaling `6.25`
+- `IMG_3814.jpg` → now extracts both the urine cup line (`2 × 0.55 = 1.10`) and the thermometer line (`7.15`)
+
+### Batch-by-batch results
+
+| Batch | Planned receipts | Result | Notes |
+| --- | ---: | --- | --- |
+| `batch-1` | 20 | completed after 2 reruns | initial run surfaced 3 structured-text parsing gaps; final rerun finished `20/20 extracted` |
+| `batch-2` | 20 | clean | `{:ok 20}`, no workflow changes needed |
+| `batch-3` | 20 | clean | `{:ok 20}`, no workflow changes needed |
+| `batch-4` | 20 | clean | `{:ok 20}`, no workflow changes needed |
+| `batch-5` | 20 | clean | `{:ok 20}`, no workflow changes needed |
+| `batch-6` | 20 | clean | `{:ok 20}`, no workflow changes needed |
+| `batch-7` | 20 | parser-clean with blockers | `12` receipts reran successfully; `8` linked-expense receipts were blocked by reset safety rules |
+| `batch-8` | 17 | clean | `{:ok 17}`, no workflow changes needed |
+
+### Batch artifacts
+
+- `tmp/receipt-ocr-batch-1-*.txt`
+- `tmp/receipt-ocr-batch-1-rerun-*.txt`
+- `tmp/receipt-ocr-batch-1-rerun2-*.txt`
+- `tmp/receipt-ocr-batch-2-*.txt`
+- `tmp/receipt-ocr-batch-3-*.txt`
+- `tmp/receipt-ocr-batch-4-*.txt`
+- `tmp/receipt-ocr-batch-5-*.txt`
+- `tmp/receipt-ocr-batch-6-*.txt`
+- `tmp/receipt-ocr-batch-7-*.txt`
+- `tmp/receipt-ocr-batch-7-linked-no-reset-*.txt`
+- `tmp/receipt-ocr-batch-8-*.txt`
+
+### Linked-expense blockers in batch 7
+
+These `8` receipts are already linked to expenses, so `reset-for-ocr!` refuses to clear them by design. A retry with `--no-reset` also skipped them because the runner only processes receipts already in OCR-active statuses when reset is disabled.
+
+All `8` blocked receipts belong to tenant `jakic-enes-test`, not tenant `enes-jakic`.
+
+Blocked receipt ids:
+
+- `12687b13-e28d-448e-8e92-3d005523c519`
+- `800c2768-13c4-4522-aac7-954cf7d7111d`
+- `d1a28a7f-4adf-4096-a195-63ca652d42e7`
+- `395d230e-954a-43de-916a-36138b5e4311`
+- `c1bb90fd-e22d-4431-a9ec-d0bac754e3a9`
+- `7c4fc534-65f2-4dba-ba19-e1033c241025`
+- `42bdc705-57e2-40f5-b012-e726f28f1dd8`
+- `c650b75a-bf12-4341-b761-98f16e546f61`
+
+Interpretation:
+
+- this is a **workflow safety constraint**, not a parsing regression
+- the corpus sweep successfully exercised every safely reparsable receipt in the target set
+- finishing the remaining `8` would require either unlinking their expenses first or intentionally changing the protected reparse workflow for linked receipts
+
+### Final sweep summary
+
+- target receipts in sweep plan: `157`
+- successfully reparsed in this run: `149`
+- blocked by linked-expense safety rules: `8`
+- new parser workflow changes required during the sweep: `2`
+- batches that needed parser changes: `1`
+- batches clean after parser stabilization: `2` through `8` (with only the batch-7 linked-expense blocker subset)
+
+Final database status snapshot after the sweep:
+
+- `extracted`: `151`
+- `posted`: `6`
+- `review_required`: `2`
+
+Tenant-specific clarification for the user receipts page:
+
+- `/t/enes-jakic/receipts` correctly shows `149` receipts because tenant `enes-jakic` has `149` receipts total, all `extracted`
+- the remaining receipts from the database-wide sweep belong to tenant `jakic-enes-test`
+- the `8` blocked linked-expense receipts are all in `jakic-enes-test`
+- the `2` `review_required` receipts are also in `jakic-enes-test`
+
+Interpretation:
+
+- The parsing workflow fine-tuning converged after the `batch-1` fixes.
+- No later batch surfaced a new parsing pattern that required additional code changes.
+- The final parser handles the structured text variants that were breaking real receipts early in the sweep.
+- The only incomplete portion of the corpus run is the explicitly documented set of linked-expense receipts that the current safety rails prevent from being reparsed in place.

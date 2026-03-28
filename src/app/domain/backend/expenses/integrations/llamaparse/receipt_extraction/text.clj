@@ -124,11 +124,11 @@
       (str/join "\n\n")
       not-empty)))
 
-(defn response->structured-text
-  [resp-json]
+(defn- response->structured-block-text
+  [resp-json allowed-types]
   (->> (response->all-items resp-json)
     (filter (fn [{:keys [type]}]
-              (contains? #{"text" "code"} (some-> type str/lower-case))))
+              (contains? allowed-types (some-> type str/lower-case))))
     (keep (fn [item]
             (sanitize-header-item-text
               (or (safe-trim (:value item))
@@ -137,6 +137,14 @@
     distinct
     (str/join "\n\n")
     not-empty))
+
+(defn response->structured-text
+  [resp-json]
+  (response->structured-block-text resp-json #{"text"}))
+
+(defn response->structured-code-text
+  [resp-json]
+  (response->structured-block-text resp-json #{"code"}))
 
 (defn response->combined-text
   [resp-json]

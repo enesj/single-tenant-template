@@ -189,6 +189,8 @@
   [resp-json]
   (let [header (response->header-text resp-json)
         structured-text (text/response->structured-text resp-json)
+        structured-code-text (text/response->structured-code-text resp-json)
+        structured-markdown-items (some-> structured-code-text markdown-items/candidates not-empty)
         text-content (http/response->text resp-json)
         combined (response->combined-text resp-json)
         date-line (text/text->date-line combined)
@@ -197,7 +199,8 @@
         table-items (table-items/response->table-items resp-json)
         {:keys [items total-lines]} (table-items/parse-table-items table-items)
         items (if (empty? items)
-                (or (text-items/parse-text-items structured-text)
+                (or structured-markdown-items
+                  (text-items/parse-text-items structured-text)
                   (text-items/parse-text-items text-content)
                   (text-items/parse-text-items combined)
                   [])
