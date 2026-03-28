@@ -120,14 +120,16 @@
                                            (:label item)
                                            (:name item))
                                qty (safe-parse-number (:qty item))
+                     unit (some-> (:unit item) str str/trim not-empty)
                                unit-price (safe-parse-number (:unit-price item))
                                line-total (safe-parse-number (:line-total item))]
-                           {:id (str id)
-                            :raw_label (or (some-> raw-label str) "")
-                            :qty (if (number? qty) (str qty) "")
-                            :unit_price (if (number? unit-price) (format-decimal unit-price) "")
-                            :line_total (if (number? line-total) (format-decimal line-total) "")
-                            :line_total_auto? true}))
+                   (cond-> {:id (str id)
+                      :raw_label (or (some-> raw-label str) "")
+                      :qty (if (number? qty) (str qty) "")
+                      :unit_price (if (number? unit-price) (format-decimal unit-price) "")
+                      :line_total (if (number? line-total) (format-decimal line-total) "")
+                      :line_total_auto? true}
+                   unit (assoc :unit unit))))
 
         filename (or (:original-filename receipt)
                    (:storage-key receipt)
@@ -156,10 +158,11 @@
   Keeps items that have a non-blank label and a parseable line_total.
   Coerces numeric fields where possible."
   [items]
-  (keep (fn [{:keys [id raw_label qty unit_price line_total]}]
+  (keep (fn [{:keys [id raw_label qty unit unit_price line_total]}]
           (let [parsed-total (safe-parse-number line_total)
                 qty-num (safe-parse-number qty)
                 unit-num (safe-parse-number unit_price)
+                unit* (some-> unit str str/trim not-empty)
                 raw-label* (some-> raw_label str)
                 id* (some-> id str)]
             (when (and (not (str/blank? raw-label*)) (number? parsed-total))
@@ -167,6 +170,7 @@
                        :line_total parsed-total}
                 (and id* (not (str/blank? id*))) (assoc :id id*)
                 (number? qty-num) (assoc :qty qty-num)
+                unit* (assoc :unit unit*)
                 (number? unit-num) (assoc :unit_price unit-num)))))
     (or items [])))
 
@@ -181,29 +185,31 @@
                          (random-uuid))
                     raw-label (or (:raw-label item) "")
                     qty (:qty item)
+            unit (some-> (:unit item) str str/trim not-empty)
                     unit-price (:unit-price item)
                     line-total (:line-total item)
                     auto? (if (contains? item :line-total-auto?)
                             (not (false? (:line-total-auto? item)))
                             true)]
-                {:id (str id)
-                 :raw_label (if (some? raw-label) (str raw-label) "")
-                 :qty (cond
-                        (string? qty) qty
-                        (number? qty) (str qty)
-                        (nil? qty) ""
-                        :else (str qty))
-                 :unit_price (cond
-                               (string? unit-price) unit-price
-                               (number? unit-price) (format-decimal unit-price)
-                               (nil? unit-price) ""
-                               :else (str unit-price))
-                 :line_total (cond
-                               (string? line-total) line-total
-                               (number? line-total) (format-decimal line-total)
-                               (nil? line-total) ""
-                               :else (str line-total))
-                 :line_total_auto? auto?}))]
+        (cond-> {:id (str id)
+            :raw_label (if (some? raw-label) (str raw-label) "")
+            :qty (cond
+              (string? qty) qty
+              (number? qty) (str qty)
+              (nil? qty) ""
+              :else (str qty))
+            :unit_price (cond
+                (string? unit-price) unit-price
+                (number? unit-price) (format-decimal unit-price)
+                (nil? unit-price) ""
+                :else (str unit-price))
+            :line_total (cond
+                (string? line-total) line-total
+                (number? line-total) (format-decimal line-total)
+                (nil? line-total) ""
+                :else (str line-total))
+            :line_total_auto? auto?}
+          unit (assoc :unit unit))))]
       (let [supplier-id (or (:supplier-id expense) (:expenses/supplier-id expense))
             payer-id (or (:payer-id expense) (:expenses/payer-id expense))
             expense-category-id (or (:expense-category-id expense) (:expenses/expense-category-id expense))

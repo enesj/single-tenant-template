@@ -15,9 +15,9 @@
     [next.jdbc.result-set :as rs]
     [taoensso.timbre :as log]))
 
-(defn- extract-ocr-item-prices
+(defn- extract-ocr-items
   "Parse OCR extraction items from a receipt's raw_extract_json.
-   Returns a vector of unit prices (BigDecimal or nil) indexed by position."
+   Returns the extraction items vector or nil."
   [receipt]
   (try
     (when-let [raw (:raw_extract_json receipt)]
@@ -29,14 +29,45 @@
                      :else nil)
             items (get-in parsed [:extraction :items])]
         (when (seq items)
-          (mapv (fn [item]
-                  (some-> (or (:unit_price item) (:unit-price item))
-                    bigdec))
-            items))))
+          (vec items))))
     (catch Exception e
-      (log/warn e "Failed to parse OCR item prices from receipt"
+      (log/warn e "Failed to parse OCR items from receipt"
         {:receipt-id (:id receipt)})
       nil)))
+
+(defn- extract-ocr-item-prices
+  "Return a vector of OCR unit prices (BigDecimal or nil) indexed by position."
+  [ocr-items]
+  (when (seq ocr-items)
+    (mapv (fn [item]
+            (some-> (or (:unit_price item) (:unit-price item))
+              bigdec))
+      ocr-items)))
+
+(defn- preserve-ocr-item-unit
+  "Fill missing approved/reviewed item units from OCR extraction items by position.
+
+  This keeps existing UI behavior intact while preventing hidden OCR metadata
+  like `:unit` from being dropped when the review form does not expose it."
+  [items ocr-items]
+  (if (seq ocr-items)
+    (vec
+      (map-indexed
+        (fn [idx item]
+          (let [item-unit (some-> (or (:unit item) (:item_unit item) (:item-unit item))
+                            str
+                            str/trim
+                            not-empty)
+                ocr-unit (some-> (or (:unit (get ocr-items idx))
+                                (:item_unit (get ocr-items idx))
+                                (:item-unit (get ocr-items idx)))
+                           str
+                           str/trim
+                           not-empty)]
+            (cond-> item
+              (and (nil? item-unit) ocr-unit) (assoc :unit ocr-unit))))
+        items))
+    (vec items)))
 
 (defn- mark-price-modified
   "Compare approved items against OCR-extracted prices by position.
@@ -135,14 +166,15 @@
         (when-not (some? total*)
           (throw (ex-info "total_amount is required" {:status 400 :field :total_amount})))
 
-        (let [new-status (if (= "review_required" (:status receipt))
+        (let [items* (preserve-ocr-item-unit items (extract-ocr-items receipt))
+              new-status (if (= "review_required" (:status receipt))
                            "extracted"
                            (:status receipt))]
           (jdbc/execute-one!
             tx
             (sql/format
               {:update :receipts
-               :set {:raw_extract_json (storage/jsonb-value (reviewed-raw-extract-json receipt items total*))
+               :set {:raw_extract_json (storage/jsonb-value (reviewed-raw-extract-json receipt items* total*))
                      :supplier_guess supplier-guess
                      :supplier_alias_id supplier-alias-id
                      :currency_guess (when currency* [:cast currency* :currency])
@@ -173,10 +205,13 @@
                  {:status 409 :id receipt-id :current-status (:status receipt)})))
 
       (let [context    (queries/get-receipt-refine-context tx receipt-id)
-            store-id   (:store_id context)
-            tenant-id  (:tenant_id receipt)
-            ocr-prices (extract-ocr-item-prices receipt)
-            items      (mark-price-modified (:items review-data) ocr-prices)
+        store-id   (:store_id context)
+        tenant-id  (:tenant_id receipt)
+        ocr-items  (extract-ocr-items receipt)
+        ocr-prices (extract-ocr-item-prices ocr-items)
+        items      (-> (:items review-data)
+             (preserve-ocr-item-unit ocr-items)
+             (mark-price-modified ocr-prices))
             base       (cond-> {:receipt_id receipt-id
                                 :created_by (:user_id receipt)
                                 :currency   (or (:currency review-data) (:currency_guess receipt) "BAM")}
@@ -214,10 +249,13 @@
                  {:status 409 :id receipt-id :current-status (:status receipt)})))
 
       (let [context      (queries/get-receipt-refine-context tx receipt-id)
-            store-id     (:store_id context)
-            receipt-tid  (:tenant_id receipt)
-            ocr-prices   (extract-ocr-item-prices receipt)
-            items        (mark-price-modified (:items review-data) ocr-prices)
+        store-id     (:store_id context)
+        receipt-tid  (:tenant_id receipt)
+        ocr-items    (extract-ocr-items receipt)
+        ocr-prices   (extract-ocr-item-prices ocr-items)
+        items        (-> (:items review-data)
+               (preserve-ocr-item-unit ocr-items)
+               (mark-price-modified ocr-prices))
             base         (cond-> {:receipt_id receipt-id
                                   :user_id    user-id
                                   :created_by user-id
@@ -258,10 +296,13 @@
                  {:status 409 :id receipt-id :current-status (:status receipt)})))
 
       (let [context      (queries/get-receipt-refine-context tx receipt-id)
-            store-id     (:store_id context)
-            receipt-tid  (:tenant_id receipt)
-            ocr-prices   (extract-ocr-item-prices receipt)
-            items        (mark-price-modified (:items review-data) ocr-prices)
+        store-id     (:store_id context)
+        receipt-tid  (:tenant_id receipt)
+        ocr-items    (extract-ocr-items receipt)
+        ocr-prices   (extract-ocr-item-prices ocr-items)
+        items        (-> (:items review-data)
+               (preserve-ocr-item-unit ocr-items)
+               (mark-price-modified ocr-prices))
             base         (cond-> {:receipt_id receipt-id
                                   :user_id    user-id
                                   :created_by user-id

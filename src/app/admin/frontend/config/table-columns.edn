@@ -1,11 +1,12 @@
 {:expense-items
  {:available-columns
-  ["expense_purchased_at" "article_canonical_name" "raw_label" "alias_id" "qty" "unit_price" "line_total" "article_id" "created_at" "expense_id" "id" "tenant_id" "updated_at"],
+  ["expense_purchased_at" "article_canonical_name" "raw_label" "alias_id" "qty" "unit" "unit_price" "line_total" "article_id" "created_at" "expense_id" "id" "tenant_id" "updated_at"],
   :default-visible-columns
   ["expense_purchased_at"
    "article_canonical_name"
    "raw_label"
    "qty"
+   "unit"
    "unit_price"
    "line_total"
    "created_at"],
@@ -15,6 +16,7 @@
    "raw_label"
    "alias_id"
    "qty"
+   "unit"
    "unit_price"
    "line_total"
    "created_at"
@@ -24,6 +26,7 @@
    "article_canonical_name"
    "raw_label"
    "qty"
+   "unit"
    "unit_price"
    "line_total"
    "created_at"],
@@ -297,12 +300,13 @@
    :user-agent {:width "260px"}}},
  :article-aliases
  {:available-columns
-  ["supplier_display_name" "article_canonical_name" "raw_label" "raw_label_normalized" "confidence" "created_at" "supplier_id" "article_id" "id" "updated_at"],
+  ["supplier_display_name" "article_canonical_name" "raw_label" "raw_label_normalized" "unit" "confidence" "created_at" "supplier_id" "article_id" "id" "updated_at"],
   :default-visible-columns
   ["supplier_display_name"
    "article_canonical_name"
    "raw_label"
    "raw_label_normalized"
+   "unit"
    "confidence"
    "created_at"],
   :filterable-columns
@@ -310,6 +314,7 @@
    "article_canonical_name"
    "raw_label"
    "raw_label_normalized"
+   "unit"
    "confidence"
    "created_at"],
   :sortable-columns
@@ -317,6 +322,7 @@
    "article_canonical_name"
    "raw_label"
    "raw_label_normalized"
+   "unit"
    "confidence"
    "created_at"],
   :always-visible ["raw_label"],
@@ -326,10 +332,29 @@
    :article_canonical_name {:width "260px"},
    :raw_label {:width "260px"},
    :raw_label_normalized {:width "220px"},
+   :unit {:width "90px"},
    :confidence {:width "110px"},
    :created_at {:width "160px", :formatter "date"},
    :supplier_id {:type "text"},
    :article_id {:type "text"}}},
+ :unmapped-aliases
+ {:available-columns
+  ["supplier_display_name" "raw_label" "raw_label_normalized" "unit" "occurrence_count" "supplier_id" "id"],
+  :default-visible-columns
+  ["supplier_display_name" "raw_label" "unit" "occurrence_count"],
+  :filterable-columns
+  ["supplier_display_name" "raw_label" "raw_label_normalized" "unit" "occurrence_count"],
+  :sortable-columns
+  ["supplier_display_name" "raw_label" "raw_label_normalized" "unit" "occurrence_count"],
+  :always-visible ["raw_label"],
+  :computed-fields {:supplier_display_name {}},
+  :column-config
+  {:supplier_display_name {:width "220px"}
+   :raw_label {:width "260px"}
+   :raw_label_normalized {:width "220px"}
+   :unit {:width "90px"}
+   :occurrence_count {:width "110px"}
+   :supplier_id {:type "text"}}},
  :stores
  {:available-columns
   ["supplier_display_name"

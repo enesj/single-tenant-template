@@ -1,0 +1,11 @@
+({:action :add-column,
+  :field-name :unit,
+  :model-name :article_aliases,
+  :options {:null false, :default "kom", :type [:varchar 10]}}
+ {:action :alter-index,
+  :index-name :idx-article-aliases-supplier-label,
+  :model-name :article_aliases,
+  :options
+  {:fields [:supplier_id :raw_label_normalized :unit],
+   :unique true,
+   :type :btree}})

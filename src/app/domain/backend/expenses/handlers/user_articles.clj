@@ -193,10 +193,12 @@
           (let [tenant-id (h/get-tenant-id request)
                 qp (:query-params request)
                 supplier-id (h/try-parse-uuid (h/get-param qp :supplier_id))
+                unit (some-> (h/get-param qp :unit) str str/trim not-empty)
                 limit (h/parse-page-limit qp 50)
                 offset (h/parse-page-offset qp)
                 opts (cond-> {:limit limit :offset offset}
                        supplier-id (assoc :supplier-id supplier-id)
+                       unit (assoc :unit unit)
                        tenant-id (assoc :tenant-id tenant-id))
                 rows (h/to-app (aliases/list-unmapped-aliases db opts))
                 total (long (or (aliases/count-unmapped-aliases db opts) 0))]
@@ -248,6 +250,7 @@
                              (:raw_labels body)
                              (:raw-labels-text body)
                              (:raw_labels_text body))
+                unit (or (:unit body) (:item-unit body) (:item_unit body))
                 allow-reassign? (boolean (or (:allow-reassign? body) (:allow_reassign? body)))]
             (when-not article-id
               (throw (ex-info "Invalid article id" {:status 400})))
@@ -259,6 +262,7 @@
                            {:supplier-id supplier-id
                             :article-id article-id
                             :raw-labels raw-labels
+                            :unit unit
                             :allow-reassign? allow-reassign?})]
               (h/json-response {:data (h/to-app result)})))
           (catch clojure.lang.ExceptionInfo e

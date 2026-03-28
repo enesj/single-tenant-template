@@ -94,6 +94,7 @@
                   :raw_label [:raw-label]
                   :raw_label_normalized [:raw-label-normalized]
                   :qty [:qty]
+                  :unit [:unit]
                   :unit_price [:unit-price]
                   :line_total [:line-total]
                   :expense_purchased_at [:expense-purchased-at]
@@ -256,6 +257,7 @@
                   :article_canonical_name [:article-canonical-name]
                   :raw_label [:raw-label]
                   :raw_label_normalized [:raw-label-normalized]
+                  :unit [:unit]
                   :created_at [:created-at]
                   ;; FK id aliases used by list-view generated specs / table-columns.edn
                   :supplier_id [:supplier-id]
@@ -317,6 +319,7 @@
      :alias-keys {:supplier_display_name [:supplier-display-name]
                   :raw_label [:raw-label]
                   :raw_label_normalized [:raw-label-normalized]
+                  :unit [:unit]
                   :occurrence_count [:occurrence-count]
                   ;; FK id aliases
                   :supplier_id [:supplier-id]}}))

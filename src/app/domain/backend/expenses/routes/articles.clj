@@ -41,6 +41,8 @@
                                                   (get qp "raw_label_normalized")
                                                   (:raw-label-normalized qp)
                                                   (:raw_label_normalized qp))
+                           unit (or (get qp "unit")
+                                  (:unit qp))
                            limit (utils/parse-int-param qp :limit 50)
                            offset (utils/parse-int-param qp :offset 0)
                            occurrence-count-min (utils/parse-int-param qp :occurrence-count-min nil)
@@ -52,6 +54,7 @@
                                   (seq supplier-name) (assoc :supplier-name supplier-name)
                                   (seq raw-label) (assoc :raw-label raw-label)
                                   (seq raw-label-normalized) (assoc :raw-label-normalized raw-label-normalized)
+                                  (seq unit) (assoc :unit unit)
                                   (some? occurrence-count-min) (assoc :occurrence-count-min occurrence-count-min)
                                   (some? occurrence-count-max) (assoc :occurrence-count-max occurrence-count-max))
                            rows (aliases/list-unmapped-aliases db opts)
@@ -87,6 +90,7 @@
                             body (factory/read-json-body req)
                             supplier-id (utils/parse-uuid-custom (or (:supplier-id body) (:supplier_id body)))
                             raw-labels (or (:raw-labels body) (:raw_labels body) (:raw-labels-text body) (:raw_labels_text body))
+                            unit (or (:unit body) (:item-unit body) (:item_unit body))
                             allow-reassign? (boolean (or (:allow-reassign? body) (:allow_reassign? body)))]
                         (when-not article-id
                           (throw (ex-info "Invalid article id" {:status 400})))
@@ -97,6 +101,7 @@
                                        {:supplier-id supplier-id
                                         :article-id article-id
                                         :raw-labels raw-labels
+                                        :unit unit
                                         :allow-reassign? allow-reassign?})]
                           (utils/success-response {:result (factory/to-app result)}))))
                     "Failed to batch-create article aliases")

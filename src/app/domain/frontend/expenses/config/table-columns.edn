@@ -1,11 +1,12 @@
 {:expense-items
  {:available-columns
-  ["expense_purchased_at" "article_canonical_name" "raw_label" "qty" "unit_price" "line_total" "created_at" "id" "tenant_id" "expense_id" "alias_id" "article_id" "updated_at"],
+  ["expense_purchased_at" "article_canonical_name" "raw_label" "qty" "unit" "unit_price" "line_total" "created_at" "id" "tenant_id" "expense_id" "alias_id" "article_id" "updated_at"],
   :default-visible-columns
   ["expense_purchased_at"
    "article_canonical_name"
    "raw_label"
    "qty"
+   "unit"
    "unit_price"
    "line_total"
    "created_at"],
@@ -14,6 +15,7 @@
    "article_canonical_name"
    "raw_label"
    "qty"
+   "unit"
    "unit_price"
    "line_total"
    "created_at"],
@@ -22,6 +24,7 @@
    "article_canonical_name"
    "raw_label"
    "qty"
+   "unit"
    "unit_price"
    "line_total"
    "created_at"],
@@ -36,6 +39,7 @@
    :article_canonical_name {:label-key :common/article},
    :raw_label {:label-key :common/raw-label},
    :qty {:label-key :common/qty},
+   :unit {:label-key :common/unit},
    :unit_price {:label-key :common/unit-price},
    :line_total {:label-key :common/line-total},
    :created_at {:label-key :common/created-at},
@@ -424,14 +428,15 @@
    :id {:label-key :common/id}}},
  :article-aliases
  {:available-columns
-  ["supplier_display_name" "article_canonical_name" "raw_label" "raw_label_normalized" "confidence" "created_at" "supplier_id" "article_id" "id" "updated_at"],
+  ["supplier_display_name" "article_canonical_name" "raw_label" "raw_label_normalized" "unit" "confidence" "created_at" "supplier_id" "article_id" "id" "updated_at"],
   :default-visible-columns
-  ["supplier_display_name" "raw_label" "article_canonical_name"],
+  ["supplier_display_name" "raw_label" "unit" "article_canonical_name"],
   :filterable-columns
   ["supplier_display_name"
    "article_canonical_name"
    "raw_label"
    "raw_label_normalized"
+   "unit"
    "confidence"
    "created_at"],
   :sortable-columns
@@ -439,6 +444,7 @@
    "article_canonical_name"
    "raw_label"
    "raw_label_normalized"
+   "unit"
    "confidence"
    "created_at"],
   :always-visible ["raw_label"],
@@ -448,6 +454,7 @@
   :column-metadata
   {:raw_label {:label-key :common/raw-label},
    :raw_label_normalized {:label-key :common/normalized},
+   :unit {:label-key :common/unit},
    :supplier_display_name {:label-key :common/supplier},
    :article_id {:label-key :common/article-id},
    :supplier_id {:label-key :common/supplier-id},
@@ -455,6 +462,26 @@
    :article_canonical_name {:label-key :common/article},
    :confidence {:label-key :common/confidence},
    :created_at {:label-key :common/created-at}}},
+ :unmapped-aliases
+ {:available-columns
+  ["supplier_display_name" "raw_label" "raw_label_normalized" "unit" "occurrence_count" "supplier_id" "id"],
+  :default-visible-columns
+  ["supplier_display_name" "raw_label" "unit" "occurrence_count"],
+  :filterable-columns
+  ["supplier_display_name" "raw_label" "raw_label_normalized" "unit" "occurrence_count"],
+  :sortable-columns
+  ["supplier_display_name" "raw_label" "raw_label_normalized" "unit" "occurrence_count"],
+  :always-visible ["raw_label"],
+  :computed-fields {:supplier_display_name {}},
+  :column-config {:supplier_id {:type "text"}},
+  :column-metadata
+  {:supplier_display_name {:label-key :common/supplier},
+   :raw_label {:label-key :common/raw-label},
+   :raw_label_normalized {:label-key :common/normalized},
+   :unit {:label-key :common/unit},
+   :occurrence_count {:label-key :common/occurrences},
+   :supplier_id {:label-key :common/supplier-id},
+   :id {:label-key :common/id}}},
  :store-aliases
  {:available-columns
   ["supplier_display_name"

@@ -55,6 +55,39 @@
       (is (= (:id expense) (:expense_id stored)))
       (is (= 1 (count (:items expense)))))))
 
+(deftest receipts-approve-preserves-ocr-item-unit-when-review-payload-omits-it
+  (when-let [db fixtures/*test-db*]
+    (let [{:keys [tenant-id]} (create-test-context! db "approve-preserve-unit")
+          supplier-result (suppliers/find-or-create-supplier! db "Unit Preserve Supplier" {})
+          supplier (:supplier supplier-result)
+          payer (th/create-payer! db {:type "card"
+                                      :label "Visa"
+                                      :tenant_id tenant-id})
+          upload (receipt-storage/upload-receipt! db {:tenant_id tenant-id
+                                                      :storage_key "s3://bucket/r-unit.jpg"
+                                                      :bytes (.getBytes "hello world")})
+          receipt-id (:id (:receipt upload))
+          _stored (receipt-status/store-extraction-results!
+                    db
+                    receipt-id
+                    {:raw_extract_json {:extraction {:items [{:raw_label "JAGODA SVJEZA"
+                                                             :qty 0.750M
+                                                             :unit "kg"
+                                                             :line_total 12.34M}]}}})
+          _ (receipt-status/update-status! db receipt-id "extracted")
+          review {:supplier_id (:id supplier)
+                  :payer_id (:id payer)
+                  :purchased_at (now)
+                  :total_amount (bigdec "12.34")
+                  :currency "BAM"
+                  :items [{:raw_label "JAGODA SVJEZA"
+                           :qty 0.750M
+                           :line_total (bigdec "12.34")}]}
+          expense (receipt-approval/approve-and-post! db receipt-id review)
+          stored (receipt-queries/get-receipt db receipt-id)]
+      (is (= "posted" (:status stored)))
+      (is (= "kg" (-> expense :items first :unit))))))
+
 (deftest receipts-delete-expense-reverts-receipt
   (when-let [db fixtures/*test-db*]
     (let [{:keys [tenant-id]} (create-test-context! db "delete-reverts")

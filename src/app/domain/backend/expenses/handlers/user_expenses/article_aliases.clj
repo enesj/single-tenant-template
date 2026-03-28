@@ -19,7 +19,7 @@
         (try
           (let [alias-id (h/try-parse-uuid (get-in request [:path-params :id]))
                 body (h/read-body-params request)
-                payload (select-keys body [:raw_label :raw_label_normalized :supplier_id :article_id])
+                payload (select-keys body [:raw_label :raw_label_normalized :unit :supplier_id :article_id])
                 update! (:update! article-aliases/service)]
             (cond
               (nil? alias-id)

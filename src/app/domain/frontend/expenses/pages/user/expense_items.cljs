@@ -56,6 +56,11 @@
     :label "Qty"
     :required false
     :step 0.001}
+   {:id :unit
+    :type :select
+    :label "Unit"
+    :required false
+    :options ["kom" "kg" "g" "l" "pak"]}
    {:id :unit_price
     :type :number
     :label "Unit price"
@@ -76,7 +81,7 @@
         ;; Build initial values from data.
         initial-values (initial-values-for
                          (-> (normalization/convert-db-keys->app-keys (or initial-data {}))
-                           (select-keys [:raw-label :article-id :qty :unit-price :line-total
+                           (select-keys [:raw-label :article-id :qty :unit :unit-price :line-total
                                          :id :expense-id :alias-id])))]
     ($ :div {:class "space-y-4"}
       (when form-error

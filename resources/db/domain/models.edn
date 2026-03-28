@@ -367,11 +367,12 @@
                             [:supplier_id :uuid {:foreign-key :suppliers/id :on-delete :cascade}]
                             [:raw_label :text]
                             [:raw_label_normalized [:varchar 255] {:null false}]
+                            [:unit [:varchar 10] {:null false :default "kom"}]
                             [:article_id :uuid {:foreign-key :articles/id :on-delete :set-null}]
                             [:confidence :integer {:default 100}]
                             [:created_at :timestamptz {:default [:now]}]
                             [:updated_at :timestamptz {:default [:now]}]]
-                   :indexes [[:idx_article_aliases_supplier_label :btree {:fields [:supplier_id :raw_label_normalized] :unique true}]
+                   :indexes [[:idx_article_aliases_supplier_label :btree {:fields [:supplier_id :raw_label_normalized :unit] :unique true}]
                              [:idx_article_aliases_article :btree {:fields [:article_id]}]]}
 
  ;; ============================================================================

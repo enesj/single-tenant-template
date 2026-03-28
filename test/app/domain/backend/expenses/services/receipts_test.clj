@@ -120,3 +120,34 @@
           (catch clojure.lang.ExceptionInfo e
             (is (= 400 (:status (ex-data e))))
             (is (= :currency (:field (ex-data e))))))))))
+
+(deftest save-review-preserves-ocr-item-unit-when-review-payload-omits-it
+  (testing "saving a reviewed receipt keeps OCR-derived unit metadata by item position"
+    (let [db fixtures/*test-db*
+          user (th/ensure-test-user! db)
+          {:keys [tenant-id]} (th/ensure-test-tenant! db user)
+          create-supplier! (:create! suppliers/service)
+          supplier (create-supplier! db {:display_name (str "Unit Preserve Supplier " (UUID/randomUUID))})
+          receipt-id (UUID/randomUUID)
+          _receipt (insert-receipt! db {:id receipt-id
+                                        :status "review_required"
+                                        :total-amount-guess "5.25"
+                                        :tenant-id tenant-id})
+          _stored (receipt-status/store-extraction-results!
+                    db
+                    receipt-id
+                    {:raw_extract_json {:extraction {:items [{:raw_label "JAGODA SVJEZA"
+                                                             :qty 0.750M
+                                                             :unit "kg"
+                                                             :line_total 5.25M}]}}})
+          updated (receipt-approval/save-review!
+                    db
+                    receipt-id
+                    {:supplier_id (:id supplier)
+                     :purchased_at "2026-01-07T12:34"
+                     :total_amount "5.25"
+                     :currency "BAM"
+                     :items [{:raw_label "JAGODA SVJEZA"
+                              :qty 0.750M
+                              :line_total 5.25M}]})]
+      (is (= "kg" (get-in (parse-jsonish (:raw_extract_json updated)) [:extraction :items 0 :unit]))))))

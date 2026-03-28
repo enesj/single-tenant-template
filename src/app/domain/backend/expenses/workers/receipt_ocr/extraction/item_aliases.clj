@@ -17,14 +17,15 @@
   (let [auto-create-articles? (true? (:auto-create-articles? opts))]
     (when (and (map? extraction) (sequential? (:items extraction)))
       (mapv
-        (fn [{:keys [raw_label] :as _item}]
+        (fn [{:keys [raw_label unit] :as _item}]
           (let [raw-label* (some-> raw_label str str/trim)]
             (if-not (valid-alias-label? raw-label*)
               {:raw_label raw-label*
+               :unit unit
                :article_alias_id nil
                :article_id nil}
               (try
-                (let [alias-row (aliases/find-or-create-alias! db supplier-id raw-label*)
+                (let [alias-row (aliases/find-or-create-alias! db supplier-id raw-label* unit)
                       alias-id (:id alias-row)
                       existing-article-id (:article_id alias-row)
                       article-id
@@ -40,14 +41,17 @@
 
                         :else nil)]
                   {:raw_label raw-label*
+                   :unit unit
                    :article_alias_id alias-id
                    :article_id article-id})
                 (catch Exception e
                   (log/warn e "Failed to auto-create article alias/article from receipt extraction item"
                     {:supplier-id supplier-id
                      :raw_label raw-label*
+                     :unit unit
                      :auto-create-articles? auto-create-articles?})
                   {:raw_label raw-label*
+                   :unit unit
                    :article_alias_id nil
                    :article_id nil})))))
         (:items extraction)))))

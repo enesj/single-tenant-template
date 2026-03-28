@@ -30,6 +30,7 @@
    :article-canonical-name :a.canonical_name
    :expense-purchased-at :e.purchased_at
    :qty :ei.qty
+   :unit :ei.unit
    :unit-price :ei.unit_price
    :line-total :ei.line_total})
 
@@ -61,6 +62,10 @@
                {:status 400
                 :field field
                 :value v})))))
+
+(defn- parse-unit
+  [v]
+  (some-> v blank->nil str str/trim str/lower-case not-empty))
 
 (defn- clamp-limit
   [n]
@@ -257,20 +262,23 @@
                     raw-label (some-> (h/get-param body :raw_label) str str/trim)
                     raw-label* (when-not (str/blank? raw-label) raw-label)
                     expense-row (jdbc/execute-one! db
-                                  (sql/format {:select [:e.supplier_id]
+                                  (sql/format {:select [:e.supplier_id :ei.unit]
                                                :from [[:expense_items :ei]]
                                                :join [[:expenses :e] [:= :e.id :ei.expense_id]]
                                                :where (cond-> [:and [:= :ei.id item-id]]
                                                         tenant-id (conj [:= :e.tenant_id tenant-id]))})
                                   {:builder-fn rs/as-unqualified-lower-maps})
                     supplier-id (:supplier_id expense-row)
+                    unit (or (parse-unit (h/get-param body :unit))
+                           (:unit expense-row))
                     alias-id (when raw-label*
-                               (:id (aliases/find-or-create-alias! db supplier-id raw-label*)))
+                               (:id (aliases/find-or-create-alias! db supplier-id raw-label* unit)))
                     updates {:alias_id (or alias-id
                                          (throw (ex-info "raw_label is required"
                                                   {:status 400
                                                    :field :raw_label})))
                              :qty (parse-decimal! :qty (h/get-param body :qty))
+                             :unit unit
                              :unit_price (parse-decimal! :unit_price (h/get-param body :unit_price))
                              :line_total (or (parse-decimal! :line_total (h/get-param body :line_total))
                                            (throw (ex-info "line_total is required"

@@ -236,7 +236,8 @@
         (let [handler (user-articles/list-unmapped-aliases-handler db)
               resp (handler (assoc (req "owner" {:limit "2"
                                                  :offset "3"
-                                                 :supplier_id (str supplier-id)})
+                                                 :supplier_id (str supplier-id)
+                                                 :unit "kg"})
                               :session {:auth-session {:tenant {:id tenant-id}}}))]
           (is (= 200 (:status resp)))
           (is (= 4 (get-in resp [:body :total])))
@@ -245,6 +246,7 @@
           (is (= {:limit 2
                   :offset 3
                   :supplier-id supplier-id
+                  :unit "kg"
                   :tenant-id tenant-id}
                 @unmapped-opts))
           (is (= @unmapped-opts @unmapped-count-opts)))))))

@@ -100,7 +100,12 @@
     :type :text
     :label "Normalized label"
     :required true
-    :placeholder "e.g. coffee-beans-1kg"}])
+    :placeholder "e.g. coffee-beans-1kg"}
+   {:id :unit
+    :type :select
+    :label "Unit"
+    :required true
+    :options ["kom" "kg" "g" "l" "pak"]}])
 
 (defui user-article-alias-edit-form-modal
   [{:keys [item on-success on-cancel]}]
@@ -113,6 +118,7 @@
         initial-values (-> {}
                          (assoc :raw_label (or (:raw-label item) ""))
                          (assoc :raw_label_normalized (or (:raw-label-normalized item) ""))
+                         (assoc :unit (or (:unit item) "kom"))
                          (assoc :article_id (or (:article-id item) ""))
                          (assoc :created_at (or (:created-at item) ""))
                          (assoc :supplier_display_name (or (:supplier-display-name item) ""))

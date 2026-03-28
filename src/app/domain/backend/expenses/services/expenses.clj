@@ -162,6 +162,7 @@
                 (update-if-present :id #(parse-uuid! :id %))
                 (update-if-present :alias_id #(parse-uuid! :alias_id %))
                 (update-if-present :raw_label #(some-> % str str/trim))
+                (update-if-present :unit #(some-> % str str/trim str/lower-case blank->nil))
                 (update-if-present :qty #(parse-bigdec! :qty %))
                 (update-if-present :unit_price #(parse-bigdec! :unit_price %))
                 (update-if-present :line_total #(parse-bigdec! :line_total %)))
@@ -201,7 +202,7 @@
   Returns the alias row or nil when both are missing/invalid."
   ([tx supplier-id item]
    (resolve-alias! tx supplier-id item {}))
-  ([tx supplier-id {:keys [raw_label alias_id]} {:keys [allow-auto-link?] :or {allow-auto-link? true}}]
+  ([tx supplier-id {:keys [raw_label alias_id unit]} {:keys [allow-auto-link?] :or {allow-auto-link? true}}]
    (cond
      alias_id
      (when-let [alias (jdbc/execute-one!
@@ -215,7 +216,7 @@
 
      (and allow-auto-link?
        (valid-alias-label? raw_label))
-     (let [alias (aliases/find-or-create-alias! tx supplier-id (str/trim (str raw_label)))]
+     (let [alias (aliases/find-or-create-alias! tx supplier-id (str/trim (str raw_label)) unit)]
        alias)
 
      :else nil)))

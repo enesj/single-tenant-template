@@ -41,6 +41,7 @@
   {:supplier-display-name :s/display_name
    :raw-label :aa/raw_label
    :raw-label-normalized :aa/raw_label_normalized
+   :unit :aa/unit
    :occurrence-count occurrence-count-expr})
 
 (defn- append-and-clause
@@ -57,8 +58,13 @@
     (update query :having append-and-clause clause)
     query))
 
+(defn normalize-unit
+  "Normalize an article/expense unit to the canonical lowercase form used in alias keys."
+  [unit]
+  (some-> unit str str/trim str/lower-case not-empty))
+
 (defn- apply-unmapped-alias-filters
-  [query {:keys [supplier-name raw-label raw-label-normalized]}]
+  [query {:keys [supplier-name raw-label raw-label-normalized unit]}]
   (cond-> query
     (seq supplier-name)
     (update :where shared-qb/merge-where-and
@@ -70,11 +76,15 @@
 
     (seq raw-label-normalized)
     (update :where shared-qb/merge-where-and
-      [:ilike :aa.raw_label_normalized (str "%" raw-label-normalized "%")])))
+      [:ilike :aa.raw_label_normalized (str "%" raw-label-normalized "%")])
+
+    (seq unit)
+    (update :where shared-qb/merge-where-and
+      [:= :aa.unit unit])))
 
 (defn- build-unmapped-aliases-query
   [{:keys [supplier-id supplier_id tenant-id tenant_id supplier-name raw-label raw-label-normalized
-           occurrence-count-min occurrence-count-max]
+           unit occurrence-count-min occurrence-count-max]
     :as _opts}]
   (let [supplier-uuid (try-uuid (or supplier-id supplier_id))
         tenant-uuid (try-uuid (or tenant-id tenant_id))
@@ -92,11 +102,12 @@
                            [:= :ei.alias_id :aa.id])]
              :where [:and
                      [:is :aa.article_id nil]]
-             :group-by [:aa.id :s.display_name]}
+             :group-by [:aa.id :aa.unit :s.display_name]}
       supplier-uuid (update :where conj [:= :aa.supplier_id supplier-uuid])
       true (apply-unmapped-alias-filters {:supplier-name supplier-name
                                           :raw-label raw-label
-                                          :raw-label-normalized raw-label-normalized})
+                                          :raw-label-normalized raw-label-normalized
+                                          :unit (normalize-unit unit)})
       having-clause (add-having-clause having-clause))))
 
 ;; ============================================================================
@@ -147,7 +158,7 @@
 ;; ============================================================================
 
 (defn find-or-create-alias!
-  "Find or create an article_alias by (supplier_id, raw_label).
+  "Find or create an article_alias by (supplier_id, raw_label, unit).
 
    Returns the alias row (with :id, :article_id, etc.).
 
@@ -155,28 +166,34 @@
    - db: database connection
    - supplier-id: UUID or nil (uses Unknown Supplier if nil)
    - raw-label: the raw label text (required)
+   - unit: canonical item unit; defaults to `kom` when blank/nil.
 
    The normalized key is computed from raw-label using articles/normalize-alias-label."
-  [db supplier-id raw-label]
-  (when (str/blank? raw-label)
-    (throw (ex-info "raw_label is required" {:status 400 :field :raw_label})))
-  (let [raw-label* (str/trim raw-label)
-        normalized (articles/normalize-alias-label raw-label*)
-        effective-supplier-id (or supplier-id (get-unknown-supplier-id db))
-        row {:id (UUID/randomUUID)
-             :supplier_id effective-supplier-id
-             :raw_label raw-label*
-             :raw_label_normalized normalized
-             :article_id nil}
-        sql-map {:insert-into :article_aliases
-                 :values [row]
-                 :on-conflict [:supplier_id :raw_label_normalized]
-                 :do-update-set {:raw_label :excluded/raw_label}
-                 :returning [:*]}]
-    (jdbc/execute-one!
-      db
-      (sql/format sql-map)
-      {:builder-fn rs/as-unqualified-lower-maps})))
+  ([db supplier-id raw-label]
+   (find-or-create-alias! db supplier-id raw-label nil))
+  ([db supplier-id raw-label unit]
+   (when (str/blank? raw-label)
+     (throw (ex-info "raw_label is required" {:status 400 :field :raw_label})))
+   (let [raw-label* (str/trim raw-label)
+         normalized (articles/normalize-alias-label raw-label*)
+         normalized-unit (or (normalize-unit unit) "kom")
+         effective-supplier-id (or supplier-id (get-unknown-supplier-id db))
+         row {:id (UUID/randomUUID)
+              :supplier_id effective-supplier-id
+              :raw_label raw-label*
+              :raw_label_normalized normalized
+              :unit normalized-unit
+              :article_id nil}
+         sql-map {:insert-into :article_aliases
+                  :values [row]
+                  :on-conflict [:supplier_id :raw_label_normalized :unit]
+                  :do-update-set {:raw_label :excluded/raw_label
+                                  :unit :excluded/unit}
+                  :returning [:*]}]
+     (jdbc/execute-one!
+       db
+       (sql/format sql-map)
+       {:builder-fn rs/as-unqualified-lower-maps}))))
 
 (defn list-article-aliases
   "List article aliases with optional filters.
@@ -258,6 +275,7 @@
                 (assoc :select [[:aa.id]
                                 [:aa.raw_label]
                                 [:aa.raw_label_normalized]
+                                [:aa.unit :unit]
                                 [:aa.supplier_id]
                                 [:s.display_name :supplier_display_name]
                                 [occurrence-count-expr :occurrence_count]])

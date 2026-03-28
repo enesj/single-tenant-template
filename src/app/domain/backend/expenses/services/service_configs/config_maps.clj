@@ -10,28 +10,35 @@
   (:import
     [java.util UUID]))
 
+(defn- normalize-unit-value
+  [value]
+  (some-> value str str/trim str/lower-case not-empty))
+
 (def article-alias-config
   {:table-name "article_aliases"
    :table-alias :aa
    :primary-key :aa/id
-   :required-fields [:supplier_id :raw_label :raw_label_normalized]
+   :required-fields [:supplier_id :raw_label :raw_label_normalized :unit]
    :allowed-order-by {:created-at :aa/created_at
                       :raw-label :aa/raw_label
                       :raw-label-normalized :aa/raw_label_normalized
+                      :unit :aa/unit
                       :supplier-display-name :s/display_name
                       :article-canonical-name :a/canonical_name}
    :default-order-by :aa/created_at
-   :search-fields [:aa/raw_label :aa/raw_label_normalized :s/display_name :a/canonical_name]
+   :search-fields [:aa/raw_label :aa/raw_label_normalized :aa/unit :s/display_name :a/canonical_name]
    :text-filter-columns {:supplier-display-name :s.display_name
                          :article-canonical-name :a.canonical_name
                          :raw-label :aa.raw_label
-                         :raw-label-normalized :aa.raw_label_normalized}
+                         :raw-label-normalized :aa.raw_label_normalized
+                         :unit :aa.unit}
    :joins [[:suppliers :s] [:= :s/id :aa/supplier_id]
            [:articles :a] [:= :a/id :aa/article_id]]
    :select-fields [[:aa.*]
                    [:s/display_name :supplier_display_name]
                    [:a/canonical_name :article_canonical_name]]
-   :field-transformers {:raw_label_normalized articles/normalize-alias-label}
+   :field-transformers {:raw_label_normalized articles/normalize-alias-label
+                        :unit normalize-unit-value}
    :has-search? true
    :has-count? true})
 
@@ -473,6 +480,7 @@
                       :alias-id :ei/alias_id
                       :created-at :ei/created_at
                       :qty :ei/qty
+                      :unit :ei/unit
                       :unit-price :ei/unit_price
                       :line-total :ei/line_total
                       :expense-purchased-at :e/purchased_at
@@ -487,19 +495,23 @@
                    [:aa/raw_label_normalized :raw_label_normalized]
                    [:e/purchased_at :expense_purchased_at]
                    [:a/canonical_name :article_canonical_name]]
+   :field-transformers {:unit normalize-unit-value}
    :before-insert (fn [db data]
                     (let [alias-svc (requiring-resolve 'app.domain.backend.expenses.services.article-aliases/find-or-create-alias!)
                           raw-label (some-> (:raw_label data) str str/trim)
-                          supplier-id (:supplier_id data)]
+                          supplier-id (:supplier_id data)
+                          unit (normalize-unit-value (:unit data))]
                       (cond
                         (some? (:alias_id data))
-                        (dissoc data :raw_label :supplier_id)
+                        (cond-> (dissoc data :raw_label :supplier_id)
+                          unit (assoc :unit unit))
 
                         (some? raw-label)
-                        (let [alias (alias-svc db supplier-id raw-label)]
-                          (-> data
-                            (dissoc :raw_label :supplier_id)
-                            (assoc :alias_id (:id alias))))
+                        (let [alias (alias-svc db supplier-id raw-label unit)]
+                          (cond-> (-> data
+                                    (dissoc :raw_label :supplier_id)
+                                    (assoc :alias_id (:id alias)))
+                            unit (assoc :unit unit)))
 
                         :else
                         (throw (ex-info "raw_label or alias_id is required"
@@ -508,16 +520,19 @@
    :before-update (fn [db _id updates]
                     (let [alias-svc (requiring-resolve 'app.domain.backend.expenses.services.article-aliases/find-or-create-alias!)
                           raw-label (some-> (:raw_label updates) str str/trim)
-                          supplier-id (:supplier_id updates)]
+                          supplier-id (:supplier_id updates)
+                          unit (normalize-unit-value (:unit updates))]
                       (cond
                         (some? raw-label)
-                        (let [alias (alias-svc db supplier-id raw-label)]
-                          (-> updates
-                            (dissoc :raw_label :supplier_id)
-                            (assoc :alias_id (:id alias))))
+                        (let [alias (alias-svc db supplier-id raw-label unit)]
+                          (cond-> (-> updates
+                                    (dissoc :raw_label :supplier_id)
+                                    (assoc :alias_id (:id alias)))
+                            unit (assoc :unit unit)))
 
                         :else
-                        (dissoc updates :raw_label :supplier_id))))
+                        (cond-> (dissoc updates :raw_label :supplier_id)
+                          unit (assoc :unit unit)))))
    :has-search? true
    :has-count? true})
 

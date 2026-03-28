@@ -1,11 +1,12 @@
 {:expense-items
- {:edit-fields ["article_id" "qty" "unit_price" "line_total"],
+ {:edit-fields ["article_id" "qty" "unit" "unit_price" "line_total"],
   :field-config
   {:article_id
    {:type "select",
     :label "Article",
     :options ["articles" "canonical_name"]},
    :qty {:type "number", :step 0.001},
+   :unit {:type "select", :label "Unit", :options ["kom" "kg" "g" "l" "pak"]},
    :unit_price {:type "number", :step 0.01},
    :line_total {:type "number", :step 0.01}},
   :removed-fields {:edit-fields ["raw_label"]}},
@@ -97,12 +98,13 @@
    :address {:type "textarea", :label "Address"}}},
  :article-aliases
  {:edit-fields
-  ["raw_label" "raw_label_normalized" "supplier_id" "article_id"],
+  ["raw_label" "raw_label_normalized" "unit" "supplier_id" "article_id"],
   :field-config
   {:supplier_id
    {:type "select",
     :label "Supplier",
     :options ["suppliers" "display_name"]},
+   :unit {:type "select", :label "Unit", :options ["kom" "kg" "g" "l" "pak"]},
    :article_id
    {:type "select",
     :label "Article",

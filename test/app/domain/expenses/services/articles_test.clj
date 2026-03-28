@@ -107,6 +107,36 @@
       (is (= 1 (count (:reassigned reassigned))))
       (is (empty? (:conflicts reassigned))))))
 
+(deftest articles-batch-create-aliases-distinguishes-units
+  (when-let [db fixtures/*test-db*]
+    (let [supplier (:supplier (suppliers/find-or-create-supplier! db (str "AliasUnit Supplier " (UUID/randomUUID)) {}))
+          article-kom (articles/create-article! db {:canonical_name (str "AliasUnit KOM " (UUID/randomUUID))})
+          article-kg (articles/create-article! db {:canonical_name (str "AliasUnit KG " (UUID/randomUUID))})
+          kom-result (articles/batch-create-aliases!
+                       db
+                       {:supplier-id (:id supplier)
+                        :article-id (:id article-kom)
+                        :raw-labels ["MILK"]})
+          kg-result (articles/batch-create-aliases!
+                      db
+                      {:supplier-id (:id supplier)
+                       :article-id (:id article-kg)
+                       :raw-labels ["MILK"]
+                       :unit "kg"})
+          kom-created (first (:created kom-result))
+          kg-created (first (:created kg-result))
+          kom-lookup (articles/find-article-by-alias db (:id supplier) "MILK")
+          kg-lookup (articles/find-article-by-alias db (:id supplier) "MILK" "kg")]
+      (is (= 1 (count (:created kom-result))))
+      (is (= 1 (count (:created kg-result))))
+      (is (= "kom" (:unit kom-created)))
+      (is (= "kg" (:unit kg-created)))
+      (is (not= (:id kom-created) (:id kg-created)))
+      (is (= (:id article-kom) (:id kom-lookup)))
+      (is (= "kom" (:unit kom-lookup)))
+      (is (= (:id article-kg) (:id kg-lookup)))
+      (is (= "kg" (:unit kg-lookup))))))
+
 (deftest articles-map-alias-to-article-makes-lookup-work
   (when-let [db fixtures/*test-db*]
     (let [supplier (:supplier (suppliers/find-or-create-supplier! db (str "MapItem Supplier " (UUID/randomUUID)) {}))
@@ -301,6 +331,45 @@
                                                    :raw-label-normalized "omega"})))
       (is (= 1 (aliases/count-unmapped-aliases db {:raw-label token
                                                    :occurrence-count-min 2}))))))
+
+(deftest articles-list-unmapped-aliases-supports-unit-filter
+  (when-let [db fixtures/*test-db*]
+    (let [supplier (:supplier (suppliers/find-or-create-supplier! db (str "Unit Filter Supplier " (UUID/randomUUID)) {}))
+          payer (th/create-payer! db {:type "cash" :label "Cash"})
+          _kom-expense (expenses/create-expense!
+                         db
+                         {:supplier_id (:id supplier)
+                          :payer_id (:id payer)
+                          :purchased_at (now)
+                          :total_amount (bigdec "1.00")
+                          :currency "BAM"}
+                         [{:raw_label "MILK"
+                           :unit "kom"
+                           :line_total (bigdec "1.00")}])
+          _kg-expense (expenses/create-expense!
+                        db
+                        {:supplier_id (:id supplier)
+                         :payer_id (:id payer)
+                         :purchased_at (now)
+                         :total_amount (bigdec "2.00")
+                         :currency "BAM"}
+                        [{:raw_label "MILK"
+                          :unit "kg"
+                          :line_total (bigdec "2.00")}])
+          kg-rows (aliases/list-unmapped-aliases db {:supplier-id (:id supplier)
+                                                     :unit "kg"
+                                                     :limit 50
+                                                     :offset 0})
+          kom-rows (aliases/list-unmapped-aliases db {:supplier-id (:id supplier)
+                                                      :unit "kom"
+                                                      :limit 50
+                                                      :offset 0})]
+      (is (= ["kg"] (mapv :unit kg-rows)))
+      (is (= ["kom"] (mapv :unit kom-rows)))
+      (is (= 1 (aliases/count-unmapped-aliases db {:supplier-id (:id supplier)
+                                                   :unit "kg"})))
+      (is (= 1 (aliases/count-unmapped-aliases db {:supplier-id (:id supplier)
+                                                   :unit "kom"}))))))
 
 (deftest articles-list-related-records-resolves-alias-linked-expense-items
   (when-let [db fixtures/*test-db*]

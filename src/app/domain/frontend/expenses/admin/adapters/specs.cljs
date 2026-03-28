@@ -54,6 +54,7 @@
             {:id :raw-label-normalized :label "Raw label normalized" :type :text}
             {:id :alias-id :label "Alias ID" :type :text}
             {:id :qty :label "Qty" :type :number}
+            {:id :unit :label "Unit" :type :text}
             {:id :unit-price :label "Unit price" :type :number}
             {:id :line-total :label "Line total" :type :number}
             {:id :created-at :label "Created at" :type :datetime}
@@ -132,6 +133,7 @@
             {:id :article-canonical-name :label "Article" :type :text}
             {:id :raw-label :label "Raw label" :type :text}
             {:id :raw-label-normalized :label "Alias" :type :text}
+            {:id :unit :label "Unit" :type :text}
             {:id :created-at :label "Created at" :type :datetime}]})
 
 (def supplier-aliases-entity-spec
@@ -181,6 +183,7 @@
    :fields [{:id :supplier-display-name :label "Supplier" :type :text}
             {:id :raw-label :label "Raw label" :type :text}
             {:id :raw-label-normalized :label "Alias" :type :text}
+            {:id :unit :label "Unit" :type :text}
             {:id :occurrence-count :label "Occurrences" :type :number}]})
 
 ;; Register entity spec subscriptions with fallback values

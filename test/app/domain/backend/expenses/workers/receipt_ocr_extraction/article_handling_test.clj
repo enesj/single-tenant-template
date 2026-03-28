@@ -35,9 +35,16 @@
                                                                       (throw (ex-info "Should not be called" {})))
 
                   ;; Article alias is created but starts unmapped.
-                  article-aliases/find-or-create-alias! (fn [_db _supplier-id _raw-label]
-                                                          {:id article-alias-id
-                                                           :article_id nil})
+                  article-aliases/find-or-create-alias!
+                  (fn
+                    ([_db _supplier-id _raw-label]
+                     {:id article-alias-id
+                      :article_id nil})
+                    ([_db _supplier-id raw-label unit]
+                     (is (= "ITEM" raw-label))
+                     (is (= "kom" unit))
+                     {:id article-alias-id
+                      :article_id nil}))
                   articles/find-or-create-article-by-canonical-name!
                   (fn [_db canonical-name]
                     (swap! calls update :create-article inc)
@@ -94,9 +101,14 @@
                                                                       (throw (ex-info "Should not be called" {})))
 
                   ;; Alias is already mapped -> skip article creation + mapping.
-                  article-aliases/find-or-create-alias! (fn [_db _supplier-id _raw-label]
-                                                          {:id article-alias-id
-                                                           :article_id existing-article-id})
+                  article-aliases/find-or-create-alias!
+                  (fn
+                    ([_db _supplier-id _raw-label]
+                     {:id article-alias-id
+                      :article_id existing-article-id})
+                    ([_db _supplier-id _raw-label _unit]
+                     {:id article-alias-id
+                      :article_id existing-article-id}))
                   articles/find-or-create-article-by-canonical-name!
                   (fn [& _]
                     (throw (ex-info "Should not be called" {})))
@@ -138,12 +150,19 @@
                   suppliers/resolve-or-create-supplier-with-places! (fn [& _]
                                                                       (throw (ex-info "Should not be called" {})))
                   article-aliases/find-or-create-alias!
-                  (fn [_db _supplier-id raw-label]
-                    (swap! calls (fn [m]
-                                   (-> m
-                                     (update :article-aliases inc)
-                                     (update :labels conj raw-label))))
-                    {:id (java.util.UUID/randomUUID)})]
+                  (fn
+                    ([_db _supplier-id raw-label]
+                     (swap! calls (fn [m]
+                                    (-> m
+                                      (update :article-aliases inc)
+                                      (update :labels conj raw-label))))
+                     {:id (java.util.UUID/randomUUID)})
+                    ([_db _supplier-id raw-label _unit]
+                     (swap! calls (fn [m]
+                                    (-> m
+                                      (update :article-aliases inc)
+                                      (update :labels conj raw-label))))
+                     {:id (java.util.UUID/randomUUID)}))]
       (let [extract-result {:parsed-markdown ""
                             :extraction {:merchant {:name "HOŠE-KOMERC"}
                                          :totals {:total 20.00}
@@ -194,12 +213,19 @@
                   suppliers/resolve-or-create-supplier-with-places! (fn [& _]
                                                                       (throw (ex-info "Should not be called" {})))
                   article-aliases/find-or-create-alias!
-                  (fn [_db _supplier-id raw-label]
-                    (swap! calls (fn [m]
-                                   (-> m
-                                     (update :article-aliases inc)
-                                     (update :labels conj raw-label))))
-                    {:id (java.util.UUID/randomUUID)})]
+                  (fn
+                    ([_db _supplier-id raw-label]
+                     (swap! calls (fn [m]
+                                    (-> m
+                                      (update :article-aliases inc)
+                                      (update :labels conj raw-label))))
+                     {:id (java.util.UUID/randomUUID)})
+                    ([_db _supplier-id raw-label _unit]
+                     (swap! calls (fn [m]
+                                    (-> m
+                                      (update :article-aliases inc)
+                                      (update :labels conj raw-label))))
+                     {:id (java.util.UUID/randomUUID)}))]
       (let [extract-result {:parsed-markdown ""
                             :extraction {:merchant {:name "HOŠE-KOMERC"}
                                          :totals {:total 12.50}
