@@ -2,7 +2,25 @@
   (:require
     [app.domain.backend.expenses.workers.receipt-ocr.common :as common]
     [app.domain.backend.expenses.workers.receipt-ocr.extraction.shape :as shape]
-    [app.domain.backend.expenses.workers.receipt-ocr.markdown :as markdown]))
+    [app.domain.backend.expenses.workers.receipt-ocr.markdown :as markdown]
+    [clojure.string :as str]))
+
+(defn- code-only-label?
+  [raw-label]
+  (let [label (some-> raw-label str str/trim not-empty)]
+    (boolean
+      (and label
+        (re-find #"\d" label)
+        (not (re-find #"\s" label))
+        (re-matches #"(?i)[A-Z0-9/_-]+" label)))))
+
+(defn- descriptive-label?
+  [raw-label]
+  (let [label (some-> raw-label str str/trim not-empty)]
+    (boolean
+      (and label
+        (re-find #"\p{L}" label)
+        (not (code-only-label? label))))))
 
 (defn- best-markdown-item-match
   [markdown-items item]
@@ -43,11 +61,14 @@
 
                   :else
                   (if-let [match (best-markdown-item-match markdown-items item)]
-                    (-> acc
-                      (update :items conj (merge item (select-keys match [:raw_label :qty :unit_price :line_total])))
-                      (update :changes conj {:from raw-label
-                                             :to (:raw_label match)
-                                             :match :ocr-markdown}))
+                    (if (and (descriptive-label? raw-label)
+                          (code-only-label? (:raw_label match)))
+                      (update acc :items conj item)
+                      (-> acc
+                        (update :items conj (merge item (select-keys match [:raw_label :qty :unit_price :line_total])))
+                        (update :changes conj {:from raw-label
+                                               :to (:raw_label match)
+                                               :match :ocr-markdown})))
                     (update acc :items conj item)))))
             {:items [] :changes []}
             (:items extraction))

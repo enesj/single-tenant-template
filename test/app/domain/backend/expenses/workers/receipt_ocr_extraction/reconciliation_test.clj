@@ -319,3 +319,29 @@
     (is (false? changed?))
     (is (= [] changes))
     (is (= "NIKE AIR MAX 1" (get-in extraction [:items 0 :raw_label])))))
+
+(deftest reconcile-extraction-keeps-descriptive-labels-over-code-only-markdown-summary
+  (let [reconcile #'extraction/reconcile-extraction-with-markdown
+        markdown (str "BINGO\n"
+                   "| Label | Qty | Unit | Total |\n"
+                   "| --- | --- | --- | --- |\n"
+                   "| E15098 | 1 | 127.00 | 1.60 |\n"
+                   "| D19717 | 1 | 270.00 | 5.00 |\n"
+                   "TOTAL: 35.60\n")
+        extraction-in {:items [{:raw_label "KEKS 127G SOFT LOVITA LJESNJA"
+                                :qty 1
+                                :unit_price 1.60
+                                :line_total 1.60}
+                               {:raw_label "HLJEB 270G ZLATNI KORIJEN"
+                                :qty 2
+                                :unit_price 2.50
+                                :line_total 5.00}]}
+        {:keys [extraction changed? changes]} (reconcile extraction-in markdown)]
+    (is (false? changed?))
+    (is (= [] changes))
+    (is (= "KEKS 127G SOFT LOVITA LJESNJA" (get-in extraction [:items 0 :raw_label])))
+    (is (= 1 (get-in extraction [:items 0 :qty])))
+    (is (= 1.60 (get-in extraction [:items 0 :unit_price])))
+    (is (= "HLJEB 270G ZLATNI KORIJEN" (get-in extraction [:items 1 :raw_label])))
+    (is (= 2 (get-in extraction [:items 1 :qty])))
+    (is (= 2.50 (get-in extraction [:items 1 :unit_price])))))

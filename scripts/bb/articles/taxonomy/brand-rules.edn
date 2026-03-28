@@ -158,10 +158,7 @@
   "Mondelez International"
   "Pakovana hrana i pića"
   nil]
- ["(?i)^\\Qmerci\\E\\b"
-  "Storck"
-  "Pakovana hrana i pića"
-  nil]
+ ["(?i)^\\Qmerci\\E\\b" "Storck" "Pakovana hrana i pića" nil]
  ["(?i)^\\Qvajkrem\\E\\b" "Meggle" "Mliječni proizvodi i jaja" nil]
  ["(?i)^\\Qdomestos\\E\\b" "Unilever" "Sredstva za čišćenje" nil]
  ["(?i)^\\Qcips\\E\\b" "Marbo Product" "Pakovana hrana i pića" nil]
@@ -171,7 +168,7 @@
  ["(?i)^\\Qdatulja\\E\\b" "Bingo" "Pakovana hrana i pića" nil]
  ["(?i)^\\Qfructal\\E\\b" "Rauch" "Pića" nil]
  ["(?i)^\\Qvreće\\E\\b" "Hoex" "Jednokratno posuđe i pakovanje" nil]
-["(?i)^\\Qlokum\\E\\b" "Klas" "Pakovana hrana i pića" nil]
+ ["(?i)^\\Qlokum\\E\\b" "Klas" "Pakovana hrana i pića" nil]
  ["(?i)^\\Qmaramice\\E\\b" "Violeta" "Papirna galanterija" nil]
  ["(?i)^\\Qnapolitanke\\E\\b" "Jadro" "Pekara i deserti" nil]
  ["(?i)^\\Qpantene\\E\\b" "Procter & Gamble" "Lična njega" nil]
@@ -182,4 +179,22 @@
  ["(?i)^\\Qjufka\\E\\b" "Merak" "Pekara i deserti" nil]
  ["(?i)^\\Qhaše\\E\\b" "Podravka" "Pakovana hrana i pića" nil]
  ["(?i)^\\Qbananice\\E\\b" "STARK" "Pekara i deserti" nil]
- ["(?i)^\\Qtrokutici\\E\\b" "Bingo" "Pekara i deserti" nil]]
+ ["(?i)^\\Qtrokutici\\E\\b" "Bingo" "Pekara i deserti" nil]
+ ["(?i)^\\Qmješavina\\E\\b" "Kotanyi" "Pakovana hrana i pića" nil]
+ ["(?i)^\\Qsenf\\E\\b" "Nestlé" "Pakovana hrana i pića" nil]
+ ["(?i)^\\Qbegova\\E\\b" "Vispak" "Pakovana hrana i pića" nil]
+ ["(?i)^\\Qženska\\E\\b" "Vero Moda" "Odjeća i modni dodaci" nil]
+ ["(?i)^\\Qfrosch\\E\\b" "Henkel" "Sredstva za čišćenje" nil]
+ ["(?i)^\\Qsladoled\\E\\b" "STARK" "Pakovana hrana i pića" nil]
+ ["(?i)^\\Qkokošija\\E\\b" "Podravka" "Pakovana hrana i pića" nil]
+ ["(?i)^\\Qmijesani\\E\\b" "Meggle" "Mliječni proizvodi i jaja" nil]
+ ["(?i)^\\Qcokoladna\\E\\b" "STARK" "Pakovana hrana i pića" nil]
+ ["(?i)^\\Qdžemper/pulover\\E\\b" "Amisu" "Odjeća i modni dodaci" nil]
+ ["(?i)^\\Qsuha\\E\\b" "Vocar" "Pakovana hrana i pića" nil]
+ ["(?i)^\\Qžitarice\\E\\b" "Dr Oetker" "Pekara i deserti" nil]
+ ["(?i)^\\Qtradicionalni\\E\\b"
+  "Mundial Gyros"
+  "Pakovana hrana i pića"
+  nil]
+ ["(?i)^\\Qumak\\E\\b" "Tabasco" "Pakovana hrana i pića" nil]
+ ["(?i)^\\Qstapići\\E\\b" "Saltas" "Pakovana hrana i pića" nil]]
