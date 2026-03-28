@@ -238,6 +238,33 @@
           (mapv (comp bigdec :unit_price) items)))
     (is (= 10M (bigdec (get-in extraction [:totals :total]))))))
 
+(deftest receipt-extraction-prefers-structured-text-and-rejects-qty-price-fragment-labels
+  (let [resp {:items {:pages [{:items [{:type "header"
+                                        :md (str "APOTEKE SARAJEVO\n"
+                                              "12.02.2026. 15:05\n")}
+                                       {:type "text"
+                                        :value (str "2,000x 7,56 15,12E\n"
+                                                 "-100,00%: 0,00\n"
+                                                 "GALAS_ČAJ_UROLOŠKI_100_G_210f 7,40E\n"
+                                                 "2PVC_KESA_SREDNJA_6f94 0,10E\n"
+                                                 "TOTAL: 7,50")}]}]}
+              :text {:pages [{:text (str "APOTEKE SARAJEVO\n"
+                                      "12.02.2026. 15:05\n"
+                                      "2,000x         7,56         15,12E\n"
+                                      "-100,00%:      0,00\n"
+                                      "GALAS_CAJ_UROLOSKI_100_G_210f7,40E\n"
+                                      "2PVC_KESA_SREDNJA_6f94       0,10E\n"
+                                      "TOTAL:               7,50\n")}]}}
+        extraction (receipt-extract/response->extraction resp)
+        items (:items extraction)]
+    (is (= 2 (count items)))
+    (is (= ["GALAS ČAJ UROLOŠKI 100 G 210f"
+            "2PVC KESA SREDNJA 6f94"]
+          (mapv :raw_label items)))
+    (is (= [7.40M 0.10M]
+          (mapv (comp bigdec :line_total) items)))
+    (is (= 7.50M (bigdec (get-in extraction [:totals :total]))))))
+
 (deftest receipt-extraction-does-not-treat-product-percent-as-discount
   (let [resp {:items {:pages [{:items [{:type "header"
                                         :md (str "\"KONZUM\" d.o.o. Sarajevo\n"

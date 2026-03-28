@@ -124,6 +124,20 @@
       (str/join "\n\n")
       not-empty)))
 
+(defn response->structured-text
+  [resp-json]
+  (->> (response->all-items resp-json)
+    (filter (fn [{:keys [type]}]
+              (= "text" (some-> type str/lower-case))))
+    (keep (fn [item]
+            (sanitize-header-item-text
+              (or (safe-trim (:value item))
+                (safe-trim (:md item))))))
+    (remove str/blank?)
+    distinct
+    (str/join "\n\n")
+    not-empty))
+
 (defn response->combined-text
   [resp-json]
   (let [header (response->header-text resp-json)

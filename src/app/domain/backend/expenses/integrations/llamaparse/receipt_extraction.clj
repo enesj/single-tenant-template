@@ -187,6 +187,7 @@
   "Build a ReceiptExtraction map from a LlamaParse result response JSON."
   [resp-json]
   (let [header (response->header-text resp-json)
+        structured-text (text/response->structured-text resp-json)
         text-content (http/response->text resp-json)
         combined (response->combined-text resp-json)
         date-line (text/text->date-line combined)
@@ -195,7 +196,8 @@
         table-items (table-items/response->table-items resp-json)
         {:keys [items total-lines]} (table-items/parse-table-items table-items)
         items (if (empty? items)
-                (or (text-items/parse-text-items text-content)
+                (or (text-items/parse-text-items structured-text)
+                  (text-items/parse-text-items text-content)
                   (text-items/parse-text-items combined)
                   [])
                 items)

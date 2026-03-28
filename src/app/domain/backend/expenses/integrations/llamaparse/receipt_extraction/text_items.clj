@@ -41,6 +41,12 @@
           (re-find #"(?iu)^(?:x\d|\d+[x×]|\d+\s*[x×])" label)
           (re-find #"(?iu)\b(?:cm|mm|ml|gr|kg|xl|xxl)\b" norm))))))
 
+(defn- qty-price-fragment-label?
+  [label]
+  (boolean
+    (and (string? label)
+      (re-matches #"(?iu)^\d[\d,\.]*x(?:\s+\d[\d,\.]*)?$" (str/trim label)))))
+
 (defn- line->text-item
   [line]
   (let [line (some-> line text/safe-trim)
@@ -62,7 +68,11 @@
               qty (or (:qty embedded) 1M)
               unit-price (when (and qty price (pos? (.compareTo (bigdec qty) 0M)))
                            (.divide (bigdec price) (bigdec qty) 4 RoundingMode/HALF_UP))]
-          (when (and label price (re-find #"\p{L}" label) (not (table-items/summary-label? (text/normalize-text label))))
+          (when (and label
+                  price
+                  (re-find #"\p{L}" label)
+                  (not (qty-price-fragment-label? label))
+                  (not (table-items/summary-label? (text/normalize-text label))))
             {:raw_label label
              :qty qty
              :unit_price unit-price
