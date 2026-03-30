@@ -215,6 +215,9 @@ This produces:
 - `tmp/needs-research.edn` — aliases that need web research
 - `tmp/research-summary.edn` — stats
 
+`articles-research` preserves alias `:unit` values in both suggested articles and mappings.
+Treat article identity as `normalized_key + unit`; only assume `kom` when the alias truly has no unit.
+
 Read the summary and `tmp/needs-research.edn` to understand what local heuristics missed.
 
 ### Step 1b — Full research (with Perplexity)
@@ -237,13 +240,14 @@ bb articles-research dev --supplier "APOTEKE" --output-prefix apoteke --pretty
 
 > **File overwrite warning:** Each research run overwrites `tmp/articles-suggested.edn`
 > and `tmp/mappings-suggested.edn`. When processing multiple suppliers sequentially,
-> **create articles and map aliases immediately after each supplier batch** before
+> **complete the full research → review → create → map → backfill cycle for each supplier batch** before
 > running the next. The workflow per supplier is:
 > 1. `bb articles-research dev --supplier "X" --pretty`
-> 2. Review + correct `tmp/articles-suggested.edn` (Phase 2 quality review)
+> 2. Review + correct `tmp/articles-suggested.edn` and `tmp/mappings-suggested.edn` (Step 1c quality review)
 > 3. Create articles (Phase 3a)
 > 4. Map aliases (Phase 3b)
-> 5. Then proceed to next supplier
+> 5. Run manufacturer backfill (Step 3d, mandatory)
+> 6. Then proceed to next supplier
 
 ### Step 1c — Quality review (single pass over both files)
 

@@ -47,14 +47,20 @@
 ;; ============================================================
 
 (defn suggestion->article-edn
-  [{:keys [canonical-name manufacturer-name category-name subcategory-name]}]
-  (cond-> {:canonical-name canonical-name
-           :category-name (or category-name "Ostalo")
-           :subcategory-name (or subcategory-name "Opste")}
-    manufacturer-name (assoc :manufacturer-name manufacturer-name)))
+  [{:keys [canonical-name manufacturer-name category-name subcategory-name unit]}]
+  (let [unit* (or (some-> unit str str/trim str/lower-case not-empty) "kom")]
+    (cond-> {:canonical-name canonical-name
+             :unit unit*
+             :category-name (or category-name "Ostalo")
+             :subcategory-name (or subcategory-name "Opste")}
+      manufacturer-name (assoc :manufacturer-name manufacturer-name))))
 
 (defn suggestion->mapping-entries
-  [{:keys [alias-ids canonical-name]}]
-  (let [article-key (db/normalize-key canonical-name)]
-    (mapv (fn [aid] {:alias-id (str aid) :article-key article-key})
+  [{:keys [alias-ids canonical-name unit]}]
+  (let [article-key (db/normalize-key canonical-name)
+        unit* (or (some-> unit str str/trim str/lower-case not-empty) "kom")]
+    (mapv (fn [aid]
+            {:alias-id (str aid)
+             :article-key article-key
+             :unit unit*})
       alias-ids)))

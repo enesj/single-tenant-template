@@ -18,12 +18,14 @@
  "Fanta"       "The Coca-Cola Company"
  "Sprite"      "The Coca-Cola Company"
  "Schweppes"   "The Coca-Cola Company"
+ "Cappy"       "The Coca-Cola Company"
 
  "Sensodyne"   "Haleon"
  "Parodontax"  "Haleon"
 
  "Balea"       "dm"
  "Alverde"     "dm"
+ "dmBio"       "dm"
  "Profissimo"  "dm"
  "Denkmit"     "dm"
  "Mivolis"     "dm"
@@ -35,6 +37,7 @@
  "Knorr"       "Unilever"
 
  "Nescafé"     "Nestlé"
+ "Nescafe"     "Nestlé"
  "Maggi"       "Nestlé"
  "Nesquik"     "Nestlé"
  "KitKat"      "Nestlé"
@@ -98,6 +101,9 @@
  "McCain"      "McCain"
 
  "Aspirin"     "Bayer"
+ "Vizol"       "Jadran Galenski Laboratorij"
+ "Neofen"      "Belupo"
+ "Dexomen"     "Berlin-Chemie AG"
 
  ;; Batch 2025-07 additions
  "Happy Day"   "Rauch"
@@ -116,5 +122,7 @@
  "ABC"         "Belje"
  "Padjeni"     "Mljekara Pađeni"
  "Pađeni"      "Mljekara Pađeni"
+ "Plazma"      "Bambi"
+ "Zlatna Dze"  "Vispak"
  "Babybel"     "Bel"
  "Strange Love" "Strange Love"}

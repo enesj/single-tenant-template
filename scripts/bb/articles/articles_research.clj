@@ -35,15 +35,28 @@
 ;; Cross-supplier deduplication
 ;; ============================================================
 
+(def ^:private default-unit "kom")
+
+(defn- normalize-unit
+  [unit]
+  (or (some-> unit str str/trim str/lower-case not-empty)
+    default-unit))
+
+(defn- article-key+unit
+  [label unit]
+  [(db/normalize-key label) (normalize-unit unit)])
+
 (defn- group-aliases
-  "Group unmapped aliases by raw_label_normalized to deduplicate across suppliers.
+  "Group unmapped aliases by raw_label_normalized + unit so weighted and piece-count variants stay separate.
   Returns a vec of maps sorted by alias count descending."
   [aliases]
   (->> aliases
-    (group-by :raw_label_normalized)
-    (map (fn [[norm-label items]]
+    (group-by (fn [{:keys [raw_label_normalized unit]}]
+                [raw_label_normalized (normalize-unit unit)]))
+    (map (fn [[[norm-label unit] items]]
            {:raw-label-normalized norm-label
             :raw-label (:raw_label (first items))
+            :unit unit
             :suppliers (vec (distinct (keep :supplier items)))
             :alias-ids (mapv :id items)}))
     (sort-by (comp - count :alias-ids))
@@ -112,7 +125,7 @@
 
 (defn- fetch-unmapped-aliases [db]
   (db/query db
-    (str "SELECT aa.id, aa.raw_label, aa.raw_label_normalized,\n"
+    (str "SELECT aa.id, aa.raw_label, aa.raw_label_normalized, aa.unit,\n"
       "       aa.supplier_id, s.display_name AS supplier\n"
       "FROM article_aliases aa\n"
       "LEFT JOIN suppliers s ON aa.supplier_id = s.id\n"
@@ -123,9 +136,11 @@
   (->> (db/query db "SELECT name FROM categories ORDER BY name")
     (mapv :name)))
 
-(defn- fetch-existing-article-keys [db]
-  (->> (db/query db "SELECT normalized_key FROM articles")
-    (map :normalized_key)
+(defn- fetch-existing-article-keys
+  [db]
+  (->> (db/query db "SELECT normalized_key, unit FROM articles")
+    (map (fn [{:keys [normalized_key unit]}]
+           [normalized_key (normalize-unit unit)]))
     set))
 
 (defn- fetch-subcategory-map
@@ -195,8 +210,8 @@
         _ (log "  " (count noise-groups) "noise candidates")
 
         ;; 4. Match against existing articles
-        already-matched (filterv (fn [{:keys [raw-label]}]
-                                   (contains? existing-keys (db/normalize-key raw-label)))
+        already-matched (filterv (fn [{:keys [raw-label unit]}]
+                                   (contains? existing-keys (article-key+unit raw-label unit)))
                           clean-groups)
         remaining (vec (remove (set already-matched) clean-groups))
         _ (when (seq already-matched)
@@ -269,10 +284,10 @@
         _ (when (seq unknown-subcats)
             (log "  " (count unknown-subcats) "new subcategories will be created"))
 
-        ;; 9. Build output — deduplicate articles by normalized key
+        ;; 9. Build output — deduplicate articles by normalized key + unit
         seen-keys (atom #{})
         articles-edn (reduce (fn [acc s]
-                               (let [k (db/normalize-key (:canonical-name s))]
+                               (let [k (article-key+unit (:canonical-name s) (:unit s))]
                                  (if (contains? @seen-keys k)
                                    acc
                                    (do (swap! seen-keys conj k)
@@ -283,9 +298,13 @@
         ;; 10. Build mappings (for all successful + existing matches)
         mappings-from-new (->> successful (mapcat output/suggestion->mapping-entries) vec)
         mappings-from-existing (->> already-matched
-                                 (mapcat (fn [{:keys [alias-ids raw-label]}]
-                                           (let [k (db/normalize-key raw-label)]
-                                             (mapv (fn [aid] {:alias-id (str aid) :article-key k})
+                                 (mapcat (fn [{:keys [alias-ids raw-label unit]}]
+                                           (let [k (db/normalize-key raw-label)
+                                                 unit* (normalize-unit unit)]
+                                             (mapv (fn [aid]
+                                                     {:alias-id (str aid)
+                                                      :article-key k
+                                                      :unit unit*})
                                                alias-ids))))
                                  vec)
         all-mappings (vec (concat mappings-from-new mappings-from-existing))
@@ -332,10 +351,10 @@
                                 (when (and merge? (.exists file))
                                   (try (edn/read-string (slurp file))
                                     (catch Exception _ nil)))))
-          ;; Merge articles: keep existing entries, append only new keys
+          ;; Merge articles: keep existing entries, append only new key+unit pairs
           existing-articles (or (read-existing-edn (f "articles-suggested.edn")) [])
-          existing-article-keys (set (map #(db/normalize-key (:canonical-name %)) existing-articles))
-          new-articles (filterv #(not (contains? existing-article-keys (db/normalize-key (:canonical-name %)))) articles-edn)
+          existing-article-keys (set (map #(article-key+unit (:canonical-name %) (:unit %)) existing-articles))
+          new-articles (filterv #(not (contains? existing-article-keys (article-key+unit (:canonical-name %) (:unit %)))) articles-edn)
           final-articles (vec (concat existing-articles new-articles))
           ;; Merge mappings: keep existing entries, append only new alias-ids
           existing-mappings (or (read-existing-edn (f "mappings-suggested.edn")) [])

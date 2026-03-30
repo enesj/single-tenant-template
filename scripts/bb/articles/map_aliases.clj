@@ -6,6 +6,13 @@
     [clojure.edn :as edn]
     [clojure.string :as str]))
 
+(def ^:private default-unit "kom")
+
+(defn- normalize-unit
+  [unit]
+  (or (some-> unit str str/trim str/lower-case not-empty)
+    default-unit))
+
 (defn- usage
   ([] (usage nil))
   ([msg]
@@ -92,6 +99,9 @@
         (= a "--canonical-name")
         (recur more (assoc parsed :canonical-name b))
 
+        (= a "--unit")
+        (recur more (assoc parsed :unit b))
+
         :else
         (do
           (usage (str "Unknown arg: " a))
@@ -161,6 +171,7 @@
    :article-id (:article-id opts)
    :article-key (:article-key opts)
    :canonical-name (:canonical-name opts)
+   :unit (:unit opts)
    :allow-reassign? (:allow-reassign? opts)})
 
 (defn- normalize-mapping
@@ -173,12 +184,14 @@
                           (boolean (:allow-reassign? base))
                           default-allow-reassign?)
         supplier-display-name (or (:supplier-display-name base)
-                                (:supplier base))]
-    (-> base
-      (assoc :alias-ids alias-ids
-        :supplier-display-name supplier-display-name
-        :allow-reassign? allow-reassign?)
-      (dissoc :alias-id :supplier))))
+                                (:supplier base))
+        unit (some-> (:unit base) normalize-unit)]
+    (cond-> (-> base
+              (assoc :alias-ids alias-ids
+                :supplier-display-name supplier-display-name
+                :allow-reassign? allow-reassign?)
+              (dissoc :alias-id :supplier))
+      unit (assoc :unit unit))))
 
 (defn- resolve-supplier-id!
   [db supplier-display-name]
@@ -193,32 +206,44 @@
          "LIMIT 1")))))
 
 (defn- resolve-article-id!
-  [db {:keys [article-id article-key canonical-name]}]
-  (cond
-    article-id article-id
+  [db {:keys [article-id article-key canonical-name unit]}]
+  (let [unit* (some-> unit normalize-unit)
+        resolve-single
+        (fn [selector-type selector-value where-clause]
+          (let [rows (db/query
+                       db
+                       (str
+                         "SELECT id, unit\n"
+                         "FROM articles\n"
+                         "WHERE " where-clause "\n"
+                         (when unit*
+                           (str "  AND unit = " (db/sql-literal unit*) "\n"))
+                         "ORDER BY created_at ASC"))]
+            (cond
+              (empty? rows) nil
+              (= 1 (count rows)) (:id (first rows))
+              unit* (throw (ex-info "Multiple articles found for selector + unit"
+                             {:selector-type selector-type
+                              :selector-value selector-value
+                              :unit unit*
+                              :rows rows}))
+              :else (throw (ex-info "Multiple articles found; provide --unit or :unit to disambiguate"
+                             {:selector-type selector-type
+                              :selector-value selector-value
+                              :candidate-units (mapv :unit rows)})))))]
+    (cond
+      article-id article-id
 
-    article-key
-    (:id
-     (db/query1
-       db
-       (str
-         "SELECT id\n"
-         "FROM articles\n"
-         "WHERE normalized_key = " (db/sql-literal article-key) "\n"
-         "LIMIT 1")))
+      article-key
+      (resolve-single :article-key article-key
+        (str "normalized_key = " (db/sql-literal article-key)))
 
-    canonical-name
-    (:id
-     (db/query1
-       db
-       (str
-         "SELECT id\n"
-         "FROM articles\n"
-         "WHERE canonical_name = " (db/sql-literal canonical-name) "\n"
-         "LIMIT 1")))
+      canonical-name
+      (resolve-single :canonical-name canonical-name
+        (str "canonical_name = " (db/sql-literal canonical-name)))
 
-    :else
-    nil))
+      :else
+      nil)))
 
 (defn- update-by-alias-ids!
   [db alias-ids article-id allow-reassign?]
@@ -257,7 +282,7 @@
     (if canonical-name 1 0)))
 
 (defn- mapping-summary
-  [{:keys [alias-ids raw-label supplier-display-name article-id article-key canonical-name allow-reassign?]}]
+  [{:keys [alias-ids raw-label supplier-display-name article-id article-key canonical-name unit allow-reassign?]}]
   {:alias (if (seq alias-ids)
             {:alias_ids alias-ids}
             {:raw_label raw-label
@@ -265,7 +290,8 @@
    :article (cond-> {}
               article-id (assoc :article-id article-id)
               article-key (assoc :article-key article-key)
-              canonical-name (assoc :canonical-name canonical-name))
+              canonical-name (assoc :canonical-name canonical-name)
+              unit (assoc :unit unit))
    :allow_reassign allow-reassign?})
 
 (defn- validate-mapping!

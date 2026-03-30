@@ -279,6 +279,7 @@ Note: line item quantity supports **3-decimal precision** (e.g. weights/volumes)
 {:id :uuid
  :canonical_name :string
  :normalized_key :string
+ :unit :string
  :created_at :timestamp
  :updated_at :timestamp}
 
@@ -287,6 +288,7 @@ Note: line item quantity supports **3-decimal precision** (e.g. weights/volumes)
  :supplier_id :uuid
  :raw_label :string
  :raw_label_normalized :string
+ :unit :string?
  :article_id :uuid?
  :created_at :timestamp}
 

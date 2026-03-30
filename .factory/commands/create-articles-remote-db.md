@@ -257,7 +257,8 @@ bb railway-articles-run scripts/bb/articles/create_articles.clj \
 Key facts:
 - `normalized_key` is auto-derived from `canonical-name` if omitted (NFD normalization → lowercase → keep `[a-z0-9]` runs).
 - Include size/volume in the name when known.
-- Writes are idempotent (`ON CONFLICT (normalized_key) DO NOTHING`) — safe to re-run.
+- `unit` is preserved end-to-end when present on aliases/mapping entries; the default remains `kom` only when no unit is supplied.
+- Writes are idempotent per article identity (`ON CONFLICT (normalized_key, unit) DO NOTHING`) — safe to re-run.
 - If you discover missing articles after the batch has run, create them in a second pass — idempotency makes it safe.
 
 ---

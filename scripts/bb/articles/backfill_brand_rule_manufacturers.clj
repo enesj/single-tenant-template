@@ -4,7 +4,8 @@
   (:require
     [articles.db :as db]
     [articles.research.heuristics :as heuristics]
-    [articles.research.validation :as validation]))
+    [articles.research.validation :as validation]
+    [clojure.string :as str]))
 
 (defn- usage
   ([] (usage nil))
@@ -62,6 +63,16 @@
   [brand]
   (str "(?i)^" (java.util.regex.Pattern/quote (str brand)) "\\b"))
 
+(defn- normalized-token-string
+  [s]
+  (some-> s db/normalize-key (#(str "-" % "-"))))
+
+(defn- normalized-brand-contained?
+  [canonical-name brand-key]
+  (let [canonical* (normalized-token-string canonical-name)
+        brand* (some-> brand-key (#(str "-" % "-")))]
+    (and canonical* brand* (str/includes? canonical* brand*))))
+
 (defn- quoted-prefix-word
   [pattern]
   (when-let [[_ word] (re-matches #"(?i)\(\?i\)\^\\Q(.+?)\\E\\b" pattern)]
@@ -109,26 +120,32 @@
   []
   (->> (or (heuristics/load-taxonomy "brand-parent-mappings.edn") {})
     seq
-    (sort-by first)
+    (sort-by (comp - count key))
     (keep (fn [[brand manufacturer-name]]
             (when-let [clean-mfr (validation/sanitize-manufacturer manufacturer-name)]
-              {:pattern (prefix-pattern brand)
-               :manufacturer-name clean-mfr
-               :manufacturer-key (db/normalize-key clean-mfr)
-               :source :brand-parent-mappings
-               :brand brand})))))
+              (let [brand-key (db/normalize-key brand)]
+                {:pattern (prefix-pattern brand)
+                 :brand-key brand-key
+                 :manufacturer-name clean-mfr
+                 :manufacturer-key (db/normalize-key clean-mfr)
+                 :source :brand-parent-mappings
+                 :brand brand
+                 :match-type :normalized-contains}))))))
 
 (defn- self-named-brand-rules
   []
   (->> (or (heuristics/load-taxonomy "self-named-brands.edn") [])
-    sort
+    (sort-by (comp - count))
     (keep (fn [brand]
             (when-let [clean-mfr (validation/sanitize-manufacturer brand)]
-              {:pattern (prefix-pattern brand)
-               :manufacturer-name clean-mfr
-               :manufacturer-key (db/normalize-key clean-mfr)
-               :source :self-named-brands
-               :brand brand})))))
+              (let [brand-key (db/normalize-key brand)]
+                {:pattern (prefix-pattern brand)
+                 :brand-key brand-key
+                 :manufacturer-name clean-mfr
+                 :manufacturer-key (db/normalize-key clean-mfr)
+                 :source :self-named-brands
+                 :brand brand
+                 :match-type :normalized-contains}))))))
 
 (defn- dedupe-rules
   [rules]
@@ -174,11 +191,19 @@
 
 (defn- find-matching-rule
   [rules canonical-name]
-  (some (fn [{:keys [pattern] :as rule}]
-          (when (and canonical-name
-                  (re-find (re-pattern pattern) canonical-name))
-            rule))
-    rules))
+  (let [matches-rule? (fn [{:keys [match-type pattern brand-key]}]
+                        (case match-type
+                          :normalized-contains (normalized-brand-contained? canonical-name brand-key)
+                          (when (and canonical-name pattern)
+                            (re-find (re-pattern pattern) canonical-name))))]
+    (->> rules
+      (filter matches-rule?)
+      (sort-by (fn [{:keys [match-type brand-key pattern]}]
+                 [(case match-type
+                    :normalized-contains 0
+                    1)
+                  (- (count (or brand-key pattern "")))]))
+      first)))
 
 (defn- match-article
   [rules manufacturers-by-key {:keys [id canonical_name normalized_key]}]

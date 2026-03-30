@@ -197,4 +197,9 @@
   "Pakovana hrana i pića"
   nil]
  ["(?i)^\\Qumak\\E\\b" "Tabasco" "Pakovana hrana i pića" nil]
- ["(?i)^\\Qstapići\\E\\b" "Saltas" "Pakovana hrana i pića" nil]]
+ ["(?i)^\\Qstapići\\E\\b" "Saltas" "Pakovana hrana i pića" nil]
+ ["(?i)^\\Qgala\\E\\b" "Gala" "Jednokratno posuđe i pakovanje" nil]
+ ["(?i)^\\Qdunhill\\E\\b" "BAT" "Duhan i duvanski proizvodi" nil]
+ ["(?i)^\\Qhappy\\E\\b" "Rauch" "Pića" nil]
+ ["(?i)^\\Qparking\\E\\b" "KJKP RAD" "Transport i putovanja" nil]
+ ["(?i)^\\Qindijaner\\E\\b" "Kraš" "Pakovana hrana i pića" nil]]

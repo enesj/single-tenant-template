@@ -9,6 +9,7 @@
 (def article-option-keys
   [:canonical-name
    :normalized-key
+   :unit
    :link
    :legacy-category
    :manufacturer-name
@@ -22,6 +23,13 @@
   [:update-manufacturer-name?
    :update-category-description?
    :update-subcategory-description?])
+
+(def ^:private default-unit "kom")
+
+(defn- normalize-unit
+  [unit]
+  (or (some-> unit str str/trim str/lower-case not-empty)
+    default-unit))
 
 (defn- usage
   ([] (usage nil))
@@ -40,6 +48,7 @@
    (println "Single-article options:")
    (println "  --canonical-name NAME")
    (println "  --normalized-key KEY              (defaults to normalized(canonical-name))")
+   (println "  --unit UNIT                       (optional; defaults to \"kom\")")
    (println "  --link URL                        (optional)")
    (println "  --legacy-category TEXT            (optional; fills articles.category)")
    (println "")
@@ -65,7 +74,7 @@
    (println "  --pretty                          (pretty EDN output)")
    (println "")
    (println "Notes:")
-   (println "  - Writes are deterministic and idempotent by normalized_key.")
+   (println "  - Writes are deterministic and idempotent by normalized_key + unit.")
    (println "  - This script intentionally does NOT update an existing article on conflict.")
    (println "  - Existing taxonomy values are preserved by default unless update flags are used.")
    (println "  - Batch mode is faster because one bb process handles multiple articles.")
@@ -113,6 +122,9 @@
 
         (= a "--normalized-key")
         (recur more (assoc parsed :normalized-key b))
+
+        (= a "--unit")
+        (recur more (assoc parsed :unit b))
 
         (= a "--link")
         (recur more (assoc parsed :link b))
@@ -249,6 +261,7 @@
                      {:article-index idx
                       :canonical-name canonical-name
                       :normalized-key (:normalized-key opts)})))
+        unit (normalize-unit (:unit opts))
         manufacturer-normalized-key (cond
                                       (:manufacturer-name opts)
                                       (some-> (or (:manufacturer-key opts)
@@ -269,11 +282,13 @@
                       :manufacturer-key (:manufacturer-key opts)})))
         normalized-opts (cond-> (assoc opts
                                   :canonical-name canonical-name
-                                  :normalized-key normalized-key)
+                                  :normalized-key normalized-key
+                                  :unit unit)
                           manufacturer-normalized-key
                           (assoc :manufacturer-key manufacturer-normalized-key))
         planned {:canonical_name canonical-name
                  :normalized_key normalized-key
+                 :unit unit
                  :legacy_category (:legacy-category normalized-opts)
                  :link (:link normalized-opts)
                  :manufacturer (cond
@@ -451,32 +466,34 @@
                 "LIMIT 1"))))))))
 
 (defn- find-article-by-key!
-  [db normalized-key]
+  [db normalized-key unit]
   (db/query1
     db
     (str
-      "SELECT id, canonical_name, normalized_key, subcategory_id, link, manufacturer_id\n"
+      "SELECT id, canonical_name, normalized_key, unit, subcategory_id, link, manufacturer_id\n"
       "FROM articles\n"
       "WHERE normalized_key = " (db/sql-literal normalized-key) "\n"
+      "  AND unit = " (db/sql-literal unit) "\n"
       "LIMIT 1")))
 
 (defn- create-article!
-  [db {:keys [canonical-name normalized-key link manufacturer-id subcategory-id]}]
+  [db {:keys [canonical-name normalized-key unit link manufacturer-id subcategory-id]}]
   (let [id (db/uuid)]
     (db/query1
       db
       (str
-        "INSERT INTO articles (id, canonical_name, normalized_key, subcategory_id, link, manufacturer_id)\n"
+        "INSERT INTO articles (id, canonical_name, normalized_key, unit, subcategory_id, link, manufacturer_id)\n"
         "VALUES ("
         (db/sql-literal id) ", "
         (db/sql-literal canonical-name) ", "
         (db/sql-literal normalized-key) ", "
+        (db/sql-literal unit) ", "
         (db/sql-literal subcategory-id) ", "
         (db/sql-literal link) ", "
         (db/sql-literal manufacturer-id)
         ")\n"
-        "ON CONFLICT (normalized_key) DO NOTHING\n"
-        "RETURNING id, canonical_name, normalized_key, subcategory_id, link, manufacturer_id"))))
+        "ON CONFLICT (normalized_key, unit) DO NOTHING\n"
+        "RETURNING id, canonical_name, normalized_key, unit, subcategory_id, link, manufacturer_id"))))
 
 (defn- process-article!
   [db caches opts]
@@ -505,21 +522,20 @@
         subcategory (cached-call!
                       (:subcategory caches)
                       subcategory-cache-key
-                      ;; Pass already-resolved category-id so ensure-subcategory!
-                      ;; skips its own SELECT (and never needs the auto-create fallback
-                      ;; in normal flow — it's there for direct callers only).
                       #(ensure-subcategory! db (assoc opts :resolved-category-id (:id category))))
         subcategory-id (:id subcategory)
         inserted (create-article! db {:canonical-name (:canonical-name opts)
                                       :normalized-key (:normalized-key opts)
+                                      :unit (:unit opts)
                                       :link (:link opts)
                                       :manufacturer-id manufacturer-id
                                       :subcategory-id subcategory-id})
         created? (some? inserted)
-        article (or inserted (find-article-by-key! db (:normalized-key opts)))
+        article (or inserted (find-article-by-key! db (:normalized-key opts) (:unit opts)))
         _ (when-not article
             (throw (ex-info "Article not found after insert/select"
-                     {:normalized-key (:normalized-key opts)})))]
+                     {:normalized-key (:normalized-key opts)
+                      :unit (:unit opts)})))]
     {:created? created?
      :article article
      :manufacturer manufacturer
