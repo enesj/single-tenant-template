@@ -1,6 +1,7 @@
 (ns app.template.frontend.events.list.filters
   "Filter management for list views - applying, clearing, and modal state"
   (:require
+    [app.shared.model-naming :as model-naming]
     [app.template.frontend.db.db :refer [common-interceptors]]
     [app.template.frontend.db.paths :as paths]
     [app.template.frontend.events.list.ui-state :as ui-state-events]
@@ -31,6 +32,24 @@
     (get-in db (conj (paths/list-ui-state entity-type) :pagination :current-page))
     1))
 
+(defn- normalize-filter-key
+  [field-id]
+  (some-> field-id model-naming/ensure-app-keyword))
+
+(defn- find-filter-entry
+  [filters field-key]
+  (some (fn [[k v]]
+          (when (= field-key (normalize-filter-key k))
+            [k v]))
+    filters))
+
+(defn- dissoc-filter-entry
+  [filters field-key]
+  (into (empty filters)
+    (remove (fn [[k _]]
+              (= field-key (normalize-filter-key k))))
+    filters))
+
 (rf/reg-event-fx
   ::apply-filter
   common-interceptors
@@ -44,15 +63,16 @@
                                 (when (and (boolean? value) (nil? keep-modal-open?))
                                   (boolean value)))
 
-            ;; Convert field-id to keyword for consistency
-            field-key (if (keyword? field-id) field-id (keyword field-id))
+            ;; Convert field-id to canonical app keyword for consistency.
+            field-key (normalize-filter-key field-id)
 
             ;; Get entity config to access field definitions
             entity-config (get-in db (paths/entity-display-settings entity-type))
             field-defs (:fields entity-config)
-            field-def (first (filter (fn [field]
-                                       (= (some-> (:id field) name keyword) field-key))
-                               field-defs))
+            field-def (some (fn [field]
+                              (when (= field-key (normalize-filter-key (:id field)))
+                                field))
+                        field-defs)
             input-type (some-> (get field-def :input-type) name)
             options (get field-def :options)
             is-select? (or (= input-type "select") (= input-type "multi-select")
@@ -108,7 +128,7 @@
 
             ;; Update filters map by adding/updating this field's filter
             current-filters (get-in db (paths/list-filters entity-type) {})
-            existing (get current-filters field-key)
+            existing (second (find-filter-entry current-filters field-key))
 
             ;; Helper to normalize filter value for equality checks
             normalize-val (fn [v]
@@ -122,21 +142,21 @@
                               :else v))
 
             same-value? (= (normalize-val existing) (normalize-val filter-value))
-
+            cleared-filters (dissoc-filter-entry current-filters field-key)
             updated-filters (cond
                               ;; Remove filter when nil/empty string
                               (or (nil? filter-value)
                                 (and (string? filter-value)
                                   (empty? filter-value)))
-                              (dissoc current-filters field-key)
+                              cleared-filters
 
                               ;; If unchanged, keep as-is to avoid re-render loops
                               same-value?
                               current-filters
 
-                              ;; Otherwise set/replace
+                              ;; Otherwise set/replace using the canonical key
                               :else
-                              (assoc current-filters field-key filter-value))
+                              (assoc cleared-filters field-key filter-value))
 
             filters-changed? (not= updated-filters current-filters)
             updated-db (if filters-changed?
@@ -171,8 +191,8 @@
             [updated-db filters-changed?]
             (if field-id
               ;; Clear specific field filter
-              (let [field-key (if (keyword? field-id) field-id (keyword field-id))
-                    updated-filters (dissoc current-filters field-key)]
+              (let [field-key (normalize-filter-key field-id)
+                    updated-filters (dissoc-filter-entry current-filters field-key)]
                 [(if (not= updated-filters current-filters)
                    (assoc-in db (paths/list-filters entity-type) updated-filters)
                    db)

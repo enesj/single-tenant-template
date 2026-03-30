@@ -43,7 +43,7 @@
                                                       (let [current-x (.-clientX move-event)
                                                             delta (- current-x start-x)
                                                             new-width (+ start-width delta)]
-                                                        (when (> new-width 50) ; Minimum width
+                                                        (when (> new-width 50)
                                                           (let [width-px (str new-width "px")]
                                                             (set-cell-width width-px)
                                                             (when on-resize
@@ -63,7 +63,6 @@
                               (.addEventListener js/document "mousemove" handle-mouse-move)
                               (.addEventListener js/document "mouseup" handle-mouse-up)))
 
-        ;; Apply sticky positioning if specified
         sticky-style (when sticky?
                        (merge
                          {:position "sticky"
@@ -82,10 +81,16 @@
                                    :box-shadow "-8px 0 24px -8px rgba(0, 0, 0, 0.12), -4px 0 8px -2px rgba(0, 0, 0, 0.08), inset 1px 0 0 hsl(var(--b3))/0.15"}
                            {})))]
 
+    (uix/use-effect
+      (fn []
+        (set-cell-width (or width "auto"))
+        js/undefined)
+      [width])
+
     ($ cell-type
       {:key index
        :class (str "table-cell relative "
-                (when sticky? "transition-all duration-200 hover:backdrop-blur-[16px] ") ; Smooth hover transition for sticky columns
+                (when sticky? "transition-all duration-200 hover:backdrop-blur-[16px] ")
                 (when resizing? "select-none ")
                 (when-not is-header? "p-2")
                 (when is-header? "px-3 py-4 text-left font-medium text-base-content border-r border-base-300/30 last:border-r-0"))
@@ -105,13 +110,10 @@
                    :position "relative"})
                 sticky-style)}
 
-      ;; Cell content - different layout for headers vs data cells
       (if is-header?
-        ;; Header cells: render text directly without flex wrapper
         ($ :span {:class (str "whitespace-nowrap truncate block "
-                           (when sticky? "font-bold text-primary drop-shadow-md text-shadow "))} ; Enhanced text styling for sticky headers
+                           (when sticky? "font-bold text-primary drop-shadow-md text-shadow "))}
           children
-          ;; Add sticky indicator icon for header cells with enhanced styling
           (when sticky?
             ($ :span {:class "ml-1 text-xs opacity-90 drop-shadow-md"
                       :style {:text-shadow "0 1px 2px rgba(0,0,0,0.1)"}}
@@ -119,12 +121,10 @@
                 :left "📌"
                 :right "📌"
                 ""))))
-        ;; Data cells: use flex layout as before
         ($ :div {:class "flex items-center h-full"}
           children))
 
-      ;; Resizer handle (only for headers and only if resizable)
-      (when (and is-header? resizable? (not sticky?))       ; No resizer on sticky columns
+      (when (and is-header? resizable? (not sticky?))
         ($ :div
           {:class "absolute top-0 right-0 h-full w-2 cursor-col-resize hover:bg-blue-300 active:bg-blue-500 z-10"
            :on-mouse-down handle-mouse-down})))))
@@ -265,7 +265,7 @@
       ($ :div {:class "overflow-x-auto max-w-full"
                :style {:max-width (str table-width "px")
                        :overflow-y "visible"}}
-        ($ :table {:class "ds-table relative border-collapse" :style {:table-layout "auto" :border-spacing "0" :min-width "800px"}}
+        ($ :table {:class "ds-table relative border-collapse" :style {:table-layout "fixed" :border-spacing "0" :min-width "800px"}}
           ($ :thead
             ($ row
               {:key "header"

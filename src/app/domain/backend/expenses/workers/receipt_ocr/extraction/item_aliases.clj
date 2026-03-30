@@ -12,6 +12,13 @@
     (and (not (str/blank? raw-label*))
       (not (str/blank? normalized)))))
 
+(defn- alias-action
+  [alias-row]
+  (when (:id alias-row)
+    (if (:created? alias-row)
+      :created
+      :reused)))
+
 (defn auto-create-aliases!
   [db supplier-id extraction opts]
   (let [auto-create-articles? (true? (:auto-create-articles? opts))]
@@ -23,10 +30,12 @@
               {:raw_label raw-label*
                :unit unit
                :article_alias_id nil
-               :article_id nil}
+               :article_id nil
+               :alias_action nil}
               (try
                 (let [alias-row (aliases/find-or-create-alias! db supplier-id raw-label* unit)
                       alias-id (:id alias-row)
+                      alias-action (alias-action alias-row)
                       existing-article-id (:article_id alias-row)
                       article-id
                       (cond
@@ -43,7 +52,8 @@
                   {:raw_label raw-label*
                    :unit unit
                    :article_alias_id alias-id
-                   :article_id article-id})
+                   :article_id article-id
+                   :alias_action alias-action})
                 (catch Exception e
                   (log/warn e "Failed to auto-create article alias/article from receipt extraction item"
                     {:supplier-id supplier-id
@@ -53,5 +63,6 @@
                   {:raw_label raw-label*
                    :unit unit
                    :article_alias_id nil
-                   :article_id nil})))))
+                   :article_id nil
+                   :alias_action nil})))))
         (:items extraction)))))

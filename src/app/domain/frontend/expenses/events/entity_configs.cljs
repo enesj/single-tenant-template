@@ -89,6 +89,7 @@
                         :article-canonical-name :article-canonical-name
                         :raw-label :raw-label
                         :raw-label-normalized :raw-label-normalized
+                        :unit :unit
                         :supplier-id :supplier-id
                         :article-id :article-id}})
 
@@ -125,7 +126,11 @@
    :api-endpoint "/admin/api/expenses/store-aliases"
    :detail-response-key :store-alias
    :has-forms? false
-   :server-search-keys #{:raw-label}})
+   :server-filter-keys {:supplier-display-name :supplier-display-name
+                        :store-display-name :store-display-name
+                        :store-address :store-address
+                        :raw-label :raw-label
+                        :raw-label-normalized :raw-label-normalized}})
 
 ;; =============================================================================
 ;; Configuration Registry

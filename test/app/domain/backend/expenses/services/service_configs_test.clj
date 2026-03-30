@@ -24,6 +24,13 @@
     (is (= (service-configs/normalize-store-key "B&K Market")
           (service-configs/normalize-store-key "B&amp;K Market")))))
 
+(deftest normalize-store-key-canonicalizes-street-number-abbreviations-test
+  (testing "store keys treat compact and spaced street-number abbreviations as the same store"
+    (is (= (service-configs/normalize-store-key "APOTEKA \"KOŠEVSKO BRDO\" BRAĆE BEGIĆ br. 4, 71000 Sarajevo")
+          (service-configs/normalize-store-key "APOTEKA \"KOŠEVSKO BRDO\" BRAĆE BEGIĆ br.4, 71000 Sarajevo")))
+    (is (= (service-configs/normalize-store-key "APOTEKA \"KOŠEVSKO BRDO\" BRAĆE BEGIĆ broj 4, 71000 Sarajevo")
+          (service-configs/normalize-store-key "APOTEKA \"KOŠEVSKO BRDO\" BRAĆE BEGIĆ broj4, 71000 Sarajevo")))))
+
 (deftest unescape-html-entities-is-bounded-test
   (testing "double-encoding is handled with bounded repeats"
     (is (= "bk"

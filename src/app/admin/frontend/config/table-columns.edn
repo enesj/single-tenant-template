@@ -109,14 +109,14 @@
    "id"],
   :default-visible-columns
   ["canonical_name"
-    "unit"
+   "unit"
    "category_name"
    "subcategory_name"
    "manufacturer_display_name"
    "created_at"],
   :filterable-columns
   ["canonical_name"
-    "unit"
+   "unit"
    "category_name"
    "subcategory_name"
    "manufacturer_display_name"
@@ -126,7 +126,7 @@
    "updated_at"],
   :sortable-columns
   ["canonical_name"
-    "unit"
+   "unit"
    "category_name"
    "subcategory_name"
    "manufacturer_display_name"
@@ -305,14 +305,13 @@
    :user-agent {:width "260px"}}},
  :article-aliases
  {:available-columns
-  ["supplier_display_name" "article_canonical_name" "raw_label" "raw_label_normalized" "unit" "confidence" "created_at" "supplier_id" "article_id" "id" "updated_at"],
+  ["supplier_display_name" "article_canonical_name" "raw_label" "raw_label_normalized" "unit" "created_at" "supplier_id" "article_id" "id" "updated_at"],
   :default-visible-columns
   ["supplier_display_name"
    "article_canonical_name"
    "raw_label"
    "raw_label_normalized"
    "unit"
-   "confidence"
    "created_at"],
   :filterable-columns
   ["supplier_display_name"
@@ -320,7 +319,6 @@
    "raw_label"
    "raw_label_normalized"
    "unit"
-   "confidence"
    "created_at"],
   :sortable-columns
   ["supplier_display_name"
@@ -328,7 +326,6 @@
    "raw_label"
    "raw_label_normalized"
    "unit"
-   "confidence"
    "created_at"],
   :always-visible ["raw_label"],
   :computed-fields {:supplier_display_name {}, :article_canonical_name {}},
@@ -338,7 +335,6 @@
    :raw_label {:width "260px"},
    :raw_label_normalized {:width "220px"},
    :unit {:width "90px"},
-   :confidence {:width "110px"},
    :created_at {:width "160px", :formatter "date"},
    :supplier_id {:type "text"},
    :article_id {:type "text"}}},

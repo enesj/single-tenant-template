@@ -90,6 +90,23 @@
         {:extraction (assoc extraction :items items)
          :post-processing post-processing}))))
 
+(defn- alias-counts
+  [entries]
+  (reduce (fn [acc entry]
+            (case (:alias_action entry)
+              :created (update acc :created inc)
+              :reused (update acc :reused inc)
+              acc))
+    {:created 0
+     :reused 0}
+    (or entries [])))
+
+(defn- alias-metrics
+  [{:keys [supplier store items]}]
+  {:suppliers (alias-counts (when supplier [supplier]))
+   :stores (alias-counts (when store [store]))
+   :articles (alias-counts items)})
+
 (defn persist-extract-result!
   "Persist a provider extract result, enriched with markdown-derived guesses.
 
@@ -149,14 +166,16 @@
                       (and (nil? (:total_amount_guess g)) markdown-total)
                       (assoc :total_amount_guess markdown-total))))
         supplier-guess (or (:supplier_guess guesses) markdown-supplier)
-        {:keys [supplier-id supplier-alias-id source]}
+        {:keys [supplier-id supplier-alias-id source] :as supplier-res}
         (try
           (resolve-supplier-and-alias db supplier-guess extraction opts)
           (catch Exception e
             (log/error e "Failed to resolve supplier from supplier_guess" {:receipt-id receipt-id})
             {:supplier-id nil
              :supplier-alias-id nil
+             :alias_action nil
              :source :unknown}))
+        supplier-alias-action (:alias_action supplier-res)
         unknown-supplier-id (try
                               (aliases/find-unknown-supplier-id db)
                               (catch Exception _
@@ -165,11 +184,12 @@
                               (= :unknown source)
                               (and unknown-supplier-id
                                 (= unknown-supplier-id supplier-id)))
-        store-res
+        {:keys [store-id store-alias-id store-guess] :as store-res}
         (if (= :unknown source)
           {:store-id nil
            :store-alias-id nil
            :store-guess nil
+           :alias_action nil
            :source :unknown}
           (try
             (resolve-store-and-alias db supplier-id extraction
@@ -180,10 +200,10 @@
               {:store-id nil
                :store-alias-id nil
                :store-guess nil
+               :alias_action nil
                :source :unknown})))
-        {:keys [store-id store-alias-id store-guess] :as store-res*}
-        store-res
-        store-source (:source store-res*)
+        store-source (:source store-res)
+        store-alias-action (:alias_action store-res)
         status (if (and valid-shape?
                      guesses
                      (not (review-required? guesses))
@@ -201,7 +221,8 @@
                                 (when (and (map? extraction) (sequential? (:items extraction)))
                                   (mapv (fn [{:keys [raw_label] :as _item}]
                                           {:raw_label (some-> raw_label str str/trim)
-                                           :article_alias_id nil})
+                                           :article_alias_id nil
+                                           :alias_action nil})
                                     (:items extraction)))
                                 (try
                                   (auto-create-aliases! db supplier-id extraction opts)
@@ -211,12 +232,15 @@
         resolution-snapshot {:supplier {:supplier_id supplier-id
                                         :supplier_alias_id supplier-alias-id
                                         :supplier_guess supplier-guess
+                                        :alias_action supplier-alias-action
                                         :source source}
                              :store {:store_id store-id
                                      :store_alias_id store-alias-id
                                      :store_guess store-guess
+                                     :alias_action store-alias-action
                                      :source store-source}
                              :items item-aliases-snapshot}
+        alias-metrics* (alias-metrics resolution-snapshot)
         provider-name (or (some-> (:provider extract-result) str str/trim not-empty)
                         "mistral")
         raw-extract-json (cond-> {:provider provider-name
@@ -254,6 +278,11 @@
         (when store-guess {:store_guess store-guess})
         (when store-alias-id {:store_alias_id store-alias-id})))
     (receipt-status/update-status! db receipt-id db-status {:error_message nil :error_details nil})
+    (log/info "Receipt extraction alias metrics"
+      {:receipt-id receipt-id
+       :supplier-source source
+       :store-source store-source
+       :alias-metrics alias-metrics*})
 
     (let [auto-post? (and (not (:defer-refine? opts))
                        (get opts :auto-post-after-upload? true))

@@ -36,6 +36,31 @@
     (is (= {:base-label "MLIJEKO 6x1L" :unit "pak"}
           (units/parse-unit-suffix "MLIJEKO 6x1L/PAK")))))
 
+(deftest parse-unit-suffix-detects-single-letter-liter-suffix
+  (testing "/L -> l"
+    (is (= {:base-label "PREMIUM 95 BAS EN 228" :unit "l"}
+          (units/parse-unit-suffix "PREMIUM 95 BAS EN 228/L"))))
+
+  (testing "/L with punctuation in the base label -> l"
+    (is (= {:base-label "TAKSA NAF.DER.ČL.25S.GPDV" :unit "l"}
+          (units/parse-unit-suffix "TAKSA NAF.DER.ČL.25S.GPDV/L")))))
+
+(deftest parse-unit-suffix-detects-piece-ocr-variant
+  (testing "/co -> kom"
+    (is (= {:base-label "ESPRESSO KAFA" :unit "kom"}
+          (units/parse-unit-suffix "ESPRESSO KAFA/co"))))
+
+  (testing "Unicode labels still strip /co"
+    (is (= {:base-label "ČAJ" :unit "kom"}
+          (units/parse-unit-suffix "ČAJ/co")))))
+
+(deftest strip-package-count-suffix-removes-trailing-pack-count-noise
+  (is (= "SETH CAJ MENTA 30GR"
+        (#'units/strip-package-count-suffix "SETH CAJ MENTA 30GR 24/1")))
+  (is (= "MLIJEKO 2.8%"
+        (#'units/strip-package-count-suffix "MLIJEKO 2.8% 12 / 1")))
+  (is (nil? (#'units/strip-package-count-suffix "ESPRESSO KAFA/co"))))
+
 (deftest parse-unit-suffix-handles-tax-marker
   (testing "/KO (E) → strips tax marker"
     (is (= {:base-label "So turisticka 250g T" :unit "kom"}
@@ -93,6 +118,28 @@
     (is (= {:base-label "Biber 50" :unit "g"}
           (units/extract-unit "Biber 50/GR" 0.5M)))))
 
+(deftest extract-unit-detects-single-letter-liter-suffix
+  (testing "Fractional qty + /L -> trusts liters"
+    (is (= {:base-label "PREMIUM 95 BAS EN 228" :unit "l"}
+          (units/extract-unit "PREMIUM 95 BAS EN 228/L" 12.340M))))
+
+  (testing "Integer qty + /L -> trusts liters"
+    (is (= {:base-label "TAKSA NAF.DER.ČL.25S.GPDV" :unit "l"}
+          (units/extract-unit "TAKSA NAF.DER.ČL.25S.GPDV/L" 1M)))))
+
+(deftest extract-unit-detects-piece-ocr-variant-and-pack-count-noise
+  (testing "Integer qty + /co -> strips suffix, unit = kom"
+    (is (= {:base-label "ESPRESSO KAFA" :unit "kom"}
+          (units/extract-unit "ESPRESSO KAFA/co" 1M))))
+
+  (testing "Unicode label + /co -> strips suffix, unit = kom"
+    (is (= {:base-label "ČAJ" :unit "kom"}
+          (units/extract-unit "ČAJ/co" 1M))))
+
+  (testing "Trailing 24/1 pack count -> strips metadata, unit inferred from qty"
+    (is (= {:base-label "SETH CAJ MENTA 30GR" :unit "kom"}
+          (units/extract-unit "SETH CAJ MENTA 30GR 24/1" 1M)))))
+
 (deftest extract-unit-defaults-with-no-suffix
   (testing "No suffix + integer qty → default kom"
     (is (= {:base-label "HLJEB 400G SA SJEMELKA MA" :unit "kom"}
@@ -146,6 +193,35 @@
           result (units/process-item-unit item)]
       (is (= "ITEM" (:raw_label result)))
       (is (= "kg" (:unit result))))))
+
+(deftest process-item-unit-detects-single-letter-liter-suffix
+  (let [item {:raw_label "PREMIUM 95 BAS EN 228/L"
+              :qty 12.340M
+              :unit_price 2.50M
+              :line_total 30.85M}
+        result (units/process-item-unit item)]
+    (is (= "PREMIUM 95 BAS EN 228" (:raw_label result)))
+    (is (= "l" (:unit result)))))
+
+(deftest process-item-unit-strips-piece-ocr-variant-and-pack-count-noise
+  (let [coffee-result (units/process-item-unit {:raw_label "ESPRESSO KAFA/co"
+                                                :qty 1M
+                                                :unit_price 2.50M
+                                                :line_total 2.50M})
+        tea-result (units/process-item-unit {:raw_label "ČAJ/co"
+                                             :qty 1M
+                                             :unit_price 3.00M
+                                             :line_total 3.00M})
+        pack-result (units/process-item-unit {:raw_label "SETH CAJ MENTA 30GR 24/1"
+                                              :qty 1M
+                                              :unit_price 4.00M
+                                              :line_total 4.00M})]
+    (is (= "ESPRESSO KAFA" (:raw_label coffee-result)))
+    (is (= "kom" (:unit coffee-result)))
+    (is (= "ČAJ" (:raw_label tea-result)))
+    (is (= "kom" (:unit tea-result)))
+    (is (= "SETH CAJ MENTA 30GR" (:raw_label pack-result)))
+    (is (= "kom" (:unit pack-result)))))
 
 ;; ---------------------------------------------------------------------------
 ;; process-items-units (batch)

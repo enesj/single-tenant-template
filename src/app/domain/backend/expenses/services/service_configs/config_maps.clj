@@ -76,6 +76,12 @@
                       :confidence :sta/confidence}
    :default-order-by :sta/created_at
    :search-fields [:sta/raw_label :sta/raw_label_normalized :st/display_name :st/address :s/display_name]
+   :text-filter-columns {:supplier-display-name :s.display_name
+                         :store-display-name :st.display_name
+                         :store-address :st.address
+                         :raw-label :sta.raw_label
+                         :raw-label-normalized :sta.raw_label_normalized}
+   :numeric-filter-columns {:confidence :sta.confidence}
    :joins [[:stores :st] [:= :st/id :sta/store_id]
            [:suppliers :s] [:= :s/id :st/supplier_id]]
    :select-fields [[:sta.*]

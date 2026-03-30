@@ -4,6 +4,8 @@
     [app.domain.backend.expenses.services.articles :as articles]
     [app.domain.backend.expenses.services.receipts.queries :as receipt-queries]
     [app.domain.backend.expenses.services.receipts.status :as receipt-status]
+    [app.domain.backend.expenses.services.store-aliases :as store-aliases]
+    [app.domain.backend.expenses.services.stores :as stores]
     [app.domain.backend.expenses.services.supplier-aliases :as supplier-aliases]
     [app.domain.backend.expenses.services.suppliers :as suppliers]
     [app.domain.backend.expenses.workers.receipt-ocr.extraction :as extraction]
@@ -259,3 +261,93 @@
         ;; Regression: this line-item must never be misclassified as metadata.
         (is (not (contains? (set (get-in post-processing [:dropped-labels-sample :metadata]))
                    "CIG DUNHIL ESSEN BR")))))))
+
+(deftest persist-extract-result-logs-alias-created-and-reused-counts
+  (let [receipt-id (java.util.UUID/randomUUID)
+        mapped-supplier-id (java.util.UUID/randomUUID)
+        supplier-alias-id (java.util.UUID/randomUUID)
+        store-alias-id (java.util.UUID/randomUUID)
+        store-id (java.util.UUID/randomUUID)
+        article-alias-ids [(java.util.UUID/randomUUID)
+                           (java.util.UUID/randomUUID)]
+        article-call-count (atom 0)
+        stored (atom nil)]
+    (with-redefs [receipt-queries/get-receipt (fn [_db _rid]
+                                                {:id receipt-id
+                                                 :status "uploaded"})
+                  receipt-status/store-extraction-results!
+                  (fn [_db _rid payload]
+                    (reset! stored payload)
+                    nil)
+                  receipt-status/update-status! (fn [& _] nil)
+
+                  supplier-aliases/find-or-create-alias!
+                  (fn [_db raw-label]
+                    (is (= "AMKO KOMERC" raw-label))
+                    {:id supplier-alias-id
+                     :supplier_id mapped-supplier-id
+                     :created? false})
+                  suppliers/resolve-or-create-supplier-with-places!
+                  (fn [& _]
+                    (throw (ex-info "Should not be called" {})))
+
+                  store-aliases/find-or-create-alias!
+                  (fn [_db raw-label]
+                    (is (= "Main Store" raw-label))
+                    {:id store-alias-id
+                     :raw_label raw-label
+                     :raw_label_normalized "main-store"
+                     :store_id nil
+                     :created? true})
+                  stores/resolve-store-from-merchant
+                  (fn [_db supplier-id merchant _opts]
+                    (is (= mapped-supplier-id supplier-id))
+                    (is (= "Main Store" (:store_name merchant)))
+                    {:store-id store-id
+                     :store-alias-label "Main Store"})
+                  store-aliases/map-alias-to-store-if-unmapped!
+                  (fn [_db alias-id mapped-store-id confidence]
+                    (is (= store-alias-id alias-id))
+                    (is (= store-id mapped-store-id))
+                    (is (= 25 confidence))
+                    {:id alias-id
+                     :store_id mapped-store-id})
+
+                  article-aliases/find-or-create-alias!
+                  (fn [_db supplier-id _raw-label unit]
+                    (let [idx (swap! article-call-count inc)]
+                      (is (= mapped-supplier-id supplier-id))
+                      (is (= "kom" unit))
+                      (case idx
+                        1 {:id (nth article-alias-ids 0)
+                           :article_id nil
+                           :created? true}
+                        2 {:id (nth article-alias-ids 1)
+                           :article_id nil
+                           :created? false}
+                        (throw (ex-info "Unexpected article alias call" {:idx idx})))))]
+      (let [extract-result {:parsed-markdown ""
+                            :extraction {:merchant {:name "AMKO KOMERC"
+                                                    :store_name "Main Store"}
+                                         :currency "BAM"
+                                         :totals {:total 2.00}
+                                         :items [{:raw_label "ITEM A" :unit "kom" :line_total 1.00}
+                                                 {:raw_label "ITEM B" :unit "kom" :line_total 1.00}
+                                                 {:raw_label "   " :unit "kom" :line_total 0.00}]}}
+            _res (extraction/persist-extract-result!
+                   ::db
+                   receipt-id
+                   extract-result
+                   {:default-currency "BAM"
+                    :places-cfg {}
+                    :user-region "BA"
+                    :defer-refine? true})
+            resolution-snapshot (get-in @stored [:raw_extract_json :resolution_snapshot])]
+        (is (= {:suppliers {:created 0 :reused 1}
+                :stores {:created 1 :reused 0}
+                :articles {:created 1 :reused 1}}
+              (#'extraction/alias-metrics resolution-snapshot)))
+        (is (= :reused (get-in resolution-snapshot [:supplier :alias_action])))
+        (is (= :created (get-in resolution-snapshot [:store :alias_action])))
+        (is (= [:created :reused]
+              (mapv :alias_action (:items resolution-snapshot))))))))

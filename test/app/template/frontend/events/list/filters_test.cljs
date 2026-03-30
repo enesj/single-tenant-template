@@ -94,6 +94,15 @@
     (is (nil? (get-in @rf-db/app-db (conj (filters-path :items) :amount)))
       "Empty string should also remove filter"))
 
+  (testing "clear-filter removes legacy snake_case/string keys too"
+    (reset! rf-db/app-db {})
+    (rf/dispatch-sync [::test-initialize-db])
+    (swap! rf-db/app-db assoc-in (filters-path :items) {"supplier_display_name" "bin"})
+
+    (rf/dispatch-sync [::filters-events/clear-filter :items :supplier-display-name])
+    (is (= {} (get-in @rf-db/app-db (filters-path :items)))
+      "Clearing should remove legacy string/snake_case filter keys"))
+
   (testing "clear-filter without field removes filters key"
     (reset! rf-db/app-db {})
     (rf/dispatch-sync [::test-initialize-db])

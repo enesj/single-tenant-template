@@ -33,10 +33,21 @@
 ;; Core Operations
 ;; ============================================================================
 
+(defn- find-alias-by-normalized-key
+  [db normalized]
+  (jdbc/execute-one!
+    db
+    (sql/format {:select [:*]
+                 :from [:supplier_aliases]
+                 :where [:= :raw_label_normalized normalized]
+                 :limit 1})
+    {:builder-fn rs/as-unqualified-lower-maps}))
+
 (defn find-or-create-alias!
   "Find or create a supplier_alias by raw_label (global uniqueness).
 
-  Returns the alias row (with :id, :supplier_id, etc.)."
+  Returns the alias row (with :id, :supplier_id, etc.) and `:created?` to
+  indicate whether this call inserted a new alias row."
   [db raw-label]
   (when (str/blank? raw-label)
     (throw (ex-info "raw_label is required" {:status 400 :field :raw_label})))
@@ -47,12 +58,7 @@
              :raw_label_normalized normalized
              :supplier_id nil
              :confidence 0
-             :created_at [:now]}
-        sql-map {:insert-into :supplier_aliases
-                 :values [row]
-                 :on-conflict [:raw_label_normalized]
-                 :do-update-set {:raw_label :excluded/raw_label}
-                 :returning [:*]}]
+             :created_at [:now]}]
     (when (or (str/blank? normalized)
             (< (count normalized) min-alias-normalized-length))
       (throw (ex-info "raw_label normalizes to an invalid key"
@@ -60,10 +66,24 @@
                 :field :raw_label
                 :raw_label raw-label*
                 :raw_label_normalized normalized})))
-    (jdbc/execute-one!
-      db
-      (sql/format sql-map)
-      {:builder-fn rs/as-unqualified-lower-maps})))
+    (if-let [inserted (jdbc/execute-one!
+                        db
+                        (sql/format {:insert-into :supplier_aliases
+                                     :values [row]
+                                     :on-conflict [:raw_label_normalized]
+                                     :do-nothing true
+                                     :returning [:*]})
+                        {:builder-fn rs/as-unqualified-lower-maps})]
+      (assoc inserted :created? true)
+      (assoc (or (jdbc/execute-one!
+                   db
+                   (sql/format {:update :supplier_aliases
+                                :set {:raw_label raw-label*}
+                                :where [:= :raw_label_normalized normalized]
+                                :returning [:*]})
+                   {:builder-fn rs/as-unqualified-lower-maps})
+               (find-alias-by-normalized-key db normalized))
+        :created? false))))
 
 (defn get-alias
   [db alias-id]

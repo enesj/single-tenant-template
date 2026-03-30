@@ -1,11 +1,14 @@
 (ns app.template.frontend.components.filter
   (:require
+    [app.shared.model-naming :as model-naming]
     [app.template.frontend.components.filter.helpers :as filter-helpers]
     [app.template.frontend.components.filter.logic :as filter-logic]
     [app.template.frontend.components.filter.rendering :as filter-rendering]
     [app.template.frontend.components.filter.ui]
+    [app.template.frontend.events.list.filters :as filter-events]
     [app.template.frontend.subs.entity :as entity-subs]
     [app.template.frontend.subs.list :as list-subs]
+    [re-frame.core :as rf]
     [uix.core :refer [defui use-state]]
     [uix.re-frame :refer [use-subscribe]]))
 
@@ -65,6 +68,19 @@
         [filter-from-date, set-filter-from-date] (use-state (:filter-from-date initial-state))
         [filter-to-date, set-filter-to-date] (use-state (:filter-to-date initial-state))
         [filter-selected-options, set-filter-selected-options] (use-state (:filter-selected-options initial-state))
+        reset-local-filter-state! (fn []
+                                    (set-filter-text "")
+                                    (set-filter-min nil)
+                                    (set-filter-max nil)
+                                    (set-filter-from-date nil)
+                                    (set-filter-to-date nil)
+                                    (set-filter-selected-options []))
+        handle-clear-filter (fn [field-id-to-clear]
+                              (let [current-field-id (some-> field-id model-naming/ensure-app-keyword)
+                                    cleared-field-id (some-> field-id-to-clear model-naming/ensure-app-keyword)]
+                                (rf/dispatch [::filter-events/clear-filter entity-type cleared-field-id])
+                                (when (= current-field-id cleared-field-id)
+                                  (reset-local-filter-state!))))
 
         ;; Calculate matching count — suppress in server-pagination mode because
         ;; items only contains the current page, not the full dataset
@@ -145,4 +161,5 @@
        :active-filters active-filters
        :items items
        :initial-value initial-value
-       :list-ui-state list-ui-state})))
+       :list-ui-state list-ui-state
+       :on-clear-filter handle-clear-filter})))

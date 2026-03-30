@@ -1,5 +1,6 @@
 (ns app.template.frontend.subs.list
   (:require
+    [app.shared.model-naming :as model-naming]
     [app.shared.pagination :as pagination]
     [app.template.frontend.components.filter.helpers :as filter-helpers]
     [app.template.frontend.db.paths :as paths]
@@ -116,11 +117,21 @@
       #{}
       (get-in db (paths/entity-selected-ids entity-type) #{}))))
 
+(defn- normalize-filter-key
+  [field-id]
+  (some-> field-id model-naming/ensure-app-keyword))
+
 (rf/reg-sub
   ::active-filters
   (fn [db [_ entity-type]]
-    ;; New structure: {:filters {field-id filter-value, field-id2 filter-value2, ...}}
-    (get-in db (paths/list-filters entity-type) {})))
+    ;; Normalize legacy/string/snake_case filter keys into canonical app keywords.
+    (let [raw-filters (get-in db (paths/list-filters entity-type) {})]
+      (reduce-kv (fn [acc field-id filter-value]
+                   (if-let [field-key (normalize-filter-key field-id)]
+                     (assoc acc field-key filter-value)
+                     acc))
+        {}
+        raw-filters))))
 
 (rf/reg-sub
   ::filtered-items

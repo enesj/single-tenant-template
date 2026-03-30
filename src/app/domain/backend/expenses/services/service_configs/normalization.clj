@@ -112,11 +112,19 @@
         (->> (remove str/blank?) vec canonicalize-tokens)
         (->> (str/join "-"))))))
 
+(defn- canonicalize-store-number-abbreviations
+  [value]
+  (when value
+    (-> value
+      (str/replace #"(?iu)\bbroj\.?(?=\s*\d)" "br ")
+      (str/replace #"(?iu)\bbr\.?(?=\s*\d)" "br "))))
+
 (defn normalize-store-key
   [value]
   (when value
     (-> value
       unescape-html-entities
+      canonicalize-store-number-abbreviations
       str/trim
       (Normalizer/normalize Normalizer$Form/NFD)
       (str/replace #"\p{M}+" "")

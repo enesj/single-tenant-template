@@ -157,10 +157,24 @@
 ;; Core Operations
 ;; ============================================================================
 
+(defn- find-alias-by-key
+  [db supplier-id raw-label-normalized unit]
+  (jdbc/execute-one!
+    db
+    (sql/format {:select [:*]
+                 :from [:article_aliases]
+                 :where [:and
+                         [:= :supplier_id supplier-id]
+                         [:= :raw_label_normalized raw-label-normalized]
+                         [:= :unit unit]]
+                 :limit 1})
+    {:builder-fn rs/as-unqualified-lower-maps}))
+
 (defn find-or-create-alias!
   "Find or create an article_alias by (supplier_id, raw_label, unit).
 
-   Returns the alias row (with :id, :article_id, etc.).
+   Returns the alias row (with :id, :article_id, etc.) and `:created?` to
+   indicate whether this call inserted a new alias row.
 
    Parameters:
    - db: database connection
@@ -183,17 +197,29 @@
               :raw_label raw-label*
               :raw_label_normalized normalized
               :unit normalized-unit
-              :article_id nil}
-         sql-map {:insert-into :article_aliases
-                  :values [row]
-                  :on-conflict [:supplier_id :raw_label_normalized :unit]
-                  :do-update-set {:raw_label :excluded/raw_label
-                                  :unit :excluded/unit}
-                  :returning [:*]}]
-     (jdbc/execute-one!
-       db
-       (sql/format sql-map)
-       {:builder-fn rs/as-unqualified-lower-maps}))))
+              :article_id nil}]
+     (if-let [inserted (jdbc/execute-one!
+                         db
+                         (sql/format {:insert-into :article_aliases
+                                      :values [row]
+                                      :on-conflict [:supplier_id :raw_label_normalized :unit]
+                                      :do-nothing true
+                                      :returning [:*]})
+                         {:builder-fn rs/as-unqualified-lower-maps})]
+       (assoc inserted :created? true)
+       (assoc (or (jdbc/execute-one!
+                    db
+                    (sql/format {:update :article_aliases
+                                 :set {:raw_label raw-label*
+                                       :unit normalized-unit}
+                                 :where [:and
+                                         [:= :supplier_id effective-supplier-id]
+                                         [:= :raw_label_normalized normalized]
+                                         [:= :unit normalized-unit]]
+                                 :returning [:*]})
+                    {:builder-fn rs/as-unqualified-lower-maps})
+                (find-alias-by-key db effective-supplier-id normalized normalized-unit))
+         :created? false)))))
 
 (defn list-article-aliases
   "List article aliases with optional filters.

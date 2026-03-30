@@ -205,6 +205,7 @@
                    :article-canonical-name :string
                    :raw-label :string
                    :raw-label-normalized :string
+                   :unit :string
                    :supplier-id :uuid
                    :article-id :uuid}
 
@@ -251,7 +252,15 @@
    :default-order-by "raw_label"
    :required-fields [:raw-label :raw-label-normalized]
    :has-search? false
-   :filter-params [:search]
+   :filter-params {:search :string
+                   :supplier-display-name :string
+                   :store-display-name :string
+                   :store-address :string
+                   :raw-label :string
+                   :raw-label-normalized :string
+                   :confidence-min :int
+                   :confidence-max :int}
+   :date-range-columns {:created-at :sta.created_at}
 
    ;; Allow clients to omit raw-label-normalized; compute it server-side.
    ;; Also coerce numeric fields (e.g. confidence) since form submissions are strings.

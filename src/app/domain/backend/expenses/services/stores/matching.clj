@@ -28,6 +28,8 @@
   [s]
   (-> (normalize-for-match s)
     (str/replace #"^ul-" "")
+    (str/replace #"(^|-)broj(\d{1,4})(?=-|$)" "$1br-$2")
+    (str/replace #"(^|-)br(\d{1,4})(?=-|$)" "$1br-$2")
     (str/replace #"-broj-" "-br-")
     (str/replace #"-\d{4,5}(?=-|$)" "")
     (str/replace #"-{2,}" "-")

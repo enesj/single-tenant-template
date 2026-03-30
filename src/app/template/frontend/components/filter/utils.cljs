@@ -1,6 +1,7 @@
 (ns app.template.frontend.components.filter.utils
   (:require
     [app.shared.date :as date-utils]
+    [app.shared.model-naming :as model-naming]
     [clojure.string :as str]))
 
 ;; Filter value formatting utilities
@@ -55,15 +56,23 @@
 (defn get-field-label
   "Get the display label for a field from entity config"
   [entity-config field-id]
-  (let [field-str (name field-id)
-        field-def (first (filter #(= (:id %) field-str) (:fields entity-config)))]
-    (or (:label field-def) field-str)))
+  (let [target-id (some-> field-id model-naming/ensure-app-keyword)
+        field-def (some (fn [field]
+                          (when (= target-id (some-> (:id field) model-naming/ensure-app-keyword))
+                            field))
+                    (:fields entity-config))]
+    (or (:label field-def)
+      (some-> target-id name)
+      (name field-id))))
 
 (defn get-value-label
   "Get display label for a field value, handling different field types"
   [entity-config all-entities field-id value]
-  (let [field-str (name field-id)
-        field-def (first (filter #(= (:id %) field-str) (:fields entity-config)))
+  (let [target-id (some-> field-id model-naming/ensure-app-keyword)
+        field-def (some (fn [field]
+                          (when (= target-id (some-> (:id field) model-naming/ensure-app-keyword))
+                            field))
+                    (:fields entity-config))
         options (get field-def :options)
         foreign-key? (and (sequential? options)
                        (= 2 (count options))

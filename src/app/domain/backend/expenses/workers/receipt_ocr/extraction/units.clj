@@ -15,20 +15,32 @@
 (def default-unit "kom")
 
 (def ^:private unit-abbreviations
-  "Lowercase abbreviation → canonical unit. Longest-first so /KOM matches before /KO."
+  "Lowercase abbreviation -> canonical unit. Longest-first so /KOM matches before /KO and /LIT before /L."
   [["kom" "kom"]
    ["ko"  "kom"]
+   ["co"  "kom"]
    ["pc"  "kom"]
    ["kg"  "kg"]
    ["gr"  "g"]
    ["lit" "l"]
+   ["l"   "l"]
    ["pak" "pak"]])
 
 (def ^:private unit-suffix-pattern
   "Regex matching a trailing unit suffix.
   Groups: (1) everything before the slash, (2) the unit abbreviation.
   Allows optional whitespace before slash and optional tax marker like (E) after."
-  #"(?i)^(.*?)\s*/\s*(kom|ko|pc|kg|gr|lit|pak)\s*(?:\([A-Z]\))?\s*$")
+  #"(?i)^(.*?)\s*/\s*(kom|ko|co|pc|kg|gr|lit|l|pak)\s*(?:\([A-Z]\))?\s*$")
+
+(def ^:private package-count-suffix-pattern
+  "Regex matching trailing pack-count metadata like `24/1` that should not become part of the alias label."
+  #"(?i)^(.*?)\s+(\d+\s*/\s*\d+)\s*$")
+
+(defn- strip-package-count-suffix
+  [raw-label]
+  (when-let [s (some-> raw-label str str/trim not-empty)]
+    (when-let [[_ base _pack-count] (re-matches package-count-suffix-pattern s)]
+      (some-> base str/trim not-empty))))
 
 (defn- integer-qty?
   "True when qty is nil (unknown, assume integer) or a whole number."
@@ -60,28 +72,28 @@
   Returns {:base-label <label-without-suffix> :unit <canonical-unit-or-nil>}.
 
   Rules:
-  - Detected non-piece suffix (/KG, /GR, /LIT, /PAK) → always trust.
-  - Detected piece suffix (/KO, /KOM, /PC) + integer qty → trust, unit = kom.
-  - Detected piece suffix + fractional qty → strip suffix, unit = kg
-    (fractional qty means weight-based, the /KO was noise on receipt).
-  - No suffix + integer qty (or nil) → default to kom.
-  - No suffix + fractional qty → assume kg (weight-based item)."
+  - Detected non-piece suffix (/KG, /GR, /LIT, /L, /PAK) -> always trust.
+  - Detected piece suffix (/KO, /CO, /KOM, /PC) + integer qty -> trust, unit = kom.
+  - Detected piece suffix + fractional qty -> strip suffix, unit = kg
+    (fractional qty means weight-based, the piece suffix was noise on receipt).
+  - Trailing pack-count metadata like `24/1` -> strip it, then infer unit from qty.
+  - No suffix + integer qty (or nil) -> default to kom.
+  - No suffix + fractional qty -> assume kg (weight-based item)."
   [raw-label qty]
   (let [trimmed (some-> raw-label str str/trim not-empty)
-        int-qty? (integer-qty? qty)]
+        int-qty? (integer-qty? qty)
+        inferred-unit (if int-qty? default-unit "kg")]
     (if-not trimmed
-      {:base-label raw-label :unit (if int-qty? default-unit "kg")}
+      {:base-label raw-label :unit inferred-unit}
       (if-let [{:keys [base-label unit] :as parsed} (parse-unit-suffix trimmed)]
         (if (= "kom" unit)
-          ;; Piece unit detected — only trust if qty is integer
           (if int-qty?
             parsed
-            ;; Fractional qty + /KO suffix → weight-based, strip suffix, assume kg
             {:base-label base-label :unit "kg"})
-          ;; Non-piece unit (kg, g, l, pak) — always trust
           parsed)
-        ;; No suffix detected — default based on qty
-        {:base-label trimmed :unit (if int-qty? default-unit "kg")}))))
+        (if-let [base-label (strip-package-count-suffix trimmed)]
+          {:base-label base-label :unit inferred-unit}
+          {:base-label trimmed :unit inferred-unit})))))
 
 (defn process-item-unit
   "Add :unit to an extraction item and strip the unit suffix from :raw_label.

@@ -48,6 +48,13 @@
             (every? #(<= % 1) token-diffs)
             (<= (reduce + 0 token-diffs) 2)))))))
 
+(defn- alias-action
+  [alias-row]
+  (when (:id alias-row)
+    (if (:created? alias-row)
+      :created
+      :reused)))
+
 (defn resolve-supplier-and-alias
   [db supplier-guess extraction opts]
   (let [supplier-guess* (some-> supplier-guess str str/trim not-empty)
@@ -146,6 +153,7 @@
                   (supplier-aliases/map-alias-to-supplier! db alias-id supplier-id 25))
                 {:supplier-id supplier-id
                  :supplier-alias-id alias-id
+                 :alias_action (alias-action alias-row)
                  :source :alias_repaired})
               (catch Exception e
                 (log/warn e "Failed to repair supplier alias mapping to OCR brand"
@@ -190,6 +198,7 @@
                   (supplier-aliases/map-alias-to-supplier! db alias-id supplier-id 25)
                   {:supplier-id supplier-id
                    :supplier-alias-id alias-id
+                   :alias_action (alias-action alias-row)
                    :source :alias_descriptor_repaired})
                 (catch Exception e
                   (log/warn e "Failed to repair supplier alias mapping to descriptor-tail supplier"
@@ -200,15 +209,18 @@
         (infer-existing-supplier-from-store-name)
         {:supplier-id (aliases/get-unknown-supplier-id db)
          :supplier-alias-id nil
+         :alias_action nil
          :source :unknown})
       (let [alias-row (supplier-aliases/find-or-create-alias! db supplier-guess*)
             alias-id (:id alias-row)
+            alias-action (alias-action alias-row)
             mapped-supplier-id (:supplier_id alias-row)]
         (if mapped-supplier-id
           (or (maybe-repair-mapped-alias alias-row)
             (maybe-repair-mapped-alias-to-descriptor alias-row)
             {:supplier-id mapped-supplier-id
              :supplier-alias-id alias-id
+             :alias_action alias-action
              :source :alias})
           (if-let [descriptor-supplier (descriptor-supplier-for-alias alias-row)]
             (let [supplier-id (:id descriptor-supplier)]
@@ -216,6 +228,7 @@
                 (supplier-aliases/map-alias-to-supplier-if-unmapped! db alias-id supplier-id 25))
               {:supplier-id supplier-id
                :supplier-alias-id alias-id
+               :alias_action alias-action
                :source :alias_descriptor})
             (let [inferred0 (or (infer-supplier-from-store-alias)
                               (infer-existing-supplier-from-store-name))
@@ -232,6 +245,7 @@
                     (supplier-aliases/map-alias-to-supplier-if-unmapped! db alias-id supplier-id confidence))
                   {:supplier-id supplier-id
                    :supplier-alias-id alias-id
+                   :alias_action alias-action
                    :source source})
                 (let [{:keys [supplier source]} (suppliers/resolve-or-create-supplier-with-places!
                                                   db
@@ -242,6 +256,7 @@
                     (supplier-aliases/map-alias-to-supplier-if-unmapped! db alias-id supplier-id 25))
                   {:supplier-id supplier-id
                    :supplier-alias-id alias-id
+                   :alias_action alias-action
                    :source (or source :resolved)})))))))))
 
 (defn resolve-store-and-alias
@@ -257,9 +272,11 @@
       {:store-id nil
        :store-alias-id nil
        :store-guess store-guess
+       :alias_action nil
        :source :unknown}
       (let [alias-row (store-aliases/find-or-create-alias! db store-alias-guess)
             alias-id (:id alias-row)
+            alias-action (alias-action alias-row)
             mapped-store-id (:store_id alias-row)]
         (if mapped-store-id
           (do
@@ -298,6 +315,7 @@
             {:store-id mapped-store-id
              :store-alias-id alias-id
              :store-guess store-guess
+             :alias_action alias-action
              :source :alias})
           (let [{:keys [store-id store-alias-label]}
                 (try
@@ -315,4 +333,5 @@
             {:store-id store-id
              :store-alias-id alias-id
              :store-guess (or store-name store-alias-label store-guess)
+             :alias_action alias-action
              :source :resolved}))))))

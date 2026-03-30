@@ -172,3 +172,13 @@
           (is (= "Hippy klupa 71000 Sarajevo" (:display_name @created-store)))
           (is (= "71000 Sarajevo" (:address @created-store)))
           (is (= "Hippy klupa 71000 Sarajevo" (get-in res [:store :display_name]))))))))
+
+(deftest match-store-treats-compact-store-number-keys-as-the-same-store-test
+  (testing "fallback store matching recognizes br4 and br-4 variants as the same store"
+    (is (= {:store-id :store-1
+            :match :loose
+            :score 1.0}
+          (store-matching/match-store
+            "apoteka-kosevsko-brdo-brace-begic-br4-71000-sarajevo"
+            [{:id :store-1
+              :key "apoteka-kosevsko-brdo-brace-begic-br-4-71000-sarajevo"}])))))

@@ -218,6 +218,39 @@
     (or table-columns {})
     legacy-admin-default-visible-columns))
 
+(def ^:private retired-admin-table-columns
+  {:article-aliases #{"confidence"}})
+
+(defn- remove-retired-admin-columns
+  [entity-config retired-columns]
+  (let [retired-columns (set retired-columns)
+        retired-keys (into #{} (keep #(when (string? %) (keyword %))) retired-columns)
+        prune-columns (fn [columns]
+                        (->> (or columns [])
+                          (remove retired-columns)
+                          vec))
+        prune-map (fn [m]
+                    (reduce dissoc (or m {}) retired-keys))]
+    (cond-> (or entity-config {})
+      true (update :available-columns prune-columns)
+      true (update :default-visible-columns prune-columns)
+      true (update :filterable-columns prune-columns)
+      true (update :sortable-columns prune-columns)
+      true (update :always-visible prune-columns)
+      true (update :computed-fields prune-map)
+      true (update :column-config prune-map)
+      true (update :column-metadata prune-map))))
+
+(defn- retire-admin-table-columns
+  [table-columns]
+  (reduce-kv
+    (fn [acc entity-key retired-columns]
+      (if (contains? acc entity-key)
+        (update acc entity-key remove-retired-admin-columns retired-columns)
+        acc))
+    (or table-columns {})
+    retired-admin-table-columns))
+
 (defn read-view-options
   "Read admin view-options defaults and overlay persisted runtime snapshots."
   [db]
@@ -290,21 +323,23 @@
                      "admin table-columns"
                      table-columns-spec/validate-table-columns-strict))
         runtime-override (some-> (read-runtime-override db admin-scope :table-columns)
-                           promote-legacy-admin-table-columns-override)]
-    (overlay-runtime-snapshot-and-validate
-      "merged table-columns"
-      table-columns-spec/validate-table-columns-strict
-      defaults
-      runtime-override)))
+                           promote-legacy-admin-table-columns-override)
+        merged (overlay-runtime-snapshot-and-validate
+                 "merged table-columns"
+                 table-columns-spec/validate-table-columns-strict
+                 defaults
+                 runtime-override)]
+    (retire-admin-table-columns merged)))
 
 (defn write-table-columns!
   "Persist admin table-columns runtime overrides in the database."
   [db table-columns]
-  (let [validation (table-columns-spec/validate-table-columns-strict table-columns)]
+  (let [sanitized-table-columns (retire-admin-table-columns table-columns)
+        validation (table-columns-spec/validate-table-columns-strict sanitized-table-columns)]
     (validate-or-throw! "table-columns" validation
       {:errors (:errors validation)
-       :warnings (:warnings validation)}))
-  (write-runtime-override! db admin-scope :table-columns table-columns))
+       :warnings (:warnings validation)})
+    (write-runtime-override! db admin-scope :table-columns sanitized-table-columns)))
 
 (defn read-user-entities
   "Read user-facing entities defaults and overlay persisted runtime snapshots."

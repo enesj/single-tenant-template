@@ -109,12 +109,36 @@
 ;; Generic CRUD Operations
 ;; ============================================================================
 
+(defn- apply-number-range-filters
+  "Apply per-column numeric min/max filters to a HoneySQL query map.
+
+   `column-mapping` is a map from filter base key to SQL column, e.g.:
+     {:confidence :sta.confidence}
+
+   `filters` may then include `<key>-min` / `<key>-max` entries, e.g.:
+     {:confidence-min 10 :confidence-max 90}."
+  [query column-mapping filters]
+  (reduce-kv
+    (fn [q filter-key sql-col]
+      (let [min-key (keyword (str (name filter-key) "-min"))
+            max-key (keyword (str (name filter-key) "-max"))
+            min-value (get filters min-key)
+            max-value (get filters max-key)]
+        (cond-> q
+          (some? min-value)
+          (update :where shared-qb/merge-where-and [:>= sql-col min-value])
+
+          (some? max-value)
+          (update :where shared-qb/merge-where-and [:<= sql-col max-value]))))
+    query
+    column-mapping))
+
 (defn build-list-function
   "Build a generic list function for an entity.
    When config has :tenant-scoped? true, accepts :tenant-id in opts to scope by tenant.
    Accepts :extra-filters in opts — a seq of HoneySQL WHERE clauses to append."
   [{:keys [table-name primary-key joins select-fields allowed-order-by search-fields
-           table-alias base-filters text-filter-columns]
+           table-alias base-filters text-filter-columns numeric-filter-columns]
     :as config}]
   (fn list-entity
     [db {:keys [limit offset order-by order-dir search tenant-id extra-filters]
@@ -139,6 +163,9 @@
           final-query (cond-> base-query
                         (seq text-filter-columns)
                         (shared-qb/apply-text-filters text-filter-columns opts)
+
+                        (seq numeric-filter-columns)
+                        (apply-number-range-filters numeric-filter-columns opts)
 
                         (and search search-fields)
                         (apply-search-filter search-fields search))]
@@ -268,7 +295,7 @@
   "Build a generic count function for an entity.
    When config has :tenant-scoped? true, accepts :tenant-id in opts map.
    Accepts :extra-filters in opts — a seq of HoneySQL WHERE clauses to append."
-  [{:keys [table-name search-fields joins table-alias base-filters text-filter-columns]
+  [{:keys [table-name search-fields joins table-alias base-filters text-filter-columns numeric-filter-columns]
     :as config}]
   (fn count-entity
     [db & [opts]]
@@ -291,6 +318,9 @@
           final-query (cond-> base-query
                         (seq text-filter-columns)
                         (shared-qb/apply-text-filters text-filter-columns opts)
+
+                        (seq numeric-filter-columns)
+                        (apply-number-range-filters numeric-filter-columns opts)
 
                         (and search search-fields)
                         (apply-search-filter search-fields search))]
