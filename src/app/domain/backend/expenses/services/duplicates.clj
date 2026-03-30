@@ -604,6 +604,22 @@
       {}
       (concat direct-rows alias-rows))))
 
+(defn- article-manufacturer-names-by-id
+  [db all-ids]
+  (->> (jdbc/execute!
+         db
+         (sql/format {:select [[:a.id :entity_id]
+                               [:m.display_name :manufacturer_name]]
+                      :from [[:articles :a]]
+                      :left-join [[:manufacturers :m] [:= :m.id :a.manufacturer_id]]
+                      :where [:in :a.id all-ids]})
+         {:builder-fn rs/as-unqualified-lower-maps})
+    (reduce (fn [acc {:keys [entity_id manufacturer_name]}]
+              (if (some? manufacturer_name)
+                (assoc acc entity_id {:manufacturer-name manufacturer_name})
+                acc))
+      {})))
+
 (defn- store-supplier-names-by-id
   [db all-ids]
   (->> (jdbc/execute!
@@ -636,10 +652,12 @@
   [db entity-type all-ids]
   (case entity-type
     :articles
-    (->> (article-price-labels-by-id db all-ids)
-      (reduce-kv (fn [acc entity-id labels]
-                   (assoc acc entity-id {:price-labels (->> labels distinct sort vec)}))
-        {}))
+    (merge-with merge
+      (->> (article-price-labels-by-id db all-ids)
+        (reduce-kv (fn [acc entity-id labels]
+                     (assoc acc entity-id {:price-labels (->> labels distinct sort vec)}))
+          {}))
+      (article-manufacturer-names-by-id db all-ids))
 
     :stores
     (store-supplier-names-by-id db all-ids)

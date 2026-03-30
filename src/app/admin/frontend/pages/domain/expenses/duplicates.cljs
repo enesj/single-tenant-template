@@ -122,6 +122,17 @@
     str/trim
     not-empty))
 
+(defn- article-manufacturer-label
+  [member]
+  (some-> (or (:manufacturer-name member)
+            (:manufacturer_name member)
+            (:manufacturer-display-name member)
+            (:manufacturer_display_name member)
+            (:manufacturer member))
+    str
+    str/trim
+    not-empty))
+
 (defn- article-member-sort-key
   [member]
   [(or (:canonical-name member)
@@ -197,6 +208,13 @@
         unit)
       ($ :span {:class "text-base-content/40"} "—"))))
 
+(defui article-manufacturer-cell [{:keys [member]}]
+  ($ :td {:class "p-2"}
+    (if-let [manufacturer (article-manufacturer-label member)]
+      ($ :span {:class "text-sm text-base-content/70"}
+        manufacturer)
+      ($ :span {:class "text-base-content/40"} "—"))))
+
 (defui cluster-member [{:keys [member cluster-idx entity-type is-primary? is-secondary? on-select-primary on-toggle-secondary]}]
   (let [member-id (or (:id member) (str (:id member)))
         display-name (or (:display-name member)
@@ -229,6 +247,8 @@
       ($ :td {:class "p-2 font-medium"} display-name)
       (when (article-entity? entity-type)
         ($ article-unit-cell {:member member}))
+      (when (article-entity? entity-type)
+        ($ article-manufacturer-cell {:member member}))
       ($ candidate-context-cell {:entity-type entity-type
                                  :member member
                                  :normalized-key normalized-key})
@@ -303,6 +323,8 @@
                 ($ :th {:class "p-2"} "Name")
                 (when (article-entity? entity-type)
                   ($ :th {:class "p-2 w-24"} "Unit"))
+                (when (article-entity? entity-type)
+                  ($ :th {:class "p-2 w-48"} "Manufacturer"))
                 ($ :th {:class "p-2"} (context-column-label entity-type))
                 ($ :th {:class "p-2 text-center w-24"} "Usage")))
             ($ :tbody
@@ -365,6 +387,8 @@
       ($ :td {:class "p-2 font-medium"} (entity-display-name member))
       (when (article-entity? entity-type)
         ($ article-unit-cell {:member member}))
+      (when (article-entity? entity-type)
+        ($ article-manufacturer-cell {:member member}))
       ($ :td {:class "p-2"}
         ($ candidate-context-content {:entity-type entity-type
                                       :member member
@@ -425,6 +449,8 @@
                   ($ :th {:class "p-2"} "Name")
                   (when (article-entity? entity-type)
                     ($ :th {:class "p-2 w-24"} "Unit"))
+                  (when (article-entity? entity-type)
+                    ($ :th {:class "p-2 w-48"} "Manufacturer"))
                   ($ :th {:class "p-2"} (context-column-label entity-type))
                   ($ :th {:class "p-2 w-24"} "Remove")))
               ($ :tbody
@@ -450,6 +476,8 @@
       ($ :td {:class "p-2 font-medium"} (entity-display-name member))
       (when (article-entity? entity-type)
         ($ article-unit-cell {:member member}))
+      (when (article-entity? entity-type)
+        ($ article-manufacturer-cell {:member member}))
       ($ :td {:class "p-2"}
         ($ candidate-context-content {:entity-type entity-type
                                       :member member
@@ -520,6 +548,8 @@
                   ($ :th {:class "p-2"} "Name")
                   (when (article-entity? entity-type)
                     ($ :th {:class "p-2 w-24"} "Unit"))
+                  (when (article-entity? entity-type)
+                    ($ :th {:class "p-2 w-48"} "Manufacturer"))
                   ($ :th {:class "p-2"} (context-column-label entity-type))
                   ($ :th {:class "p-2 w-28"} "State")
                   ($ :th {:class "p-2 w-44"} "Actions")))

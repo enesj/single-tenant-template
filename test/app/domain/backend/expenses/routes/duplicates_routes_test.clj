@@ -72,7 +72,10 @@
                         :canonical_name "Greek Yogurt"}])
                     duplicates-svc/enrich-members-with-context
                     (fn [_db _entity-type members]
-                      (mapv #(assoc % :price-labels ["1.99 BAM"]) members))]
+                      (mapv #(assoc %
+                               :price-labels ["1.99 BAM"]
+                               :manufacturer-name "Meggle")
+                        members))]
         (let [response (handler {:admin {:id #uuid "00000000-0000-0000-0000-000000000001"}
                                  :query-params {"entity-type" "articles"
                                                 "q" "yog"
@@ -82,7 +85,8 @@
           (is (= ["yog" 50 nil] @captured-args))
           (is (= [{:id "00000000-0000-0000-0000-0000000000aa"
                    :canonical-name "Greek Yogurt"
-                   :price-labels ["1.99 BAM"]}]
+                   :price-labels ["1.99 BAM"]
+                   :manufacturer-name "Meggle"}]
                 (:results body))))))))
 
 (deftest manual-search-handler-returns-empty-results-for-short-queries-test

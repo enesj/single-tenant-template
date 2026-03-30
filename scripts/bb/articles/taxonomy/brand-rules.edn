@@ -202,4 +202,17 @@
  ["(?i)^\\Qdunhill\\E\\b" "BAT" "Duhan i duvanski proizvodi" nil]
  ["(?i)^\\Qhappy\\E\\b" "Rauch" "Pića" nil]
  ["(?i)^\\Qparking\\E\\b" "KJKP RAD" "Transport i putovanja" nil]
- ["(?i)^\\Qindijaner\\E\\b" "Kraš" "Pakovana hrana i pića" nil]]
+ ["(?i)^\\Qindijaner\\E\\b" "Kraš" "Pakovana hrana i pića" nil]
+ ["(?i)^\\Qgotovo\\E\\b" "Bingo" "Pakovana hrana i pića" nil]
+ ["(?i)^\\Qcrp\\E\\b" "Medicover" "Zdravlje i apoteka" nil]
+ ["(?i)^\\Qzacin\\E\\b" "Kotanyi" "Pakovana hrana i pića" nil]
+ ["(?i)^\\Qcokolada\\E\\b" "Dolcela" "Pakovana hrana i pića" nil]
+ ["(?i)^\\Qdzemper/pulover\\E\\b" "Amisu" "Odjeća i modni dodaci" nil]
+ ["(?i)^\\Qraffaello\\E\\b" "Ferrero" "Pakovana hrana i pića" nil]
+ ["(?i)^\\Qmilka\\E\\b"
+  "Mondelez International"
+  "Pakovana hrana i pića"
+  nil]
+ ["(?i)^\\Qdžem\\E\\b" "Swit" "Pakovana hrana i pića" nil]
+ ["(?i)^\\Qaqua\\E\\b" "Knjaz Miloš" "Pića" nil]
+ ["(?i)^\\Qdonat\\E\\b" "Atlantic Grupa" "Pića" nil]]

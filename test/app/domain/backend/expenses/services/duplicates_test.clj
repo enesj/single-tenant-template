@@ -103,7 +103,7 @@
           (is (> count-a count-b)))))))
 
 (deftest enrich-with-usage-counts-adds-article-price-labels-test
-  (testing "article candidates include distinct sorted price labels from direct and alias-linked items"
+  (testing "article candidates include distinct sorted price labels and manufacturer names"
     (let [article-id (UUID/randomUUID)
           clusters [{:members [{:id article-id}] :count 1}]]
       (with-redefs [jdbc/execute! (fn [_db sql-params _opts]
@@ -136,12 +136,54 @@
                                           :line_total 4.50M
                                           :currency "EUR"}]
 
+                                        (and (string? sql-str)
+                                          (re-find #"from articles" sql-str)
+                                          (re-find #"manufacturers" sql-str))
+                                        [{:entity_id article-id
+                                          :manufacturer_name "Meggle"}]
+
                                         :else
                                         [])))]
         (let [enriched (duplicates/enrich-with-usage-counts :db :articles clusters)
               member (-> enriched first :members first)]
           (is (= ["4.50 EUR" "5.00 BAM"] (:price-labels member)))
+          (is (= "Meggle" (:manufacturer-name member)))
           (is (= 0 (:usage-count member))))))))
+
+(deftest enrich-members-with-context-adds-article-manufacturer-name-test
+  (testing "manual-search article candidates include manufacturer names alongside price labels"
+    (let [article-id (UUID/randomUUID)
+          members [{:id article-id
+                    :canonical_name "Greek Yogurt"}]]
+      (with-redefs [jdbc/execute! (fn [_db sql-params _opts]
+                                    (let [sql-str (some-> (first sql-params) str str/lower-case)]
+                                      (cond
+                                        (and (string? sql-str)
+                                          (re-find #"from expense_items" sql-str)
+                                          (re-find #"ei\.article_id" sql-str))
+                                        [{:entity_id article-id
+                                          :unit_price 1.99M
+                                          :qty 1M
+                                          :line_total 1.99M
+                                          :currency "BAM"}]
+
+                                        (and (string? sql-str)
+                                          (re-find #"from article_aliases" sql-str)
+                                          (re-find #"ei\.alias_id" sql-str))
+                                        []
+
+                                        (and (string? sql-str)
+                                          (re-find #"from articles" sql-str)
+                                          (re-find #"manufacturers" sql-str))
+                                        [{:entity_id article-id
+                                          :manufacturer_name "Meggle"}]
+
+                                        :else
+                                        [])))]
+        (let [enriched (duplicates/enrich-members-with-context :db :articles members)
+              member (first enriched)]
+          (is (= ["1.99 BAM"] (:price-labels member)))
+          (is (= "Meggle" (:manufacturer-name member))))))))
 
 (deftest detect-prefix-duplicates-articles-sort-key-prefers-unit-only-in-ui-test
   (testing "article member sort key keeps kg before kom for otherwise-identical names"
