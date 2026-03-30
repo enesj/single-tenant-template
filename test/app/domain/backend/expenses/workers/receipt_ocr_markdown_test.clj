@@ -277,6 +277,15 @@
                    "</table>\n")]
     (is (= "LUPRIV PLUS Mostar" (header/supplier-guess markdown)))))
 
+(deftest markdown-supplier-guess-skips-role-labeled-person-lines
+  (let [markdown (str "Kasir: Alma Halilovic\n"
+                   "\"Pepco B-H\" d.o.o.\n"
+                   "13.02.2026. 17:36\n"
+                   "<table>\n"
+                   "  <tr><td>ITEM</td><td>1,00E</td></tr>\n"
+                   "</table>\n")]
+    (is (= "\"Pepco B-H\" d.o.o." (header/supplier-guess markdown)))))
+
 (deftest markdown-purchased-at-extracts-ba-datetime-format
   (testing "parses dd.mm.yyyy. hh:mm with trailing dot"
     (let [markdown "UR CAFFE BAR\n29.01.2026. 14:31\nESPRESSO KAFA 2,00"]

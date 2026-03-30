@@ -295,6 +295,65 @@
         (is (= 9.95M (common/parse-money (:total_amount_guess @stored))))
         (is (= 9.95M (common/parse-money (get-in @stored [:raw_extract_json :extraction :totals :total]))))))))
 
+(deftest persist-extract-result-prefers-markdown-merchant-over-role-labeled-person-metadata
+  (let [receipt-id (java.util.UUID/randomUUID)
+        mapped-supplier-id (java.util.UUID/randomUUID)
+        alias-id (java.util.UUID/randomUUID)
+        stored (atom nil)
+        supplier-alias-raw-label (atom nil)
+        places-supplier-guess (atom nil)]
+    (with-redefs [receipt-queries/get-receipt (fn [_db _rid]
+                                                {:id receipt-id
+                                                 :status "uploaded"})
+                  receipt-status/store-extraction-results!
+                  (fn [_db _rid payload]
+                    (reset! stored payload)
+                    nil)
+                  receipt-status/update-status! (fn [& _] nil)
+                  article-aliases/find-unknown-supplier-id (fn [_db] ::unknown-supplier)
+                  supplier-aliases/find-or-create-alias!
+                  (fn [_db raw-label]
+                    (reset! supplier-alias-raw-label raw-label)
+                    {:id alias-id
+                     :supplier_id nil})
+                  supplier-aliases/map-alias-to-supplier-if-unmapped! (fn [& _] nil)
+                  suppliers/resolve-or-create-supplier-with-places!
+                  (fn [_db supplier-guess _opts]
+                    (reset! places-supplier-guess supplier-guess)
+                    {:supplier {:id mapped-supplier-id
+                                :display_name supplier-guess
+                                :normalized_key (suppliers/normalize-supplier-key supplier-guess)}
+                     :source :places-api})
+                  article-aliases/find-or-create-alias!
+                  (fn [& _]
+                    {:id (java.util.UUID/randomUUID)})]
+      (let [extract-result {:parsed-markdown (str "\"Pepco B-H\" d.o.o.\n"
+                                               "Podružnica Sarajevo 2\n"
+                                               "ul. Kolodvorska br.12\n"
+                                               "71000 Sarajevo\n"
+                                               "JIB: 4203144510090\n"
+                                               "TOTAL: 10,00\n")
+                            :extraction {:merchant {:name "Касир: Alma Halilovic"}
+                                         :totals {:total 10.00}
+                                         :items [{:raw_label "ITEM" :line_total 10.00}]}}
+            res (extraction/persist-extract-result!
+                  ::db
+                  receipt-id
+                  extract-result
+                  {:default-currency "BAM"
+                   :places-cfg {}
+                   :user-region "BA"
+                   :defer-refine? true})
+            supplier-snapshot (get-in @stored [:raw_extract_json :resolution_snapshot :supplier])]
+        (is (= receipt-id (:receipt-id res)))
+        (is (= "extracted" (:status res)))
+        (is (= "Pepco B-H" @supplier-alias-raw-label))
+        (is (= "Pepco B-H" @places-supplier-guess))
+        (is (= "Pepco B-H" (:supplier_guess @stored)))
+        (is (= "Pepco B-H" (get-in @stored [:raw_extract_json :extraction :merchant :name])))
+        (is (= mapped-supplier-id (:supplier_id supplier-snapshot)))
+        (is (= :places-api (:source supplier-snapshot)))))))
+
 (deftest reconcile-extraction-prefers-ocr-markdown-label
   (let [reconcile #'extraction/reconcile-extraction-with-markdown
         markdown (str "FISKALNI RACUN\n"

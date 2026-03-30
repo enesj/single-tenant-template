@@ -140,6 +140,89 @@
           (str/includes? s "<tr")
           (str/starts-with? s "|"))))))
 
+(def ^:private metadata-role-tokens
+  #{"agent"
+    "blagajna"
+    "blagajnik"
+    "cashier"
+    "clerk"
+    "customer"
+    "employee"
+    "ime"
+    "kasir"
+    "name"
+    "operater"
+    "operator"
+    "prezime"
+    "prodavac"
+    "prodavacica"
+    "prodavač"
+    "prodavačica"
+    "radnik"
+    "radnica"
+    "seller"
+    "server"
+    "sluzbenik"
+    "sluzbenica"
+    "službenik"
+    "službenica"
+    "касир"
+    "оператер"
+    "оператор"
+    "презиме"
+    "продавац"
+    "радник"
+    "радница"
+    "службеник"
+    "име"})
+
+(def ^:private metadata-label-value-re
+  #"(?iu)^\s*([^:]{1,32})\s*:\s*(.+?)\s*$")
+
+(def ^:private person-name-token-re
+  #"(?iu)^\p{L}[\p{L}.'’`-]*$")
+
+(defn- normalized-word-tokens
+  [s]
+  (when-let [s* (some-> s str str/trim not-empty)]
+    (->> (str/split s* #"[^\p{L}\p{N}]+")
+      (map str/lower-case)
+      (remove str/blank?)
+      vec)))
+
+(defn- roleish-metadata-label?
+  [label]
+  (boolean
+    (some metadata-role-tokens (normalized-word-tokens label))))
+
+(defn- person-name-like?
+  [value]
+  (let [tokens (normalized-word-tokens value)]
+    (boolean
+      (and (seq tokens)
+        (<= 2 (count tokens) 4)
+        (every? #(re-matches person-name-token-re %) tokens)
+        (not-any? #(re-find #"\d" %) tokens)
+        (not (re-find legal-suffix-re (or value "")))))))
+
+(defn- numeric-line?
+  [s]
+  (when (string? s)
+    (let [s (-> s str/trim (str/replace #"\s+" ""))]
+      (boolean (re-matches #"\d{6,}" s)))))
+
+(defn plausible-merchant-name?
+  [s]
+  (let [s* (some-> s text/strip-line-markup str/trim not-empty)]
+    (boolean
+      (and s*
+        (not (numeric-line? s*))
+        (not (date-time-line? s*))
+        (if-let [[_ label value] (re-matches metadata-label-value-re s*)]
+          (not (and (roleish-metadata-label? label)
+                 (person-name-like? value)))
+          true)))))
+
 (defn merchant-header
   "Parse receipt header into structured merchant info.
    Returns {:merchant_name .. :store_name .. :address ..} or nil."
@@ -160,6 +243,7 @@
                                  (or (nil? line)
                                    (numeric-line? line)
                                    (date-time-line? line)
+                                   (not (plausible-merchant-name? line))
                                    (and norm (some #(str/starts-with? norm %) supplier-ignore-prefixes)))))
           lines (->> (str/split-lines markdown)
                   (take-while (complement table-boundary-line?))
@@ -170,6 +254,7 @@
                            (let [line (some-> line0 text/strip-line-markup)
                                  norm (text/normalize-text line)]
                              (and norm
+                               (plausible-merchant-name? line)
                                (not (table-boundary-line? line0))
                                (not (is-header-stop-line? norm)))))
                          lines)
@@ -227,6 +312,7 @@
                 (let [line (some-> line0 text/strip-line-markup)
                       norm (some-> line text/normalize-text strip-leading-junk)]
                   (when (and norm
+                          (plausible-merchant-name? line)
                           (not (numeric-line? line))
                           (not (date-time-line? line))
                           (not (some #(str/starts-with? norm %) supplier-ignore-prefixes)))

@@ -1,6 +1,7 @@
 (ns app.domain.backend.expenses.workers.receipt-ocr.extraction.merchant
   (:require
     [app.domain.backend.expenses.workers.receipt-ocr.markdown :as markdown]
+    [app.domain.backend.expenses.workers.receipt-ocr.markdown.header :as markdown-header]
     [clojure.string :as str]))
 
 (def branch-store-prefix-pattern
@@ -52,7 +53,9 @@
     (let [merchant (:merchant extraction)]
       (if-not (map? merchant)
         extraction
-        (let [merchant-name (some-> merchant :name str str/trim not-empty)
+        (let [merchant-name0 (some-> merchant :name str str/trim not-empty)
+              merchant-name (when (markdown-header/plausible-merchant-name? merchant-name0)
+                              merchant-name0)
               store-name0-raw (some-> merchant :store_name str str/trim not-empty)
               address0 (some-> merchant :address str str/trim not-empty)
               store-name0 (normalize-store-name merchant-name store-name0-raw address0)
@@ -66,6 +69,9 @@
                                      (not= store-name0-raw store-name0))
               merchant*
               (cond-> merchant
+                (and (seq merchant-name0) (not (seq merchant-name)))
+                (dissoc :name)
+
                 (and (seq address0) (not (seq raw-address0)))
                 (assoc :raw_address address0)
 
@@ -111,9 +117,12 @@
   (if-not (and (map? merchant) (map? markdown-merchant-header))
     merchant
     (let [merchant-name0 (some-> merchant :name str str/trim not-empty)
+          merchant-name-valid? (markdown-header/plausible-merchant-name? merchant-name0)
+          merchant-name-h (some-> markdown-merchant-header :merchant_name str str/trim not-empty)
+          merchant-name-h-valid? (markdown-header/plausible-merchant-name? merchant-name-h)
           store-name0-raw (some-> merchant :store_name str str/trim not-empty)
           store-name0 (when (and (seq store-name0-raw)
-                              (not (and (seq merchant-name0)
+                              (not (and merchant-name-valid?
                                      (= (str/lower-case store-name0-raw)
                                        (str/lower-case merchant-name0)))))
                         store-name0-raw)
@@ -122,6 +131,9 @@
           raw-address0 (some-> merchant :raw_address str str/trim not-empty)
           merchant*
           (cond-> merchant
+            (and (seq merchant-name0) (not merchant-name-valid?))
+            (dissoc :name)
+
             (and (seq address0) (not (seq raw-address0)))
             (assoc :raw_address address0)
 
@@ -144,6 +156,9 @@
                         :else address0)
           store-name-new (or store-name0 store-name-h)]
       (cond-> merchant*
+        (and (not merchant-name-valid?) merchant-name-h-valid?)
+        (assoc :name merchant-name-h)
+
         (and (not (seq store-name0)) (seq store-name-new))
         (assoc :store_name store-name-new)
 
