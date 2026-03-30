@@ -2,6 +2,7 @@
   "Tests for duplicate detection service."
   (:require
     [app.domain.backend.expenses.services.duplicates :as duplicates]
+    [clojure.string :as str]
     [clojure.test :refer [deftest is testing]]
     [next.jdbc :as jdbc])
   (:import
@@ -57,6 +58,26 @@
         (duplicates/detect-prefix-duplicates :db :suppliers {:fetch-limit 999999}))
       (is (= [5000 1 20000] @captured-limits)))))
 
+(deftest detect-prefix-duplicates-articles-ignore-unit-boundary-test
+  (testing "article prefix detection groups same-prefix rows even when stored units differ"
+    (let [id-a (UUID/randomUUID)
+          id-b (UUID/randomUUID)
+          rows [{:id id-a
+                 :canonical_name "Kajmak Mladi Rfz Pa"
+                 :normalized_key "kajmak-mladi-rfz-pa"
+                 :unit "kg"
+                 :created_at #inst "2024-01-02"}
+                {:id id-b
+                 :canonical_name "Kajmak Mladi Padjeni Rinfuza"
+                 :normalized_key "kajmak-mladi-padjeni-rinfuza"
+                 :unit "kom"
+                 :created_at #inst "2024-01-01"}]]
+      (with-redefs [jdbc/execute! (fn [_db _sql _opts] rows)]
+        (let [clusters (duplicates/detect-prefix-duplicates :db :articles {:prefix-words 2})]
+          (is (= 1 (count clusters)))
+          (is (= #{id-a id-b}
+                (set (map :id (:members (first clusters)))))))))))
+
 ;; ============================================================================
 ;; Usage Count Enrichment
 ;; ============================================================================
@@ -86,7 +107,7 @@
     (let [article-id (UUID/randomUUID)
           clusters [{:members [{:id article-id}] :count 1}]]
       (with-redefs [jdbc/execute! (fn [_db sql-params _opts]
-                                    (let [sql-str (some-> (first sql-params) str clojure.string/lower-case)]
+                                    (let [sql-str (some-> (first sql-params) str str/lower-case)]
                                       (cond
                                         (and (string? sql-str)
                                           (re-find #"count\(\*\)" sql-str))
@@ -122,12 +143,32 @@
           (is (= ["4.50 EUR" "5.00 BAM"] (:price-labels member)))
           (is (= 0 (:usage-count member))))))))
 
+(deftest detect-prefix-duplicates-articles-sort-key-prefers-unit-only-in-ui-test
+  (testing "article member sort key keeps kg before kom for otherwise-identical names"
+    (is (= [["Kajmak Mladi Rfz Pa" "kg"]
+            ["Kajmak Mladi Rfz Pa" "kom"]]
+          (->> [{:canonical-name "Kajmak Mladi Rfz Pa" :unit "kom" :id "b"}
+                {:canonical-name "Kajmak Mladi Rfz Pa" :unit "kg" :id "a"}]
+            (sort-by (fn [member]
+                       [(or (:canonical-name member)
+                          (:canonical_name member)
+                          (:display-name member)
+                          (:display_name member)
+                          (:name member)
+                          "")
+                        (or (:unit member) "")
+                        (or (:created-at member)
+                          (:created_at member)
+                          "")
+                        (or (:id member) "")]))
+            (mapv (juxt :canonical-name :unit)))))))
+
 (deftest enrich-with-usage-counts-adds-store-supplier-name-test
   (testing "store candidates include supplier display name"
     (let [store-id (UUID/randomUUID)
           clusters [{:members [{:id store-id}] :count 1}]]
       (with-redefs [jdbc/execute! (fn [_db sql-params _opts]
-                                    (let [sql-str (some-> (first sql-params) str clojure.string/lower-case)]
+                                    (let [sql-str (some-> (first sql-params) str str/lower-case)]
                                       (cond
                                         (and (string? sql-str)
                                           (re-find #"from stores" sql-str)

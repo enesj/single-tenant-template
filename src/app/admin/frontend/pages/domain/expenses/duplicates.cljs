@@ -34,6 +34,10 @@
         entity-types)
     entity-type))
 
+(defn- article-entity?
+  [entity-type]
+  (= entity-type "articles"))
+
 (defui mode-tabs []
   (let [current (use-subscribe [::dup-events/mode])]
     ($ :div {:class "ds-tabs ds-tabs-boxed mb-4" :id "dedup-mode-tabs"}
@@ -109,6 +113,29 @@
     (:price_labels member)
     []))
 
+(defn- article-unit-label
+  [member]
+  (some-> (or (:unit member)
+            (:unit_name member)
+            (:unit-name member))
+    str
+    str/trim
+    not-empty))
+
+(defn- article-member-sort-key
+  [member]
+  [(or (:canonical-name member)
+     (:canonical_name member)
+     (:display-name member)
+     (:display_name member)
+     (:name member)
+     "")
+   (or (article-unit-label member) "")
+   (or (:created-at member)
+     (:created_at member)
+     "")
+   (or (:id member) "")])
+
 (defn- store-supplier-label
   [member]
   (or (:supplier-display-name member)
@@ -163,6 +190,13 @@
                                   :member member
                                   :normalized-key normalized-key})))
 
+(defui article-unit-cell [{:keys [member]}]
+  ($ :td {:class "p-2"}
+    (if-let [unit (article-unit-label member)]
+      ($ :span {:class "ds-badge ds-badge-sm ds-badge-primary ds-badge-outline font-mono"}
+        unit)
+      ($ :span {:class "text-base-content/40"} "—"))))
+
 (defui cluster-member [{:keys [member cluster-idx entity-type is-primary? is-secondary? on-select-primary on-toggle-secondary]}]
   (let [member-id (or (:id member) (str (:id member)))
         display-name (or (:display-name member)
@@ -193,6 +227,8 @@
                      :checked (boolean is-secondary?)
                      :on-change (fn [_] (on-toggle-secondary member-id))})))
       ($ :td {:class "p-2 font-medium"} display-name)
+      (when (article-entity? entity-type)
+        ($ article-unit-cell {:member member}))
       ($ candidate-context-cell {:entity-type entity-type
                                  :member member
                                  :normalized-key normalized-key})
@@ -200,31 +236,32 @@
         ($ :span {:class "ds-badge ds-badge-sm ds-badge-ghost"} (str usage-count))))))
 
 (defui cluster-card [{:keys [cluster idx]}]
-  (let [selections  (use-subscribe [::dup-events/selections])
+  (let [selections (use-subscribe [::dup-events/selections])
         entity-type (use-subscribe [::dup-events/entity-type])
-        merging?    (use-subscribe [::dup-events/merging?])
-        flagging?   (use-subscribe [::dup-events/flagging?])
-        members     (:members cluster)
-        cluster-id  (or (:cluster-id cluster) (:cluster_id cluster))
-        member-ids  (->> members
-                      (map :id)
-                      (remove nil?)
-                      vec)
-        cluster-sel     (get selections idx {})
-        primary-id      (:primary-id cluster-sel)
-        secondary-ids   (set (:secondary-ids cluster-sel []))
-        on-select-primary   (use-callback
-                              (fn [member-id]
-                                (rf/dispatch [::dup-events/select-primary idx member-id]))
-                              [idx])
+        merging? (use-subscribe [::dup-events/merging?])
+        flagging? (use-subscribe [::dup-events/flagging?])
+        members (cond->> (:members cluster)
+                  (article-entity? entity-type) (sort-by article-member-sort-key))
+        cluster-id (or (:cluster-id cluster) (:cluster_id cluster))
+        member-ids (->> members
+                     (map :id)
+                     (remove nil?)
+                     vec)
+        cluster-sel (get selections idx {})
+        primary-id (:primary-id cluster-sel)
+        secondary-ids (set (:secondary-ids cluster-sel []))
+        on-select-primary (use-callback
+                            (fn [member-id]
+                              (rf/dispatch [::dup-events/select-primary idx member-id]))
+                            [idx])
         on-toggle-secondary (use-callback
                               (fn [member-id]
                                 (rf/dispatch [::dup-events/toggle-secondary idx member-id]))
                               [idx])
         can-merge? (and primary-id (seq secondary-ids))
-        can-hide?  (and (seq cluster-id) (seq member-ids))]
+        can-hide? (and (seq cluster-id) (seq member-ids))]
     ($ :div {:class "ds-card bg-base-100 shadow-md mb-4"
-             :id    (str "dedup-cluster-" idx)}
+             :id (str "dedup-cluster-" idx)}
       ($ :div {:class "ds-card-body p-4"}
         ($ :div {:class "flex justify-between items-center mb-2"}
           ($ :h3 {:class "font-semibold text-base"}
@@ -232,30 +269,30 @@
           ($ :div {:class "flex items-center gap-2"}
             (when can-hide?
               ($ :button
-                {:id       (str "dedup-hide-btn-" idx)
-                 :title    "Hide this cluster as a false positive"
-                 :class    (str "ds-btn ds-btn-sm ds-btn-outline"
-                             (when flagging? " ds-loading"))
+                {:id (str "dedup-hide-btn-" idx)
+                 :title "Hide this cluster as a false positive"
+                 :class (str "ds-btn ds-btn-sm ds-btn-outline"
+                          (when flagging? " ds-loading"))
                  :disabled (or flagging? merging?)
                  :on-click (fn [_]
                              (rf/dispatch [::dup-events/ignore-cluster
                                            {:entity-type (keyword entity-type)
-                                            :cluster-id  cluster-id
-                                            :member-ids  member-ids}]))}
+                                            :cluster-id cluster-id
+                                            :member-ids member-ids}]))}
                 "Hide"))
             ($ :button
-              {:id       (str "dedup-merge-btn-" idx)
-               :class    (str "ds-btn ds-btn-sm ds-btn-warning"
-                           (when-not can-merge? " ds-btn-disabled")
-                           (when merging? " ds-loading"))
+              {:id (str "dedup-merge-btn-" idx)
+               :class (str "ds-btn ds-btn-sm ds-btn-warning"
+                        (when-not can-merge? " ds-btn-disabled")
+                        (when merging? " ds-loading"))
                :disabled (or (not can-merge?) merging? flagging?)
                :on-click (fn [_]
                            (when can-merge?
                              (rf/dispatch [::dup-events/merge-preview
-                                           {:entity-type  (keyword entity-type)
-                                            :primary-id   primary-id
+                                           {:entity-type (keyword entity-type)
+                                            :primary-id primary-id
                                             :secondary-ids (vec secondary-ids)
-                                            :cluster-idx  idx}])))}
+                                            :cluster-idx idx}])))}
               "Merge")))
         ($ :div {:class "overflow-x-auto"}
           ($ :table {:class "ds-table ds-table-sm w-full"}
@@ -264,19 +301,21 @@
                 ($ :th {:class "p-2 w-16"} "Primary")
                 ($ :th {:class "p-2 w-16"} "Merge")
                 ($ :th {:class "p-2"} "Name")
+                (when (article-entity? entity-type)
+                  ($ :th {:class "p-2 w-24"} "Unit"))
                 ($ :th {:class "p-2"} (context-column-label entity-type))
                 ($ :th {:class "p-2 text-center w-24"} "Usage")))
             ($ :tbody
-              (for [[i member] (map-indexed vector members)]
+              (for [member members]
                 (let [mid (or (:id member) (str (:id member)))]
                   ($ cluster-member
-                    {:key                mid
-                     :member             member
-                     :cluster-idx        idx
-                     :entity-type        entity-type
-                     :is-primary?        (= primary-id mid)
-                     :is-secondary?      (contains? secondary-ids mid)
-                     :on-select-primary  on-select-primary
+                    {:key mid
+                     :member member
+                     :cluster-idx idx
+                     :entity-type entity-type
+                     :is-primary? (= primary-id mid)
+                     :is-secondary? (contains? secondary-ids mid)
+                     :on-select-primary on-select-primary
                      :on-toggle-secondary on-toggle-secondary}))))))))))
 
 ;; ============================================================================
@@ -324,6 +363,8 @@
                      :checked (boolean is-secondary?)
                      :on-change (fn [_] (on-toggle-secondary member))})))
       ($ :td {:class "p-2 font-medium"} (entity-display-name member))
+      (when (article-entity? entity-type)
+        ($ article-unit-cell {:member member}))
       ($ :td {:class "p-2"}
         ($ candidate-context-content {:entity-type entity-type
                                       :member member
@@ -382,6 +423,8 @@
                   ($ :th {:class "p-2 w-16"} "Primary")
                   ($ :th {:class "p-2 w-16"} "Merge")
                   ($ :th {:class "p-2"} "Name")
+                  (when (article-entity? entity-type)
+                    ($ :th {:class "p-2 w-24"} "Unit"))
                   ($ :th {:class "p-2"} (context-column-label entity-type))
                   ($ :th {:class "p-2 w-24"} "Remove")))
               ($ :tbody
@@ -405,6 +448,8 @@
         normalized-key (or (:normalized-key member) (:normalized_key member) "—")]
     ($ :tr
       ($ :td {:class "p-2 font-medium"} (entity-display-name member))
+      (when (article-entity? entity-type)
+        ($ article-unit-cell {:member member}))
       ($ :td {:class "p-2"}
         ($ candidate-context-content {:entity-type entity-type
                                       :member member
@@ -473,6 +518,8 @@
               ($ :thead
                 ($ :tr
                   ($ :th {:class "p-2"} "Name")
+                  (when (article-entity? entity-type)
+                    ($ :th {:class "p-2 w-24"} "Unit"))
                   ($ :th {:class "p-2"} (context-column-label entity-type))
                   ($ :th {:class "p-2 w-28"} "State")
                   ($ :th {:class "p-2 w-44"} "Actions")))

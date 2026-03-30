@@ -33,27 +33,30 @@
   same group (e.g. stores must share the same supplier_id to be considered
   duplicates). Applies to all strategies.
 
+  :display-cols (optional) — extra columns to include in duplicate candidate
+  payloads for UI context without affecting grouping.
+
   :normalize-fn (optional) — derive a detection key from the display name when
   the entity does not persist a normalized_key column."
-  {:suppliers     {:table "suppliers"
-                   :name-col :display_name
-                   :key-col :normalized_key
-                   :fk-tables {:expenses {:col :supplier_id}
-                               :stores {:col :supplier_id}
-                               :supplier_aliases {:col :supplier_id}
-                               :article_aliases {:col :supplier_id}}}
-   :articles      {:table "articles"
-                   :name-col :canonical_name
-                   :key-col :normalized_key
-                   :group-col :unit
-                   :fk-tables {:expense_items {:col :article_id}
-                               :article_aliases {:col :article_id}}}
-   :stores        {:table "stores"
-                   :name-col :display_name
-                   :key-col :normalized_key
-                   :group-col :supplier_id
-                   :fk-tables {:expenses {:col :store_id}
-                               :store_aliases {:col :store_id}}}
+  {:suppliers {:table "suppliers"
+               :name-col :display_name
+               :key-col :normalized_key
+               :fk-tables {:expenses {:col :supplier_id}
+                           :stores {:col :supplier_id}
+                           :supplier_aliases {:col :supplier_id}
+                           :article_aliases {:col :supplier_id}}}
+   :articles {:table "articles"
+              :name-col :canonical_name
+              :key-col :normalized_key
+              :display-cols [:unit]
+              :fk-tables {:expense_items {:col :article_id}
+                          :article_aliases {:col :article_id}}}
+   :stores {:table "stores"
+            :name-col :display_name
+            :key-col :normalized_key
+            :group-col :supplier_id
+            :fk-tables {:expenses {:col :store_id}
+                        :store_aliases {:col :store_id}}}
    :manufacturers {:table "manufacturers"
                    :name-col :display_name
                    :key-col :normalized_key
@@ -111,10 +114,11 @@
       (keyword? detection-col) (assoc detection-col detection-key))))
 
 (defn- detection-select-cols
-  [{:keys [name-col key-col group-col]}]
+  [{:keys [name-col key-col group-col display-cols]}]
   (cond-> [:id name-col :created_at]
     key-col (conj key-col)
-    group-col (conj group-col)))
+    group-col (conj group-col)
+    (seq display-cols) (into display-cols)))
 
 (defn- fetch-all-rows
   "Fetch rows for an entity (id, name-col, detection key, and group-col when present).
