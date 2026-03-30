@@ -21,6 +21,13 @@
 
 (def ^:private unknown-supplier-normalized-key "unknown-supplier")
 
+(def ^:private min-alias-normalized-length 2)
+
+(defn- valid-alias-normalized-key?
+  [normalized]
+  (and (not (str/blank? normalized))
+    (>= (count normalized) min-alias-normalized-length)))
+
 ;; ============================================================================
 ;; Service Registration
 ;; ============================================================================
@@ -190,6 +197,12 @@
      (throw (ex-info "raw_label is required" {:status 400 :field :raw_label})))
    (let [raw-label* (str/trim raw-label)
          normalized (articles/normalize-alias-label raw-label*)
+         _ (when-not (valid-alias-normalized-key? normalized)
+             (throw (ex-info "raw_label normalizes to an invalid key"
+                      {:status 400
+                       :field :raw_label
+                       :raw_label raw-label*
+                       :raw_label_normalized normalized})))
          normalized-unit (or (normalize-unit unit) "kom")
          effective-supplier-id (or supplier-id (get-unknown-supplier-id db))
          row {:id (UUID/randomUUID)

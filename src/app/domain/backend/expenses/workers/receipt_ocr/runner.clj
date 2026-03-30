@@ -87,10 +87,13 @@
                                   :content-type content-type*})
                 global-auto-post? (:global-auto-publish-after-upload? opts)
                 auto-post-enabled? (and (:auto-post-after-upload? ocr-cfg) global-auto-post?)
-                opts* (assoc opts :auto-post-after-upload? auto-post-enabled?)
+                defer-refine? (true? (:defer-refine? opts))
+                opts* (assoc opts
+                        :auto-post-after-upload? auto-post-enabled?
+                        :persist-item-aliases? (not defer-refine?))
                 persist-result (-> (extraction/persist-extract-result! db receipt-id extract-result opts*)
                                  (assoc :auto-post-after-upload? auto-post-enabled?))]
-            (if (:defer-refine? opts*)
+            (if defer-refine?
               (assoc persist-result :receipt receipt :extract-result extract-result)
               (refine/maybe-refine-review-required db receipt extract-result persist-result opts*)))
           (catch Exception e

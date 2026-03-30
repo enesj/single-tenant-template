@@ -72,6 +72,18 @@
   [handler]
   (admin-mw/wrap-admin-role handler :admin))
 
+(defn- default-prefix-words
+  "Choose a safer default prefix width per entity type.
+
+  Suppliers often have a short brand key plus a descriptor suffix (for example
+  `bk` vs `bk-family`), so one-token prefix grouping is the most useful default
+  there. Other entity types stay on the stricter two-token default to avoid
+  noisy clusters."
+  [entity-type]
+  (case entity-type
+    :suppliers 1
+    2))
+
 (defn- detect-handler
   [db]
   (admin-utils/with-error-handling
@@ -93,8 +105,10 @@
 
           :else
           (let [opts (cond-> {:fetch-limit fetch-limit}
-                       (get qp "prefix-words")
-                       (assoc :prefix-words (admin-utils/parse-int-param qp "prefix-words" 2))
+                       (or (= strategy :prefix)
+                         (get qp "prefix-words"))
+                       (assoc :prefix-words
+                         (admin-utils/parse-int-param qp "prefix-words" (default-prefix-words entity-type)))
 
                        (get qp "threshold")
                        (assoc :threshold (try (Double/parseDouble (str (get qp "threshold")))

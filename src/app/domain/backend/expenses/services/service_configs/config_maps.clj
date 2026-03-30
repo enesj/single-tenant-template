@@ -14,6 +14,31 @@
   [value]
   (some-> value str str/trim str/lower-case not-empty))
 
+(def ^:private min-article-alias-normalized-length 2)
+
+(defn- ensure-valid-article-alias-data
+  [data]
+  (let [raw-label-provided? (contains? data :raw_label)
+        raw-label-normalized-provided? (contains? data :raw_label_normalized)
+        raw-label (some-> (:raw_label data) str str/trim)
+        normalized (cond
+                     raw-label-provided? (articles/normalize-alias-label raw-label)
+                     raw-label-normalized-provided? (articles/normalize-alias-label (:raw_label_normalized data))
+                     :else nil)]
+    (when (and (or raw-label-provided? raw-label-normalized-provided?)
+            (or (str/blank? normalized)
+              (< (count normalized) min-article-alias-normalized-length)))
+      (throw (ex-info "raw_label normalizes to an invalid key"
+               {:status 400
+                :entity "article_aliases"
+                :field :raw_label
+                :raw_label raw-label
+                :raw_label_normalized normalized})))
+    (cond-> data
+      raw-label-provided? (assoc :raw_label raw-label)
+      (or raw-label-provided? raw-label-normalized-provided?) (assoc :raw_label_normalized normalized)
+      (contains? data :unit) (update :unit normalize-unit-value))))
+
 (def article-alias-config
   {:table-name "article_aliases"
    :table-alias :aa
@@ -39,6 +64,10 @@
                    [:a/canonical_name :article_canonical_name]]
    :field-transformers {:raw_label_normalized articles/normalize-alias-label
                         :unit normalize-unit-value}
+   :before-insert (fn [data]
+                    (ensure-valid-article-alias-data data))
+   :before-update (fn [_id updates]
+                    (ensure-valid-article-alias-data updates))
    :has-search? true
    :has-count? true})
 

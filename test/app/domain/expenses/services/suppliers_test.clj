@@ -226,6 +226,52 @@
         (is (= (:id supplier) (get-in result [:supplier :id])))
         (is (= :places-api (:source result)))))))
 
+(deftest resolve-or-create-supplier-with-places-ignores-prefix-only-match-for-short-brands
+  (when-let [db fixtures/*test-db*]
+    (let [brand-name "B&K"
+          opts {:places-cfg {:api-key "test" :region-code "BA" :language-code "bs"}}
+          result (with-redefs [places-api/search-text! (fn [& _]
+                                                         {:places [{:name "B&K Family DOO"
+                                                                    :raw {:displayName {:text "B&K Family DOO"}}}
+                                                                   {:name "B&K Wäge- und Anlagentechnik GmbH"
+                                                                    :raw {:displayName {:text "B&K Wäge- und Anlagentechnik GmbH"}}}]
+                                                          :error nil})]
+                   (suppliers/resolve-or-create-supplier-with-places! db brand-name opts))]
+      (is (= :ocr-fallback (:source result)))
+      (is (= brand-name (get-in result [:supplier :display_name])))
+      (is (= (suppliers/normalize-supplier-key brand-name)
+            (get-in result [:supplier :normalized_key]))))))
+
+(deftest resolve-or-create-supplier-with-places-ignores-places-branch-suffix-for-supplier
+  (when-let [db fixtures/*test-db*]
+    (let [supplier-name "AMKO KOMERC"
+          opts {:places-cfg {:api-key "test" :region-code "BA" :language-code "bs"}}
+          result (with-redefs [places-api/search-text! (fn [& _]
+                                                         {:places [{:name "Amko komerc Humska"
+                                                                    :raw {:displayName {:text "Amko komerc Humska"}}}
+                                                                   {:name "Amko komerc Grbavička Grbavica"
+                                                                    :raw {:displayName {:text "Amko komerc Grbavička Grbavica"}}}]
+                                                          :error nil})]
+                   (suppliers/resolve-or-create-supplier-with-places! db supplier-name opts))]
+      (is (= :ocr-fallback (:source result)))
+      (is (= supplier-name (get-in result [:supplier :display_name])))
+      (is (= (suppliers/normalize-supplier-key supplier-name)
+            (get-in result [:supplier :normalized_key]))))))
+
+(deftest resolve-or-create-supplier-with-places-ignores-shorter-places-root-for-qualified-brand
+  (when-let [db fixtures/*test-db*]
+    (let [supplier-name "New Yorker BH"
+          opts {:places-cfg {:api-key "test" :region-code "BA" :language-code "bs"}}
+          result (with-redefs [places-api/search-text! (fn [& _]
+                                                         {:places [{:name "New Yorker"
+                                                                    :raw {:displayName {:text "New Yorker"}}}]
+                                                          :error nil})]
+                   (suppliers/resolve-or-create-supplier-with-places! db supplier-name opts))]
+      (is (= :ocr-fallback (:source result)))
+      (is (= supplier-name (get-in result [:supplier :display_name])))
+      (is (= (suppliers/normalize-supplier-key supplier-name)
+            (get-in result [:supplier :normalized_key]))))))
+
 (deftest resolve-or-create-supplier-with-places-preserves-ocr-brand-name
   (when-let [db fixtures/*test-db*]
     (let [suffix (subs (str (java.util.UUID/randomUUID)) 0 8)

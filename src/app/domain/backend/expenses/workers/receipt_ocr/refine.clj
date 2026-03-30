@@ -320,9 +320,13 @@
             (.awaitTermination pool 10 TimeUnit/SECONDS)))))))
 
 (defn auto-post-extracted-results!
-  "Persist extraction results for all auto-postable receipts in the batch."
+  "Persist final extraction results for all non-review-required receipts after defer-refine runs.
+
+  This final pass writes aliases from the settled extraction and optionally auto-posts
+  when that feature is enabled."
   [db opts results]
-  (let [post-opts (dissoc opts :defer-refine? :skip-auto-post?)
+  (let [post-opts (assoc (dissoc opts :defer-refine? :skip-auto-post?)
+                    :persist-item-aliases? true)
         post-map (->> results
                    (keep (fn [result]
                            (let [receipt-id (result-receipt-id result)
@@ -334,8 +338,7 @@
                              (when (and receipt-id receipt extract-result
                                      (= :ok (:result result))
                                      (= :extract (:stage result))
-                                     (not (:review-required? result))
-                                     (true? auto-post?))
+                                     (not (:review-required? result)))
                                (let [updated (extraction/persist-extract-result!
                                                db
                                                receipt-id

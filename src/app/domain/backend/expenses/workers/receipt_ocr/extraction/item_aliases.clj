@@ -19,13 +19,48 @@
       :created
       :reused)))
 
+(def ^:private min-suspicious-alias-normalized-length
+  2)
+
+(defn- alias-label-diagnostics
+  [raw-label unit]
+  (let [raw-label* (some-> raw-label str str/trim)
+        normalized (articles/normalize-alias-label raw-label*)]
+    {:raw_label raw-label*
+     :raw_label_length (some-> raw-label* count)
+     :raw_label_normalized normalized
+     :raw_label_normalized_length (some-> normalized count)
+     :unit unit}))
+
+(defn- suspicious-short-alias-label?
+  [raw-label]
+  (let [normalized (articles/normalize-alias-label (some-> raw-label str str/trim))]
+    (and (seq normalized)
+      (< (count normalized) min-suspicious-alias-normalized-length))))
+
 (defn auto-create-aliases!
   [db supplier-id extraction opts]
   (let [auto-create-articles? (true? (:auto-create-articles? opts))]
     (when (and (map? extraction) (sequential? (:items extraction)))
       (mapv
-        (fn [{:keys [raw_label unit] :as _item}]
-          (let [raw-label* (some-> raw_label str str/trim)]
+        (fn [idx {:keys [raw_label unit qty unit_price line_total] :as _item}]
+          (let [raw-label* (some-> raw_label str str/trim)
+                suspicious-short? (suspicious-short-alias-label? raw-label*)
+                log-context (merge
+                              {:receipt-id (:receipt-id opts)
+                               :item-index idx
+                               :supplier-id supplier-id
+                               :supplier-guess (:supplier-guess opts)
+                               :provider (:provider opts)
+                               :model (:model opts)
+                               :auto-create-articles? auto-create-articles?
+                               :qty qty
+                               :unit_price unit_price
+                               :line_total line_total}
+                              (alias-label-diagnostics raw-label* unit))]
+            (when suspicious-short?
+              (log/warn "Receipt extraction item has suspicious short alias label before persistence"
+                log-context))
             (if-not (valid-alias-label? raw-label*)
               {:raw_label raw-label*
                :unit unit
@@ -49,6 +84,13 @@
                           article-id)
 
                         :else nil)]
+                  (when suspicious-short?
+                    (log/warn "Suspicious short alias label reached alias persistence"
+                      (assoc log-context
+                        :alias-id alias-id
+                        :alias-action alias-action
+                        :existing-article-id existing-article-id
+                        :article-id article-id)))
                   {:raw_label raw-label*
                    :unit unit
                    :article_alias_id alias-id
@@ -56,13 +98,22 @@
                    :alias_action alias-action})
                 (catch Exception e
                   (log/warn e "Failed to auto-create article alias/article from receipt extraction item"
-                    {:supplier-id supplier-id
+                    {:receipt-id (:receipt-id opts)
+                     :item-index idx
+                     :supplier-id supplier-id
+                     :supplier-guess (:supplier-guess opts)
+                     :provider (:provider opts)
+                     :model (:model opts)
                      :raw_label raw-label*
                      :unit unit
+                     :qty qty
+                     :unit_price unit_price
+                     :line_total line_total
                      :auto-create-articles? auto-create-articles?})
                   {:raw_label raw-label*
                    :unit unit
                    :article_alias_id nil
                    :article_id nil
                    :alias_action nil})))))
+        (range)
         (:items extraction)))))

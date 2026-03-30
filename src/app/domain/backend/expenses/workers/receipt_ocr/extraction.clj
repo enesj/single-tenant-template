@@ -2,6 +2,7 @@
   "Extraction post-processing + persistence."
   (:require
     [app.domain.backend.expenses.services.article-aliases :as aliases]
+    [app.domain.backend.expenses.services.articles :as articles]
     [app.domain.backend.expenses.services.receipts.queries :as receipt-queries]
     [app.domain.backend.expenses.services.receipts.status :as receipt-status]
     [app.domain.backend.expenses.workers.receipt-ocr.common :as common]
@@ -107,6 +108,40 @@
    :stores (alias-counts (when store [store]))
    :articles (alias-counts items)})
 
+(def ^:private min-suspicious-alias-normalized-length
+  2)
+
+(defn- suspicious-item-alias-candidates
+  [items]
+  (->> (or items [])
+    (keep-indexed
+      (fn [idx {:keys [raw_label unit qty unit_price line_total] :as _item}]
+        (let [raw-label* (some-> raw_label str str/trim)
+              normalized (articles/normalize-alias-label raw-label*)]
+          (when (and (seq normalized)
+                  (< (count normalized) min-suspicious-alias-normalized-length))
+            {:item_index idx
+             :raw_label raw-label*
+             :raw_label_length (some-> raw-label* count)
+             :raw_label_normalized normalized
+             :raw_label_normalized_length (count normalized)
+             :unit unit
+             :qty qty
+             :unit_price unit_price
+             :line_total line_total}))))
+    vec))
+
+(defn- unresolved-item-alias-snapshot
+  [items]
+  (when (sequential? items)
+    (mapv (fn [{:keys [raw_label unit] :as _item}]
+            {:raw_label (some-> raw_label str str/trim)
+             :unit unit
+             :article_alias_id nil
+             :article_id nil
+             :alias_action nil})
+      items)))
+
 (defn persist-extract-result!
   "Persist a provider extract result, enriched with markdown-derived guesses.
 
@@ -204,6 +239,25 @@
                :source :unknown})))
         store-source (:source store-res)
         store-alias-action (:alias_action store-res)
+        provider-name (or (some-> (:provider extract-result) str str/trim not-empty)
+                        "mistral")
+        suspicious-item-aliases (suspicious-item-alias-candidates (:items extraction))
+        persist-item-aliases? (if (contains? opts :persist-item-aliases?)
+                                (boolean (:persist-item-aliases? opts))
+                                true)
+        _ (when (seq suspicious-item-aliases)
+            (log/warn "Receipt extraction produced suspicious short item aliases after post-processing"
+              {:receipt-id receipt-id
+               :supplier-guess supplier-guess
+               :supplier-id supplier-id
+               :provider provider-name
+               :model (:model extract-result)
+               :suspicious-items suspicious-item-aliases
+               :item-count (count (or (:items extraction) []))
+               :markdown-items-count (count (or markdown-items []))
+               :reconciliation-changed? changed?
+               :reconciliation-changes changes
+               :post-processing post-processing}))
         status (if (and valid-shape?
                      guesses
                      (not (review-required? guesses))
@@ -217,15 +271,21 @@
                                  provider-confidence))
         db-status (if lines-total-mismatch "review_required" status)
         llm-refine (:llm_refine extract-result)
-        item-aliases-snapshot (if (= :unknown source)
-                                (when (and (map? extraction) (sequential? (:items extraction)))
-                                  (mapv (fn [{:keys [raw_label] :as _item}]
-                                          {:raw_label (some-> raw_label str str/trim)
-                                           :article_alias_id nil
-                                           :alias_action nil})
-                                    (:items extraction)))
+        item-aliases-snapshot (cond
+                                (= :unknown source)
+                                (unresolved-item-alias-snapshot (:items extraction))
+
+                                (not persist-item-aliases?)
+                                (unresolved-item-alias-snapshot (:items extraction))
+
+                                :else
                                 (try
-                                  (auto-create-aliases! db supplier-id extraction opts)
+                                  (auto-create-aliases! db supplier-id extraction
+                                    (assoc opts
+                                      :receipt-id receipt-id
+                                      :supplier-guess supplier-guess
+                                      :provider provider-name
+                                      :model (:model extract-result)))
                                   (catch Exception e
                                     (log/warn e "Failed to auto-create aliases from receipt extraction" {:receipt-id receipt-id})
                                     nil)))
@@ -241,8 +301,6 @@
                                      :source store-source}
                              :items item-aliases-snapshot}
         alias-metrics* (alias-metrics resolution-snapshot)
-        provider-name (or (some-> (:provider extract-result) str str/trim not-empty)
-                        "mistral")
         raw-extract-json (cond-> {:provider provider-name
                                   :received_at (:received-at extract-result)
                                   :model (:model extract-result)

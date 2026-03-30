@@ -92,6 +92,36 @@
             (throw e))
           (throw e))))))
 
+(defn- normalized-key-tokens
+  [normalized-key]
+  (when-let [key* (some-> normalized-key str str/trim not-empty)]
+    (->> (str/split key* #"-")
+      (remove str/blank?)
+      vec)))
+
+(defn- descriptor-suffix-variant?
+  "Return true when one normalized supplier key is just the other's token prefix.
+
+  This catches branch/location/style suffix drift such as:
+  - `amko-komerc` vs `amko-komerc-humska`
+  - `new-yorker` vs `new-yorker-bh`
+
+  Those are not reliable Places corrections; they should stay on the OCR brand
+  path instead of creating or selecting a more specific canonical supplier."
+  [left right]
+  (let [left-tokens (normalized-key-tokens left)
+        right-tokens (normalized-key-tokens right)
+        left-count (count left-tokens)
+        right-count (count right-tokens)]
+    (boolean
+      (and (seq left-tokens)
+        (seq right-tokens)
+        (not= left-tokens right-tokens)
+        (or (and (< left-count right-count)
+              (= left-tokens (subvec right-tokens 0 left-count)))
+          (and (< right-count left-count)
+            (= right-tokens (subvec left-tokens 0 right-count))))))))
+
 (defn- choose-create-display-name
   [ocr-display-name candidate-name]
   (let [ocr-display-name (some-> ocr-display-name configs/unescape-html-entities str str/trim not-empty)
@@ -134,13 +164,17 @@
               (let [candidate-name (some-> (:name place) configs/unescape-html-entities)
                     candidate-normalized (normalize-supplier-key candidate-name)
                     candidate-legacy-normalized (legacy-normalize-supplier-key-v0 candidate-name)
+                    suffix-variant? (descriptor-suffix-variant? normalized candidate-normalized)
                     create-display-name (choose-create-display-name display-name candidate-name)]
-                (if-let [existing (find-by-normalized-keys-or-legacy
-                                    db
-                                    [candidate-normalized candidate-legacy-normalized])]
-                  {:supplier (maybe-unescape-existing-display-name! db existing) :source :places-api}
-                  {:supplier (create-supplier-idempotent! db create-display-name)
-                   :source :places-api}))
+                (if suffix-variant?
+                  {:supplier (create-supplier-idempotent! db display-name)
+                   :source :ocr-fallback}
+                  (if-let [existing (find-by-normalized-keys-or-legacy
+                                      db
+                                      [candidate-normalized candidate-legacy-normalized])]
+                    {:supplier (maybe-unescape-existing-display-name! db existing) :source :places-api}
+                    {:supplier (create-supplier-idempotent! db create-display-name)
+                     :source :places-api})))
               {:supplier (create-supplier-idempotent! db display-name)
                :source :ocr-fallback})))))))
 

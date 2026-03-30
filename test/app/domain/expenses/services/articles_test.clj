@@ -152,6 +152,22 @@
       (is (= (:id article-kg) (:id kg-lookup)))
       (is (= "kg" (:unit kg-lookup))))))
 
+(deftest article-aliases-find-or-create-rejects-too-short-normalized-label
+  (when-let [db fixtures/*test-db*]
+    (let [supplier (:supplier (suppliers/find-or-create-supplier! db (str "Short Alias Supplier " (UUID/randomUUID)) {}))]
+      (doseq [raw-label ["A" "##"]]
+        (let [error (try
+                      (aliases/find-or-create-alias! db (:id supplier) raw-label)
+                      nil
+                      (catch clojure.lang.ExceptionInfo e
+                        e))]
+          (is (instance? clojure.lang.ExceptionInfo error))
+          (is (= 400 (:status (ex-data error))))
+          (is (= :raw_label (:field (ex-data error))))))
+      (is (empty? (aliases/list-article-aliases db {:supplier-id (:id supplier)
+                                                    :limit 10
+                                                    :offset 0}))))))
+
 (deftest articles-map-alias-to-article-makes-lookup-work
   (when-let [db fixtures/*test-db*]
     (let [supplier (:supplier (suppliers/find-or-create-supplier! db (str "MapItem Supplier " (UUID/randomUUID)) {}))

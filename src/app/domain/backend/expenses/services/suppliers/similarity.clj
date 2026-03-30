@@ -122,7 +122,7 @@
   (cond
     (<= input-len 2)
     (and (seq input-prefix)
-      (str/starts-with? candidate-prefix input-prefix))
+      (= candidate-prefix input-prefix))
 
     (<= input-len 4) (>= ratio 0.80)
     (<= input-len 7) (>= ratio 0.70)

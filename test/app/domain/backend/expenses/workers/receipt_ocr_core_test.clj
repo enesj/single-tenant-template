@@ -83,6 +83,37 @@
         (is (= "image/jpeg" (:content-type @seen)))
         (is (= "prepared" (String. ^bytes (:bytes @seen))))))))
 
+(deftest auto-post-extracted-results-finalizes-non-review-required-results-when-auto-post-disabled
+  (let [receipt-id (java.util.UUID/randomUUID)
+        calls (atom [])
+        results [{:receipt-id receipt-id
+                  :receipt {:id receipt-id}
+                  :stage :extract
+                  :result :ok
+                  :review-required? false
+                  :extract-result {:parsed-markdown ""
+                                   :extraction {:items [{:raw_label "ITEM"}]}}
+                  :auto-post-after-upload? false}]]
+    (with-redefs [extraction/persist-extract-result!
+                  (fn [_db rid extract-result opts]
+                    (swap! calls conj {:receipt-id rid
+                                       :extract-result extract-result
+                                       :opts opts})
+                    {:receipt-id rid
+                     :stage :extract
+                     :result :ok
+                     :status "extracted"})]
+      (let [res (#'refine/auto-post-extracted-results!
+                 ::db
+                 {:defer-refine? true
+                  :auto-post-after-upload? false}
+                 results)]
+        (is (= 1 (count @calls)))
+        (is (= receipt-id (:receipt-id (first @calls))))
+        (is (true? (get-in (first @calls) [:opts :persist-item-aliases?])))
+        (is (false? (get-in (first @calls) [:opts :auto-post-after-upload?])))
+        (is (= "extracted" (:status (first res))))))))
+
 (deftest refine-review-required-results-respects-concurrency-limit
   (let [limit 2
         opts {:cerebras-cfg {:refine-concurrency limit :refine-timeout-ms 5000}}

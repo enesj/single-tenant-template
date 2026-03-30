@@ -200,6 +200,53 @@
         (is (= "extracted" (:status _res)))
         (is (= "review_required" (:effective-status _res)))))))
 
+(deftest persist-extract-result-defers-item-alias-persistence-when-disabled
+  (let [receipt-id (java.util.UUID/randomUUID)
+        mapped-supplier-id (java.util.UUID/randomUUID)
+        supplier-alias-id (java.util.UUID/randomUUID)
+        stored (atom nil)
+        article-alias-calls (atom 0)]
+    (with-redefs [receipt-queries/get-receipt (fn [_db _rid]
+                                                {:id receipt-id
+                                                 :status "uploaded"})
+                  receipt-status/store-extraction-results!
+                  (fn [_db _rid payload]
+                    (reset! stored payload)
+                    nil)
+                  receipt-status/update-status! (fn [& _] nil)
+                  supplier-aliases/find-or-create-alias! (fn [_db _raw-label]
+                                                           {:id supplier-alias-id
+                                                            :supplier_id mapped-supplier-id})
+                  suppliers/resolve-or-create-supplier-with-places! (fn [& _]
+                                                                      (throw (ex-info "Should not be called" {})))
+                  article-aliases/find-or-create-alias!
+                  (fn [& _]
+                    (swap! article-alias-calls inc)
+                    (throw (ex-info "Should not be called" {})))]
+      (let [extract-result {:parsed-markdown ""
+                            :extraction {:merchant {:name "AMKO KOMERC"}
+                                         :currency "BAM"
+                                         :totals {:total 1.00}
+                                         :items [{:raw_label "ITEM" :unit "kom" :line_total 1.00}]}}
+            res (extraction/persist-extract-result!
+                  ::db
+                  receipt-id
+                  extract-result
+                  {:default-currency "BAM"
+                   :places-cfg {}
+                   :user-region "BA"
+                   :defer-refine? true
+                   :persist-item-aliases? false})
+            resolution-items (get-in @stored [:raw_extract_json :resolution_snapshot :items])]
+        (is (= receipt-id (:receipt-id res)))
+        (is (= 0 @article-alias-calls))
+        (is (= [{:raw_label "ITEM"
+                 :unit "kom"
+                 :article_alias_id nil
+                 :article_id nil
+                 :alias_action nil}]
+              resolution-items))))))
+
 (deftest persist-extract-result-keeps-legitimate-item-label-ending-with-br
   (let [receipt-id (java.util.UUID/randomUUID)
         mapped-supplier-id (java.util.UUID/randomUUID)

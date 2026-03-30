@@ -38,6 +38,29 @@
             (is (= 200 (:status response)))
             (is (= expected (:fetch-limit @captured-opts)))))))))
 
+(deftest detect-handler-defaults-prefix-words-by-entity-type-test
+  (testing "supplier prefix detection defaults to one token while others stay stricter"
+    (let [captured-opts (atom [])
+          handler (#'duplicates-routes/detect-handler :db)]
+      (with-redefs [duplicates-svc/detect-duplicates
+                    (fn [_db entity-type strategy opts]
+                      (swap! captured-opts conj {:entity-type entity-type
+                                                 :strategy strategy
+                                                 :opts opts})
+                      [])
+                    duplicates-svc/attach-cluster-ids (fn [_entity-type clusters] clusters)
+                    ignored-clusters/list-ignored-cluster-ids (fn [_db _admin-id _entity-type] #{})
+                    duplicates-svc/filter-ignored-clusters (fn [_ignored clusters] clusters)
+                    duplicates-svc/enrich-with-usage-counts (fn [_db _entity-type clusters] clusters)]
+        (doseq [[entity-type expected-prefix] [["suppliers" 1]
+                                               ["articles" 2]]]
+          (let [response (handler {:admin {:id #uuid "00000000-0000-0000-0000-000000000001"}
+                                   :query-params {"entity-type" entity-type
+                                                  "strategy" "prefix"}})]
+            (is (= 200 (:status response)))
+            (is (= expected-prefix
+                  (get-in (last @captured-opts) [:opts :prefix-words])))))))))
+
 (deftest manual-search-handler-uses-entity-search-with-bounded-limit-test
   (testing "manual search dispatches to the selected entity search function"
     (let [captured-args (atom nil)
