@@ -13,6 +13,10 @@
     (rf/dispatch-sync [::audit-adapter/initialize-audit-ui-state])
     (let [db @rf-db/app-db
           base (paths/list-ui-state :audit-logs)]
+  (is (= {:field :created-at :direction :desc}
+    (get-in db (conj (paths/entity-metadata :audit-logs) :sort))))
+  (is (= {:field :created-at :direction :desc}
+    (get-in db (conj base :sort))))
       (is (= 1 (get-in db (conj base :pagination :current-page))))
       (is (nil? (get-in db (conj base :pagination :per-page)))
         "per-page should be left unset so list-view can seed it from configured defaults")

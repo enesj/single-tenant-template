@@ -47,12 +47,16 @@
 
           current-filters (merge (get-in db [:admin :audit :filters] {})
                             (get-in db (paths/list-filters entity-key) {}))
-          ;; Keep admin path but prefer template values when present
+          ;; Preserve any legacy pagination metadata, but never let stale page/limit
+          ;; values override the canonical template list UI state.
           admin-pagination (get-in db [:admin :audit :pagination] {})
-          current-pagination (merge {:page template-page :per-page template-per-page} admin-pagination)
-          ;; Align default sort with adapter default (:timestamp)
+          current-pagination (merge (dissoc admin-pagination :page :current-page :per-page :limit :offset)
+                               {:page template-page
+                                :current-page template-page
+                                :per-page template-per-page})
+          ;; Align default sort with adapter default (:created-at)
           template-sort (paths/resolved-list-sort-config db entity-key)
-          current-sort (merge {:field :timestamp :direction :desc}
+          current-sort (merge {:field :created-at :direction :desc}
                          (get-in db [:admin :audit :sort] {})
                          template-sort)
 
@@ -61,16 +65,20 @@
           final-pagination (merge current-pagination pagination)
           final-sort (merge current-sort sort)
 
-          limit (or (parse-pos-int (:limit final-pagination))
+          limit (or (parse-pos-int (:per-page pagination))
+                  (parse-pos-int (:limit pagination))
                   (parse-pos-int (:per-page final-pagination))
                   template-per-page)
-          page (or (parse-pos-int (:page final-pagination))
+          page (or (parse-pos-int (:page pagination))
+                 (parse-pos-int (:current-page pagination))
+                 (parse-pos-int (:page final-pagination))
                  (parse-pos-int (:current-page final-pagination))
                  template-page)
-          offset (or (parse-non-neg-int (:offset final-pagination))
+          offset (or (parse-non-neg-int (:offset pagination))
                    (* (dec page) limit))
           resolved-pagination (assoc final-pagination
                                 :page page
+                                :current-page page
                                 :per-page limit
                                 :limit limit
                                 :offset offset)

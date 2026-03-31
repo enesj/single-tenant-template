@@ -43,8 +43,11 @@
           template-page (paths/resolved-list-current-page db entity-key)
           current-filters (merge (get-in db [:admin :login-events :filters] {})
                             (get-in db (paths/list-filters entity-key) {}))
-          current-pagination (merge {:page template-page :per-page template-per-page}
-                               (get-in db [:admin :login-events :pagination] {}))
+          admin-pagination (get-in db [:admin :login-events :pagination] {})
+          current-pagination (merge (dissoc admin-pagination :page :current-page :per-page :limit :offset)
+                               {:page template-page
+                                :current-page template-page
+                                :per-page template-per-page})
           template-sort (paths/resolved-list-sort-config db entity-key)
           current-sort (merge {:field :created-at :direction :desc}
                          (get-in db [:admin :login-events :sort] {})
@@ -52,16 +55,20 @@
           final-filters (merge current-filters filters)
           final-pagination (merge current-pagination pagination)
           final-sort (merge current-sort sort)
-          limit (or (parse-pos-int (:limit final-pagination))
+          limit (or (parse-pos-int (:per-page pagination))
+                  (parse-pos-int (:limit pagination))
                   (parse-pos-int (:per-page final-pagination))
                   template-per-page)
-          page (or (parse-pos-int (:page final-pagination))
+          page (or (parse-pos-int (:page pagination))
+                 (parse-pos-int (:current-page pagination))
+                 (parse-pos-int (:page final-pagination))
                  (parse-pos-int (:current-page final-pagination))
                  template-page)
-          offset (or (parse-non-neg-int (:offset final-pagination))
+          offset (or (parse-non-neg-int (:offset pagination))
                    (* (dec page) limit))
           resolved-pagination (assoc final-pagination
                                 :page page
+                                :current-page page
                                 :per-page limit
                                 :limit limit
                                 :offset offset)

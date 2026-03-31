@@ -24,13 +24,42 @@
       (is (nil? (get-in req [:params :pagination]))
         "Request should not send nested :pagination map"))))
 
+(deftest load-audit-logs-defaults-to-created-at-desc-sort
+  (testing ":admin/load-audit-logs uses backend-supported created-at sort by default"
+    (setup/reset-db!)
+    (setup/install-http-stub!)
+
+    (rf/dispatch-sync [:admin/load-audit-logs])
+
+    (let [req (setup/last-http-request)]
+      (is (= "created-at" (get-in req [:params :order-by])))
+      (is (= "desc" (get-in req [:params :order-dir])))
+      (is (not= "timestamp" (get-in req [:params :order-by]))
+        "Audit requests should not use the legacy timestamp sort field"))))
+
+(deftest load-audit-logs-prefers-template-pagination-over-legacy-admin-state
+  (testing ":admin/load-audit-logs ignores stale legacy admin pagination when list UI state changes"
+    (setup/reset-db!)
+    (setup/install-http-stub!)
+    (swap! rf-db/app-db assoc-in (paths/list-per-page :audit-logs) 10)
+    (swap! rf-db/app-db assoc-in (paths/list-current-page :audit-logs) 42)
+    (swap! rf-db/app-db assoc-in [:admin :audit :pagination]
+      {:page 1 :current-page 1 :per-page 25 :limit 25 :offset 0})
+
+    (rf/dispatch-sync [:admin/load-audit-logs])
+
+    (let [req (setup/last-http-request)]
+      (is (= 10 (get-in req [:params :limit]))
+        "rows-per-page should come from canonical list UI state")
+      (is (= 410 (get-in req [:params :offset]))
+        "page changes should not be overwritten by stale legacy admin pagination"))))
 (deftest audit-logs-loaded-stores-server-total-items
   (testing "audit load success stores server :total into template list total-items"
     (setup/reset-db!)
     (rf/dispatch-sync [::audit-events/audit-logs-loaded {:logs [{:id "l-1"} {:id "l-2"}]
-                                                     :total 101
-                                                     :limit 20
-                                                     :offset 0}])
+                                                         :total 101
+                                                         :limit 20
+                                                         :offset 0}])
 
     (let [db @rf-db/app-db]
       (is (= 101 (get-in db (paths/list-total-items :audit-logs)))))))

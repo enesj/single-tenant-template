@@ -63,10 +63,10 @@
           selected-ids-path (paths/entity-selected-ids :audit-logs)
           ;; Seed only current-page and preserve existing pagination (including per-page) if present.
           ;; Per-page defaults are seeded by list-view from entities.edn (:display-settings :per-page).
-          db* (db-utils/assoc-paths db
-                [[(conj metadata-path :sort) {:field :timestamp :direction :desc}]
+              db* (db-utils/assoc-paths db
+                [[(conj metadata-path :sort) {:field :created-at :direction :desc}]
                  [(conj metadata-path :filters) {}]
-                 [ui-state-path {:sort {:field :timestamp :direction :desc}
+                 [ui-state-path {:sort {:field :created-at :direction :desc}
                                  :pagination-mode :server
                                  :refresh-event [:admin/load-audit-logs]
                                  :pagination (-> (merge {:current-page 1}
