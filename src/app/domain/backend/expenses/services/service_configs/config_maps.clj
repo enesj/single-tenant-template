@@ -84,6 +84,8 @@
                       :confidence :sa/confidence}
    :default-order-by :sa/created_at
    :search-fields [:sa/raw_label :sa/raw_label_normalized :s/display_name]
+   :text-filter-columns {:supplier-display-name :s.display_name
+                         :raw-label-normalized  :sa.raw_label_normalized}
    :joins [[:suppliers :s] [:= :s/id :sa/supplier_id]]
    :select-fields [[:sa.*]
                    [:s/display_name :supplier_display_name]]
@@ -134,6 +136,7 @@
                       :store-count :store_count}
    :default-order-by :display_name
    :search-fields [:display_name :normalized_key]
+   :text-filter-columns {:normalized-key :normalized_key}
    ;; Include store_count so the supplier list page can show/hide the expand chevron
    ;; without a separate prefetch. The correlated subquery is evaluated per-row.
    :select-fields [[:*]
@@ -174,6 +177,10 @@
                       :updated-at :st/updated_at}
    :default-order-by :st/display_name
    :search-fields [:st/display_name :st/normalized_key :st/address :c/name :s/display_name]
+   :text-filter-columns {:supplier-display-name :s.display_name
+                         :normalized-key        :st.normalized_key
+                         :address               :st.address
+                         :city-name             :c.name}
    :joins [[:cities :c] [:= :c.id :st/city_id]
            [:suppliers :s] [:= :s/id :st/supplier_id]]
    :select-fields [[:st.*]
@@ -216,6 +223,7 @@
                       :updated-at :updated_at}
    :default-order-by :display_name
    :search-fields [:display_name :normalized_key]
+   :text-filter-columns {:normalized-key :normalized_key}
    :field-transformers {:normalized_key normalize/normalize-manufacturer-key}
    :before-insert (fn [data]
                     (let [display-name (normalize/unescape-html-entities (:display_name data))]
@@ -243,6 +251,7 @@
                       :updated-at :updated_at}
    :default-order-by :name
    :search-fields [:name :description]
+   :text-filter-columns {:description :description}
    :before-insert (fn [data]
                     (-> data
                       (assoc :id (UUID/randomUUID))))
@@ -281,6 +290,9 @@
                       :updated-at :updated_at}
    :default-order-by :name
    :search-fields [:name :normalized_key]
+   :text-filter-columns {:normalized-key :normalized_key
+                         :zip            :zip
+                         :country        :country}
    :before-insert (fn [data]
                     (let [name (some-> (:name data) normalize/unescape-html-entities str str/trim not-empty)]
                       (when-not name
@@ -351,7 +363,8 @@
                       :updated-at :sc/updated_at}
    :default-order-by :sc/name
    :search-fields [:sc/name :sc/description]
-   :text-filter-columns {:category-name :c.name}
+   :text-filter-columns {:category-name :c.name
+                         :description   :sc.description}
    :joins [[:categories :c] [:= :c/id :sc/category_id]]
    :select-fields [[:sc.*]
                    [:c/name :category_name]]

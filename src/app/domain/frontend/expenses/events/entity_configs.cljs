@@ -14,7 +14,8 @@
    :api-endpoint "/admin/api/expenses/suppliers"
    :detail-response-key :supplier
    :has-forms? false
-   :server-search-keys #{:display-name}})
+   :server-filter-keys {:display-name    :search
+                        :normalized-key  :normalized-key}})
 
 (def manufacturers-config
   {:entity-key :manufacturers
@@ -22,7 +23,8 @@
    :api-endpoint "/admin/api/expenses/manufacturers"
    :detail-response-key :manufacturer
    :has-forms? false
-   :server-search-keys #{:display-name}})
+   :server-filter-keys {:display-name    :search
+                        :normalized-key  :normalized-key}})
 
 (def payers-config
   {:entity-key :payers
@@ -54,7 +56,8 @@
    :server-filter-keys {:canonical-name              :search
                         :category-name               :category-name
                         :subcategory-name            :subcategory-name
-                        :manufacturer-display-name   :manufacturer-display-name}})
+                        :manufacturer-display-name   :manufacturer-display-name
+                        :unit                        :unit}})
 
 (def receipts-config
   {:entity-key :receipts
@@ -100,7 +103,8 @@
    :has-forms? false
    :server-filter-keys {:supplier-display-name :supplier-name
                         :raw-label :raw-label
-                        :raw-label-normalized :raw-label-normalized}})
+                        :raw-label-normalized :raw-label-normalized
+                        :unit :unit}})
 
 (def supplier-aliases-config
   {:entity-key :supplier-aliases
@@ -108,9 +112,11 @@
    :api-endpoint "/admin/api/expenses/supplier-aliases"
    :detail-response-key :supplier-alias
    :has-forms? false
-   :server-filter-keys {:raw-label     :search
-                        :supplier-id   :supplier-id
-                        :unmapped-only :unmapped-only}})
+   :server-filter-keys {:raw-label              :search
+                        :supplier-id            :supplier-id
+                        :unmapped-only          :unmapped-only
+                        :supplier-display-name  :supplier-display-name
+                        :raw-label-normalized   :raw-label-normalized}})
 
 (def stores-config
   {:entity-key :stores
@@ -118,7 +124,11 @@
    :api-endpoint "/admin/api/expenses/stores"
    :detail-response-key :store
    :has-forms? false
-   :server-search-keys #{:display-name}})
+   :server-filter-keys {:display-name           :search
+                        :supplier-display-name  :supplier-display-name
+                        :normalized-key         :normalized-key
+                        :address                :address
+                        :city-name              :city-name}})
 
 (def store-aliases-config
   {:entity-key :store-aliases
@@ -142,7 +152,8 @@
    :api-endpoint "/admin/api/expenses/categories"
    :detail-response-key :category
    :has-forms? false
-   :server-search-keys #{:name}})
+   :server-filter-keys {:name        :search
+                        :description :description}})
 
 (def expense-categories-config
   {:entity-key :expense-categories
@@ -158,7 +169,10 @@
    :api-endpoint "/admin/api/expenses/cities"
    :detail-response-key :city
    :has-forms? false
-   :server-search-keys #{:name}})
+   :server-filter-keys {:name           :search
+                        :normalized-key :normalized-key
+                        :zip            :zip
+                        :country        :country}})
 
 (def countries-config
   {:entity-key :countries
@@ -173,6 +187,6 @@
    :api-endpoint "/admin/api/expenses/subcategories"
    :detail-response-key :subcategory
    :has-forms? false
-   :server-filter-keys {:name :search
-                        :description :search
+   :server-filter-keys {:name          :search
+                        :description   :description
                         :category-name :category-name}})

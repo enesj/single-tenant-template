@@ -2,6 +2,7 @@
   "Admin account management events"
   (:require
     [app.admin.frontend.utils.http :as admin-http]
+    [app.shared.pagination :as pagination]
     [app.template.frontend.utils.state :as state-utils]
     [app.template.frontend.db.paths :as paths]
     [re-frame.core :as rf]
@@ -27,33 +28,93 @@
     (assoc error-key (admin-http/extract-error-message error))))
 
 ;; ============================================================================
+;; Filter Flattening
+;; ============================================================================
+
+(defn- flatten-ui-filters
+  "Flatten shared-list UI filter values into flat backend query params.
+   Date ranges {:from x :to y} → <field>-from / <field>-to.
+   Select maps {:value v :label _} → scalar v.
+   Nil/empty string values are omitted."
+  [filters]
+  (reduce-kv
+    (fn [acc k v]
+      (cond
+        (nil? v) acc
+        (and (string? v) (empty? v)) acc
+
+        ;; Date range → <field>-from / <field>-to
+        (and (map? v) (or (contains? v :from) (contains? v :to)))
+        (let [field-name (name k)]
+          (cond-> acc
+            (some? (:from v)) (assoc (keyword (str field-name "-from")) (:from v))
+            (some? (:to v)) (assoc (keyword (str field-name "-to")) (:to v))))
+
+        ;; Number range → <field>-min / <field>-max
+        (and (map? v) (or (contains? v :min) (contains? v :max)))
+        (let [field-name (name k)]
+          (cond-> acc
+            (some? (:min v)) (assoc (keyword (str field-name "-min")) (:min v))
+            (some? (:max v)) (assoc (keyword (str field-name "-max")) (:max v))))
+
+        ;; Select → extract :value
+        (and (map? v) (contains? v :value))
+        (if (some? (:value v))
+          (assoc acc k (:value v))
+          acc)
+
+        ;; Scalar (string, number, boolean) → pass through
+        :else (assoc acc k v)))
+    {}
+    filters))
+
+;; ============================================================================
 ;; Load Admins Events
 ;; ============================================================================
 
 (rf/reg-event-fx
   :admin/load-admins
   (fn [{:keys [db]} [_ params]]
-    (log-admin-operation "Loading admins with params" params)
-    {:db (state-utils/start-api-request db {:loading-key :admin/admins-loading?
-                                            :error-key :admin/admins-error
-                                            :entity-type :admins})
-     :http-xhrio (admin-http/admin-get
-                   {:uri "/admin/api/admins"
-                    :params (or params {})
-                    :on-success [:admin/load-admins-success]
-                    :on-failure [:admin/load-admins-failure]})}))
+    (let [entity-key :admins
+          params* (or params {})
+          limit (or (:limit params*)
+                  (paths/resolved-list-per-page db entity-key pagination/default-page-size))
+          page (or (:page params*)
+                 (paths/resolved-list-current-page db entity-key))
+          offset (or (:offset params*)
+                   (* (dec page) limit))
+          ui-filters (get-in db (paths/list-filters entity-key) {})
+          flat-filters (flatten-ui-filters ui-filters)
+          sort-params (paths/resolved-list-sort-query-params db entity-key)
+          request-params (merge flat-filters
+                           sort-params
+                           {:limit limit :offset offset})]
+      (log-admin-operation "Loading admins with params" request-params)
+      {:db (state-utils/start-api-request db {:loading-key :admin/admins-loading?
+                                              :error-key :admin/admins-error
+                                              :entity-type :admins})
+       :http-xhrio (admin-http/admin-get
+                     {:uri "/admin/api/admins"
+                      :params request-params
+                      :on-success [:admin/load-admins-success]
+                      :on-failure [:admin/load-admins-failure]})})))
 
 (rf/reg-event-fx
   :admin/load-admins-success
   (fn [{:keys [db]} [_ response]]
     (log-admin-operation "Admins loaded successfully" {:count (count (:admins response))})
-    (state-utils/handle-entity-api-success
-      db
-      :admins
-      response
-      {:loading-key :admin/admins-loading?
-       :admin-key :admin/admins
-       :sync-event [:app.admin.frontend.adapters.admins/sync-admins-to-template]})))
+    (let [response* (state-utils/safe-js->clj response)
+          total-items (or (:total response*)
+                        (count (or (:admins response*) [])))
+          effect (state-utils/handle-entity-api-success
+                   db
+                   :admins
+                   response
+                   {:loading-key :admin/admins-loading?
+                    :admin-key :admin/admins
+                    :sync-event [:app.admin.frontend.adapters.admins/sync-admins-to-template]})]
+      (update effect :db
+        #(assoc-in % (paths/list-total-items :admins) total-items)))))
 
 (rf/reg-event-db
   :admin/load-admins-failure

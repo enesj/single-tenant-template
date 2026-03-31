@@ -34,7 +34,7 @@
    :default-order-by "name"
    :required-fields [:name]
    :has-search? true
-   :filter-params [:search]})
+   :filter-params [:search :description]})
 
 (def expense-category-config
   {:entity-key :expense-category
@@ -56,7 +56,7 @@
    :default-order-by "name"
    :required-fields [:category-id :name]
    :has-search? true
-   :filter-params [:search :category-name]})
+   :filter-params [:search :category-name :description]})
 
 (def supplier-config
   {:entity-key :supplier
@@ -67,7 +67,7 @@
    :default-order-by "display_name"
    :required-fields [:display-name]
    :has-search? true
-   :filter-params [:search]
+   :filter-params [:search :normalized-key]
    :date-range-columns {:created-at :created_at
                         :updated-at :updated_at}})
 
@@ -80,7 +80,7 @@
    :default-order-by "display_name"
    :required-fields [:supplier-id :display-name]
    :has-search? false
-   :filter-params [:search]
+   :filter-params [:search :supplier-display-name :normalized-key :address :city-name]
    ;; Table-qualified: store query JOINs cities + suppliers (alias :st)
    :date-range-columns {:created-at :st.created_at
                         :updated-at :st.updated_at}})
@@ -94,7 +94,7 @@
    :default-order-by "name"
    :required-fields [:name]
    :has-search? true
-   :filter-params [:search]})
+   :filter-params [:search :normalized-key :zip :country]})
 
 (def country-config
   {:entity-key :country
@@ -120,7 +120,7 @@
    :default-order-by "display_name"
    :required-fields [:display-name]
    :has-search? true
-   :filter-params [:search]})
+   :filter-params [:search :normalized-key]})
 
 (def payer-config
   {:entity-key :payer
@@ -155,7 +155,7 @@
    :default-order-by "canonical_name"
    :required-fields [:canonical-name]
    :has-search? true
-   :filter-params [:search :category-name :subcategory-name :manufacturer-display-name]
+   :filter-params [:search :category-name :subcategory-name :manufacturer-display-name :unit]
    ;; Table-qualified: article query JOINs manufacturers/subcategories/categories (alias :a)
    :date-range-columns {:created-at :a.created_at
                         :updated-at :a.updated_at}})
@@ -228,7 +228,9 @@
    :has-search? false
    :filter-params {:supplier-id :uuid
                    :unmapped-only :boolean
-                   :search :string}
+                   :search :string
+                   :supplier-display-name :string
+                   :raw-label-normalized :string}
 
    ;; Allow clients to omit raw-label-normalized; compute it server-side.
    ;; Also coerce numeric fields (e.g. confidence) since form submissions are strings.

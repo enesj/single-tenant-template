@@ -11,6 +11,47 @@
     [taoensso.timbre :as log]))
 
 ;; ============================================================================
+;; Filter Flattening
+;; ============================================================================
+
+(defn- flatten-ui-filters
+  "Flatten shared-list UI filter values into flat backend query params.
+   Date ranges {:from x :to y} → <field>-from / <field>-to.
+   Select maps {:value v :label _} → scalar v.
+   Nil/empty string values are omitted."
+  [filters]
+  (reduce-kv
+    (fn [acc k v]
+      (cond
+        (nil? v) acc
+        (and (string? v) (empty? v)) acc
+
+        ;; Date range → <field>-from / <field>-to
+        (and (map? v) (or (contains? v :from) (contains? v :to)))
+        (let [field-name (name k)]
+          (cond-> acc
+            (some? (:from v)) (assoc (keyword (str field-name "-from")) (:from v))
+            (some? (:to v)) (assoc (keyword (str field-name "-to")) (:to v))))
+
+        ;; Number range → <field>-min / <field>-max
+        (and (map? v) (or (contains? v :min) (contains? v :max)))
+        (let [field-name (name k)]
+          (cond-> acc
+            (some? (:min v)) (assoc (keyword (str field-name "-min")) (:min v))
+            (some? (:max v)) (assoc (keyword (str field-name "-max")) (:max v))))
+
+        ;; Select → extract :value
+        (and (map? v) (contains? v :value))
+        (if (some? (:value v))
+          (assoc acc k (:value v))
+          acc)
+
+        ;; Scalar (string, number, boolean) → pass through
+        :else (assoc acc k v)))
+    {}
+    filters))
+
+;; ============================================================================
 ;; Load Users Events
 ;; ============================================================================
 
@@ -52,10 +93,10 @@
           param-filters (if (map? (:filters params*))
                           (:filters params*)
                           {})
+          flat-filters (flatten-ui-filters (merge ui-filters param-filters))
           sort-params (merge (paths/resolved-list-sort-query-params db entity-key)
                         (select-keys params* [:order-by :order-dir]))
-          request-params (-> (merge ui-filters
-                               param-filters
+          request-params (-> (merge flat-filters
                                sort-params
                                (dissoc params* :filters :pagination :page :per-page :current-page :order-by :order-dir))
                            (assoc :limit limit
