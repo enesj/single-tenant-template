@@ -90,7 +90,53 @@
         (let [response (handler request)
               body (h/parse-response-body response)]
           (is (= 200 (:status response)))
-          (is (= 1 (count (:admins body)))))))))
+          (is (= 1 (count (:admins body))))))))
+
+  (testing "list-admins forwards email and full-name filters"
+    (let [db (h/mock-db)
+          handler (admins/list-admins-handler db)
+          request (h/mock-admin-request :get "/admin/api/admins" mock-admin
+                    {:params {:email "admin1@example.com"
+                              :full-name "Admin One"}})]
+      (with-redefs [admin-admins/list-all-admins
+                    (fn [_db opts]
+                      (is (= "admin1@example.com" (:email opts)))
+                      (is (= "Admin One" (:full-name opts)))
+                      [(first mock-admin-list)])
+                    admin-admins/get-admin-count (constantly 1)]
+        (let [response (handler request)]
+          (is (= 200 (:status response)))))))
+
+  (testing "list-admins forwards last-login-at date range"
+    (let [db (h/mock-db)
+          handler (admins/list-admins-handler db)
+          request (h/mock-admin-request :get "/admin/api/admins" mock-admin
+                    {:params {:last-login-at-from "2026-01-01T00:00:00Z"
+                              :last-login-at-to "2026-03-31T23:59:59Z"}})]
+      (with-redefs [admin-admins/list-all-admins
+                    (fn [_db opts]
+                      (is (instance? java.time.Instant (:last-login-at-from opts))
+                        "last-login-at-from should be parsed to Instant")
+                      (is (instance? java.time.Instant (:last-login-at-to opts))
+                        "last-login-at-to should be parsed to Instant")
+                      mock-admin-list)
+                    admin-admins/get-admin-count (constantly 2)]
+        (let [response (handler request)]
+          (is (= 200 (:status response)))))))
+
+  (testing "list-admins ignores invalid date params gracefully"
+    (let [db (h/mock-db)
+          handler (admins/list-admins-handler db)
+          request (h/mock-admin-request :get "/admin/api/admins" mock-admin
+                    {:params {:last-login-at-from "not-a-date"}})]
+      (with-redefs [admin-admins/list-all-admins
+                    (fn [_db opts]
+                      (is (nil? (:last-login-at-from opts))
+                        "invalid date should parse to nil")
+                      mock-admin-list)
+                    admin-admins/get-admin-count (constantly 2)]
+        (let [response (handler request)]
+          (is (= 200 (:status response))))))))
 
 ;; ============================================================================
 ;; Get Admin Details Tests

@@ -136,6 +136,45 @@
       (is (number? (:limit filters)))
       (is (number? (:offset filters))))))
 
+(deftest list-users-handler-date-range-test
+  (testing "list-users forwards date-range params as parsed Instants"
+    (let [db (h/mock-db)
+          handler (users-routes/list-users-handler db)
+          request (h/mock-admin-request :get "/admin/api/users" {:id (random-uuid)}
+                    {:params {:created-at-from "2026-01-01T00:00:00Z"
+                              :created-at-to "2026-03-31T23:59:59Z"
+                              :last-login-at-from "2026-02-01T00:00:00Z"
+                              :limit "50"
+                              :offset "0"}})]
+      (with-redefs [users/list-all-users-page
+                    (fn [_db opts]
+                      (is (instance? java.time.Instant (:created-at-from opts))
+                        "created-at-from should be parsed to Instant")
+                      (is (instance? java.time.Instant (:created-at-to opts))
+                        "created-at-to should be parsed to Instant")
+                      (is (instance? java.time.Instant (:last-login-at-from opts))
+                        "last-login-at-from should be parsed to Instant")
+                      (is (nil? (:last-login-at-to opts))
+                        "absent date param should remain nil")
+                      {:users [] :total 0 :limit 50 :offset 0})]
+        (let [response (handler request)]
+          (is (= 200 (:status response)))))))
+
+  (testing "list-users preserves email-verified=false"
+    (let [db (h/mock-db)
+          handler (users-routes/list-users-handler db)
+          request (h/mock-admin-request :get "/admin/api/users" {:id (random-uuid)}
+                    {:params {:email-verified "false"
+                              :limit "50"
+                              :offset "0"}})]
+      (with-redefs [users/list-all-users-page
+                    (fn [_db opts]
+                      (is (false? (:email-verified opts))
+                        "email-verified=false must not be dropped")
+                      {:users [] :total 0 :limit 50 :offset 0})]
+        (let [response (handler request)]
+          (is (= 200 (:status response))))))))
+
 ;; ============================================================================
 ;; User Status Constants Tests
 ;; ============================================================================

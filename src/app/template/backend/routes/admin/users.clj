@@ -16,9 +16,12 @@
       (let [params (:params request)
             pagination (utils/extract-pagination-params params)
             sort (utils/extract-sort-params params)
-            filters {:search (:search params)
-                     :status (:status params)
-                     :email-verified (utils/parse-boolean-param params :email-verified)}
+            date-ranges (utils/extract-date-range-params params
+                          [:created-at :updated-at :last-login-at])
+            filters (merge {:search (:search params)
+                            :status (:status params)
+                            :email-verified (utils/parse-boolean-param params :email-verified)}
+                      date-ranges)
             {:keys [users total limit offset]}
             (admin-users/list-all-users-page db (merge filters pagination sort))]
         (log/info "👥 Admin list-users returned" (count users) "users"

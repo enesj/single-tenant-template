@@ -8,6 +8,7 @@
     [app.shared.adapters.database :as shared-db]
     [app.shared.adapters.normalization :as norm]
     [app.shared.query-builders :as shared-qb]
+    [app.shared.type-conversion :as tc]
     [app.template.backend.utils.adapters.persistence :as persist]
     [honey.sql :as hsql]
     [next.jdbc :as jdbc]
@@ -28,13 +29,22 @@
     (norm/normalize-admin-result user-config)))
 
 (defn- build-user-list-filter-clauses
-  [{:keys [search status email-verified]}]
+  [{:keys [search status email-verified
+           created-at-from created-at-to
+           updated-at-from updated-at-to
+           last-login-at-from last-login-at-to]}]
   (cond-> []
     search (conj [:or
                   [:ilike :u/email (str "%" search "%")]
                   [:ilike :u/full_name (str "%" search "%")]])
-    status (conj [:= :u/status status])
-    (some? email-verified) (conj [:= :u/email_verified email-verified])))
+    status (conj [:= :u/status (tc/cast-for-database :user-status status)])
+    (some? email-verified) (conj [:= :u/email_verified email-verified])
+    created-at-from (conj [:>= :u/created_at created-at-from])
+    created-at-to (conj [:<= :u/created_at created-at-to])
+    updated-at-from (conj [:>= :u/updated_at updated-at-from])
+    updated-at-to (conj [:<= :u/updated_at updated-at-to])
+    last-login-at-from (conj [:>= :u/last_login_at last-login-at-from])
+    last-login-at-to (conj [:<= :u/last_login_at last-login-at-to])))
 
 (defn- build-user-list-where-clause
   [filters]

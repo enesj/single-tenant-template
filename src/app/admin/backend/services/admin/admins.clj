@@ -96,48 +96,49 @@
 ;; Admin Listing and Search
 ;; ============================================================================
 
+(defn- build-admin-list-filter-clauses
+  [{:keys [search status role email full-name
+           last-login-at-from last-login-at-to]}]
+  (cond-> []
+    search (conj [:or
+                  [:ilike :a/email (str "%" search "%")]
+                  [:ilike :a/full_name (str "%" search "%")]])
+    status (conj [:= :a/status (tc/cast-for-database :admin-status status)])
+    role (conj [:= :a/role (tc/cast-for-database :admin-role role)])
+    email (conj [:ilike :a/email (str "%" email "%")])
+    full-name (conj [:ilike :a/full_name (str "%" full-name "%")])
+    last-login-at-from (conj [:>= :a/last_login_at last-login-at-from])
+    last-login-at-to (conj [:<= :a/last_login_at last-login-at-to])))
+
+(defn- build-admin-list-where-clause
+  [filters]
+  (let [clauses (build-admin-list-filter-clauses filters)]
+    (when (seq clauses)
+      (into [:and] clauses))))
+
 (defn list-all-admins
   "List all admins with optional filtering and pagination"
-  [db {:keys [search status role limit offset]
-       :or {limit 50 offset 0}}]
-  (let [base-query {:select [:a.*]
-                    :from [[:admins :a]]
-                    :order-by [[:created_at :desc]]}
-        query (cond-> base-query
-                search (update :where (fn [w]
-                                        (let [clause [:or
-                                                      [:ilike :a/email (str "%" search "%")]
-                                                      [:ilike :a/full_name (str "%" search "%")]]]
-                                          (if w [:and w clause] clause))))
-                status (update :where (fn [w]
-                                        (let [clause [:= :a/status (tc/cast-for-database :admin-status status)]]
-                                          (if w [:and w clause] clause))))
-                role (update :where (fn [w]
-                                      (let [clause [:= :a/role (tc/cast-for-database :admin-role role)]]
-                                        (if w [:and w clause] clause))))
+  [db {:keys [limit offset]
+       :or {limit 50 offset 0}
+       :as filters}]
+  (let [where-clause (build-admin-list-where-clause filters)
+        query (cond-> {:select [:a.*]
+                       :from [[:admins :a]]
+                       :order-by [[:created_at :desc]]}
+                where-clause (assoc :where where-clause)
                 limit (assoc :limit limit)
                 offset (assoc :offset offset))]
-    (log/debug "Listing admins with filters" {:search search :status status :role role})
+    (log/debug "Listing admins with filters" (select-keys filters [:search :status :role :email :full-name]))
     (->> (jdbc/execute! db (hsql/format query))
       (map db-admin->app))))
 
 (defn get-admin-count
   "Get total count of admins matching filters"
-  [db {:keys [search status role]}]
-  (let [base-query {:select [[:%count.* :count]]
-                    :from [[:admins :a]]}
-        query (cond-> base-query
-                search (update :where (fn [w]
-                                        (let [clause [:or
-                                                      [:ilike :a/email (str "%" search "%")]
-                                                      [:ilike :a/full_name (str "%" search "%")]]]
-                                          (if w [:and w clause] clause))))
-                status (update :where (fn [w]
-                                        (let [clause [:= :a/status (tc/cast-for-database :admin-status status)]]
-                                          (if w [:and w clause] clause))))
-                role (update :where (fn [w]
-                                      (let [clause [:= :a/role (tc/cast-for-database :admin-role role)]]
-                                        (if w [:and w clause] clause)))))]
+  [db filters]
+  (let [where-clause (build-admin-list-where-clause filters)
+        query (cond-> {:select [[:%count.* :count]]
+                       :from [[:admins :a]]}
+                where-clause (assoc :where where-clause))]
     (-> (jdbc/execute-one! db (hsql/format query))
       :count)))
 

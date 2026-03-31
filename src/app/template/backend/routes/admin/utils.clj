@@ -5,7 +5,9 @@
     [app.shared.type-conversion :as type-conv]
     [cheshire.core :as json]
     [clojure.string :as str]
-    [taoensso.timbre :as log]))
+    [taoensso.timbre :as log])
+  (:import
+    [java.time Instant LocalDate OffsetDateTime ZoneOffset]))
 
 ;; Response Generation Utilities
 
@@ -89,6 +91,37 @@
              :or {default-limit 50 default-offset 0}}]
   {:limit (parse-int-param params :limit default-limit)
    :offset (parse-int-param params :offset default-offset)})
+
+(defn parse-instant-param
+  "Lenient parse of a date/time string into java.time.Instant.
+   Returns nil for nil, blank, or unparseable input."
+  [raw]
+  (when-not (str/blank? (str (or raw "")))
+    (or (when (instance? Instant raw) raw)
+      (try (Instant/parse (str raw)) (catch Exception _ nil))
+      (try (-> (OffsetDateTime/parse (str raw)) .toInstant) (catch Exception _ nil))
+      (try (-> (LocalDate/parse (str raw)) (.atStartOfDay ZoneOffset/UTC) .toInstant) (catch Exception _ nil)))))
+
+(defn extract-date-range-params
+  "Extract date range filter params for the given field names from a params map.
+   Returns a map with non-nil parsed Instants keyed as `:<field>-from` / `:<field>-to`.
+
+   Example:
+     (extract-date-range-params params [:created-at :updated-at])
+     => {:created-at-from #inst \"...\", :updated-at-to #inst \"...\"}"
+  [params field-names]
+  (reduce
+    (fn [acc field-name]
+      (let [field-str (name field-name)
+            from-key (keyword (str field-str "-from"))
+            to-key (keyword (str field-str "-to"))
+            from-val (parse-instant-param (get-param params from-key))
+            to-val (parse-instant-param (get-param params to-key))]
+        (cond-> acc
+          (some? from-val) (assoc from-key from-val)
+          (some? to-val) (assoc to-key to-val))))
+    {}
+    field-names))
 
 (defn extract-sort-params
   "Extract sort parameters from request.

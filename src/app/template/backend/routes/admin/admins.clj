@@ -28,9 +28,13 @@
     (fn [request]
       (let [params (:params request)
             pagination (utils/extract-pagination-params params)
-            filters {:search (:search params)
-                     :status (:status params)
-                     :role (:role params)}
+            date-ranges (utils/extract-date-range-params params [:last-login-at])
+            filters (merge {:search (:search params)
+                            :status (:status params)
+                            :role (:role params)
+                            :email (:email params)
+                            :full-name (:full-name params)}
+                      date-ranges)
             admins (admin-admins/list-all-admins db (merge filters pagination))
             total (admin-admins/get-admin-count db filters)]
         (log/info "👥 Admin list-admins returned" (count admins) "admins"
