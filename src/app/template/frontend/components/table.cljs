@@ -97,7 +97,7 @@
        :colSpan (when (and colspan (not is-header?)) colspan)
        :data-column-index (when-not is-header? index)
        :style (merge
-                {:overflow "visible"}
+                {:overflow (if (or is-header? sticky?) "visible" "hidden")}
                 (if fixed-width
                   {:width fixed-width
                    :min-width fixed-width
@@ -121,7 +121,9 @@
                 :left "📌"
                 :right "📌"
                 ""))))
-        ($ :div {:class "flex items-center h-full"}
+        ($ :div {:class "flex items-center h-full w-full min-w-0"
+                 :style {:overflow-wrap "anywhere"
+                         :word-break "break-word"}}
           children))
 
       (when (and is-header? resizable? (not sticky?))

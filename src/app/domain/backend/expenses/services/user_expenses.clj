@@ -7,6 +7,7 @@
     [app.shared.model-naming :as model-naming]
     [app.shared.query-builders :as shared-qb]
     [app.shared.type-conversion :as type-conv]
+    [clojure.string :as str]
     [honey.sql :as sql]
     [next.jdbc :as jdbc]
     [next.jdbc.result-set :as rs]
@@ -44,10 +45,9 @@
 
    `tenant-id` scopes the expense to a specific tenant.
 
-   Currency conversion (Phase 2):
-   - When currency is non-BAM, fetches the daily exchange rate and populates
-     original_amount, bam_amount, exchange_rate, and rate_fetched_at.
-   - When currency is BAM (or nil/default), original_amount = bam_amount = total_amount."
+   For non-BAM currencies, this primes the daily exchange-rate cache (when app
+   config is available) and lets the shared expense service persist normalized
+   monetary fields for every write path."
   ([db tenant-id user-id expense-data items]
    (create-user-expense! db tenant-id user-id expense-data items nil))
   ([db tenant-id user-id expense-data items app-config]
@@ -58,34 +58,18 @@
      (when-not user-id
        (throw (ex-info "user-id is required" {:data expense-data})))
      (log/debug "Creating expense for user" {:user-id user-id :tenant-id tenant-id :currency currency})
+     (when (and total-amount (not= currency "BAM") app-config)
+       (try
+         (exchange-rates/ensure-daily-rates!
+           db
+           (exchange-rates/build-config app-config))
+         (catch Exception e
+           (log/warn e "Failed to ensure daily rates" {:currency currency}))))
      (let [expense-data (cond-> (assoc expense-data
                                   :user_id user-id
                                   :created_by user-id
                                   :currency currency)
-                          tenant-id (assoc :tenant_id tenant-id))
-           ;; Currency conversion: populate original_amount, bam_amount, exchange_rate
-           expense-data (if (and total-amount (not= currency "BAM"))
-                          (let [rate-date (LocalDate/now)
-                                ;; Ensure rates are cached for today
-                                _ (when app-config
-                                    (try
-                                      (exchange-rates/ensure-daily-rates!
-                                        db (exchange-rates/build-config app-config))
-                                      (catch Exception e
-                                        (log/warn e "Failed to ensure daily rates" {:currency currency}))))
-                                rate (exchange-rates/get-conversion-rate db currency rate-date)
-                                bam-amount (if rate
-                                             (.setScale (* total-amount rate) 2 java.math.RoundingMode/HALF_UP)
-                                             total-amount)]
-                            (cond-> (assoc expense-data
-                                      :original_amount total-amount
-                                      :bam_amount bam-amount)
-                              rate (assoc :exchange_rate rate
-                                     :rate_fetched_at (Instant/now))))
-                          ;; BAM: all amounts are the same, no rate needed
-                          (cond-> expense-data
-                            total-amount (assoc :original_amount total-amount
-                                           :bam_amount total-amount)))]
+                          tenant-id (assoc :tenant_id tenant-id))]
        (admin-expenses/create-expense! db expense-data items)))))
 
 (defn update-user-expense!

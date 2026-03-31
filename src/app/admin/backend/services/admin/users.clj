@@ -28,6 +28,31 @@
     shared-db/convert-pg-objects
     (norm/normalize-admin-result user-config)))
 
+(def ^:private latest-successful-user-login-query
+  {:select [[:le.principal_id :principal_id]
+            [[:max :le.created_at] :last_login_at]]
+   :from [[:login_events :le]]
+   :where [:and
+           [:= :le.success true]
+           [:= :le.principal_type (tc/cast-for-database :login-principal-type "user")]]
+   :group-by [:le.principal_id]})
+
+(def ^:private effective-last-login-at-expr
+  [:raw "COALESCE(u.last_login_at, ul.last_login_at)"])
+
+(def ^:private user-list-select-columns
+  [[:u.id :id]
+   [:u.email :email]
+   [:u.full_name :full_name]
+   [:u.password_hash :password_hash]
+   [:u.status :status]
+   [:u.email_verified :email_verified]
+   [:u.avatar_url :avatar_url]
+   [:u.auth_provider :auth_provider]
+   [:u.created_at :created_at]
+   [:u.updated_at :updated_at]
+   [effective-last-login-at-expr :last_login_at]])
+
 (defn- build-user-list-filter-clauses
   [{:keys [search status email-verified
            created-at-from created-at-to
@@ -43,8 +68,8 @@
     created-at-to (conj [:<= :u/created_at created-at-to])
     updated-at-from (conj [:>= :u/updated_at updated-at-from])
     updated-at-to (conj [:<= :u/updated_at updated-at-to])
-    last-login-at-from (conj [:>= :u/last_login_at last-login-at-from])
-    last-login-at-to (conj [:<= :u/last_login_at last-login-at-to])))
+    last-login-at-from (conj [:>= effective-last-login-at-expr last-login-at-from])
+    last-login-at-to (conj [:<= effective-last-login-at-expr last-login-at-to])))
 
 (defn- build-user-list-where-clause
   [filters]
@@ -59,16 +84,19 @@
    :full-name :u/full_name
    :status :u/status
    :email-verified :u/email_verified
-   :last-login-at :u/last_login_at})
+   :last-login-at effective-last-login-at-expr})
 
 (defn- build-users-list-query
   [{:keys [limit offset order-by order-dir] :as filters}]
   (let [where-clause (build-user-list-where-clause filters)
         order-column (get allowed-user-order-by order-by :u/created_at)
         order-direction (shared-qb/normalize-order-direction order-dir {:default :desc})]
-    (cond-> {:select [:u.*]
+    (cond-> {:select user-list-select-columns
              :from [[:users :u]]
-             :order-by [[order-column order-direction]]}
+             :left-join [[latest-successful-user-login-query :ul]
+                         [:= :ul.principal_id :u.id]]
+             :order-by [[order-column order-direction]
+                        [:u.id :asc]]}
       where-clause (assoc :where where-clause)
       limit (assoc :limit limit)
       offset (assoc :offset offset))))
@@ -88,7 +116,9 @@
   [db opts]
   (let [where-clause (build-user-list-where-clause opts)
         query (cond-> {:select [[[:count :*] :total]]
-                       :from [[:users :u]]}
+                       :from [[:users :u]]
+                       :left-join [[latest-successful-user-login-query :ul]
+                                   [:= :ul.principal_id :u.id]]}
                 where-clause (assoc :where where-clause))
         row (jdbc/execute-one! db (hsql/format query))
         total (or (:total row) (some-> row vals first) 0)]

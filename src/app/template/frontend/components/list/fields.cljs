@@ -53,8 +53,10 @@
       ($ :span {:title text-str
                 :class (str "cursor-help truncate-text "
                          (when is-json? "json-indicator"))
-                :style {:display "inline-block"
-                        :max-width (str (* max-length 0.8) "ch")
+                :style {:display "block"
+                        :width "100%"
+                        :min-width "0"
+                        :max-width (str "min(100%, " (* max-length 0.8) "ch)")
                         :overflow "hidden"
                         :text-overflow "ellipsis"
                         :white-space "nowrap"}}

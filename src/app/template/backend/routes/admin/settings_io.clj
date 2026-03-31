@@ -219,7 +219,8 @@
     legacy-admin-default-visible-columns))
 
 (def ^:private retired-admin-table-columns
-  {:article-aliases #{"confidence"}})
+  {:article-aliases #{"confidence"}
+   :users #{"avatar-url"}})
 
 (defn- remove-retired-admin-columns
   [entity-config retired-columns]

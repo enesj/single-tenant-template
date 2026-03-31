@@ -3,7 +3,7 @@
   (:require
     [app.domain.backend.expenses.services.article-aliases :as aliases]
     [app.domain.backend.expenses.services.articles :as articles]
-
+    [app.domain.backend.expenses.services.exchange-rates :as exchange-rates]
     [clojure.string :as str]
     [honey.sql :as sql]
     [next.jdbc :as jdbc]
@@ -238,6 +238,65 @@
     (update-if-present :is_posted parse-bool)
     (update-if-present :notes blank->nil)))
 
+(defn- expense-rate-date
+  "Derive the LocalDate used for exchange-rate lookup."
+  [{:keys [purchased_at]}]
+  (if (instance? Instant purchased_at)
+    (LocalDate/ofInstant purchased_at ZoneOffset/UTC)
+    (LocalDate/now)))
+
+(defn- compute-bam-amount
+  [total-amount rate]
+  (some-> (.multiply ^java.math.BigDecimal total-amount
+            ^java.math.BigDecimal rate)
+    (.setScale 2 RoundingMode/HALF_UP)))
+
+(defn normalize-expense-amounts
+  "Populate derived monetary fields so all expense write paths persist
+   consistent values.
+
+   - BAM expenses persist original_amount = bam_amount = total_amount.
+   - Non-BAM expenses use the cached daily exchange rate when available.
+   - If no rate is cached yet, bam_amount falls back to total_amount so it is
+     never left nil in reporting queries."
+  ([db expense-data]
+   (normalize-expense-amounts db expense-data nil))
+  ([db expense-data {:keys [app-config ensure-rates?]}]
+   (let [total-amount (:total_amount expense-data)
+         currency (or (:currency expense-data) "BAM")]
+     (if-not total-amount
+       (assoc expense-data :currency currency)
+       (if (= "BAM" currency)
+         (assoc expense-data
+           :currency currency
+           :original_amount total-amount
+           :bam_amount total-amount
+           :exchange_rate nil
+           :rate_fetched_at nil)
+         (let [rate-date (expense-rate-date expense-data)
+               _ (when (and ensure-rates? app-config)
+                   (try
+                     (exchange-rates/ensure-daily-rates!
+                       db
+                       (exchange-rates/build-config app-config))
+                     (catch Exception e
+                       (log/warn e "Failed to ensure daily rates"
+                         {:currency currency
+                          :rate-date (str rate-date)}))))
+               rate (or (:exchange_rate expense-data)
+                      (exchange-rates/get-conversion-rate db currency rate-date))
+               bam-amount (or (when rate
+                                (compute-bam-amount total-amount rate))
+                            total-amount)]
+           (assoc expense-data
+             :currency currency
+             :original_amount total-amount
+             :bam_amount bam-amount
+             :exchange_rate rate
+             :rate_fetched_at (when rate
+                                (or (:rate_fetched_at expense-data)
+                                  (Instant/now))))))))))
+
 (defn- revert-linked-receipt-after-expense-delete!
   "If the deleted expense was created from a receipt, revert the receipt so it can be
   deleted or approved+posted again.
@@ -443,7 +502,9 @@
   - Stores each line item's raw label via `article_aliases` when the label is valid.
   - Skips alias creation for blank/short/punctuation-only labels.
   - Falls back to inferring `:tenant_id` from the linked receipt or payer when
-    older callers omit it."
+    older callers omit it.
+  - Persists normalized monetary fields (`original_amount`, `bam_amount`,
+    `exchange_rate`, `rate_fetched_at`) for every create path."
   ([db {:keys [items] :as body}]
    (create-expense! db (dissoc body :items) items))
   ([db expense-data items]
@@ -483,7 +544,8 @@
                              expense-data*)
              _ (require-keys! expense-data* [:payer_id :purchased_at :total_amount])
              _ (ensure-receipt-link-available! tx expense-data*)
-               ;; Context validation: at least one of supplier, store, category, or article
+             expense-data* (normalize-expense-amounts tx expense-data*)
+             ;; Context validation: at least one of supplier, store, category, or article
              _ (when-not (or (:supplier_id expense-data*)
                            (:store_id expense-data*)
                            (:expense_category_id expense-data*)
@@ -529,7 +591,7 @@
                              (throw e)))))
              supplier-id (:supplier_id expense)]
 
-           ;; Insert line items (if any — empty items is valid for minimal entry)
+         ;; Insert line items (if any — empty items is valid for minimal entry)
          (when (seq items*)
            (let [resolved-items (mapv (fn [item]
                                         (require-keys! item [:line_total])
@@ -577,108 +639,120 @@
   ([db id body] (update-expense! db id body nil))
   ([db id body tenant-id]
    (let [id* (parse-uuid! :id id)
-         updates* (-> body
-                    (dissoc :items)
-                    normalize-expense-data
-                    (select-keys [:store_id :supplier_id :payer_id :expense_category_id :purchased_at :total_amount :currency :notes :is_posted])
-                    (update-if-present :currency #(when % [:cast % :currency])))
+         parsed-updates (-> body
+                          (dissoc :items)
+                          normalize-expense-data)
+         amount-keys [:purchased_at :total_amount :currency]
+         base-keys [:store_id :supplier_id :payer_id :expense_category_id :purchased_at :total_amount :currency :notes :is_posted]
          where (if tenant-id
                  [:and [:= :id id*] [:= :tenant_id tenant-id]]
                  [:= :id id*])]
      (jdbc/with-transaction [tx db]
-       (when-let [expense (if (seq updates*)
-                            (jdbc/execute-one!
-                              tx
-                              (sql/format {:update :expenses
-                                           :set updates*
-                                           :where where
-                                           :returning [:*]})
-                              {:builder-fn rs/as-unqualified-lower-maps})
-                            (jdbc/execute-one!
-                              tx
-                              (sql/format {:select [:*]
-                                           :from [:expenses]
-                                           :where where
-                                           :limit 1})
-                              {:builder-fn rs/as-unqualified-lower-maps}))]
+       (when-let [existing (jdbc/execute-one!
+                             tx
+                             (sql/format {:select [:*]
+                                          :from [:expenses]
+                                          :where where
+                                          :limit 1})
+                             {:builder-fn rs/as-unqualified-lower-maps})]
+         (let [updates* (if (seq parsed-updates)
+                          (let [base-updates (select-keys parsed-updates base-keys)]
+                            (if (some #(contains? base-updates %) amount-keys)
+                              (let [amount-input (merge (select-keys existing [:purchased_at :total_amount :currency :original_amount :bam_amount :exchange_rate :rate_fetched_at])
+                                                   base-updates)
+                                    normalized-amounts (select-keys (normalize-expense-amounts tx amount-input)
+                                                         [:original_amount :bam_amount :exchange_rate :rate_fetched_at])]
+                                (merge base-updates normalized-amounts))
+                              base-updates))
+                          {})
+               updates* (update-if-present updates* :currency #(when % [:cast % :currency]))
+               expense (if (seq updates*)
+                         (jdbc/execute-one!
+                           tx
+                           (sql/format {:update :expenses
+                                        :set updates*
+                                        :where where
+                                        :returning [:*]})
+                           {:builder-fn rs/as-unqualified-lower-maps})
+                         existing)]
 
-         (when (contains? body :items)
-           (let [existing-ids (->> (jdbc/execute!
-                                     tx
-                                     (sql/format {:select [:id]
-                                                  :from [:expense_items]
-                                                  :where [:= :expense_id id*]})
-                                     {:builder-fn rs/as-unqualified-lower-maps})
-                                (map :id)
-                                (into #{}))
-                 items* (mapv normalize-expense-item (or (:items body) []))
-                 _ (when (empty? items*)
-                     (throw (ex-info "At least one line item is required" {:status 400 :field :items})))
-
-                 update-items (filterv (fn [{item-id :id}]
-                                         (and item-id (contains? existing-ids item-id)))
-                                items*)
-                 keep-ids (into #{} (map :id update-items))
-                 insert-items (filterv (fn [{item-id :id}]
-                                         (not (and item-id (contains? existing-ids item-id))))
-                                items*)
-                 supplier-id (:supplier_id expense)
-                 delete-where (if (seq keep-ids)
-                                [:and
-                                 [:= :expense_id id*]
-                                 [:not [:in :id keep-ids]]]
-                                [:= :expense_id id*])]
-
-            ;; Delete removed items.
-             (jdbc/execute!
-               tx
-               (sql/format {:delete-from :expense_items
-                            :where delete-where}))
-
-            ;; Update existing items (no retroactive auto-linking).
-             (doseq [item update-items]
-               (require-keys! item [:line_total])
-               (let [alias (resolve-alias! tx supplier-id item)
-                     item* (cond-> (select-keys item [:qty :unit :unit_price :line_total])
-                             alias (assoc :alias_id (:id alias)))]
-                 (jdbc/execute!
-                   tx
-                   (sql/format {:update :expense_items
-                                :set item*
-                                :where [:and
-                                        [:= :id (:id item)]
-                                        [:= :expense_id id*]]}))))
-
-            ;; Insert new items (auto-link from alias when possible).
-             (let [resolved-inserts (mapv (fn [item]
-                                            (require-keys! item [:line_total])
-                                            (let [alias (resolve-alias! tx supplier-id item)
-                                                  resolved-article-id (:article_id alias)]
-                                              (assoc item
-                                                :resolved_alias alias
-                                                :resolved_alias_id (some-> alias :id)
-                                                :resolved_article_id resolved-article-id)))
-                                      insert-items)
-                   exp-tenant-id (:tenant_id expense)
-                   item-rows (mapv (fn [{:keys [resolved_alias_id qty unit unit_price line_total]}]
-                                     (cond-> {:id (UUID/randomUUID)
-                                              :expense_id id*
-                                              :alias_id resolved_alias_id
-                                              :qty qty
-                                              :unit_price unit_price
-                                              :line_total line_total}
-                                       exp-tenant-id (assoc :tenant_id exp-tenant-id)
-                                       unit (assoc :unit unit)))
-                               resolved-inserts)
-                   _inserted-items (if (seq item-rows)
-                                     (jdbc/execute!
+           (when (contains? body :items)
+             (let [existing-ids (->> (jdbc/execute!
                                        tx
-                                       (sql/format {:insert-into :expense_items
-                                                    :values item-rows
-                                                    :returning [:*]})
+                                       (sql/format {:select [:id]
+                                                    :from [:expense_items]
+                                                    :where [:= :expense_id id*]})
                                        {:builder-fn rs/as-unqualified-lower-maps})
-                                     [])])))
+                                  (map :id)
+                                  (into #{}))
+                   items* (mapv normalize-expense-item (or (:items body) []))
+                   _ (when (empty? items*)
+                       (throw (ex-info "At least one line item is required" {:status 400 :field :items})))
 
-         (get-expense-with-items tx id*))))))
+                   update-items (filterv (fn [{item-id :id}]
+                                           (and item-id (contains? existing-ids item-id)))
+                                  items*)
+                   keep-ids (into #{} (map :id update-items))
+                   insert-items (filterv (fn [{item-id :id}]
+                                           (not (and item-id (contains? existing-ids item-id))))
+                                  items*)
+                   supplier-id (:supplier_id expense)
+                   delete-where (if (seq keep-ids)
+                                  [:and
+                                   [:= :expense_id id*]
+                                   [:not [:in :id keep-ids]]]
+                                  [:= :expense_id id*])]
+
+              ;; Delete removed items.
+               (jdbc/execute!
+                 tx
+                 (sql/format {:delete-from :expense_items
+                              :where delete-where}))
+
+              ;; Update existing items (no retroactive auto-linking).
+               (doseq [item update-items]
+                 (require-keys! item [:line_total])
+                 (let [alias (resolve-alias! tx supplier-id item)
+                       item* (cond-> (select-keys item [:qty :unit :unit_price :line_total])
+                               alias (assoc :alias_id (:id alias)))]
+                   (jdbc/execute!
+                     tx
+                     (sql/format {:update :expense_items
+                                  :set item*
+                                  :where [:and
+                                          [:= :id (:id item)]
+                                          [:= :expense_id id*]]}))))
+
+              ;; Insert new items (auto-link from alias when possible).
+               (let [resolved-inserts (mapv (fn [item]
+                                              (require-keys! item [:line_total])
+                                              (let [alias (resolve-alias! tx supplier-id item)
+                                                    resolved-article-id (:article_id alias)]
+                                                (assoc item
+                                                  :resolved_alias alias
+                                                  :resolved_alias_id (some-> alias :id)
+                                                  :resolved_article_id resolved-article-id)))
+                                        insert-items)
+                     exp-tenant-id (:tenant_id expense)
+                     item-rows (mapv (fn [{:keys [resolved_alias_id qty unit unit_price line_total]}]
+                                       (cond-> {:id (UUID/randomUUID)
+                                                :expense_id id*
+                                                :alias_id resolved_alias_id
+                                                :qty qty
+                                                :unit_price unit_price
+                                                :line_total line_total}
+                                         exp-tenant-id (assoc :tenant_id exp-tenant-id)
+                                         unit (assoc :unit unit)))
+                                 resolved-inserts)
+                     _inserted-items (if (seq item-rows)
+                                       (jdbc/execute!
+                                         tx
+                                         (sql/format {:insert-into :expense_items
+                                                      :values item-rows
+                                                      :returning [:*]})
+                                         {:builder-fn rs/as-unqualified-lower-maps})
+                                       [])])))
+
+           (get-expense-with-items tx id*)))))))
 
 

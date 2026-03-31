@@ -4,17 +4,24 @@
     [app.backend.fixtures :as fixtures]
     [app.domain.backend.expenses.services.articles :as articles]
     [app.domain.backend.expenses.services.expenses :as expenses]
-
     [app.domain.backend.expenses.services.suppliers :as suppliers]
     [app.domain.expenses.test-helpers :as th]
     [clojure.test :refer [deftest is use-fixtures]]
     [next.jdbc :as jdbc])
   (:import
-    (java.util UUID)))
+    [java.time LocalDate]
+    [java.util UUID]))
 
 (use-fixtures :each fixtures/with-transaction-rollback)
 
 (defn- now [] (java.time.Instant/now))
+
+(defn- insert-rate!
+  [db {:keys [currency-code rate-date rate is-fallback]}]
+  (jdbc/execute-one!
+    db
+    ["insert into daily_exchange_rates (id, currency_code, rate_date, rate, fetched_at, is_fallback, created_at) values (?, ?, ?, ?, now(), ?, now())"
+     (UUID/randomUUID) currency-code rate-date rate (boolean is-fallback)]))
 
 (deftest expenses-auto-links-article-when-alias-exists
   (when-let [db fixtures/*test-db*]
@@ -146,6 +153,62 @@
       (is (= false (:is_posted expense)))
       (is (= 1 (count (:items expense))))
       (is (= "Item" (-> expense :items first :raw_label))))))
+
+(deftest expenses-create-populates-derived-amounts-for-non-bam-currency
+  (when-let [db fixtures/*test-db*]
+    (let [supplier-result (suppliers/find-or-create-supplier! db "Derived Amount Supplier" {})
+          supplier (:supplier supplier-result)
+          payer (th/create-payer! db {:type "cash" :label "Cash"})
+          purchased-at "2030-01-02T10:15"
+          rate-date (LocalDate/parse "2030-01-02")
+          _ (insert-rate! db {:currency-code "EUR"
+                              :rate-date rate-date
+                              :rate 1.95583M
+                              :is-fallback false})
+          expense (expenses/create-expense! db
+                    {:supplier_id (:id supplier)
+                     :payer_id (:id payer)
+                     :purchased_at purchased-at
+                     :total_amount (bigdec "10.00")
+                     :currency "EUR"}
+                    [{:raw_label "Item"
+                      :line_total (bigdec "10.00")}])]
+      (is (= 10.00M (:total_amount expense)))
+      (is (= 10.00M (:original_amount expense)))
+      (is (= 19.56M (:bam_amount expense)))
+      (is (= 1.95583M (:exchange_rate expense)))
+      (is (some? (:rate_fetched_at expense))))))
+
+(deftest expenses-update-recomputes-derived-amounts-when-money-fields-change
+  (when-let [db fixtures/*test-db*]
+    (let [supplier (:supplier (suppliers/find-or-create-supplier! db (str "Recompute Amount Supplier " (UUID/randomUUID)) {}))
+          payer (th/create-payer! db {:type "cash" :label "Cash"})
+          created (expenses/create-expense! db
+                    {:supplier_id (:id supplier)
+                     :payer_id (:id payer)
+                     :purchased_at (now)
+                     :total_amount (bigdec "5.00")
+                     :currency "BAM"}
+                    [{:raw_label "Item"
+                      :line_total (bigdec "5.00")}])
+          purchased-at "2030-01-03T09:30"
+          rate-date (LocalDate/parse "2030-01-03")
+          _ (insert-rate! db {:currency-code "EUR"
+                              :rate-date rate-date
+                              :rate 1.95583M
+                              :is-fallback false})
+          updated (expenses/update-expense! db
+                    (:id created)
+                    {:supplier_id (:id supplier)
+                     :payer_id (:id payer)
+                     :purchased_at purchased-at
+                     :total_amount (bigdec "10.00")
+                     :currency "EUR"})]
+      (is (= 10.00M (:total_amount updated)))
+      (is (= 10.00M (:original_amount updated)))
+      (is (= 19.56M (:bam_amount updated)))
+      (is (= 1.95583M (:exchange_rate updated)))
+      (is (some? (:rate_fetched_at updated))))))
 
 (deftest expenses-create-repairs-inconsistent-unit-price-from-line-total
   (when-let [db fixtures/*test-db*]

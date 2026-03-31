@@ -17,6 +17,8 @@
   (when principal-type
     (tc/cast-for-database :login-principal-type (name principal-type))))
 
+(declare update-principal-last-login!)
+
 (defn record-login-event!
   "Record a login attempt for an admin or user.
 
@@ -43,23 +45,38 @@
          :principal-id principal-id
          :success success}))
     (when principal-id-uuid
-      (log/info "LOGIN-MONITOR: recording login event"
-        {:principal-type principal-type-str
-         :principal-id (str principal-id-uuid)
-         :success success
-         :reason reason
-         :ip ip})
+      (let [logged-at (time/instant)]
+        (log/info "LOGIN-MONITOR: recording login event"
+          {:principal-type principal-type-str
+           :principal-id (str principal-id-uuid)
+           :success success
+           :reason reason
+           :ip ip})
+        (jdbc/execute-one! db
+          (hsql/format
+            {:insert-into :login_events
+             :values [{:id (UUID/randomUUID)
+                       :principal_type (tc/cast-for-database :login-principal-type principal-type-str)
+                       :principal_id principal-id-uuid
+                       :success success
+                       :reason reason
+                       :ip ip
+                       :user_agent user-agent
+                       :created_at logged-at}]}))
+        (when success
+          (update-principal-last-login! db principal-type principal-id-uuid logged-at))))))
+
+(defn- update-principal-last-login!
+  [db principal-type principal-id logged-at]
+  (let [target-table (case (keyword (name principal-type))
+                       :user :users
+                       :admin :admins
+                       nil)]
+    (when target-table
       (jdbc/execute-one! db
-        (hsql/format
-          {:insert-into :login_events
-           :values [{:id (UUID/randomUUID)
-                     :principal_type (tc/cast-for-database :login-principal-type principal-type-str)
-                     :principal_id principal-id-uuid
-                     :success success
-                     :reason reason
-                     :ip ip
-                     :user_agent user-agent
-                     :created_at (time/instant)}]})))))
+        (hsql/format {:update target-table
+                      :set {:last_login_at logged-at}
+                      :where [:= :id principal-id]})))))
 
 (defn count-recent-login-events
   "Count login events since a given instant.

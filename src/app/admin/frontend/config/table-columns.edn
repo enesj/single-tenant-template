@@ -488,7 +488,6 @@
    "updated-at"
    "password-hash"
    "email-verified"
-   "avatar-url"
    "auth-provider"],
   :default-visible-columns
   ["id"
@@ -500,7 +499,6 @@
    "updated-at"
    "password-hash"
    "email-verified"
-   "avatar-url"
    "auth-provider"],
   :filterable-columns
   ["status" "last-login-at" "created-at" "updated-at"],

@@ -51,6 +51,8 @@
           expense (receipt-approval/approve-and-post! db receipt-id review)
           stored (receipt-queries/get-receipt db receipt-id)]
       (is (:id expense))
+      (is (= 12.34M (:original_amount expense)))
+      (is (= 12.34M (:bam_amount expense)))
       (is (= "posted" (:status stored)))
       (is (= (:id expense) (:expense_id stored)))
       (is (= 1 (count (:items expense)))))))
@@ -71,9 +73,9 @@
                     db
                     receipt-id
                     {:raw_extract_json {:extraction {:items [{:raw_label "JAGODA SVJEZA"
-                                                             :qty 0.750M
-                                                             :unit "kg"
-                                                             :line_total 12.34M}]}}})
+                                                              :qty 0.750M
+                                                              :unit "kg"
+                                                              :line_total 12.34M}]}}})
           _ (receipt-status/update-status! db receipt-id "extracted")
           review {:supplier_id (:id supplier)
                   :payer_id (:id payer)

@@ -7,8 +7,11 @@
     [app.backend.test-helpers :as h]
     [app.shared.adapters.normalization :as norm]
     [app.template.backend.routes.admin.users :as users-routes]
+    [app.template.backend.utils.adapters.persistence :as persist]
     [clojure.string :as str]
-    [clojure.test :refer [deftest is testing use-fixtures]]))
+    [clojure.test :refer [deftest is testing use-fixtures]]
+    [honey.sql :as hsql]
+    [next.jdbc :as jdbc]))
 
 ;; ============================================================================
 ;; User Data Normalization Tests
@@ -51,6 +54,38 @@
     (with-redefs [users/list-all-users (fn [_ _] [])]
       (let [result (users/list-all-users nil {})]
         (is (empty? result)))))
+
+  (testing "list-all-users derives last-login-at from successful login events"
+    (let [captured-query (atom nil)
+          last-login-from (java.time.Instant/parse "2026-03-01T00:00:00Z")]
+      (with-redefs [persist/execute-admin-query
+                    (fn [_db query _normalize _opts]
+                      (reset! captured-query query)
+                      [])]
+        (is (= [] (users/list-all-users nil {:last-login-at-from last-login-from
+                                             :order-by :last-login-at
+                                             :order-dir :desc
+                                             :limit 10
+                                             :offset 0})))
+        (is (= [[:raw "COALESCE(u.last_login_at, ul.last_login_at)"] :last_login_at]
+              (last (:select @captured-query))))
+        (is (= [[:raw "COALESCE(u.last_login_at, ul.last_login_at)"] :desc]
+              (first (:order-by @captured-query))))
+        (is (vector? (:left-join @captured-query)))
+        (is (= [:>= [:raw "COALESCE(u.last_login_at, ul.last_login_at)"] last-login-from]
+              (second (:where @captured-query)))))))
+
+  (testing "count-all-users applies the same derived last-login filter"
+    (let [captured-query (atom nil)
+          last-login-from (java.time.Instant/parse "2026-03-01T00:00:00Z")]
+      (with-redefs [hsql/format identity
+                    jdbc/execute-one! (fn [_db query]
+                                        (reset! captured-query query)
+                                        {:total 0})]
+        (is (= 0 (users/count-all-users nil {:last-login-at-from last-login-from})))
+        (is (vector? (:left-join @captured-query)))
+        (is (= [:>= [:raw "COALESCE(u.last_login_at, ul.last_login_at)"] last-login-from]
+              (second (:where @captured-query)))))))
 
   (testing "search-users-advanced with mocked DB returns empty"
     (with-redefs [users/search-users-advanced (fn [_ _] [])]

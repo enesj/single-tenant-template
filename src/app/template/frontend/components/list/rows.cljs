@@ -110,6 +110,7 @@
         build-filterable-cell
         (fn [{:keys [field raw-value display-value rendered-content]}]
           (let [field-id (normalize-column-id (:id field))
+                rendered-content* (or rendered-content "")
                 filter-value (when (and show-filtering?
                                      (field-filterable? field-id))
                                (filter-helpers/cell-filter-value
@@ -119,7 +120,9 @@
                                   :display-value display-value}))]
             (if filter-value
               (fn []
-                ($ :div {:class "w-full cursor-pointer"
+                ($ :div {:class "w-full min-w-0 cursor-pointer"
+                         :style {:overflow-wrap "anywhere"
+                                 :word-break "break-word"}
                          :title "Double-click to filter by this value"
                          :on-double-click (fn [e]
                                             (.stopPropagation e)
@@ -128,8 +131,8 @@
                                                           field-id
                                                           filter-value
                                                           false]))}
-                  rendered-content))
-              rendered-content)))
+                  rendered-content*))
+              rendered-content*)))
         field-values (mapv (fn [field]
                              (let [raw-id (:id field)
                                    field-id (normalize-column-id raw-id)

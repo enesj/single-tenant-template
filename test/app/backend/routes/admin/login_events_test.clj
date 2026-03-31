@@ -9,6 +9,7 @@
     [app.template.backend.routes.admin.login-events :as login-events]
     [app.template.backend.services.monitoring.login-events :as login-monitoring]
     [clojure.test :refer [deftest is testing use-fixtures]]
+    [honey.sql :as hsql]
     [next.jdbc]))
 
 ;; ============================================================================
@@ -168,4 +169,36 @@
     (is (fn? login-monitoring/count-recent-login-events)))
 
   (testing "get-login-history function exists"
-    (is (fn? login-monitoring/get-login-history))))
+    (is (fn? login-monitoring/get-login-history)))
+
+  (testing "successful logins also update the principal last_login_at field"
+    (let [calls (atom [])
+          user-id (java.util.UUID/randomUUID)]
+      (with-redefs [hsql/format identity
+                    next.jdbc/execute-one! (fn [_db query]
+                                             (swap! calls conj query)
+                                             {})]
+        (login-monitoring/record-login-event! ::db {:principal-type :user
+                                                    :principal-id user-id
+                                                    :success true
+                                                    :ip "127.0.0.1"
+                                                    :user-agent "Test UA"})
+        (is (= 2 (count @calls))))
+      (is (= :login_events (:insert-into (first @calls))))
+      (is (= :users (:update (second @calls))))))
+
+  (testing "failed logins do not update last_login_at"
+    (let [calls (atom [])
+          user-id (java.util.UUID/randomUUID)]
+      (with-redefs [hsql/format identity
+                    next.jdbc/execute-one! (fn [_db query]
+                                             (swap! calls conj query)
+                                             {})]
+        (login-monitoring/record-login-event! ::db {:principal-type :user
+                                                    :principal-id user-id
+                                                    :success false
+                                                    :reason "invalid_credentials"
+                                                    :ip "127.0.0.1"
+                                                    :user-agent "Test UA"})
+        (is (= 1 (count @calls))))
+      (is (= :login_events (:insert-into (first @calls)))))))
