@@ -149,3 +149,28 @@
             (merge/merge-preview :db :suppliers id [id])))
       (is (thrown-with-msg? clojure.lang.ExceptionInfo #"secondary-ids must not be empty"
             (merge/merge-preview :db :suppliers id []))))))
+
+(deftest merge-articles-different-units-are-rejected-test
+  (testing "article merges reject candidates with different units"
+    (let [primary-id (UUID/randomUUID)
+          secondary-id (UUID/randomUUID)]
+      (with-redefs [jdbc/execute! (fn [_db _sql-params _opts]
+                                    [{:id primary-id :unit "kg"}
+                                     {:id secondary-id :unit "kom"}])]
+        (is (thrown-with-msg? clojure.lang.ExceptionInfo #"same unit"
+              (merge/merge-preview :db :articles primary-id [secondary-id])))
+        (is (thrown-with-msg? clojure.lang.ExceptionInfo #"same unit"
+              (merge/merge-entities! :db :articles primary-id [secondary-id])))))))
+
+(deftest merge-preview-articles-same-unit-remains-allowed-test
+  (testing "article merge preview still works when all candidates share a unit"
+    (let [primary-id (UUID/randomUUID)
+          secondary-id (UUID/randomUUID)]
+      (with-redefs [jdbc/execute! (fn [_db _sql-params _opts]
+                                    [{:id primary-id :unit "kg"}
+                                     {:id secondary-id :unit "kg"}])
+                    jdbc/execute-one! (fn [_db _sql-params _opts]
+                                        {:cnt 0})]
+        (is (= {:expense_items 0
+                :article_aliases 0}
+              (merge/merge-preview :db :articles primary-id [secondary-id])))))))

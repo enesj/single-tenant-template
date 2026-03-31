@@ -1,14 +1,15 @@
 (ns app.backend.routes.admin.login-events-test
   "Tests for login events monitoring API routes.
-   
+
    Tests cover:
    - Listing login events with filtering
    - Handler creation validation"
   (:require
+    [app.backend.test-helpers :as h]
     [app.template.backend.routes.admin.login-events :as login-events]
     [app.template.backend.services.monitoring.login-events :as login-monitoring]
-    [app.backend.test-helpers :as h]
-    [clojure.test :refer [deftest is testing use-fixtures]]))
+    [clojure.test :refer [deftest is testing use-fixtures]]
+    [next.jdbc]))
 
 ;; ============================================================================
 ;; Test Fixtures
@@ -137,6 +138,18 @@
 ;; ============================================================================
 ;; Service Function Tests (can be tested without mocking JDBC)
 ;; ============================================================================
+
+(deftest count-login-events-uses-db-as-first-arg
+  (testing "count-login-events passes the datasource before SQL params"
+    (let [db ::mock-db
+          execute-args (atom nil)]
+      (with-redefs [next.jdbc/execute-one! (fn [& args]
+                                             (reset! execute-args args)
+                                             {:total 7})]
+        (is (= 7 (login-monitoring/count-login-events db {})))
+        (is (= db (first @execute-args)))
+        (is (vector? (second @execute-args)))
+        (is (string? (ffirst (rest @execute-args))))))))
 
 (deftest login-monitoring-service-test
   (testing "list-login-events function exists"

@@ -76,6 +76,42 @@
               :primary-id primary-id
               :secondary-ids secondary-ids}))))
 
+(defn- article-units-by-id
+  [db ids]
+  (if (seq ids)
+    (->> (jdbc/execute!
+           db
+           (sql/format {:select [:id :unit]
+                        :from [:articles]
+                        :where [:in :id ids]})
+           {:builder-fn rs/as-unqualified-lower-maps})
+      (reduce (fn [acc {:keys [id unit]}]
+                (assoc acc id unit))
+        {}))
+    {}))
+
+(defn- validate-article-merge-units!
+  [db primary-id secondary-ids]
+  (let [ids (vec (distinct (cons primary-id secondary-ids)))
+        unit-by-id (article-units-by-id db ids)
+        distinct-units (->> ids
+                         (map unit-by-id)
+                         distinct
+                         vec)]
+    (when (> (count distinct-units) 1)
+      (throw (ex-info "Articles can only be merged when all candidates share the same unit"
+               {:status 400
+                :entity-type :articles
+                :primary-id primary-id
+                :secondary-ids secondary-ids
+                :units distinct-units})))))
+
+(defn- validate-merge-request!
+  [db entity-type primary-id secondary-ids]
+  (validate-merge-args! entity-type primary-id secondary-ids)
+  (when (= entity-type :articles)
+    (validate-article-merge-units! db primary-id secondary-ids)))
+
 (defn- entity-table
   [entity-type]
   (keyword (name entity-type)))
@@ -212,7 +248,7 @@
 
   Returns a map of {:table-name affected-row-count} for each FK table."
   [db entity-type primary-id secondary-ids]
-  (validate-merge-args! entity-type primary-id secondary-ids)
+  (validate-merge-request! db entity-type primary-id secondary-ids)
   (let [fk-specs (get fk-configs entity-type)]
     (reduce
       (fn [acc {:keys [table col]}]
@@ -228,7 +264,7 @@
   Must be called within a transaction for safety. Wraps in its own transaction
   if not already in one."
   [db entity-type primary-id secondary-ids]
-  (validate-merge-args! entity-type primary-id secondary-ids)
+  (validate-merge-request! db entity-type primary-id secondary-ids)
   (log/info "Starting entity merge"
     {:entity-type entity-type
      :primary-id primary-id

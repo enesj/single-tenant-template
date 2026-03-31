@@ -58,8 +58,8 @@
         (duplicates/detect-prefix-duplicates :db :suppliers {:fetch-limit 999999}))
       (is (= [5000 1 20000] @captured-limits)))))
 
-(deftest detect-prefix-duplicates-articles-ignore-unit-boundary-test
-  (testing "article prefix detection groups same-prefix rows even when stored units differ"
+(deftest detect-prefix-duplicates-articles-respect-unit-boundary-test
+  (testing "article prefix detection excludes same-prefix rows when stored units differ"
     (let [id-a (UUID/randomUUID)
           id-b (UUID/randomUUID)
           rows [{:id id-a
@@ -74,9 +74,7 @@
                  :created_at #inst "2024-01-01"}]]
       (with-redefs [jdbc/execute! (fn [_db _sql _opts] rows)]
         (let [clusters (duplicates/detect-prefix-duplicates :db :articles {:prefix-words 2})]
-          (is (= 1 (count clusters)))
-          (is (= #{id-a id-b}
-                (set (map :id (:members (first clusters)))))))))))
+          (is (empty? clusters) "Different article units should not be surfaced as merge candidates"))))))
 
 ;; ============================================================================
 ;; Usage Count Enrichment

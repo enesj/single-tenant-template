@@ -40,12 +40,14 @@
             (log/info "Admin" (:email admin) "attempting to delete login event" event-id)
 
             ;; Execute delete with admin context - set RLS bypass
-            (let [result (next-jdbc/with-transaction [tx db]
-                           ;; Set admin bypass context
-                           (next-jdbc/execute-one! tx ["SET LOCAL app.bypass_rls = true"])
-                           ;; Execute the delete
-                           (next-jdbc/execute-one! tx
-                             ["DELETE FROM login_events WHERE id = ?::uuid" event-id]))]
+            (let [result (next-jdbc/transact db
+                           (fn [tx]
+                             ;; Set admin bypass context
+                             (next-jdbc/execute-one! tx ["SET LOCAL app.bypass_rls = true"])
+                             ;; Execute the delete
+                             (next-jdbc/execute-one! tx
+                               ["DELETE FROM login_events WHERE id = ?::uuid" event-id]))
+                           {})]
               (if (> (:next.jdbc/update-count result) 0)
                 (do
                   (log/info "Successfully deleted login event" event-id "by admin" (:email admin))
@@ -69,13 +71,15 @@
 
         (if (empty? parsed-ids)
           (utils/error-response "No valid IDs provided" :status 400)
-          (let [result (next-jdbc/with-transaction [tx db]
-                         ;; Set admin bypass context
-                         (next-jdbc/execute-one! tx ["SET LOCAL app.bypass_rls = true"])
-                         ;; Execute the bulk delete using ANY for array matching
-                         (next-jdbc/execute-one! tx
-                           ["DELETE FROM login_events WHERE id = ANY(?::uuid[])"
-                            (into-array String (map str parsed-ids))]))
+          (let [result (next-jdbc/transact db
+                         (fn [tx]
+                           ;; Set admin bypass context
+                           (next-jdbc/execute-one! tx ["SET LOCAL app.bypass_rls = true"])
+                           ;; Execute the bulk delete using ANY for array matching
+                           (next-jdbc/execute-one! tx
+                             ["DELETE FROM login_events WHERE id = ANY(?::uuid[])"
+                              (into-array String (map str parsed-ids))]))
+                         {})
                 deleted-count (:next.jdbc/update-count result)]
             (log/info "Successfully bulk deleted" deleted-count "login events by admin" (str (:email admin)))
             (utils/log-admin-action "bulk_delete_login_events" (:id admin)

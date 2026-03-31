@@ -165,9 +165,7 @@
 (defn count-login-events
   "Count login events using the same filters as `list-login-events`."
   [db opts]
-  (let [row (-> (build-login-events-count-query opts)
-              hsql/format
-              (jdbc/execute-one! db))
+  (let [row (jdbc/execute-one! db (hsql/format (build-login-events-count-query opts)))
         total (or (:total row) (some-> row vals first) 0)]
     (long total)))
 

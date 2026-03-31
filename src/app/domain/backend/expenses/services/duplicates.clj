@@ -30,8 +30,9 @@
   "Per-entity config for duplicate detection.
 
   :group-col (optional) — when set, candidates are only compared within the
-  same group (e.g. stores must share the same supplier_id to be considered
-  duplicates). Applies to all strategies.
+  same group (e.g. stores must share the same supplier_id, and articles must
+  share the same unit, to be considered duplicates). Applies to all
+  strategies.
 
   :display-cols (optional) — extra columns to include in duplicate candidate
   payloads for UI context without affecting grouping.
@@ -48,6 +49,7 @@
    :articles {:table "articles"
               :name-col :canonical_name
               :key-col :normalized_key
+              :group-col :unit
               :display-cols [:unit]
               :fk-tables {:expense_items {:col :article_id}
                           :article_aliases {:col :article_id}}}
