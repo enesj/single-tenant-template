@@ -63,23 +63,39 @@
                               (.addEventListener js/document "mousemove" handle-mouse-move)
                               (.addEventListener js/document "mouseup" handle-mouse-up)))
 
+        header-style (when is-header?
+                       {:position "sticky"
+                        :top 0
+                        :z-index (if sticky?
+                                   (max 22000 (or sticky-z-index 22000))
+                                   20000)})
+
         sticky-style (when sticky?
                        (merge
                          {:position "sticky"
-                          :z-index (or sticky-z-index 20)
+                          :z-index (cond
+                                     is-header? (max 22000 (or sticky-z-index 22000))
+                                     :else (or sticky-z-index 20))
                           :overflow "visible"}
                          (case sticky-position
-                           :left {:left 0
-                                  :background "linear-gradient(90deg, hsl(var(--b1)) 0%, hsl(var(--b1))/0.98 40%, hsl(var(--b2))/0.92 70%, hsl(var(--b2))/0.75 85%, rgba(255,255,255,0.1) 100%)"
-                                  :backdrop-filter "blur(12px) saturate(1.8)"
-                                  :border-right "1px solid hsl(var(--b3))/0.4"
-                                  :box-shadow "8px 0 24px -8px rgba(0, 0, 0, 0.12), 4px 0 8px -2px rgba(0, 0, 0, 0.08), inset -1px 0 0 hsl(var(--b3))/0.15"}
-                           :right {:right 0
-                                   :background "linear-gradient(270deg, hsl(var(--b1)) 0%, hsl(var(--b1))/0.98 40%, hsl(var(--b2))/0.92 70%, hsl(var(--b2))/0.75 85%, rgba(255,255,255,0.1) 100%)"
-                                   :backdrop-filter "blur(12px) saturate(1.8)"
-                                   :border-left "1px solid hsl(var(--b3))/0.4"
-                                   :box-shadow "-8px 0 24px -8px rgba(0, 0, 0, 0.12), -4px 0 8px -2px rgba(0, 0, 0, 0.08), inset 1px 0 0 hsl(var(--b3))/0.15"}
-                           {})))]
+                           :left {:left 0}
+                           :right {:right 0}
+                           {})))
+
+        header-class (when is-header?
+                       (str "bg-base-100 shadow-[inset_0_-1px_0_rgba(15,23,42,0.08)] "
+                         (when sticky? "backdrop-blur-md ")
+                         (case sticky-position
+                           :left "border-r border-base-300/60 "
+                           :right "border-l border-base-300/60 "
+                           "")))
+
+        sticky-body-class (when (and sticky? (not is-header?))
+                            (str "bg-base-100/95 backdrop-blur-md "
+                              (case sticky-position
+                                :left "border-r border-base-300/40 shadow-[8px_0_16px_-12px_rgba(15,23,42,0.22)] "
+                                :right "border-l border-base-300/40 shadow-[-8px_0_16px_-12px_rgba(15,23,42,0.22)] "
+                                "")))]
 
     (uix/use-effect
       (fn []
@@ -90,10 +106,12 @@
     ($ cell-type
       {:key index
        :class (str "table-cell relative "
-                (when sticky? "transition-all duration-200 hover:backdrop-blur-[16px] ")
+                (when sticky? "transition-all duration-200 ")
                 (when resizing? "select-none ")
-                (when-not is-header? "p-2")
-                (when is-header? "px-3 py-4 text-left font-medium text-base-content border-r border-base-300/30 last:border-r-0"))
+                (when-not is-header? "p-2 ")
+                (when is-header? "px-3 py-4 text-left font-medium text-base-content border-r border-base-300/30 last:border-r-0 ")
+                header-class
+                sticky-body-class)
        :colSpan (when (and colspan (not is-header?)) colspan)
        :data-column-index (when-not is-header? index)
        :style (merge
@@ -108,15 +126,15 @@
                    :min-width "50px"
                    :box-sizing "border-box"
                    :position "relative"})
+                header-style
                 sticky-style)}
 
       (if is-header?
         ($ :span {:class (str "whitespace-nowrap truncate block "
-                           (when sticky? "font-bold text-primary drop-shadow-md text-shadow "))}
+                           (when sticky? "font-bold text-primary "))}
           children
           (when sticky?
-            ($ :span {:class "ml-1 text-xs opacity-90 drop-shadow-md"
-                      :style {:text-shadow "0 1px 2px rgba(0,0,0,0.1)"}}
+            ($ :span {:class "ml-1 text-xs opacity-90"}
               (case sticky-position
                 :left "📌"
                 :right "📌"
@@ -195,10 +213,17 @@
    :show-highlights? {:type :boolean :required false}
    :pagination {:type :any :required false}})
 
+(def sticky-thead-class
+  "sticky top-0 z-[19000] bg-base-100")
+
+(def settings-row-cell-class
+  "px-2 py-1 border-t border-b bg-base-200 shadow-[inset_0_-1px_0_rgba(15,23,42,0.08)]")
+
 (defui table
   {:prop-types table-props}
   [{:keys [headers rows row-key render-row render-row-expansion editing entity-name entity-spec _display-settings _page-display-settings
-           per-page on-per-page-change rows-per-page-options] :as props}]
+           per-page on-per-page-change rows-per-page-options]
+    :as props}]
   (let [header-cells (ensure-seq headers)
         header-count (count header-cells)
         ;; FIXED: Use proper nil check instead of falsy check to handle explicit false values
@@ -263,99 +288,104 @@
         ;; These are settings that are locked by admins and can't be changed by users
         hardcoded-settings (use-subscribe [::ui-subs/hardcoded-view-options effective-entity-name])]
 
-    ($ :div {:id (when entity-name (str "table-" (kw/ensure-name entity-name)))}
-      ($ :div {:class "overflow-x-auto max-w-full"
-               :style {:max-width (str table-width "px")
-                       :overflow-y "visible"}}
-        ($ :table {:class "ds-table relative border-collapse" :style {:table-layout "fixed" :border-spacing "0" :min-width "800px"}}
-          ($ :thead
-            ($ row
-              {:key "header"
-               :cells header-cells
-               :class "text-base"
-               :is-header? true
-               :num-columns (count header-cells)
-               :entity-name entity-name
-               :column-widths column-widths
-               :resizable-columns resizable-columns
-               :fixed-width-columns fixed-width-columns
-               :sticky-columns sticky-columns
-               :on-column-resize handle-column-resize})
+    ($ :div {:id (when entity-name (str "table-" (kw/ensure-name entity-name)))
+             :class "w-full"
+             :style (cond-> {}
+                      table-width (assoc :max-width (str table-width "px")))}
+      ($ :table {:class "ds-table relative border-separate"
+                 :style {:table-layout "fixed"
+                         :border-spacing "0"
+                         :min-width "800px"}}
+        ($ :thead {:class sticky-thead-class}
+          ($ row
+            {:key "header"
+             :cells header-cells
+             :class "text-base"
+             :is-header? true
+             :num-columns (count header-cells)
+             :entity-name entity-name
+             :column-widths column-widths
+             :resizable-columns resizable-columns
+             :fixed-width-columns fixed-width-columns
+             :sticky-columns sticky-columns
+             :on-column-resize handle-column-resize})
 
-            ;; List view settings row - always visible between header and body
-            ($ :tr {:class "list-view-settings-row bg-base-200"}
-              ($ :td {:colSpan header-count :class "px-2 py-1 border-t border-b"}
-                ($ :div {:class "flex flex-nowrap gap-2 justify-left overflow-x-auto"}
-                  ($ :span {:id "btn-settings-toggle" :class "flex items-center text-primary ml-2 p-1 cursor-pointer relative z-100"
-                            :on-mouse-enter #(set-hovering-icon! true)
-                            :on-mouse-leave #(set-hovering-icon! false)
-                            :on-click #(set-settings-panel-visible! (not settings-panel-visible?))}
-                    ($ settings-icon {:active? settings-panel-visible?}))
-                  (when (and hovering-icon? (not settings-panel-visible?))
-                    ($ :span {:class "relative whitespace-nowrap px-2 py-1 rounded shadow-md z-10"}
-                      "Click to set columns visibility"))
-                  (when settings-panel-visible?
-                    ($ list-view-settings-panel {:entity-name effective-entity-name
-                                                 :current-entity-name effective-entity-name
-                                                 :entity-spec entity-spec
-                                                 :compact? true
-                                                 ;; Pass hardcoded settings from view-options.edn
-                                                 ;; These controls will be hidden in the settings panel
-                                                 :hardcoded-display-settings hardcoded-settings
-                                                 ;; Pass rows per page props so it's always available
-                                                 :per-page per-page
-                                                 :on-per-page-change on-per-page-change
-                                                 :rows-per-page-options rows-per-page-options}))))))
-          ($ :tbody
-            (mapcat
-              (fn [[idx row-data]]
-                (let [row-id (row-key row-data)
-                      rendered-result (render-row row-data editing)
-                      ;; Extract cells and highlight flags from the result
-                      cells (if (and (map? rendered-result) (:cells rendered-result))
-                              (:cells rendered-result)
-                              rendered-result)
-                      recently-updated? (boolean
-                                          (and (map? rendered-result)
-                                            (:recently-updated? rendered-result)))
-                      recently-created? (boolean
-                                          (and (map? rendered-result)
-                                            (:recently-created? rendered-result)))
-                      selected? (boolean
-                                  (and (map? rendered-result)
-                                    (:selected? rendered-result)))
-                      is-api-failure? (boolean
+          ;; List view settings row - always visible between header and body
+          ($ :tr {:class "list-view-settings-row bg-base-200"}
+            ($ :td {:colSpan header-count
+                    :class settings-row-cell-class}
+              ($ :div {:class "flex flex-nowrap gap-2 justify-left overflow-x-auto"}
+                ($ :span {:id "btn-settings-toggle"
+                          :class "flex items-center text-primary ml-2 p-1 cursor-pointer relative z-100"
+                          :on-mouse-enter #(set-hovering-icon! true)
+                          :on-mouse-leave #(set-hovering-icon! false)
+                          :on-click #(set-settings-panel-visible! (not settings-panel-visible?))}
+                  ($ settings-icon {:active? settings-panel-visible?}))
+                (when (and hovering-icon? (not settings-panel-visible?))
+                  ($ :span {:class "relative whitespace-nowrap px-2 py-1 rounded shadow-md z-10"}
+                    "Click to set columns visibility"))
+                (when settings-panel-visible?
+                  ($ list-view-settings-panel {:entity-name effective-entity-name
+                                               :current-entity-name effective-entity-name
+                                               :entity-spec entity-spec
+                                               :compact? true
+                                               ;; Pass hardcoded settings from view-options.edn
+                                               ;; These controls will be hidden in the settings panel
+                                               :hardcoded-display-settings hardcoded-settings
+                                               ;; Pass rows per page props so it's always available
+                                               :per-page per-page
+                                               :on-per-page-change on-per-page-change
+                                               :rows-per-page-options rows-per-page-options}))))))
+        ($ :tbody
+          (mapcat
+            (fn [[idx row-data]]
+              (let [row-id (row-key row-data)
+                    rendered-result (render-row row-data editing)
+                    ;; Extract cells and highlight flags from the result
+                    cells (if (and (map? rendered-result) (:cells rendered-result))
+                            (:cells rendered-result)
+                            rendered-result)
+                    recently-updated? (boolean
                                         (and (map? rendered-result)
-                                          (:is-api-failure? rendered-result)))
-                      ;; Apply different highlight classes based on status and if highlights are shown
-                      ;; API failure rows are always highlighted red regardless of the highlight toggle
-                      highlight-class (cond
-                                        is-api-failure? " bg-red-100/70 hover:bg-red-200/70"
-                                        (not show-highlights?) ""
-                                        recently-updated? " bg-green-200/50"
-                                        recently-created? " bg-blue-200/50"
-                                        :else "")
-                      selection-class (if selected? " bg-primary/5" "")
-                      main-row ($ row
-                                 {:key (str "row-" idx "-" row-id)
-                                  :cells cells
-                                  :class (str "ds-hover" highlight-class selection-class)
-                                  :num-columns header-count
-                                  :is-header? false
-                                  :entity-name entity-name
-                                  :row-index idx
-                                  :column-widths column-widths
-                                  :resizable-columns resizable-columns
-                                  :fixed-width-columns fixed-width-columns
-                                  :sticky-columns sticky-columns})
-                      expansion-content (when render-row-expansion
-                                          (render-row-expansion row-data))]
-                  (if expansion-content
-                    [main-row
-                     ($ :tr {:key (str "exp-" idx "-" row-id)}
-                       ($ :td {:colSpan header-count :class "p-0"}
-                         expansion-content))]
-                    [main-row])))
-              (map-indexed vector (ensure-seq rows)))))))))
+                                          (:recently-updated? rendered-result)))
+                    recently-created? (boolean
+                                        (and (map? rendered-result)
+                                          (:recently-created? rendered-result)))
+                    selected? (boolean
+                                (and (map? rendered-result)
+                                  (:selected? rendered-result)))
+                    is-api-failure? (boolean
+                                      (and (map? rendered-result)
+                                        (:is-api-failure? rendered-result)))
+                    ;; Apply different highlight classes based on status and if highlights are shown
+                    ;; API failure rows are always highlighted red regardless of the highlight toggle
+                    highlight-class (cond
+                                      is-api-failure? " bg-red-100/70 hover:bg-red-200/70"
+                                      (not show-highlights?) ""
+                                      recently-updated? " bg-green-200/50"
+                                      recently-created? " bg-blue-200/50"
+                                      :else "")
+                    selection-class (if selected? " bg-primary/5" "")
+                    main-row ($ row
+                               {:key (str "row-" idx "-" row-id)
+                                :cells cells
+                                :class (str "ds-hover" highlight-class selection-class)
+                                :num-columns header-count
+                                :is-header? false
+                                :entity-name entity-name
+                                :row-index idx
+                                :column-widths column-widths
+                                :resizable-columns resizable-columns
+                                :fixed-width-columns fixed-width-columns
+                                :sticky-columns sticky-columns})
+                    expansion-content (when render-row-expansion
+                                        (render-row-expansion row-data))]
+                (if expansion-content
+                  [main-row
+                   ($ :tr {:key (str "exp-" idx "-" row-id)}
+                     ($ :td {:colSpan header-count :class "p-0"}
+                       expansion-content))]
+                  [main-row])))
+            (map-indexed vector (ensure-seq rows))))))))
 
 ;; Removed the batch edit form from here

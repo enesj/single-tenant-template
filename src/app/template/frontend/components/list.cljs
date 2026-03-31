@@ -525,8 +525,9 @@
                       allowed-add? effective-allow-add?
                       show-add-button? (and policy-show-add-button? (or allowed-add? disable-mode?))
                       add-disabled? (and policy-show-add-button? disable-mode? (not allowed-add?))]
-                  ($ :div {:class "w-full" :style {:max-width (str table-width "px")}}  ;; Wrapper to contain header, table and pagination together with table width constraint
-                      ;; Header section moved inside table wrapper for proper alignment
+                  ($ :div {:class "w-full flex flex-col gap-3"
+                           :style (cond-> {}
+                                    table-width (assoc :max-width (str table-width "px")))}
                     ($ header-section
                       {:title title
                        :show-add-form? show-add-form?
@@ -547,7 +548,7 @@
                                             (:total ui-state)))
                           record-count (or total-records (count visible-items))]
                       ($ :div {:id (str "selected-count-" (kw/ensure-name entity-name))
-                               :class "flex items-center gap-2 mb-2 text-sm text-base-content/70"}
+                               :class "flex items-center gap-2 text-sm text-base-content/70"}
                         ($ :span {:class "font-semibold"}
                           (str record-count " " (if (= record-count 1) "record" "records")))
                         (when (pos? selected-count)
@@ -557,35 +558,39 @@
                                 (str ", " hidden-selected-count " hidden"))
                               ")")))))
 
-                    ($ :div {:class "ds-divider"})                    ;; Divider after header
-                    ($ table
-                      {:headers table-headers
-                       :rows items-vec
-                       :row-key (fn [item]
-                                  (id-utils/extract-entity-id item))
-                       :entity-name entity-name
-                       :entity-spec entity-spec
-                       :show-highlights? show-highlights?
-                       :render-row render-row-fn
-                       :render-row-expansion (:render-row-expansion props)
-                         ;; IMPORTANT: Pass the merged display settings for behavior
-                       :display-settings merged-display-settings
-                         ;; IMPORTANT: Pass hardcoded settings (page props + view-options) for settings panel control visibility
-                       :page-display-settings hardcoded-view-options
-                         ;; Pass rows per page props to table for settings panel
-                       :per-page effective-per-page
-                       :on-per-page-change on-per-page-change
-                       :rows-per-page-options [5 10 20 25 50 100]})
-                      ;; Display pagination controls within same container as table
-                      ;; Check both pagination display setting and whether there are multiple pages
-                    (when (and (get merged-display-settings :show-pagination? true)
-                            (> pagination-total-pages 1))
-                      ($ pagination
-                        {:current-page pagination-current-page
-                         :total-pages pagination-total-pages
-                         :on-page-change on-page-change
-                         ;; Pass rows per page data and options
-                         :per-page effective-per-page
-                         :on-per-page-change on-per-page-change
-                         :rows-per-page-options [5 10 20 25 50 100]
-                         :entity-name entity-name}))))))))))))
+                    ($ :div {:id (str "table-shell-" (kw/ensure-name entity-name))
+                             :class "w-full flex flex-col overflow-hidden rounded-xl border border-base-300 bg-base-100 shadow-sm"
+                             :style {:max-height "min(70vh, calc(100vh - 12rem))"}}
+                      ($ :div {:id (str "table-scroll-viewport-" (kw/ensure-name entity-name))
+                               :class "min-h-0 flex-1 overflow-auto"}
+                        ($ table
+                          {:headers table-headers
+                           :rows items-vec
+                           :row-key (fn [item]
+                                      (id-utils/extract-entity-id item))
+                           :entity-name entity-name
+                           :entity-spec entity-spec
+                           :show-highlights? show-highlights?
+                           :render-row render-row-fn
+                           :render-row-expansion (:render-row-expansion props)
+                           ;; IMPORTANT: Pass the merged display settings for behavior
+                           :display-settings merged-display-settings
+                           ;; IMPORTANT: Pass hardcoded settings (page props + view-options) for settings panel control visibility
+                           :page-display-settings hardcoded-view-options
+                           ;; Pass rows per page props to table for settings panel
+                           :per-page effective-per-page
+                           :on-per-page-change on-per-page-change
+                           :rows-per-page-options [5 10 20 25 50 100]}))
+                      (when (and (get merged-display-settings :show-pagination? true)
+                              (> pagination-total-pages 1))
+                        ($ :div {:id (str "table-pagination-" (kw/ensure-name entity-name))
+                                 :class "shrink-0 border-t border-base-300 bg-base-100"}
+                          ($ pagination
+                            {:current-page pagination-current-page
+                             :total-pages pagination-total-pages
+                             :on-page-change on-page-change
+                             ;; Pass rows per page data and options
+                             :per-page effective-per-page
+                             :on-per-page-change on-per-page-change
+                             :rows-per-page-options [5 10 20 25 50 100]
+                             :entity-name entity-name}))))))))))))))

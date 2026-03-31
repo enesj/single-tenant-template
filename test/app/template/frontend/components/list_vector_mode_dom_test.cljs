@@ -5,6 +5,7 @@
     [app.template.frontend.components.list :as list]
     [app.template.frontend.components.list.table :as list-table]
     [app.template.frontend.components.list.ui :as list-ui]
+    [app.template.frontend.components.pagination :as pagination]
     [app.template.frontend.components.settings.list-view-settings :as list-view-settings]
     [app.template.frontend.components.table :as table]
     [app.template.frontend.events.list.ui-state :as ui-events]
@@ -394,3 +395,87 @@
               (is (= [3 2] (mapv :id rows))
                 "rows-override should be filtered then sorted using current list UI state"))
             (done)))))))
+
+(deftest table-header-cells-stick-to-top-of-scroll-viewport
+  (async done
+    (mount-component!
+      ($ table/resizable-cell
+        {:is-header? true
+         :index 0}
+        "Name")
+      (fn [container]
+        (let [header (.querySelector container "th")]
+          (is (some? header) "Expected a rendered header cell")
+          (is (= "sticky" (.. header -style -position))
+            "Header cells should use sticky positioning inside the scroll viewport")
+          (is (= "0px" (.. header -style -top))
+            "Header cells should pin to the top edge of the scroll viewport")
+          (is (str/includes? (.-className header) "bg-base-100")
+            "Sticky header cells should use an opaque header background class"))
+        (done)))))
+
+(deftest table-thead-keeps-settings-row-sticky-with-header
+  (let [thead-class table/sticky-thead-class
+        settings-class table/settings-row-cell-class]
+    (is (str/includes? thead-class "sticky")
+      "Thead should stay sticky so the settings row scrolls with the header")
+    (is (str/includes? thead-class "top-0")
+      "Sticky thead should pin to the top edge of the scroll viewport")
+    (is (str/includes? settings-class "bg-base-200")
+      "Settings row should keep an opaque background while sticky")))
+
+(deftest list-view-keeps-pagination-outside-scroll-viewport
+  (async done
+    (with-redefs [rf/dispatch (fn [_] nil)
+                  column-config/vector-config? (constantly false)
+                  list-table/make-table-headers (fn [_] [])
+                  table/table (fn [_] ($ :div {:id "table-content-stub"}))
+                  pagination/pagination (fn [_] ($ :div {:id "pagination-stub"}))
+                  list-ui/header-section (fn [_] ($ :div {:id "list-header-stub"}))
+                  uix-rf/use-subscribe (fn [query]
+                                         (cond
+                                           (= query [:admin/config-loaded?]) false
+                                           (= (first query) :app.template.frontend.subs.entity/paginated-entities) [{:id 1}]
+                                           (= (first query) :app.template.frontend.subs.entity/loading?) false
+                                           (= (first query) :app.template.frontend.subs.entity/error) nil
+                                           (= (first query) :app.template.frontend.subs.list/total-pages) 3
+                                           (= (first query) :app.template.frontend.subs.entity/current-page) 1
+                                           (= (first query) :app.template.frontend.subs.list/selected-ids) #{}
+                                           (= (first query) :app.template.frontend.subs.ui/editing) nil
+                                           (= (first query) :app.template.frontend.subs.ui/show-add-form) false
+                                           (= (first query) :app.template.frontend.subs.ui/recently-updated-entities) #{}
+                                           (= (first query) :app.template.frontend.subs.ui/recently-created-entities) #{}
+                                           (= (first query) :app.template.frontend.subs.ui/hardcoded-view-options) {}
+                                           (= (first query) :app.template.frontend.subs.ui/entity-display-settings) {}
+                                           (= (first query) :app.template.frontend.subs.ui/filterable-fields) []
+                                           (= (first query) :app.template.frontend.events.list.settings/filterable-fields) {}
+                                           (= (first query) :app.template.frontend.subs.list/sort-config) {:field nil :direction nil}
+                                           (= (first query) :app.template.frontend.subs.list/active-filters) {}
+                                           (= (first query) :app.template.frontend.subs.list/batch-edit-inline) {:open? false}
+                                           (= (first query) :app.template.frontend.subs.list/entity-ui-state) {}
+                                           (= (first query) :app.template.frontend.events.list.settings/table-width) 1200
+                                           (= (first query) :app.template.frontend.subs.ui/entity-display-prefs) {}
+                                           (= (first query) :form-entity-specs/by-name) {:fields []}
+                                           (= (first query) :app.template.frontend.subs.ui/visible-columns) {}
+                                           :else nil))]
+      (mount-component!
+        ($ list/list-view
+          {:entity-name :users
+           :entity-spec {:fields []}
+           :title "Users"})
+        (fn [container]
+          (let [shell (.querySelector container "#table-shell-users")
+                viewport (.querySelector container "#table-scroll-viewport-users")
+                pagination-container (.querySelector container "#table-pagination-users")
+                pagination-stub (.querySelector container "#pagination-stub")]
+            (is (some? shell) "Expected a dedicated list shell wrapper")
+            (is (some? viewport) "Expected a dedicated scroll viewport for the table")
+            (is (str/includes? (.-className viewport) "overflow-auto")
+              "Scroll viewport should manage vertical scrolling")
+            (is (some? pagination-container) "Expected a dedicated pagination footer container")
+            (is (some? pagination-stub) "Expected the pagination stub to render")
+            (is (.contains pagination-container pagination-stub)
+              "Pagination UI should live inside the footer container")
+            (is (not (.contains viewport pagination-stub))
+              "Pagination UI should stay outside the scrolling table viewport"))
+          (done))))))
