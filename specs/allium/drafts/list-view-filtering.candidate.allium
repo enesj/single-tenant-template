@@ -1,3 +1,4 @@
+-- allium: 1
 -- Filtering on canonical list pages (list-view component)
 --
 -- Distilled from the shared template list-view filtering flow and the canonical
@@ -9,6 +10,7 @@
 -- - Client-mode (local) filtering behavior
 -- - Mode-agnostic page reset on filter change (see list-filter-pagination-reset.allium)
 -- - Server-mode refresh dispatch behavior
+-- - Shared server query-param forwarding contract (see ../shared/list-filter-query-param-forwarding.allium)
 -- - Canonical page mode split (reference-data = client, transactional = server)
 --
 -- Does NOT cover:
@@ -225,17 +227,19 @@ surface CanonicalListFilterControls {
         UserClearsFilter(list, field_id)
         UserTogglesFieldFiltering(list, field)
 
-    guarantee:
-        When `list.has_filters` and `list.active_inline_field = null`, compact active-filter chips are shown.
+    @guarantee CompactFilterChips
+        -- When `list.has_filters` and `list.active_inline_field = null`, compact active-filter chips are shown.
 
-    guarantee:
-        Filter apply/clear resets `list.current_page` to `1` regardless of pagination mode (one-shot, only on actual value change). Server mode additionally dispatches a refresh.
+    @guarantee PageResetOnFilterChange
+        -- Filter apply/clear resets `list.current_page` to `1` regardless of pagination mode
+        -- (one-shot, only on actual value change). Server mode additionally dispatches a refresh.
 
-    guarantee:
-        Client mode evaluates filters locally with AND semantics across active filters.
+    @guarantee ClientFilteringUsesAndSemantics
+        -- Client mode evaluates filters locally with AND semantics across active filters.
 
-    guarantee:
-        Text filtering matches case-insensitive substrings; number/date ranges are inclusive; select filters match selected values.
+    @guarantee FilterKindsMatchCanonicalSemantics
+        -- Text filtering matches case-insensitive substrings; number/date ranges are
+        -- inclusive; select filters match selected values.
 }
 
 open question "Should transactional admin pages move from fetch-many + client filtering to server filtering for very large datasets? (Reference-data pages are intentionally client-mode.)"

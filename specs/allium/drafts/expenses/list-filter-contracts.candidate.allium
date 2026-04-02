@@ -1,0 +1,140 @@
+-- allium: 1
+--
+-- Distilled from the current user-facing expenses list pages and the verified
+-- filter fixes on this branch.
+--
+-- Scope:
+-- - /expenses/list currency and total-amount filters
+-- - /expense-items unit and unit-price filters
+-- - the observable contract between the filter controls and the backend-backed
+--   result set
+--
+-- Verification notes from the live app on 2026-04-02:
+-- - /expenses/list `currency=EUR` returns 200 with zero matching rows
+-- - /expenses/list `total-amount 400..500` narrows to one row (411.15)
+-- - /expense-items `unit=kg` narrows the result set instead of returning the
+--   unfiltered list
+-- - /expense-items `unit-price 8..9` narrows to matching rows and was already
+--   working before the `unit` fix
+
+entity ExpenseListFilterState {
+    route: "/expenses/list"
+    pagination_mode: server
+    currency_filter: String?
+    total_amount_min: Decimal?
+    total_amount_max: Decimal?
+    total_matches: Integer
+}
+
+entity ExpenseItemsFilterState {
+    route: "/expense-items"
+    pagination_mode: server
+    unit_filter: String?
+    unit_price_min: Decimal?
+    unit_price_max: Decimal?
+    total_matches: Integer
+}
+
+rule ExpenseListCurrencyFilterUsesCanonicalCode {
+    when: ApplyExpenseListCurrencyFilter(list, currency_code)
+    requires: currency_code != null
+
+    ensures: list.currency_filter = currency_code.uppercase
+    ensures: ExpenseListCurrencyQueryProduced(list)
+
+    @guidance
+        -- The backend compares against the canonical currency code exactly.
+        -- This is an equality-style match, not a substring search.
+}
+
+rule ExpenseListTotalAmountFilterUsesInclusiveBounds {
+    when: ApplyExpenseListTotalAmountRange(list, min_amount, max_amount)
+    requires: min_amount != null or max_amount != null
+
+    ensures: list.total_amount_min = min_amount
+    ensures: list.total_amount_max = max_amount
+    ensures: ExpenseListTotalAmountQueryProduced(list)
+
+    @guidance
+        -- The forwarded params are `total-amount-min` and `total-amount-max`.
+        -- Matching uses inclusive lower/upper bounds.
+}
+
+rule ExpenseItemsUnitFilterUsesCanonicalUnitCode {
+    when: ApplyExpenseItemsUnitFilter(list, unit_code)
+    requires: unit_code != null
+
+    ensures: list.unit_filter = unit_code.lowercase
+    ensures: ExpenseItemsUnitQueryProduced(list)
+
+    @guidance
+        -- The Unit popup is a text filter in the list UI, but the backend
+        -- applies it as an exact canonical-unit match (`kg`, `kom`, ...),
+        -- not as an arbitrary substring search.
+}
+
+rule ExpenseItemsUnitPriceFilterUsesInclusiveBounds {
+    when: ApplyExpenseItemsUnitPriceRange(list, min_price, max_price)
+    requires: min_price != null or max_price != null
+
+    ensures: list.unit_price_min = min_price
+    ensures: list.unit_price_max = max_price
+    ensures: ExpenseItemsUnitPriceQueryProduced(list)
+
+    @guidance
+        -- The forwarded params are `unit-price-min` and `unit-price-max`.
+        -- Matching uses inclusive lower/upper bounds.
+}
+
+surface UserExpensesListFilters {
+    facing viewer: User
+
+    context list: ExpenseListFilterState
+
+    exposes:
+        list.currency_filter
+        list.total_amount_min
+        list.total_amount_max
+        list.total_matches
+
+    provides:
+        ApplyExpenseListCurrencyFilter(list, currency_code)
+        ApplyExpenseListTotalAmountRange(list, min_amount, max_amount)
+
+    @guarantee CurrencyFilterIsServerBacked
+        -- Applying a currency filter produces a server request and returns a
+        -- narrowed result set based on the canonical currency code.
+
+    @guarantee TotalAmountRangeIsServerBacked
+        -- Applying a total-amount range produces a server request and returns only
+        -- expenses whose total amount falls within the inclusive bounds.
+}
+
+surface ExpenseItemsPowerListFilters {
+    facing viewer: User
+
+    context list: ExpenseItemsFilterState
+
+    exposes:
+        list.unit_filter
+        list.unit_price_min
+        list.unit_price_max
+        list.total_matches
+
+    provides:
+        ApplyExpenseItemsUnitFilter(list, unit_code)
+        ApplyExpenseItemsUnitPriceRange(list, min_price, max_price)
+
+    @guarantee UnitFilterNarrowsByCanonicalUnit
+        -- Applying a Unit filter forwards the canonical unit code and narrows the
+        -- server-backed result set accordingly.
+
+    @guarantee UnitPriceRangeNarrowsByInclusiveBounds
+        -- Applying a Unit price range forwards min/max bounds and narrows the
+        -- server-backed result set accordingly.
+}
+
+deferred ExpenseListCurrencyQueryProduced
+deferred ExpenseListTotalAmountQueryProduced
+deferred ExpenseItemsUnitQueryProduced
+deferred ExpenseItemsUnitPriceQueryProduced

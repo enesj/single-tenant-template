@@ -1,0 +1,170 @@
+-- allium: 1
+--
+-- Shared contract for how canonical list filters become server query params.
+--
+-- Distilled from the template/domain list-view refresh path and verified against
+-- the running expenses pages that use server pagination.
+--
+-- Covers:
+-- - text-filter forwarding only when a field has an explicit backend mapping
+-- - number-range forwarding as <field>-min / <field>-max
+-- - date-range forwarding as <field>-from / <field>-to
+-- - select-filter forwarding using selected values rather than display labels
+-- - server refresh dispatch after filter changes
+--
+-- Excludes:
+-- - in-memory client filtering semantics
+-- - filter panel rendering and option loading
+-- - domain-specific backend query clauses
+
+external entity EntityType { name: String }
+external entity ColumnId { name: String }
+
+value FilterParamMapping {
+    field_id: ColumnId
+    backend_param: String
+}
+
+entity ServerListFilterState {
+    entity_type: EntityType
+    pagination_mode: client | server
+    refresh_event_registered: Boolean
+    text_filter_mappings: Set<FilterParamMapping>
+}
+
+entity ColumnFilter {
+    entity_type: EntityType
+    field_id: ColumnId
+}
+
+variant TextFilter : ColumnFilter {
+    query: String
+}
+
+variant NumberRangeFilter : ColumnFilter {
+    min: Decimal?
+    max: Decimal?
+}
+
+variant DateRangeFilter : ColumnFilter {
+    from: Timestamp?
+    to: Timestamp?
+}
+
+variant SelectFilter : ColumnFilter {
+    selected_values: Set<String>
+    selected_labels: Set<String>
+}
+
+rule ServerTextFilterUsesExplicitMapping {
+    when: ApplyTextFilter(state, filter)
+    requires: state.pagination_mode = server
+    requires: state.text_filter_mappings.any(m => m.field_id = filter.field_id)
+
+    ensures: TextFilterQueryParamProduced(state, filter)
+    ensures:
+        if state.refresh_event_registered:
+            ServerListRefreshRequested(state)
+
+    @guidance
+        -- The mapped backend param may differ from the column field id.
+        -- Example: a raw-label filter may forward as `search`, while `unit`
+        -- forwards as `unit`.
+}
+
+rule UnmappedServerTextFilterIsIgnored {
+    when: ApplyTextFilter(state, filter)
+    requires: state.pagination_mode = server
+    requires: not state.text_filter_mappings.any(m => m.field_id = filter.field_id)
+
+    ensures: UnmappedTextFilterIgnored(state, filter)
+
+    @guidance
+        -- This is the historical failure mode behind several false-positive UI
+        -- bugs: the filter panel accepted text, but the server request never
+        -- included a matching param because the field was missing from the
+        -- whitelist/config.
+}
+
+rule NumberRangeFilterExpandsToBoundParams {
+    when: ApplyNumberRangeFilter(state, filter)
+    requires: state.pagination_mode = server
+    requires: filter.min != null or filter.max != null
+
+    ensures: NumberRangeQueryParamsProduced(state, filter)
+    ensures:
+        if state.refresh_event_registered:
+            ServerListRefreshRequested(state)
+
+    @guidance
+        -- Number ranges use `<field>-min` and `<field>-max`.
+        -- The field id is converted to the canonical server param form used by
+        -- the list refresh event.
+}
+
+rule DateRangeFilterExpandsToTemporalBoundParams {
+    when: ApplyDateRangeFilter(state, filter)
+    requires: state.pagination_mode = server
+    requires: filter.from != null or filter.to != null
+
+    ensures: DateRangeQueryParamsProduced(state, filter)
+    ensures:
+        if state.refresh_event_registered:
+            ServerListRefreshRequested(state)
+
+    @guidance
+        -- Date ranges use `<field>-from` and `<field>-to`.
+        -- When a bound is represented as a JavaScript Date in the client, the
+        -- forwarded value is an ISO-8601 timestamp string.
+}
+
+rule SelectFilterUsesSelectedValues {
+    when: ApplySelectFilter(state, filter)
+    requires: state.pagination_mode = server
+    requires: filter.selected_values.count > 0
+
+    ensures: SelectFilterQueryParamsProduced(state, filter)
+    ensures:
+        if state.refresh_event_registered:
+            ServerListRefreshRequested(state)
+
+    @guidance
+        -- Select filters forward stable values, not human-facing labels.
+        -- Labels are only a UI concern for chips and menus.
+}
+
+surface ServerListFilterForwarding {
+    facing viewer: User
+
+    context state: ServerListFilterState
+
+    exposes:
+        state.pagination_mode
+        state.refresh_event_registered
+        state.text_filter_mappings
+
+    provides:
+        ApplyTextFilter(state, filter)
+        ApplyNumberRangeFilter(state, filter)
+        ApplyDateRangeFilter(state, filter)
+        ApplySelectFilter(state, filter)
+
+    @guarantee ExplicitTextWhitelist
+        -- Only text filters with an explicit field-to-backend mapping are forwarded
+        -- into server requests.
+
+    @guarantee RangeFiltersNeedNoTextWhitelist
+        -- Number and date ranges are forwarded by their shape, even when the field
+        -- is not part of the text-filter mapping table.
+
+    @guarantee ValuesOverLabels
+        -- Select filters are serialized from selected values, not their display
+        -- labels, so the server sees canonical identifiers.
+}
+
+deferred TextFilterQueryParamProduced
+deferred UnmappedTextFilterIgnored
+deferred NumberRangeQueryParamsProduced
+deferred DateRangeQueryParamsProduced
+deferred SelectFilterQueryParamsProduced
+deferred ServerListRefreshRequested
