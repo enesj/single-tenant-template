@@ -251,8 +251,11 @@
                                         :offset "-9"
                                         :search "milk"
                                         :raw-label "jagoda"
+                                        :unit "kg"
                                         :qty-min "0.35"
                                         :qty-max "0.35"
+                                        :unit-price-min "8"
+                                        :unit-price-max "9"
                                         :expense-purchased-at-from "2026-03-01T00:00:00Z"}))]
         (is (= 200 (:status resp)))
         (is (= 9 (get-in resp [:body :total])))
@@ -260,10 +263,16 @@
         (is (= 0 (get-in resp [:body :offset])))
         (is (vector? (get-in resp [:body :data])))
         (is (= 2 (count (filter #(= 0.35M %) (rest @list-sql)))))
+        (is (= 1 (count (filter #(= 8M %) (rest @list-sql)))))
+        (is (= 1 (count (filter #(= 9M %) (rest @list-sql)))))
+        (is (some #(= "kg" %) (rest @list-sql)))
         (is (some #(= "%jagoda%" %) (rest @list-sql)))
         (is (some #(= "%milk%" %) (rest @list-sql)))
         (is (some #(instance? java.time.Instant %) (rest @list-sql)))
         (is (= 2 (count (filter #(= 0.35M %) (rest @count-sql)))))
+        (is (= 1 (count (filter #(= 8M %) (rest @count-sql)))))
+        (is (= 1 (count (filter #(= 9M %) (rest @count-sql)))))
+        (is (some #(= "kg" %) (rest @count-sql)))
         (is (some #(= "%jagoda%" %) (rest @count-sql)))
         (is (some #(= "%milk%" %) (rest @count-sql)))
         (is (some #(instance? java.time.Instant %) (rest @count-sql)))))))

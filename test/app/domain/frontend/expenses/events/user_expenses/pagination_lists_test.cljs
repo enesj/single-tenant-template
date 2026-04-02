@@ -150,6 +150,8 @@
     (swap! rf-db/app-db assoc-in (paths/list-current-page :expense-items) 3)
     (swap! rf-db/app-db assoc-in (paths/list-filters :expense-items)
       {:qty {:min 0.35 :max 0.35}
+       :unit-price {:min 8 :max 9}
+       :unit "kg"
        :expense-purchased-at {:from "2026-03-01T00:00:00.000Z"
                               :to "2026-03-31T23:59:59.999Z"}
        :raw-label "jagoda"})
@@ -164,6 +166,9 @@
                   :offset 40
                   :qty-min 0.35
                   :qty-max 0.35
+                  :unit-price-min 8
+                  :unit-price-max 9
+                  :unit "kg"
                   :expense-purchased-at-from "2026-03-01T00:00:00.000Z"
                   :expense-purchased-at-to "2026-03-31T23:59:59.999Z"
                   :raw-label "jagoda"}
@@ -171,6 +176,9 @@
                                      :offset
                                      :qty-min
                                      :qty-max
+                                     :unit-price-min
+                                     :unit-price-max
+                                     :unit
                                      :expense-purchased-at-from
                                      :expense-purchased-at-to
                                      :raw-label]))))

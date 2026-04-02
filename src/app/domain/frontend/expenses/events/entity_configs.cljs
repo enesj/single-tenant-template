@@ -80,7 +80,8 @@
    :api-endpoint "/admin/api/expenses/expense-items"
    :detail-response-key :expense-item
    :has-forms? false
-   :server-search-keys #{:raw-label}})
+   :server-filter-keys {:raw-label :search
+                        :unit :unit}})
 
 (def article-aliases-config
   {:entity-key :article-aliases
