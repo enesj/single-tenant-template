@@ -249,7 +249,6 @@
    :store-display-name     :st.display_name
    :expense-category-name  :ec.name
    :payer-label            :p.label
-   :currency               :e.currency
    :notes                  :e.notes})
 
 (def ^:private allowed-user-expenses-order-by
@@ -269,6 +268,53 @@
    :expense-category-name :ec.name
    :is-posted :e.is_posted})
 
+(defn- parse-decimal-param
+  [raw]
+  (cond
+    (nil? raw) nil
+    (instance? java.math.BigDecimal raw) raw
+    (number? raw) (bigdec raw)
+    :else
+    (let [value (some-> raw str str/trim not-empty)]
+      (when value
+        (try
+          (bigdec value)
+          (catch Exception _
+            nil))))))
+
+(defn- normalize-currency-filter
+  [currency]
+  (let [normalize-one (fn [value]
+                        (cond
+                          (nil? value) nil
+                          (keyword? value) (some-> value name str/trim not-empty str/upper-case)
+                          :else (some-> value str str/trim not-empty str/upper-case)))]
+    (let [values (cond
+                   (nil? currency) []
+                   (and (sequential? currency) (not (string? currency))) currency
+                   :else [currency])]
+      (->> values
+        (map normalize-one)
+        (remove nil?)
+        distinct
+        vec))))
+
+(defn- text-cast-column
+  [column]
+  (if (keyword? column)
+    (let [ns-part (namespace column)
+          n (name column)]
+      [:raw (str (when ns-part (str ns-part ".")) n "::text")])
+    column))
+
+(defn- apply-currency-filter
+  [where column currency-values]
+  (let [column (text-cast-column column)]
+    (cond
+      (empty? currency-values) where
+      (= 1 (count currency-values)) (conj where [:= column (first currency-values)])
+      :else (conj where [:in column currency-values]))))
+
 (defn list-user-expenses
   "List expenses for a specific user with common filters.
 
@@ -276,7 +322,9 @@
   - :from, :to
   - :supplier-id, :payer-id, :is-posted?
   - :supplier-display-name, :store-display-name, :expense-category-name,
-    :payer-label, :currency, :notes  (text ILIKE filters)
+    :payer-label, :notes  (text ILIKE filters)
+  - :currency (exact match, accepts one or many values)
+  - :total-amount-min, :total-amount-max
   - :limit, :offset
   - :order-by (app keyword)
   - :order-dir (:asc/:desc)
@@ -286,6 +334,7 @@
                                 supplier-id payer-id is-posted?
                                 supplier-display-name store-display-name
                                 expense-category-name payer-label currency notes
+                                total-amount-min total-amount-max
                                 limit offset order-by order-dir]
                          :or {limit 50 offset 0 order-dir :desc}}]
   (let [user-id (ensure-uuid user-id)
@@ -294,6 +343,9 @@
         to (parse-instant-param to)
         created-at-from (parse-instant-param created-at-from)
         created-at-to (parse-instant-param created-at-to)
+        total-amount-min (parse-decimal-param total-amount-min)
+        total-amount-max (parse-decimal-param total-amount-max)
+        currency-values (normalize-currency-filter currency)
         order-by* (model-naming/ensure-app-keyword order-by)
         order-col (get allowed-user-expenses-order-by order-by* :e.purchased_at)
         order-dir* (shared-qb/normalize-order-direction order-dir {:default :desc})]
@@ -306,7 +358,10 @@
                        created-at-to (conj [:<= :e.created_at created-at-to])
                        supplier-id (conj [:= :e.supplier_id supplier-id])
                        payer-id (conj [:= :e.payer_id payer-id])
-                       (some? is-posted?) (conj [:= :e.is_posted (boolean is-posted?)]))
+                       (some? is-posted?) (conj [:= :e.is_posted (boolean is-posted?)])
+                       (some? total-amount-min) (conj [:>= :e.total_amount total-amount-min])
+                       (some? total-amount-max) (conj [:<= :e.total_amount total-amount-max]))
+          base-where (apply-currency-filter base-where :e.currency currency-values)
           query (-> {:select [[:e.*]
                               [:s.display_name :supplier_display_name]
                               [:st.display_name :store_display_name]
@@ -333,7 +388,6 @@
                      :store-display-name store-display-name
                      :expense-category-name expense-category-name
                      :payer-label payer-label
-                     :currency currency
                      :notes notes}))]
       (jdbc/execute! db (sql/format query) {:builder-fn rs/as-unqualified-lower-maps}))))
 
@@ -345,18 +399,21 @@
   [db tenant-id user-id {:keys [from to created-at-from created-at-to
                                 supplier-id payer-id is-posted?
                                 supplier-display-name store-display-name
-                                expense-category-name payer-label currency notes]}]
+                                expense-category-name payer-label currency notes
+                                total-amount-min total-amount-max]}]
   (let [user-id (ensure-uuid user-id)
         tenant-id (ensure-uuid tenant-id)
         from (parse-instant-param from)
         to (parse-instant-param to)
         created-at-from (parse-instant-param created-at-from)
         created-at-to (parse-instant-param created-at-to)
+        total-amount-min (parse-decimal-param total-amount-min)
+        total-amount-max (parse-decimal-param total-amount-max)
+        currency-values (normalize-currency-filter currency)
         text-filters {:supplier-display-name supplier-display-name
                       :store-display-name store-display-name
                       :expense-category-name expense-category-name
                       :payer-label payer-label
-                      :currency currency
                       :notes notes}
         has-text-filters? (shared-qb/has-text-filters?
                             (keys expense-text-filter-columns) text-filters)]
@@ -369,7 +426,10 @@
                        created-at-to (conj [:<= (if has-text-filters? :e.created_at :created_at) created-at-to])
                        supplier-id (conj [:= (if has-text-filters? :e.supplier_id :supplier_id) supplier-id])
                        payer-id (conj [:= (if has-text-filters? :e.payer_id :payer_id) payer-id])
-                       (some? is-posted?) (conj [:= (if has-text-filters? :e.is_posted :is_posted) (boolean is-posted?)]))
+                       (some? is-posted?) (conj [:= (if has-text-filters? :e.is_posted :is_posted) (boolean is-posted?)])
+                       (some? total-amount-min) (conj [:>= (if has-text-filters? :e.total_amount :total_amount) total-amount-min])
+                       (some? total-amount-max) (conj [:<= (if has-text-filters? :e.total_amount :total_amount) total-amount-max]))
+          base-where (apply-currency-filter base-where (if has-text-filters? :e.currency :currency) currency-values)
           query (if has-text-filters?
                   (-> {:select [[[:count :*] :total]]
                        :from [[:expenses :e]]
@@ -401,15 +461,13 @@
       (catch Exception _ nil))))
 
 (defn highlight-user-expense-days
-  "Return distinct local-date strings for a given timestamp column,
-   respecting the same filters as list/count but excluding the
-   date-range filter on the highlighted column itself.
-
-   Returns e.g. [\"2026-03-08\" \"2026-03-14\" \"2026-03-20\"]."
+  "Return distinct local-date strings for a given timestamp column while
+   respecting the same non-highlight filters as list/count."
   [db tenant-id user-id {:keys [from to created-at-from created-at-to
                                 supplier-id payer-id is-posted?
                                 supplier-display-name store-display-name
                                 expense-category-name payer-label currency notes
+                                total-amount-min total-amount-max
                                 highlight-column highlight-timezone
                                 highlight-field]}]
   (let [tz-id (safe-timezone-id highlight-timezone)
@@ -420,13 +478,15 @@
     (when (and tz-id (seq sql-col))
       (let [user-id (ensure-uuid user-id)
             tenant-id (ensure-uuid tenant-id)
-            ;; Exclude the highlighted field's own date-range filter
             exclude-purchased? (= highlight-field :purchased-at)
             exclude-created? (= highlight-field :created-at)
             from (when-not exclude-purchased? (parse-instant-param from))
             to (when-not exclude-purchased? (parse-instant-param to))
             created-at-from (when-not exclude-created? (parse-instant-param created-at-from))
             created-at-to (when-not exclude-created? (parse-instant-param created-at-to))
+            total-amount-min (parse-decimal-param total-amount-min)
+            total-amount-max (parse-decimal-param total-amount-max)
+            currency-values (normalize-currency-filter currency)
             day-expr (str "to_char(timezone('"
                        (clojure.string/replace tz-id "'" "''")
                        "', " sql-col ")::date, 'YYYY-MM-DD')")
@@ -439,7 +499,10 @@
                          created-at-to (conj [:<= :e.created_at created-at-to])
                          supplier-id (conj [:= :e.supplier_id (ensure-uuid supplier-id)])
                          payer-id (conj [:= :e.payer_id (ensure-uuid payer-id)])
-                         (some? is-posted?) (conj [:= :e.is_posted (boolean is-posted?)]))
+                         (some? is-posted?) (conj [:= :e.is_posted (boolean is-posted?)])
+                         (some? total-amount-min) (conj [:>= :e.total_amount total-amount-min])
+                         (some? total-amount-max) (conj [:<= :e.total_amount total-amount-max]))
+            base-where (apply-currency-filter base-where :e.currency currency-values)
             query (-> {:select [[[:raw day-expr] :day]]
                        :from [[:expenses :e]]
                        :left-join [[:suppliers :s] [:= :s.id :e.supplier_id]
@@ -454,7 +517,6 @@
                        :store-display-name store-display-name
                        :expense-category-name expense-category-name
                        :payer-label payer-label
-                       :currency currency
                        :notes notes}))]
         (->> (jdbc/execute! db (sql/format query)
                {:builder-fn rs/as-unqualified-lower-maps})

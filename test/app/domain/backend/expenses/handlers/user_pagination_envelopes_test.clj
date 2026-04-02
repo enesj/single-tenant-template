@@ -4,6 +4,7 @@
     [app.domain.backend.expenses.handlers.user-categories :as user-categories]
     [app.domain.backend.expenses.handlers.user-cities :as user-cities]
     [app.domain.backend.expenses.handlers.user-expense-categories :as user-expense-categories]
+    [app.domain.backend.expenses.handlers.user-expenses.crud :as user-expenses-crud]
     [app.domain.backend.expenses.handlers.user-expenses.expense-items :as expense-items]
     [app.domain.backend.expenses.handlers.user-expenses.helpers :as h]
     [app.domain.backend.expenses.handlers.user-expenses.reference-data :as reference-data]
@@ -26,6 +27,7 @@
     [app.domain.backend.expenses.services.subcategories :as subcategories]
     [app.domain.backend.expenses.services.supplier-aliases :as supplier-aliases]
     [app.domain.backend.expenses.services.suppliers :as suppliers]
+    [app.domain.backend.expenses.services.user-expenses :as user-expenses]
     [clojure.test :refer [deftest is testing]]
     [next.jdbc :as jdbc])
   (:import
@@ -208,6 +210,30 @@
                   :extra-filters [[:>= :sc.created_at from-ts]
                                   [:<= :sc.created_at to-ts]]}
                 @subcategories-count-opts)))))))
+
+(deftest expenses-list-handler-forwards-currency-and-total-range-filters
+  (let [list-opts (atom nil)
+        count-opts (atom nil)]
+    (with-redefs [user-expenses/list-user-expenses
+                  (fn [_db _tenant-id _user-id opts]
+                    (reset! list-opts opts)
+                    [{:id (UUID/randomUUID)}])
+                  user-expenses/count-user-expenses
+                  (fn [_db _tenant-id _user-id opts]
+                    (reset! count-opts opts)
+                    1)
+                  h/json-response (fn [body & [status]] {:status (or status 200)
+                                                         :body body})]
+      (let [handler (user-expenses-crud/list-expenses-handler db)
+            resp (handler (req "owner" {:currency "EUR"
+                                        :total-amount-min "10.25"
+                                        :total-amount-max "25.50"}))]
+        (is (= 200 (:status resp)))
+        (is (= 1 (get-in resp [:body :total])))
+        (is (= "EUR" (:currency @list-opts)))
+        (is (= 10.25M (:total-amount-min @list-opts)))
+        (is (= 25.50M (:total-amount-max @list-opts)))
+        (is (= @list-opts @count-opts))))))
 
 (deftest expense-items-list-handler-includes-standard-envelope
   (let [list-sql (atom nil)

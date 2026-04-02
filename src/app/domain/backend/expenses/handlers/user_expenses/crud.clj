@@ -8,6 +8,15 @@
     [cheshire.core :as json]
     [taoensso.timbre :as log]))
 
+(defn- parse-decimal-param
+  [raw]
+  (let [value (some-> raw str clojure.string/trim not-empty)]
+    (when value
+      (try
+        (bigdec value)
+        (catch Exception _
+          nil)))))
+
 (defn list-expenses-handler
   "Handler factory for listing user's expenses."
   [db]
@@ -23,12 +32,15 @@
                   text-filters (h/extract-text-filter-params params
                                  [:supplier-display-name :store-display-name
                                   :expense-category-name :payer-label
-                                  :currency :notes])
+                                  :notes])
                   ;; Support both legacy :from/:to and new :purchased-at-from/:purchased-at-to
                   purchased-from (or (h/get-param params :purchased-at-from) (h/get-param params :from))
                   purchased-to (or (h/get-param params :purchased-at-to) (h/get-param params :to))
                   created-from (h/get-param params :created-at-from)
                   created-to (h/get-param params :created-at-to)
+                  currency-filter (h/get-param params :currency)
+                  total-amount-min (parse-decimal-param (h/get-param params :total-amount-min))
+                  total-amount-max (parse-decimal-param (h/get-param params :total-amount-max))
                   ;; Date highlight support
                   highlight-field-raw (h/get-param params :highlight-date-field)
                   highlight-field (some-> highlight-field-raw model-naming/ensure-app-keyword)
@@ -45,6 +57,9 @@
                                        :limit (or (some-> (h/get-param params :limit) parse-long) 50)
                                        :offset (or (some-> (h/get-param params :offset) parse-long) 0)}
                                  text-filters)
+                         currency-filter (assoc :currency currency-filter)
+                         (some? total-amount-min) (assoc :total-amount-min total-amount-min)
+                         (some? total-amount-max) (assoc :total-amount-max total-amount-max)
                          order-by (assoc :order-by order-by)
                          order-dir (assoc :order-dir order-dir))
                   uid (when-not (h/tenant-elevated? request) user-id)
