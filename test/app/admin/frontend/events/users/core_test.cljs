@@ -57,6 +57,32 @@
       (is (= 50 (get-in req [:params :limit])))
       (is (= 0 (get-in req [:params :offset]))))))
 
+(deftest load-users-request-flattens-top-level-filter-maps
+  (testing ":admin/load-users flattens live list-view filter shapes before building query params"
+    (setup/reset-db!)
+    (setup/install-http-stub!)
+    (swap! rf-db/app-db assoc-in (paths/list-per-page :users) 25)
+    (swap! rf-db/app-db assoc-in (paths/list-current-page :users) 1)
+
+    (rf/dispatch-sync [:admin/load-users {"status" [{"value" "inactive"
+                                                     "label" "Inactive"}]
+                                          "created-at" {"from" (js/Date. "2026-03-16T00:00:00.000Z")
+                                                        "to" (js/Date. "2026-03-16T23:59:59.999Z")}}])
+
+    (let [req (setup/last-http-request)
+          params (:params req)]
+      (is (= :get (:method req)))
+      (is (= "/admin/api/users" (:uri req)))
+      (is (= "inactive" (:status params)))
+      (is (= "2026-03-16T00:00:00.000Z" (:created-at-from params)))
+      (is (= "2026-03-16T23:59:59.999Z" (:created-at-to params)))
+      (is (nil? (:created-at params))
+        "Date filters should be flattened into *-from/*-to params")
+      (is (nil? (get params "status"))
+        "String-keyed select filters should be normalized to keyword params")
+      (is (nil? (:pagination params))
+        "Request should not send nested pagination params"))))
+
 (deftest load-users-success-stores-server-total-items
   (testing "load-users success stores server :total into template list total-items"
     (setup/reset-db!)

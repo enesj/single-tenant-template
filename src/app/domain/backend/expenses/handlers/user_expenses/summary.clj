@@ -15,9 +15,13 @@
         (let [tenant-id (h/get-tenant-id request)]
           (try
             (let [params (:query-params request)
-                  days-back (or (some-> (:days_back params) parse-long) 30)
+                  days-back (or (some-> (h/get-param params :days_back) parse-long) 30)
                   uid (when-not (h/tenant-elevated? request) user-id)
-                  summary (user-expenses/get-user-expense-summary db tenant-id uid {:days-back days-back})]
+                  summary (user-expenses/get-user-expense-summary db tenant-id uid {:days-back days-back
+                                                                                    :from (h/get-param params :from)
+                                                                                    :to (h/get-param params :to)
+                                                                                    :supplier-id (h/get-param params :supplier_id)
+                                                                                    :expense-category-id (h/get-param params :expense_category_id)})]
               (h/json-response {:data summary}))
             (catch Exception e
               (log/error e "Error getting expense summary"

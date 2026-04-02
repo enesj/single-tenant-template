@@ -26,14 +26,38 @@
                 search (h/get-param qp :search)
                 order-by (h/parse-order-by qp)
                 order-dir (h/parse-order-dir qp)
+                supplier-display-name (h/get-param qp :supplier-display-name)
+                store-display-name (h/get-param qp :store-display-name)
+                store-address (h/get-param qp :store-address)
+                raw-label (h/get-param qp :raw-label)
+                raw-label-normalized (h/get-param qp :raw-label-normalized)
+                confidence-min (some-> (h/get-param qp :confidence-min) parse-double)
+                confidence-max (some-> (h/get-param qp :confidence-max) parse-double)
+                created-at-from (h/parse-instant-param (h/get-param qp :created-at-from))
+                created-at-to (h/parse-instant-param (h/get-param qp :created-at-to))
+                extra-filters (cond-> []
+                                created-at-from (conj [:>= :sta/created_at created-at-from])
+                                created-at-to (conj [:<= :sta/created_at created-at-to]))
                 opts (cond-> {:limit limit
                               :offset offset
                               :search search}
                        order-by (assoc :order-by order-by)
-                       order-dir (assoc :order-dir order-dir))
+                       order-dir (assoc :order-dir order-dir)
+                       (some? supplier-display-name) (assoc :supplier-display-name supplier-display-name)
+                       (some? store-display-name) (assoc :store-display-name store-display-name)
+                       (some? store-address) (assoc :store-address store-address)
+                       (some? raw-label) (assoc :raw-label raw-label)
+                       (some? raw-label-normalized) (assoc :raw-label-normalized raw-label-normalized)
+                       (some? confidence-min) (assoc :confidence-min confidence-min)
+                       (some? confidence-max) (assoc :confidence-max confidence-max)
+                       (seq extra-filters) (assoc :extra-filters extra-filters))
                 rows (h/to-app ((:list store-aliases/service) db opts))
                 rows (cond-> rows (sequential? rows) vec)
-                total (long (or ((:count store-aliases/service) db {:search search}) 0))]
+                count-opts (cond-> (select-keys opts [:search :supplier-display-name :store-display-name
+                                                      :store-address :raw-label :raw-label-normalized
+                                                      :confidence-min :confidence-max])
+                             (seq extra-filters) (assoc :extra-filters extra-filters))
+                total (long (or ((:count store-aliases/service) db count-opts) 0))]
             (h/json-response {:data rows
                               :total total
                               :limit limit

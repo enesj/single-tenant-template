@@ -126,20 +126,13 @@
   Supports:
   - :supplier-id / :supplier_id
   - :unmapped-only (boolean, filters to supplier_id IS NULL)"
-  [db {:keys [search supplier-id supplier_id unmapped-only] :as _opts}]
+  [db {:keys [supplier-id supplier_id unmapped-only] :as opts}]
   (let [supplier-uuid (try-uuid (or supplier-id supplier_id))
         base-filters (cond-> (vec (or (:base-filters config) []))
                        supplier-uuid (conj [:= :sa/supplier_id supplier-uuid])
                        unmapped-only (conj [:is :sa/supplier_id nil]))
         config* (assoc config :base-filters base-filters)]
-    (if (or supplier-uuid unmapped-only)
-      (let [base-query (factory/build-base-query config*)
-            count-query (-> base-query
-                          (dissoc :order-by :limit :offset)
-                          (assoc :select [[[:count :*] :total]]))
-            final-query (factory/apply-search-filter count-query (:search-fields config*) search)]
-        (:total (jdbc/execute-one! db (sql/format final-query) {:builder-fn rs/as-unqualified-lower-maps})))
-      ((:count service) db {:search search}))))
+    ((factory/build-count-function config*) db opts)))
 
 (defn map-alias-to-supplier!
   "Map a supplier alias to a canonical supplier.

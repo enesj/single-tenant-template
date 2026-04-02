@@ -29,6 +29,7 @@
     [clojure.test :refer [deftest is testing]]
     [next.jdbc :as jdbc])
   (:import
+    [java.time Instant]
     [java.util UUID]))
 
 (def db :test-db)
@@ -160,6 +161,53 @@
                   :unmapped-only true}
                 @supplier-aliases-opts))
           (is (= @supplier-aliases-opts @supplier-aliases-count-opts)))))))
+
+(deftest supplier-detail-and-subcategories-date-filters-flow-through
+  (let [article-aliases-opts (atom nil)
+        article-aliases-count-opts (atom nil)
+        subcategories-opts (atom nil)
+        subcategories-count-opts (atom nil)
+        from-ts (Instant/parse "2026-04-01T22:00:00Z")
+        to-ts (Instant/parse "2026-04-02T21:59:59.999Z")]
+    (with-redefs [article-aliases/list-article-aliases
+                  (fn [_db opts]
+                    (reset! article-aliases-opts opts)
+                    [{:id (UUID/randomUUID)}])
+                  article-aliases/count-article-aliases
+                  (fn [_db opts]
+                    (reset! article-aliases-count-opts opts)
+                    0)
+                  subcategories/service
+                  {:list (fn [_db opts]
+                           (reset! subcategories-opts opts)
+                           [{:id (UUID/randomUUID)}])
+                   :count (fn [_db opts]
+                            (reset! subcategories-count-opts opts)
+                            0)}
+                  h/json-response (fn [body & [status]] {:status (or status 200)
+                                                         :body body})]
+      (testing "supplier detail article aliases forwards created-at extra filters"
+        (let [handler (supplier-detail/list-article-aliases-handler db)
+              resp (handler (req "owner" {:created-at-from "2026-04-01T22:00:00Z"
+                                          :created-at-to "2026-04-02T21:59:59.999Z"}))]
+          (is (= 200 (:status resp)))
+          (is (= [[:>= :aa.created_at from-ts]
+                  [:<= :aa.created_at to-ts]]
+                (:extra-filters @article-aliases-opts)))
+          (is (= @article-aliases-opts @article-aliases-count-opts))))
+
+      (testing "subcategories forwards created-at extra filters using table alias"
+        (let [handler (user-subcategories/list-subcategories-handler db)
+              resp (handler (req "owner" {:created-at-from "2026-04-01T22:00:00Z"
+                                          :created-at-to "2026-04-02T21:59:59.999Z"}))]
+          (is (= 200 (:status resp)))
+          (is (= [[:>= :sc.created_at from-ts]
+                  [:<= :sc.created_at to-ts]]
+                (:extra-filters @subcategories-opts)))
+          (is (= {:search nil
+                  :extra-filters [[:>= :sc.created_at from-ts]
+                                  [:<= :sc.created_at to-ts]]}
+                @subcategories-count-opts)))))))
 
 (deftest expense-items-list-handler-includes-standard-envelope
   (let [list-sql (atom nil)
@@ -339,3 +387,190 @@
           (is (= 5 (get-in resp [:body :offset])))
           (is (= {:limit 6 :offset 5 :search "exp"} (get @seen :expense-categories)))
           (is (= {:search "exp"} (get @seen :expense-categories-count))))))))
+
+(deftest catalog-list-handlers-accept-column-filter-aliases
+  (let [seen (atom {})
+        tenant-id (UUID/randomUUID)
+        mk-list (fn [k]
+                  (fn [_db opts]
+                    (swap! seen assoc k opts)
+                    [{:id (UUID/randomUUID)}]))
+        mk-count (fn [k total]
+                   (fn [_db opts]
+                     (swap! seen assoc (keyword (str (name k) "-count")) opts)
+                     total))]
+    (with-redefs [suppliers/list-suppliers (mk-list :suppliers)
+                  suppliers/count-suppliers (mk-count :suppliers 10)
+                  stores-service/entity-service {:list (mk-list :stores)
+                                                 :count (mk-count :stores 12)}
+                  categories/service {:list (mk-list :categories)
+                                      :count (mk-count :categories 15)}
+                  cities/service {:list (mk-list :cities)
+                                  :count (mk-count :cities 13)}
+                  manufacturers/service {:list (mk-list :manufacturers)
+                                         :count (mk-count :manufacturers 14)}
+                  subcategories/service {:list (mk-list :subcategories)
+                                         :count (mk-count :subcategories 16)}
+                  expense-categories/service {:list (mk-list :expense-categories)
+                                              :count (mk-count :expense-categories 17)}
+                  h/json-response (fn [body & [status]] {:status (or status 200)
+                                                         :body body})]
+      (testing "suppliers use display-name as search"
+        (let [handler (reference-data/list-suppliers-handler db)
+              resp (handler (req "member" {:limit "8"
+                                           :display-name "Konzum"}))]
+          (is (= 200 (:status resp)))
+          (is (= {:limit 8 :offset 0 :search "Konzum"}
+                (get @seen :suppliers)))
+          (is (= {:search "Konzum"}
+                (get @seen :suppliers-count)))))
+
+      (testing "stores use display-name as search"
+        (let [handler (user-stores/list-stores-handler db)
+              resp (handler (req "admin" {:limit "3"
+                                          :display-name "Podružnica"}))]
+          (is (= 200 (:status resp)))
+          (is (= {:limit 3 :offset 0 :search "Podružnica"}
+                (get @seen :stores)))
+          (is (= {:search "Podružnica"}
+                (get @seen :stores-count)))))
+
+      (testing "categories use name as search"
+        (let [handler (user-categories/list-categories-handler db)
+              resp (handler (req "admin" {:limit "4"
+                                          :name "Dom i vrt"}))]
+          (is (= 200 (:status resp)))
+          (is (= {:limit 4 :offset 0 :search "Dom i vrt"}
+                (get @seen :categories)))
+          (is (= {:search "Dom i vrt"}
+                (get @seen :categories-count)))))
+
+      (testing "cities use name as search"
+        (let [handler (user-cities/list-cities-handler db)
+              resp (handler (req "admin" {:limit "2"
+                                          :name "Aleksandrovac"}))]
+          (is (= 200 (:status resp)))
+          (is (= {:limit 2 :offset 0 :search "Aleksandrovac"}
+                (get @seen :cities)))
+          (is (= {:search "Aleksandrovac"}
+                (get @seen :cities-count)))))
+
+      (testing "manufacturers use display-name as search"
+        (let [handler (user-manufacturers/list-manufacturers-handler db)
+              resp (handler (req "admin" {:limit "3"
+                                          :display-name "Amisu"}))]
+          (is (= 200 (:status resp)))
+          (is (= {:limit 3 :offset 0 :search "Amisu"}
+                (get @seen :manufacturers)))
+          (is (= {:search "Amisu"}
+                (get @seen :manufacturers-count)))))
+
+      (testing "subcategories use name as search"
+        (let [handler (user-subcategories/list-subcategories-handler db)
+              resp (handler (req "admin" {:limit "5"
+                                          :name "Alati"}))]
+          (is (= 200 (:status resp)))
+          (is (= {:limit 5 :offset 0 :search "Alati"}
+                (get @seen :subcategories)))
+          (is (= {:search "Alati"}
+                (get @seen :subcategories-count)))))
+
+      (testing "expense categories use name as search while keeping tenant scope"
+        (let [handler (user-expense-categories/list-expense-categories-handler db)
+              resp (handler (assoc (req "admin" {:limit "6"
+                                                 :name "Komunalije"})
+                              :session {:auth-session {:tenant {:id tenant-id}}}))]
+          (is (= 200 (:status resp)))
+          (is (= {:limit 6 :offset 0 :search "Komunalije" :tenant-id tenant-id}
+                (get @seen :expense-categories)))
+          (is (= {:search "Komunalije" :tenant-id tenant-id}
+                (get @seen :expense-categories-count))))))))
+
+(deftest article-and-alias-list-handlers-accept-column-filter-aliases
+  (let [articles-opts (atom nil)
+        articles-count-opts (atom nil)
+        supplier-aliases-opts (atom nil)
+        supplier-aliases-count-opts (atom nil)
+        unmapped-opts (atom nil)
+        unmapped-count-opts (atom nil)
+        tenant-id (UUID/randomUUID)]
+    (with-redefs [articles/list-articles
+                  (fn [_db opts]
+                    (reset! articles-opts opts)
+                    [{:id (UUID/randomUUID)}])
+                  articles/count-articles
+                  (fn [_db opts]
+                    (reset! articles-count-opts opts)
+                    {:total 6})
+                  supplier-aliases/list-supplier-aliases
+                  (fn [_db opts]
+                    (reset! supplier-aliases-opts opts)
+                    [{:id (UUID/randomUUID)}])
+                  supplier-aliases/count-supplier-aliases
+                  (fn [_db opts]
+                    (reset! supplier-aliases-count-opts opts)
+                    9)
+                  article-aliases/list-unmapped-aliases
+                  (fn [_db opts]
+                    (reset! unmapped-opts opts)
+                    [{:id (UUID/randomUUID)}])
+                  article-aliases/count-unmapped-aliases
+                  (fn [_db opts]
+                    (reset! unmapped-count-opts opts)
+                    4)
+                  h/json-response (fn [body & [status]]
+                                    {:status (or status 200)
+                                     :body body})]
+      (testing "articles honor canonical and related column filters"
+        (let [handler (user-articles/list-articles-handler db)
+              resp (handler (req "owner" {:limit "7"
+                                          :canonical-name "Ananas CJ"
+                                          :manufacturer-display-name "Bayer"
+                                          :category-name "Pića"
+                                          :subcategory-name "Voće"
+                                          :unit "kg"}))]
+          (is (= 200 (:status resp)))
+          (is (= {:limit 7
+                  :offset 0
+                  :search "Ananas CJ"
+                  :unit "kg"
+                  :manufacturer-display-name "Bayer"
+                  :category-name "Pića"
+                  :subcategory-name "Voće"}
+                @articles-opts))
+          (is (= {:search "Ananas CJ"
+                  :unit "kg"
+                  :manufacturer-display-name "Bayer"
+                  :category-name "Pića"
+                  :subcategory-name "Voće"}
+                @articles-count-opts))))
+
+      (testing "supplier aliases use raw-label as search"
+        (let [handler (supplier-aliases-handler/list-supplier-aliases-handler db)
+              resp (handler (req "admin" {:limit "2"
+                                          :raw-label "PETROL BH OIL COMPANY"
+                                          :supplier-display-name "PETROL BH OIL COMPANY"
+                                          :raw-label-normalized "petrol-bh-oil-company"}))]
+          (is (= 200 (:status resp)))
+          (is (= {:limit 2
+                  :offset 0
+                  :search "PETROL BH OIL COMPANY"
+                  :supplier-display-name "PETROL BH OIL COMPANY"
+                  :raw-label-normalized "petrol-bh-oil-company"}
+                @supplier-aliases-opts))
+          (is (= @supplier-aliases-opts @supplier-aliases-count-opts))))
+
+      (testing "unmapped aliases use supplier-display-name alias"
+        (let [handler (user-articles/list-unmapped-aliases-handler db)
+              resp (handler (assoc (req "owner" {:limit "2"
+                                                 :supplier-display-name "BINGO"
+                                                 :raw-label "COKOLADNA BANANICA 25G STARK"})
+                              :session {:auth-session {:tenant {:id tenant-id}}}))]
+          (is (= 200 (:status resp)))
+          (is (= {:limit 2
+                  :offset 0
+                  :tenant-id tenant-id
+                  :supplier-name "BINGO"
+                  :raw-label "COKOLADNA BANANICA 25G STARK"}
+                @unmapped-opts))
+          (is (= @unmapped-opts @unmapped-count-opts)))))))

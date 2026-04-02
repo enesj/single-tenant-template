@@ -18,6 +18,18 @@
 ;; Handlers
 ;; -----------------------------------------------------------------------------
 
+(defn- parse-instant-param
+  [raw]
+  (when-let [value (some-> raw str str/trim not-empty)]
+    (or (try
+          (java.time.Instant/parse value)
+          (catch Exception _ nil))
+      (try
+        (-> (java.time.LocalDate/parse value)
+          (.atStartOfDay java.time.ZoneOffset/UTC)
+          .toInstant)
+        (catch Exception _ nil)))))
+
 (defn list-articles-handler
   [db]
   (fn [request]
@@ -30,19 +42,38 @@
           (let [qp (:query-params request)
                 limit (h/parse-page-limit qp 200)
                 offset (h/parse-page-offset qp)
-                search (h/get-param qp :search)
-              unit (some-> (h/get-param qp :unit) str str/trim not-empty)
+                search (or (h/get-param qp :search)
+                         (h/get-param qp :canonical-name))
+                unit (some-> (h/get-param qp :unit) str str/trim not-empty)
+                manufacturer-display-name (some-> (h/get-param qp :manufacturer-display-name) str str/trim not-empty)
+                category-name (some-> (h/get-param qp :category-name) str str/trim not-empty)
+                subcategory-name (some-> (h/get-param qp :subcategory-name) str str/trim not-empty)
+                created-at-from (parse-instant-param (h/get-param qp :created-at-from))
+                created-at-to (parse-instant-param (h/get-param qp :created-at-to))
+                extra-filters (cond-> []
+                                created-at-from (conj [:>= :a.created_at created-at-from])
+                                created-at-to (conj [:<= :a.created_at created-at-to]))
                 order-by (h/parse-order-by qp)
                 order-dir (h/parse-order-dir qp)
                 opts (cond-> {:limit limit
                               :offset offset}
                        (some? search) (assoc :search search)
-                unit (assoc :unit unit)
+                       unit (assoc :unit unit)
+                       manufacturer-display-name (assoc :manufacturer-display-name manufacturer-display-name)
+                       category-name (assoc :category-name category-name)
+                       subcategory-name (assoc :subcategory-name subcategory-name)
+                       (seq extra-filters) (assoc :extra-filters extra-filters)
                        order-by (assoc :order-by order-by)
                        order-dir (assoc :order-dir order-dir))
+                count-opts (cond-> {}
+                             (some? search) (assoc :search search)
+                             unit (assoc :unit unit)
+                             manufacturer-display-name (assoc :manufacturer-display-name manufacturer-display-name)
+                             category-name (assoc :category-name category-name)
+                             subcategory-name (assoc :subcategory-name subcategory-name)
+                             (seq extra-filters) (assoc :extra-filters extra-filters))
                 rows (h/to-app (articles/list-articles db opts))
-              total (long (or (:total (articles/count-articles db (cond-> {:search search}
-                            unit (assoc :unit unit)))) 0))]
+                total (long (or (:total (articles/count-articles db count-opts)) 0))]
             (h/json-response {:data rows
                               :total total
                               :limit limit
@@ -85,11 +116,11 @@
             (try
               (let [body (h/read-body-params request)
                     canonical-provided? (contains? body :canonical_name)
-                  unit-provided? (or (contains? body :unit)
-                       (contains? body :item_unit)
-                       (contains? body :item-unit))
-                  unit (when unit-provided?
-                     (some-> (or (:unit body) (:item_unit body) (:item-unit body)) str str/trim not-empty))
+                    unit-provided? (or (contains? body :unit)
+                                     (contains? body :item_unit)
+                                     (contains? body :item-unit))
+                    unit (when unit-provided?
+                           (some-> (or (:unit body) (:item_unit body) (:item-unit body)) str str/trim not-empty))
 
                     manufacturer-id-provided? (or (contains? body :manufacturer_id)
                                                 (contains? body :manufacturer-id)
@@ -207,12 +238,27 @@
                 qp (:query-params request)
                 supplier-id (h/try-parse-uuid (h/get-param qp :supplier_id))
                 unit (some-> (h/get-param qp :unit) str str/trim not-empty)
+                supplier-name (or (h/get-param qp :supplier-name)
+                                (h/get-param qp :supplier-display-name))
+                raw-label (h/get-param qp :raw-label)
+                raw-label-normalized (h/get-param qp :raw-label-normalized)
+                occurrence-count-min (some-> (h/get-param qp :occurrence-count-min) parse-long)
+                occurrence-count-max (some-> (h/get-param qp :occurrence-count-max) parse-long)
                 limit (h/parse-page-limit qp 50)
                 offset (h/parse-page-offset qp)
+                order-by (h/parse-order-by qp)
+                order-dir (h/parse-order-dir qp)
                 opts (cond-> {:limit limit :offset offset}
                        supplier-id (assoc :supplier-id supplier-id)
                        unit (assoc :unit unit)
-                       tenant-id (assoc :tenant-id tenant-id))
+                       tenant-id (assoc :tenant-id tenant-id)
+                       (some? supplier-name) (assoc :supplier-name supplier-name)
+                       (some? raw-label) (assoc :raw-label raw-label)
+                       (some? raw-label-normalized) (assoc :raw-label-normalized raw-label-normalized)
+                       (some? occurrence-count-min) (assoc :occurrence-count-min occurrence-count-min)
+                       (some? occurrence-count-max) (assoc :occurrence-count-max occurrence-count-max)
+                       order-by (assoc :order-by order-by)
+                       order-dir (assoc :order-dir order-dir))
                 rows (h/to-app (aliases/list-unmapped-aliases db opts))
                 total (long (or (aliases/count-unmapped-aliases db opts) 0))]
             (h/json-response {:data rows

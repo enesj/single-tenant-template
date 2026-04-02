@@ -20,36 +20,70 @@
    Select maps {:value v :label _} → scalar v.
    Nil/empty string values are omitted."
   [filters]
-  (reduce-kv
-    (fn [acc k v]
-      (cond
-        (nil? v) acc
-        (and (string? v) (empty? v)) acc
+  (let [lookup-map-value (fn [m k]
+                           (if (contains? m k)
+                             (get m k)
+                             (get m (name k))))
+        normalize-select-item (fn [item]
+                                (cond
+                                  (map? item) (lookup-map-value item :value)
+                                  (keyword? item) (name item)
+                                  :else item))]
+    (reduce-kv
+      (fn [acc k v]
+        (cond
+          (nil? v) acc
+          (and (string? v) (empty? v)) acc
 
-        ;; Date range → <field>-from / <field>-to
-        (and (map? v) (or (contains? v :from) (contains? v :to)))
-        (let [field-name (name k)]
-          (cond-> acc
-            (some? (:from v)) (assoc (keyword (str field-name "-from")) (:from v))
-            (some? (:to v)) (assoc (keyword (str field-name "-to")) (:to v))))
+          ;; Date range → <field>-from / <field>-to
+          (and (map? v)
+            (or (contains? v :from) (contains? v "from")
+              (contains? v :to) (contains? v "to")))
+          (let [field-name (name k)
+                from-val (lookup-map-value v :from)
+                to-val (lookup-map-value v :to)
+                ->query-value (fn [x]
+                                (cond
+                                  (instance? js/Date x) (.toISOString x)
+                                  (some? x) (str x)
+                                  :else nil))]
+            (cond-> acc
+              (some? from-val) (assoc (keyword (str field-name "-from")) (->query-value from-val))
+              (some? to-val) (assoc (keyword (str field-name "-to")) (->query-value to-val))))
 
-        ;; Number range → <field>-min / <field>-max
-        (and (map? v) (or (contains? v :min) (contains? v :max)))
-        (let [field-name (name k)]
-          (cond-> acc
-            (some? (:min v)) (assoc (keyword (str field-name "-min")) (:min v))
-            (some? (:max v)) (assoc (keyword (str field-name "-max")) (:max v))))
+          ;; Number range → <field>-min / <field>-max
+          (and (map? v)
+            (or (contains? v :min) (contains? v "min")
+              (contains? v :max) (contains? v "max")))
+          (let [field-name (name k)
+                min-val (lookup-map-value v :min)
+                max-val (lookup-map-value v :max)]
+            (cond-> acc
+              (some? min-val) (assoc (keyword (str field-name "-min")) min-val)
+              (some? max-val) (assoc (keyword (str field-name "-max")) max-val)))
 
-        ;; Select → extract :value
-        (and (map? v) (contains? v :value))
-        (if (some? (:value v))
-          (assoc acc k (:value v))
-          acc)
+          ;; Multi-select values → scalar for one selection, vector for many
+          (vector? v)
+          (let [selected-values (->> v
+                                  (map normalize-select-item)
+                                  (filter some?)
+                                  vec)]
+            (cond
+              (empty? selected-values) acc
+              (= 1 (count selected-values)) (assoc acc (keyword (name k)) (first selected-values))
+              :else (assoc acc (keyword (name k)) selected-values)))
 
-        ;; Scalar (string, number, boolean) → pass through
-        :else (assoc acc k v)))
-    {}
-    filters))
+          ;; Select → extract :value
+          (and (map? v) (or (contains? v :value) (contains? v "value")))
+          (let [selected-value (lookup-map-value v :value)]
+            (if (some? selected-value)
+              (assoc acc (keyword (name k)) selected-value)
+              acc))
+
+          ;; Scalar (string, number, boolean) → pass through
+          :else (assoc acc (keyword (name k)) v)))
+      {}
+      filters)))
 
 ;; ============================================================================
 ;; Load Users Events
@@ -93,14 +127,23 @@
           param-filters (if (map? (:filters params*))
                           (:filters params*)
                           {})
-          flat-filters (flatten-ui-filters (merge ui-filters param-filters))
+          top-level-filter-params (dissoc params*
+                                    :filters
+                                    :pagination
+                                    :page
+                                    :per-page
+                                    :current-page
+                                    :limit
+                                    :offset
+                                    :order-by
+                                    :order-dir)
+          flat-filters (flatten-ui-filters (merge ui-filters param-filters top-level-filter-params))
           sort-params (merge (paths/resolved-list-sort-query-params db entity-key)
                         (select-keys params* [:order-by :order-dir]))
-          request-params (-> (merge flat-filters
-                               sort-params
-                               (dissoc params* :filters :pagination :page :per-page :current-page :order-by :order-dir))
-                           (assoc :limit limit
-                             :offset offset))]
+          request-params (merge flat-filters
+                           sort-params
+                           {:limit limit
+                            :offset offset})]
       (utils/log-user-operation "Loading users with params" request-params)
       {:db (state-utils/start-api-request db {:loading-key :admin/users-loading?
                                               :error-key :admin/users-error

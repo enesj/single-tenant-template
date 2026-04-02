@@ -39,7 +39,7 @@
   common-interceptors
   (fn [{:keys [db]} _]
     (let [months-back (h/->positive-int (get-in db (conj h/reports-path :filters :months-back)) 6)]
-      {:dispatch-n [[:user-expenses/fetch-summary]
+      {:dispatch-n [[:user-expenses/fetch-report-summary]
                     [:user-expenses/fetch-by-month {:months-back months-back}]
                     [:user-expenses/fetch-by-supplier {:limit 25}]
                     [:user-expenses/fetch-report-filter-options]

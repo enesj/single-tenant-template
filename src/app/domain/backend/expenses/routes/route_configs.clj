@@ -34,7 +34,9 @@
    :default-order-by "name"
    :required-fields [:name]
    :has-search? true
-   :filter-params [:search :description]})
+   :filter-params [:search :description]
+   :date-range-columns {:created-at :created_at
+                        :updated-at :updated_at}})
 
 (def expense-category-config
   {:entity-key :expense-category
@@ -56,7 +58,9 @@
    :default-order-by "name"
    :required-fields [:category-id :name]
    :has-search? true
-   :filter-params [:search :category-name :description]})
+   :filter-params [:search :category-name :description]
+   :date-range-columns {:created-at :sc.created_at
+                        :updated-at :sc.updated_at}})
 
 (def supplier-config
   {:entity-key :supplier
@@ -94,7 +98,9 @@
    :default-order-by "name"
    :required-fields [:name]
    :has-search? true
-   :filter-params [:search :normalized-key :zip :country]})
+   :filter-params [:search :normalized-key :zip :country]
+   :date-range-columns {:created-at :created_at
+                        :updated-at :updated_at}})
 
 (def country-config
   {:entity-key :country
@@ -120,7 +126,9 @@
    :default-order-by "display_name"
    :required-fields [:display-name]
    :has-search? true
-   :filter-params [:search :normalized-key]})
+   :filter-params [:search :normalized-key]
+   :date-range-columns {:created-at :created_at
+                        :updated-at :updated_at}})
 
 (def payer-config
   {:entity-key :payer
@@ -208,6 +216,7 @@
                    :unit :string
                    :supplier-id :uuid
                    :article-id :uuid}
+   :date-range-columns {:created-at :aa.created_at}
 
    ;; Admin edit forms can send numeric fields as strings (HTML inputs always
    ;; emit strings). Coerce them at the boundary so Postgres doesn't reject the

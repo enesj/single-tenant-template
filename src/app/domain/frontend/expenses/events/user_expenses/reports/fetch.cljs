@@ -41,6 +41,34 @@
                   :on-failure on-failure})})
 
 ;; ---------------------------------------------------------------------------
+;; Summary
+;; ---------------------------------------------------------------------------
+
+(rf/reg-event-fx
+  :user-expenses/fetch-report-summary
+  common-interceptors
+  (fn [{:keys [db]} _]
+    (fetch-fx db
+      :summary
+      endpoints/summary-endpoint
+      (h/common-report-params db)
+      [:user-expenses/fetch-report-summary-success]
+      [:user-expenses/fetch-report-summary-failure])))
+
+(rf/reg-event-db
+  :user-expenses/fetch-report-summary-success
+  common-interceptors
+  (fn [db [response]]
+    (finish-success db :summary (or (:data response) {}))))
+
+(rf/reg-event-db
+  :user-expenses/fetch-report-summary-failure
+  common-interceptors
+  (fn [db [error]]
+    (log/warn "Failed to fetch report summary" {:error error})
+    (finish-failure db :summary error)))
+
+;; ---------------------------------------------------------------------------
 ;; Filter options
 ;; ---------------------------------------------------------------------------
 

@@ -169,7 +169,9 @@
   - order-dir (default desc)
   - show-purged (optional boolean; when truthy include purged receipts)
   - original-filename (text filter, ILIKE)
-  - supplier-guess (text filter, ILIKE)"
+  - supplier-guess (text filter, ILIKE)
+  - created-by-name (text filter, ILIKE)
+  - purchased-at-guess-from/to, created-at-from/to, updated-at-from/to (date filters)"
   [db]
   (with-error-handling
     (fn [request]
@@ -181,14 +183,22 @@
                 status (parse-status-param (or (:status qp) (get qp "status")))
                 show-purged? (parse-show-purged-param qp)
                 text-filters (h/extract-text-filter-params qp
-                               [:original-filename :supplier-guess])
+                               [:original-filename :supplier-guess :created-by-name])
+                date-filters (into {}
+                               (keep (fn [k]
+                                       (when-let [v (h/get-param qp k)]
+                                         [k v])))
+                               [:purchased-at-guess-from :purchased-at-guess-to
+                                :created-at-from :created-at-to
+                                :updated-at-from :updated-at-to])
                 opts (cond-> (merge {:status status
                                      :show-purged? show-purged?
                                      :limit (parse-long-param qp :limit 50)
                                      :offset (parse-long-param qp :offset 0)
                                      :order-dir (keyword (or (:order-dir qp) (get qp "order-dir") "desc"))
                                      :order-by (or (:order-by qp) (get qp "order-by"))}
-                               text-filters)
+                               text-filters
+                               date-filters)
                        tenant-id (assoc :tenant-id tenant-id))
                 {:keys [rows total purged-total limit offset]}
                 (if (h/tenant-elevated? request)

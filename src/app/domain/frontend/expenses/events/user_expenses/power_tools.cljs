@@ -12,7 +12,6 @@
     [app.template.frontend.db.db :refer [common-interceptors]]
     [app.template.frontend.db.paths :as paths]
     [app.template.frontend.shared.crud.success :as crud-success]
-    [clojure.string :as str]
     [re-frame.core :as rf]))
 
 (defn- begin-entity-load
@@ -27,61 +26,77 @@
     (assoc-in (paths/entity-loading? entity-type) false)
     (assoc-in (paths/entity-error entity-type) (when error (http/extract-error-message error)))))
 
-(defn- normalize-filter-value
-  [value]
-  (cond
-    (map? value)
-    (when (or (contains? value :value)
-            (contains? value "value"))
-      (or (normalize-filter-value (:value value))
-        (normalize-filter-value (get value "value"))))
-
-    (keyword? value) (name value)
-    (string? value) (some-> value str/trim not-empty)
-    (vector? value) (let [items (->> value
-                                  (map normalize-filter-value)
-                                  (remove nil?)
-                                  vec)]
-                      (when (seq items)
-                        items))
-    (sequential? value) (let [items (->> value
-                                      (map normalize-filter-value)
-                                      (remove nil?)
-                                      vec)]
-                          (when (seq items)
-                            items))
-    :else value))
-
-(defn- normalize-filter-params
+(defn- flatten-ui-filters
+  "Flatten shared-list UI filter values into flat backend query params.
+   Date ranges {:from x :to y} → <field>-from / <field>-to.
+   Number ranges {:min x :max y} → <field>-min / <field>-max.
+   Select maps {:value v :label _} → scalar v.
+   Nil/empty string values are omitted."
   [filters]
-  (reduce-kv
-    (fn [acc k v]
-      (let [field-name (name k)]
+  (let [lookup-map-value (fn [m k]
+                           (if (contains? m k)
+                             (get m k)
+                             (get m (name k))))
+        normalize-select-item (fn [item]
+                                (cond
+                                  (map? item) (lookup-map-value item :value)
+                                  (keyword? item) (name item)
+                                  :else item))]
+    (reduce-kv
+      (fn [acc k v]
         (cond
-          (and (map? v)
-            (or (contains? v :from)
-              (contains? v :to)))
-          (let [from* (normalize-filter-value (:from v))
-                to* (normalize-filter-value (:to v))]
-            (cond-> acc
-              (some? from*) (assoc (keyword (str field-name "-from")) from*)
-              (some? to*) (assoc (keyword (str field-name "-to")) to*)))
+          (nil? v) acc
+          (and (string? v) (empty? v)) acc
 
+          ;; Date range → <field>-from / <field>-to
           (and (map? v)
-            (or (contains? v :min)
-              (contains? v :max)))
-          (let [min* (normalize-filter-value (:min v))
-                max* (normalize-filter-value (:max v))]
+            (or (contains? v :from) (contains? v "from")
+              (contains? v :to) (contains? v "to")))
+          (let [field-name (name k)
+                from-val (lookup-map-value v :from)
+                to-val (lookup-map-value v :to)
+                ->query-value (fn [x]
+                                (cond
+                                  (instance? js/Date x) (.toISOString x)
+                                  (some? x) (str x)
+                                  :else nil))]
             (cond-> acc
-              (some? min*) (assoc (keyword (str field-name "-min")) min*)
-              (some? max*) (assoc (keyword (str field-name "-max")) max*)))
+              (some? from-val) (assoc (keyword (str field-name "-from")) (->query-value from-val))
+              (some? to-val) (assoc (keyword (str field-name "-to")) (->query-value to-val))))
 
-          :else
-          (if-let [normalized (normalize-filter-value v)]
-            (assoc acc k normalized)
-            acc))))
-    {}
-    (or filters {})))
+          ;; Number range → <field>-min / <field>-max
+          (and (map? v)
+            (or (contains? v :min) (contains? v "min")
+              (contains? v :max) (contains? v "max")))
+          (let [field-name (name k)
+                min-val (lookup-map-value v :min)
+                max-val (lookup-map-value v :max)]
+            (cond-> acc
+              (some? min-val) (assoc (keyword (str field-name "-min")) min-val)
+              (some? max-val) (assoc (keyword (str field-name "-max")) max-val)))
+
+          ;; Multi-select values → scalar for one selection, vector for many
+          (vector? v)
+          (let [selected-values (->> v
+                                  (map normalize-select-item)
+                                  (filter some?)
+                                  vec)]
+            (cond
+              (empty? selected-values) acc
+              (= 1 (count selected-values)) (assoc acc (keyword (name k)) (first selected-values))
+              :else (assoc acc (keyword (name k)) selected-values)))
+
+          ;; Select → extract :value
+          (and (map? v) (or (contains? v :value) (contains? v "value")))
+          (let [selected-value (lookup-map-value v :value)]
+            (if (some? selected-value)
+              (assoc acc (keyword (name k)) selected-value)
+              acc))
+
+          ;; Scalar (string, number, boolean) → pass through
+          :else (assoc acc (keyword (name k)) v)))
+      {}
+      filters)))
 
 (defn- current-list-page-params
   [db entity-key default-limit]
@@ -92,7 +107,7 @@
                     (when (contains? #{:asc :desc "asc" "desc"} direction)
                       (name (keyword direction))))
         order-field (when-let [f (:field sort-config)] (name f))
-        filters (normalize-filter-params (get-in db [:ui :lists entity-key :filters]))]
+        filters (flatten-ui-filters (or (get-in db [:ui :lists entity-key :filters]) {}))]
     (cond-> (merge {:limit per-page
                     :offset (* (max 0 (dec current-page)) per-page)}
               filters)

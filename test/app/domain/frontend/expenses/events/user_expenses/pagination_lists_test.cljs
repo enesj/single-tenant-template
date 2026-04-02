@@ -111,6 +111,38 @@
         (finally
           (rf/reg-fx :dispatch rf/dispatch))))))
 
+(deftest receipts-refresh-list-flattens-date-and-created-by-filters
+  (testing "refresh wrapper serializes receipts date ranges and created-by filter"
+    (sup/reset-db!)
+    (swap! rf-db/app-db assoc-in (paths/list-per-page :receipts) 25)
+    (swap! rf-db/app-db assoc-in (paths/list-current-page :receipts) 2)
+    (swap! rf-db/app-db assoc-in (paths/list-filters :receipts)
+      {:created-by-name "Enes Jakić"
+       :purchased-at-guess {"from" (js/Date. "2026-03-21T00:00:00.000Z")
+                            "to" (js/Date. "2026-03-22T00:00:00.000Z")}
+       :created-at {"from" (js/Date. "2026-03-30T00:00:00.000Z")
+                    "to" (js/Date. "2026-03-31T00:00:00.000Z")}})
+    (let [dispatches (atom [])]
+      (rf/reg-fx :dispatch (fn [event]
+                             (swap! dispatches conj event)))
+      (try
+        (rf/dispatch-sync [:user-expenses/refresh-receipts-list])
+        (let [[event-id params] (first @dispatches)]
+          (is (= :user-expenses/fetch-receipts event-id))
+          (is (= {:limit 25
+                  :offset 25
+                  :created-by-name "Enes Jakić"
+                  :purchased-at-guess-from "2026-03-21T00:00:00.000Z"
+                  :purchased-at-guess-to "2026-03-22T00:00:00.000Z"
+                  :created-at-from "2026-03-30T00:00:00.000Z"
+                  :created-at-to "2026-03-31T00:00:00.000Z"}
+                (select-keys params [:limit :offset
+                                     :created-by-name
+                                     :purchased-at-guess-from :purchased-at-guess-to
+                                     :created-at-from :created-at-to]))))
+        (finally
+          (rf/reg-fx :dispatch rf/dispatch))))))
+
 (deftest expense-items-refresh-list-expands-range-and-date-filters
   (testing "expense items refresh expands number/date filters into backend query params"
     (sup/reset-db!)
@@ -397,6 +429,31 @@
           (is (= :user-expenses/fetch-expense-categories event-id))
           (is (= {:limit 12 :offset 48}
                 (select-keys params [:limit :offset]))))
+        (finally
+          (rf/reg-fx :dispatch rf/dispatch))))))
+
+(deftest expense-categories-refresh-list-flattens-created-at-range-filters
+  (testing "expense categories refresh serializes created-at date-range filters for the API"
+    (sup/reset-db!)
+    (swap! rf-db/app-db assoc-in (paths/list-per-page :expense-categories) 12)
+    (swap! rf-db/app-db assoc-in (paths/list-current-page :expense-categories) 2)
+    (swap! rf-db/app-db assoc-in (paths/list-filters :expense-categories)
+      {:name "Ivanica"
+       :created-at {"from" (js/Date. "2026-03-14T00:00:00.000Z")
+                    "to" (js/Date. "2026-03-15T00:00:00.000Z")}})
+    (let [dispatches (atom [])]
+      (rf/reg-fx :dispatch (fn [event]
+                             (swap! dispatches conj event)))
+      (try
+        (rf/dispatch-sync [:user-expenses/refresh-expense-categories-list])
+        (let [[event-id params] (first @dispatches)]
+          (is (= :user-expenses/fetch-expense-categories event-id))
+          (is (= {:limit 12
+                  :offset 12
+                  :name "Ivanica"
+                  :created-at-from "2026-03-14T00:00:00.000Z"
+                  :created-at-to "2026-03-15T00:00:00.000Z"}
+                (select-keys params [:limit :offset :name :created-at-from :created-at-to]))))
         (finally
           (rf/reg-fx :dispatch rf/dispatch))))))
 

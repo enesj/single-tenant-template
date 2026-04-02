@@ -39,17 +39,32 @@
           (let [qp (:query-params request)
                 limit (h/parse-page-limit qp 200)
                 offset (h/parse-page-offset qp)
-                search (h/get-param qp :search)
+                search (or (h/get-param qp :search)
+                         (h/get-param qp :name))
                 order-by (h/parse-order-by qp)
                 order-dir (h/parse-order-dir qp)
+                normalized-key (h/get-param qp :normalized-key)
+                zip (h/get-param qp :zip)
+                country (h/get-param qp :country)
+                created-at-from (h/parse-instant-param (h/get-param qp :created-at-from))
+                created-at-to (h/parse-instant-param (h/get-param qp :created-at-to))
+                extra-filters (cond-> []
+                                created-at-from (conj [:>= :created_at created-at-from])
+                                created-at-to (conj [:<= :created_at created-at-to]))
                 opts (cond-> {:limit limit
                               :offset offset
                               :search search}
                        order-by (assoc :order-by order-by)
-                       order-dir (assoc :order-dir order-dir))
+                       order-dir (assoc :order-dir order-dir)
+                       (some? normalized-key) (assoc :normalized-key normalized-key)
+                       (some? zip) (assoc :zip zip)
+                       (some? country) (assoc :country country)
+                       (seq extra-filters) (assoc :extra-filters extra-filters))
                 rows (h/to-app ((:list cities/service) db opts))
                 rows (cond-> rows (sequential? rows) vec)
-                total (long (or ((:count cities/service) db {:search search}) 0))]
+                count-opts (cond-> (select-keys opts [:search :normalized-key :zip :country])
+                             (seq extra-filters) (assoc :extra-filters extra-filters))
+                total (long (or ((:count cities/service) db count-opts) 0))]
             (h/json-response {:data rows
                               :total total
                               :limit limit

@@ -470,35 +470,63 @@
    When user-id is nil, aggregates all tenant expenses.
    Returns: {:total-expenses N :total-amount M :currency-totals {...} :recent-count N}
    `tenant-id` scopes the summary to a specific tenant."
-  [db tenant-id user-id {:keys [days-back] :or {days-back 30}}]
+  [db tenant-id user-id {:keys [days-back from to supplier-id expense-category-id]
+                         :or {days-back 30}}]
   (let [user-id (ensure-uuid user-id)
-        tenant-id (ensure-uuid tenant-id)]
-    (let [;; Total count of all expenses
-          total-expenses (count-user-expenses db tenant-id user-id {})
-
-          ;; Total amount by currency
-          currency-where (cond-> [:and
-                                  [:= :is_posted true]]
-                           user-id (conj [:= :user_id user-id])
-                           tenant-id (conj [:= :tenant_id tenant-id]))
-          currency-totals (jdbc/execute!
-                            db
-                            (sql/format {:select [:currency
-                                                  [[:sum :total_amount] :total]]
-                                         :from [:expenses]
-                                         :where currency-where
-                                         :group-by [:currency]})
-                            {:builder-fn rs/as-unqualified-lower-maps})
-
-          ;; Recent expenses count (last N days)
-          recent-date (java.time.Instant/now)
-          recent-count (count-user-expenses db tenant-id user-id
-                         {:from (.minus recent-date (java.time.Duration/ofDays days-back))})]
-
-      {:total-expenses total-expenses
-       :currency-totals (into {} (map (juxt :currency :total) currency-totals))
-       :recent-count recent-count
-       :days-back days-back})))
+        tenant-id (ensure-uuid tenant-id)
+        from* (parse-instant-param from)
+        to* (parse-instant-param to)
+        supplier-id* (some-> supplier-id ensure-uuid)
+        expense-category-id* (some-> expense-category-id ensure-uuid)
+        report-summary? (or from* to* supplier-id* expense-category-id*)]
+    (if report-summary?
+      (let [summary-where (cond-> [:and
+                                   [:= :is_posted true]]
+                            user-id (conj [:= :user_id user-id])
+                            tenant-id (conj [:= :tenant_id tenant-id])
+                            from* (conj [:>= :purchased_at from*])
+                            to* (conj [:<= :purchased_at to*])
+                            supplier-id* (conj [:= :supplier_id supplier-id*])
+                            expense-category-id* (conj [:= :expense_category_id expense-category-id*]))
+            total-expenses (:total (jdbc/execute-one!
+                                     db
+                                     (sql/format {:select [[[:count :*] :total]]
+                                                  :from [:expenses]
+                                                  :where summary-where})
+                                     {:builder-fn rs/as-unqualified-lower-maps}))
+            currency-totals (jdbc/execute!
+                              db
+                              (sql/format {:select [:currency
+                                                    [[:sum :total_amount] :total]]
+                                           :from [:expenses]
+                                           :where summary-where
+                                           :group-by [:currency]})
+                              {:builder-fn rs/as-unqualified-lower-maps})]
+        {:total-expenses total-expenses
+         :currency-totals (into {} (map (juxt :currency :total) currency-totals))
+         :recent-count total-expenses
+         :from from*
+         :to to*})
+      (let [total-expenses (count-user-expenses db tenant-id user-id {})
+            currency-where (cond-> [:and
+                                    [:= :is_posted true]]
+                             user-id (conj [:= :user_id user-id])
+                             tenant-id (conj [:= :tenant_id tenant-id]))
+            currency-totals (jdbc/execute!
+                              db
+                              (sql/format {:select [:currency
+                                                    [[:sum :total_amount] :total]]
+                                           :from [:expenses]
+                                           :where currency-where
+                                           :group-by [:currency]})
+                              {:builder-fn rs/as-unqualified-lower-maps})
+            recent-date (java.time.Instant/now)
+            recent-count (count-user-expenses db tenant-id user-id
+                           {:from (.minus recent-date (java.time.Duration/ofDays days-back))})]
+        {:total-expenses total-expenses
+         :currency-totals (into {} (map (juxt :currency :total) currency-totals))
+         :recent-count recent-count
+         :days-back days-back}))))
 
 (defn get-user-spending-by-month
   "Get monthly spending aggregation for a user.

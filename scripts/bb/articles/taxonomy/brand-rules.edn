@@ -215,4 +215,10 @@
   nil]
  ["(?i)^\\Qdžem\\E\\b" "Swit" "Pakovana hrana i pića" nil]
  ["(?i)^\\Qaqua\\E\\b" "Knjaz Miloš" "Pića" nil]
- ["(?i)^\\Qdonat\\E\\b" "Atlantic Grupa" "Pića" nil]]
+ ["(?i)^\\Qdonat\\E\\b" "Atlantic Grupa" "Pića" nil]
+ ["(?i)^\\Qvaseline\\E\\b" "Unilever" "Lična njega" nil]
+ ["(?i)^\\Qštapići\\E\\b" "Saltas" "Pakovana hrana i pića" nil]
+ ["(?i)^\\Qdurabag\\E\\b"
+  "DuraBag"
+  "Jednokratno posuđe i pakovanje"
+  nil]]

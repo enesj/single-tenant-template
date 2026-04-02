@@ -26,6 +26,94 @@
     (assoc-in (paths/entity-loading? entity-type) false)
     (assoc-in (paths/entity-error entity-type) (when error (http/extract-error-message error)))))
 
+(defn- date->iso-str
+  [value]
+  (cond
+    (instance? js/Date value) (.toISOString value)
+    (string? value) value
+    :else (str value)))
+
+(defn- normalize-filter-value
+  [value]
+  (cond
+    (and (map? value)
+      (or (contains? value :from)
+        (contains? value :to)
+        (contains? value "from")
+        (contains? value "to")
+        (contains? value :min)
+        (contains? value :max)
+        (contains? value "min")
+        (contains? value "max")))
+    value
+
+    (map? value)
+    (or (some-> (get value :value) normalize-filter-value)
+      (some-> (get value "value") normalize-filter-value))
+
+    (keyword? value) (name value)
+    (string? value) (some-> value clojure.string/trim not-empty)
+
+    (vector? value)
+    (let [items (->> value
+                  (map normalize-filter-value)
+                  (remove nil?)
+                  vec)]
+      (when (seq items)
+        (if (= 1 (count items))
+          (first items)
+          items)))
+
+    (sequential? value)
+    (let [items (->> value
+                  (map normalize-filter-value)
+                  (remove nil?)
+                  vec)]
+      (when (seq items)
+        (if (= 1 (count items))
+          (first items)
+          items)))
+
+    :else value))
+
+(defn- flatten-ui-filters
+  [filters]
+  (reduce-kv
+    (fn [acc k v]
+      (let [normalized (normalize-filter-value v)
+            field-key (keyword (name k))
+            field-name (name field-key)
+            range-from (when (map? normalized)
+                         (or (get normalized :from)
+                           (get normalized "from")))
+            range-to (when (map? normalized)
+                       (or (get normalized :to)
+                         (get normalized "to")))
+            range-min (when (map? normalized)
+                        (or (get normalized :min)
+                          (get normalized "min")))
+            range-max (when (map? normalized)
+                        (or (get normalized :max)
+                          (get normalized "max")))]
+        (cond
+          (nil? normalized)
+          acc
+
+          (or (some? range-from) (some? range-to))
+          (cond-> acc
+            (some? range-from) (assoc (keyword (str field-name "-from")) (date->iso-str range-from))
+            (some? range-to) (assoc (keyword (str field-name "-to")) (date->iso-str range-to)))
+
+          (or (some? range-min) (some? range-max))
+          (cond-> acc
+            (some? range-min) (assoc (keyword (str field-name "-min")) range-min)
+            (some? range-max) (assoc (keyword (str field-name "-max")) range-max))
+
+          :else
+          (assoc acc field-key normalized))))
+    {}
+    (or filters {})))
+
 (defn- current-expense-categories-page-params
   [db]
   (let [entity-key :expense-categories
@@ -36,9 +124,7 @@
                     (when (contains? #{:asc :desc "asc" "desc"} direction)
                       (name (keyword direction))))
         order-field (when-let [f (:field sort-config)] (name f))
-        filters (some-> (get-in db [:ui :lists entity-key :filters])
-                  (select-keys [:name])
-                  not-empty)]
+        filters (flatten-ui-filters (or (get-in db [:ui :lists entity-key :filters]) {}))]
     (cond-> (merge {:limit per-page
                     :offset (* (max 0 (dec current-page)) per-page)}
               filters)

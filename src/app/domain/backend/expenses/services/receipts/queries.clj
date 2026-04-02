@@ -191,10 +191,48 @@
       1 (first clauses)
       (into [:and] clauses))))
 
+(defn- parse-instant-param
+  [raw]
+  (when-let [value (some-> raw str clojure.string/trim not-empty)]
+    (or (try
+          (java.time.Instant/parse value)
+          (catch Exception _ nil))
+      (try
+        (-> (java.time.LocalDate/parse value)
+          (.atStartOfDay java.time.ZoneOffset/UTC)
+          .toInstant)
+        (catch Exception _ nil)))))
+
+(defn- receipt-date-filter-clauses
+  [{:keys [purchased-at-guess-from purchased-at-guess-to
+           created-at-from created-at-to
+           updated-at-from updated-at-to]}]
+  (let [purchased-at-guess-from* (parse-instant-param purchased-at-guess-from)
+        purchased-at-guess-to* (parse-instant-param purchased-at-guess-to)
+        created-at-from* (parse-instant-param created-at-from)
+        created-at-to* (parse-instant-param created-at-to)
+        updated-at-from* (parse-instant-param updated-at-from)
+        updated-at-to* (parse-instant-param updated-at-to)]
+    (cond-> []
+      purchased-at-guess-from* (conj [:>= :receipts.purchased_at_guess purchased-at-guess-from*])
+      purchased-at-guess-to* (conj [:<= :receipts.purchased_at_guess purchased-at-guess-to*])
+      created-at-from* (conj [:>= :receipts.created_at created-at-from*])
+      created-at-to* (conj [:<= :receipts.created_at created-at-to*])
+      updated-at-from* (conj [:>= :receipts.updated_at updated-at-from*])
+      updated-at-to* (conj [:<= :receipts.updated_at updated-at-to*]))))
+
+(defn- apply-receipt-date-filters
+  [query opts]
+  (reduce (fn [q clause]
+            (update q :where shared-qb/merge-where-and clause))
+    query
+    (receipt-date-filter-clauses opts)))
+
 (def ^:private receipt-text-filter-columns
   "Mapping from text filter keys to SQL column identifiers for receipts."
   {:original-filename :receipts.original_filename
-   :supplier-guess    :receipts.supplier_guess})
+   :supplier-guess    :receipts.supplier_guess
+   :created-by-name   [:raw "coalesce(cb.full_name, cb.email)"]})
 
 (def ^:private sortable-receipt-columns
   "Whitelist mapping client-supplied column names to ORDER BY expressions.
@@ -213,15 +251,19 @@
    "updated-at" :updated_at})
 
 (defn list-receipts
-  "List receipts with optional status and text filters.
+  "List receipts with optional status, text, and date filters.
 
   Returns a lightweight projection for list views (detail endpoints return
   raw_extract_json / parsed_markdown, etc.).
   Optional :tenant-id in opts scopes to a specific tenant.
-  Text filter keys: :original-filename, :supplier-guess."
+  Text filter keys: :original-filename, :supplier-guess, :created-by-name."
   [db {:keys [status tenant-id limit offset order-dir order-by
-              original-filename supplier-guess show-purged?]
-       :or {limit 50 offset 0 order-dir :desc}}]
+              original-filename supplier-guess created-by-name show-purged?
+              purchased-at-guess-from purchased-at-guess-to
+              created-at-from created-at-to
+              updated-at-from updated-at-to]
+       :or {limit 50 offset 0 order-dir :desc}
+       :as opts}]
   (let [helpers (build-status-query-helpers)
         {:keys [lines-total-sql effective-status-sql]} helpers
         where-clause (build-receipts-where-clause status nil helpers
@@ -231,7 +273,8 @@
                     [:raw effective-status-sql]
                     (or (get sortable-receipt-columns (some-> order-by name)) :created_at))
         text-filters {:original-filename original-filename
-                      :supplier-guess supplier-guess}
+                      :supplier-guess supplier-guess
+                      :created-by-name created-by-name}
         query (cond-> {:select [:receipts.id
                                 :receipts.original_filename
                                 [[:raw effective-status-sql] :status]
@@ -254,7 +297,14 @@
                        :limit limit
                        :offset offset}
                 where-clause (assoc :where where-clause))
-        query (shared-qb/apply-text-filters query receipt-text-filter-columns text-filters)]
+        query (-> query
+                (shared-qb/apply-text-filters receipt-text-filter-columns text-filters)
+                (apply-receipt-date-filters {:purchased-at-guess-from purchased-at-guess-from
+                                             :purchased-at-guess-to purchased-at-guess-to
+                                             :created-at-from created-at-from
+                                             :created-at-to created-at-to
+                                             :updated-at-from updated-at-from
+                                             :updated-at-to updated-at-to}))]
     (jdbc/execute! db (sql/format query) {:builder-fn rs/as-unqualified-lower-maps})))
 
 (defn list-user-receipts
@@ -264,15 +314,19 @@
   - receipts owned by `user-id`
   - receipts with no `user_id` (unassigned/admin-uploaded)
 
-  Supports optional status and text filters.
+  Supports optional status, text, and date filters.
   Optional :tenant-id in opts scopes to a specific tenant.
-  Text filter keys: :original-filename, :supplier-guess.
+  Text filter keys: :original-filename, :supplier-guess, :created-by-name.
 
   Returns a lightweight projection for list views (detail endpoints return
   raw_extract_json / parsed_markdown, etc.)."
   [db user-id {:keys [status tenant-id limit offset order-dir order-by
-                      original-filename supplier-guess show-purged?]
-               :or {limit 50 offset 0 order-dir :desc}}]
+                      original-filename supplier-guess created-by-name show-purged?
+                      purchased-at-guess-from purchased-at-guess-to
+                      created-at-from created-at-to
+                      updated-at-from updated-at-to]
+               :or {limit 50 offset 0 order-dir :desc}
+               :as opts}]
   (when-not user-id
     (throw (ex-info "user-id is required" {:status 400})))
   (let [helpers (build-status-query-helpers)
@@ -284,7 +338,8 @@
                     [:raw effective-status-sql]
                     (or (get sortable-receipt-columns (some-> order-by name)) :created_at))
         text-filters {:original-filename original-filename
-                      :supplier-guess supplier-guess}
+                      :supplier-guess supplier-guess
+                      :created-by-name created-by-name}
         query (-> {:select [:receipts.id
                             :receipts.original_filename
                             [[:raw effective-status-sql] :status]
@@ -307,32 +362,54 @@
                    :order-by [[order-col order-dir]]
                    :limit limit
                    :offset offset}
-                (shared-qb/apply-text-filters receipt-text-filter-columns text-filters))]
+                (shared-qb/apply-text-filters receipt-text-filter-columns text-filters)
+                (apply-receipt-date-filters {:purchased-at-guess-from purchased-at-guess-from
+                                             :purchased-at-guess-to purchased-at-guess-to
+                                             :created-at-from created-at-from
+                                             :created-at-to created-at-to
+                                             :updated-at-from updated-at-from
+                                             :updated-at-to updated-at-to}))]
     (jdbc/execute! db (sql/format query) {:builder-fn rs/as-unqualified-lower-maps})))
 
 (defn count-receipts
-  "Count receipts using the same status/text filter semantics as `list-receipts`.
+  "Count receipts using the same status/text/date filter semantics as `list-receipts`.
    Optional :tenant-id in opts scopes to a specific tenant.
-   Text filter keys: :original-filename, :supplier-guess."
-  [db {:keys [status tenant-id original-filename supplier-guess show-purged?]}]
+   Text filter keys: :original-filename, :supplier-guess, :created-by-name."
+  [db {:keys [status tenant-id original-filename supplier-guess created-by-name show-purged?
+              purchased-at-guess-from purchased-at-guess-to
+              created-at-from created-at-to
+              updated-at-from updated-at-to]
+       :as opts}]
   (let [helpers (build-status-query-helpers)
         where-clause (build-receipts-where-clause status nil helpers
                        :tenant-id tenant-id
                        :show-purged? show-purged?)
         text-filters {:original-filename original-filename
-                      :supplier-guess supplier-guess}
+                      :supplier-guess supplier-guess
+                      :created-by-name created-by-name}
         query (-> (cond-> {:select [[[:count :*] :total]]
-                           :from [:receipts]}
+                           :from [:receipts]
+                           :left-join [[:users :cb] [:= :cb.id :receipts.created_by]]}
                     where-clause (assoc :where where-clause))
-                (shared-qb/apply-text-filters receipt-text-filter-columns text-filters))
+                (shared-qb/apply-text-filters receipt-text-filter-columns text-filters)
+                (apply-receipt-date-filters {:purchased-at-guess-from purchased-at-guess-from
+                                             :purchased-at-guess-to purchased-at-guess-to
+                                             :created-at-from created-at-from
+                                             :created-at-to created-at-to
+                                             :updated-at-from updated-at-from
+                                             :updated-at-to updated-at-to}))
         row (jdbc/execute-one! db (sql/format query) {:builder-fn rs/as-unqualified-lower-maps})]
     (long (or (:total row) 0))))
 
 (defn count-user-receipts
   "Count receipts visible to `user-id` using the same filters as `list-user-receipts`.
    Optional :tenant-id in opts scopes to a specific tenant.
-   Text filter keys: :original-filename, :supplier-guess."
-  [db user-id {:keys [status tenant-id original-filename supplier-guess show-purged?]}]
+   Text filter keys: :original-filename, :supplier-guess, :created-by-name."
+  [db user-id {:keys [status tenant-id original-filename supplier-guess created-by-name show-purged?
+                      purchased-at-guess-from purchased-at-guess-to
+                      created-at-from created-at-to
+                      updated-at-from updated-at-to]
+               :as opts}]
   (when-not user-id
     (throw (ex-info "user-id is required" {:status 400})))
   (let [helpers (build-status-query-helpers)
@@ -340,33 +417,55 @@
                        :tenant-id tenant-id
                        :show-purged? show-purged?)
         text-filters {:original-filename original-filename
-                      :supplier-guess supplier-guess}
+                      :supplier-guess supplier-guess
+                      :created-by-name created-by-name}
         query (-> {:select [[[:count :*] :total]]
                    :from [:receipts]
+                   :left-join [[:users :cb] [:= :cb.id :receipts.created_by]]
                    :where where-clause}
-                (shared-qb/apply-text-filters receipt-text-filter-columns text-filters))
+                (shared-qb/apply-text-filters receipt-text-filter-columns text-filters)
+                (apply-receipt-date-filters {:purchased-at-guess-from purchased-at-guess-from
+                                             :purchased-at-guess-to purchased-at-guess-to
+                                             :created-at-from created-at-from
+                                             :created-at-to created-at-to
+                                             :updated-at-from updated-at-from
+                                             :updated-at-to updated-at-to}))
         row (jdbc/execute-one! db (sql/format query) {:builder-fn rs/as-unqualified-lower-maps})]
     (long (or (:total row) 0))))
 
 (defn count-purged-receipts
-  "Count purged receipts using the same status/text filters as `list-receipts`."
-  [db {:keys [status tenant-id original-filename supplier-guess]}]
+  "Count purged receipts using the same status/text/date filters as `list-receipts`."
+  [db {:keys [status tenant-id original-filename supplier-guess created-by-name
+              purchased-at-guess-from purchased-at-guess-to
+              created-at-from created-at-to
+              updated-at-from updated-at-to]}]
   (let [helpers (build-status-query-helpers)
         where-clause (build-receipts-where-clause status nil helpers
                        :tenant-id tenant-id
                        :purged-only? true)
         text-filters {:original-filename original-filename
-                      :supplier-guess supplier-guess}
+                      :supplier-guess supplier-guess
+                      :created-by-name created-by-name}
         query (-> (cond-> {:select [[[:count :*] :total]]
-                           :from [:receipts]}
+                           :from [:receipts]
+                           :left-join [[:users :cb] [:= :cb.id :receipts.created_by]]}
                     where-clause (assoc :where where-clause))
-                (shared-qb/apply-text-filters receipt-text-filter-columns text-filters))
+                (shared-qb/apply-text-filters receipt-text-filter-columns text-filters)
+                (apply-receipt-date-filters {:purchased-at-guess-from purchased-at-guess-from
+                                             :purchased-at-guess-to purchased-at-guess-to
+                                             :created-at-from created-at-from
+                                             :created-at-to created-at-to
+                                             :updated-at-from updated-at-from
+                                             :updated-at-to updated-at-to}))
         row (jdbc/execute-one! db (sql/format query) {:builder-fn rs/as-unqualified-lower-maps})]
     (long (or (:total row) 0))))
 
 (defn count-user-purged-receipts
   "Count purged receipts visible to `user-id` using the same filters as `list-user-receipts`."
-  [db user-id {:keys [status tenant-id original-filename supplier-guess]}]
+  [db user-id {:keys [status tenant-id original-filename supplier-guess created-by-name
+                      purchased-at-guess-from purchased-at-guess-to
+                      created-at-from created-at-to
+                      updated-at-from updated-at-to]}]
   (when-not user-id
     (throw (ex-info "user-id is required" {:status 400})))
   (let [helpers (build-status-query-helpers)
@@ -374,11 +473,19 @@
                        :tenant-id tenant-id
                        :purged-only? true)
         text-filters {:original-filename original-filename
-                      :supplier-guess supplier-guess}
+                      :supplier-guess supplier-guess
+                      :created-by-name created-by-name}
         query (-> {:select [[[:count :*] :total]]
                    :from [:receipts]
+                   :left-join [[:users :cb] [:= :cb.id :receipts.created_by]]
                    :where where-clause}
-                (shared-qb/apply-text-filters receipt-text-filter-columns text-filters))
+                (shared-qb/apply-text-filters receipt-text-filter-columns text-filters)
+                (apply-receipt-date-filters {:purchased-at-guess-from purchased-at-guess-from
+                                             :purchased-at-guess-to purchased-at-guess-to
+                                             :created-at-from created-at-from
+                                             :created-at-to created-at-to
+                                             :updated-at-from updated-at-from
+                                             :updated-at-to updated-at-to}))
         row (jdbc/execute-one! db (sql/format query) {:builder-fn rs/as-unqualified-lower-maps})]
     (long (or (:total row) 0))))
 

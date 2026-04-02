@@ -20,6 +20,8 @@
                           [:created-at :updated-at :last-login-at])
             filters (merge {:search (:search params)
                             :status (:status params)
+                            :email (:email params)
+                            :full-name (:full-name params)
                             :email-verified (utils/parse-boolean-param params :email-verified)}
                       date-ranges)
             {:keys [users total limit offset]}

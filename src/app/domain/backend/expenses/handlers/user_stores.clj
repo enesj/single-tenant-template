@@ -39,10 +39,17 @@
                 qp (:query-params request)
                 limit (h/parse-page-limit qp 200)
                 offset (h/parse-page-offset qp)
-                search (h/get-param qp :search)
+                search (or (h/get-param qp :search)
+                         (h/get-param qp :display-name))
                 order-by (h/parse-order-by qp)
                 order-dir (h/parse-order-dir qp)
                 supplier-id (some-> (h/get-param qp :supplier_id) h/try-parse-uuid)
+                supplier-display-name (h/get-param qp :supplier-display-name)
+                normalized-key (h/get-param qp :normalized-key)
+                address (h/get-param qp :address)
+                city-name (h/get-param qp :city-name)
+                created-at-from (h/parse-instant-param (h/get-param qp :created-at-from))
+                created-at-to (h/parse-instant-param (h/get-param qp :created-at-to))
                 ;; When supplier_id is given (expand drill-down), skip tenant scoping —
                 ;; the admin/owner is explicitly viewing all stores for that supplier.
                 extra-filters (cond-> []
@@ -58,19 +65,28 @@
                                                     :where [:and [:= :tenant_id tenant-id]
                                                             [:is-not :store_id nil]]}]])
                                 supplier-id
-                                (conj [:= :st/supplier_id supplier-id]))
+                                (conj [:= :st/supplier_id supplier-id])
+                                created-at-from
+                                (conj [:>= :st/created_at created-at-from])
+                                created-at-to
+                                (conj [:<= :st/created_at created-at-to]))
                 extra-filters (when (seq extra-filters) extra-filters)
                 opts (cond-> {:limit limit
                               :offset offset
                               :search search}
                        order-by (assoc :order-by order-by)
                        order-dir (assoc :order-dir order-dir)
-                       extra-filters (assoc :extra-filters extra-filters))
+                       extra-filters (assoc :extra-filters extra-filters)
+                       (some? supplier-display-name) (assoc :supplier-display-name supplier-display-name)
+                       (some? normalized-key) (assoc :normalized-key normalized-key)
+                       (some? address) (assoc :address address)
+                       (some? city-name) (assoc :city-name city-name))
                 rows (h/to-app ((:list stores-service/entity-service) db opts))
                 rows (cond-> rows (sequential? rows) vec)
                 total (long (or ((:count stores-service/entity-service)
-                                  db (cond-> {:search search}
-                                       extra-filters (assoc :extra-filters extra-filters)))
+                                  db (select-keys opts [:search :extra-filters
+                                                        :supplier-display-name :normalized-key
+                                                        :address :city-name]))
                               0))]
             (h/json-response {:data rows
                               :total total

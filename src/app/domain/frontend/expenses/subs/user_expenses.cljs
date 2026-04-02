@@ -233,6 +233,16 @@
     (get-in db [:user-expenses :reports :filters])))
 
 (rf/reg-sub
+  :user-expenses/report-summary
+  (fn [db _]
+    (or (reports-data db :summary :data) {})))
+
+(rf/reg-sub
+  :user-expenses/report-summary-loading?
+  (fn [db _]
+    (boolean (reports-data db :summary :loading?))))
+
+(rf/reg-sub
   :user-expenses/report-filter-options
   (fn [db _]
     (reports-data db :filter-options :data)))

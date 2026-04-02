@@ -53,17 +53,30 @@
           (let [qp (:query-params request)
                 limit (h/parse-page-limit qp 200)
                 offset (h/parse-page-offset qp)
-                search (h/get-param qp :search)
+                search (or (h/get-param qp :search)
+                         (h/get-param qp :name))
                 order-by (h/parse-order-by qp)
                 order-dir (h/parse-order-dir qp)
+                category-name (h/get-param qp :category-name)
+                description (h/get-param qp :description)
+                created-at-from (h/parse-instant-param (h/get-param qp :created-at-from))
+                created-at-to (h/parse-instant-param (h/get-param qp :created-at-to))
+                extra-filters (cond-> []
+                                created-at-from (conj [:>= :sc.created_at created-at-from])
+                                created-at-to (conj [:<= :sc.created_at created-at-to]))
                 opts (cond-> {:limit limit
                               :offset offset
                               :search search}
                        order-by (assoc :order-by order-by)
-                       order-dir (assoc :order-dir order-dir))
+                       order-dir (assoc :order-dir order-dir)
+                       (some? category-name) (assoc :category-name category-name)
+                       (some? description) (assoc :description description)
+                       (seq extra-filters) (assoc :extra-filters extra-filters))
                 rows (h/to-app ((:list subcategories/service) db opts))
                 rows (cond-> rows (sequential? rows) vec)
-                total (long (or ((:count subcategories/service) db {:search search}) 0))]
+                count-opts (cond-> (select-keys opts [:search :category-name :description])
+                             (seq extra-filters) (assoc :extra-filters extra-filters))
+                total (long (or ((:count subcategories/service) db count-opts) 0))]
             (h/json-response {:data rows
                               :total total
                               :limit limit

@@ -11,14 +11,14 @@
 (defn list-supplier-aliases-handler
   "List supplier aliases for power users.
 
-	Query params:
-	- limit (default 50)
-	- offset (default 0)
-	- search (string, optional)
-	- supplier_id (uuid, optional)
-	- unmapped-only (boolean, optional)
-	- order-by (snake/kebab/string/keyword, optional)
-	- order-dir (asc/desc, optional)"
+\tQuery params:
+\t- limit (default 50)
+\t- offset (default 0)
+\t- search (string, optional)
+\t- supplier_id (uuid, optional)
+\t- unmapped-only (boolean, optional)
+\t- order-by (snake/kebab/string/keyword, optional)
+\t- order-dir (asc/desc, optional)"
   [db]
   (fn [request]
     (if-let [_user-id (h/get-user-id request)]
@@ -29,17 +29,22 @@
           (let [params (:query-params request)
                 limit (h/parse-page-limit params 50)
                 offset (h/parse-page-offset params)
-                search (h/get-param params :search)
+                search (or (h/get-param params :search)
+                         (h/get-param params :raw-label))
                 supplier-id (h/try-parse-uuid (h/get-param params :supplier_id))
                 unmapped-only (h/parse-boolean-param params :unmapped-only)
                 order-by (h/parse-order-by params)
                 order-dir (h/parse-order-dir params)
+                supplier-display-name (h/get-param params :supplier-display-name)
+                raw-label-normalized (h/get-param params :raw-label-normalized)
                 opts (cond-> {:limit limit :offset offset}
                        (some? search) (assoc :search search)
                        supplier-id (assoc :supplier_id supplier-id)
                        (some? unmapped-only) (assoc :unmapped-only unmapped-only)
                        order-by (assoc :order-by order-by)
-                       order-dir (assoc :order-dir order-dir))
+                       order-dir (assoc :order-dir order-dir)
+                       (some? supplier-display-name) (assoc :supplier-display-name supplier-display-name)
+                       (some? raw-label-normalized) (assoc :raw-label-normalized raw-label-normalized))
                 rows (vec (supplier-aliases/list-supplier-aliases db opts))
                 total (long (or (supplier-aliases/count-supplier-aliases db opts) 0))]
             (h/json-response {:data rows

@@ -61,9 +61,12 @@
   (let [months* (->positive-int months-back 6)
         now (js/Date.)
         from (js/Date. (.getTime now))]
-    (.setUTCDate from 1)
+    (if (= 1 months*)
+      (.setUTCDate from (- (.getUTCDate from) 30))
+      (do
+        (.setUTCDate from 1)
+        (.setUTCMonth from (- (.getUTCMonth from) months*))))
     (.setUTCHours from 0 0 0 0)
-    (.setUTCMonth from (- (.getUTCMonth from) (max 1 months*)))
     {:from (.toISOString from)
      :to (.toISOString now)}))
 

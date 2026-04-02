@@ -58,6 +58,35 @@
                 :tenant-id tenant-id}
               @count-opts))))))
 
+(deftest list-expense-categories-forwards-created-at-range-filters
+  (let [tenant-id (UUID/randomUUID)
+        list-opts (atom nil)
+        count-opts (atom nil)
+        created-from "2026-03-14T00:00:00.000Z"
+        created-to "2026-03-15T00:00:00.000Z"
+        expected-filters [[:>= :created_at (java.time.Instant/parse created-from)]
+                          [:<= :created_at (java.time.Instant/parse created-to)]]]
+    (with-redefs [expense-categories/service
+                  {:list (fn [_db opts]
+                           (reset! list-opts opts)
+                           [])
+                   :count (fn [_db opts]
+                            (reset! count-opts opts)
+                            0)}
+                  h/json-response (fn [body & [status]] {:status (or status 200)
+                                                         :body body})]
+      (let [handler (user-expense-categories/list-expense-categories-handler db)
+            resp (handler (assoc (request :get "/api/v1/expenses/expense-categories"
+                                   (admin-session tenant-id)
+                                   nil)
+                            :query-params {:created-at-from created-from
+                                           :created-at-to created-to}))]
+        (is (= 200 (:status resp)))
+        (is (= expected-filters (:extra-filters @list-opts)))
+        (is (= expected-filters (:extra-filters @count-opts)))
+        (is (= tenant-id (:tenant-id @list-opts)))
+        (is (= tenant-id (:tenant-id @count-opts)))))))
+
 (deftest create-expense-category-includes-current-tenant-id
   (let [tenant-id (UUID/randomUUID)
         seen-payload (atom nil)]

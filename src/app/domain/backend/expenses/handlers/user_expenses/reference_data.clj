@@ -40,8 +40,9 @@
      :id)))
 
 (defn list-suppliers-handler
-  "Handler factory for listing suppliers available to users.
-   When a tenant-id is present, scopes to suppliers used in that tenant's expenses."
+  "Handler factory for listing suppliers.
+
+  NOTE: This is user-facing API (non-admin)."
   [db]
   (fn [request]
     (if-let [_user-id (h/get-user-id request)]
@@ -52,31 +53,40 @@
                 params (:query-params request)
                 limit (h/parse-page-limit params 100)
                 offset (h/parse-page-offset params)
-                search (h/get-param params :search)
+                search (or (h/get-param params :search)
+                         (h/get-param params :display-name))
                 order-by (h/parse-order-by params)
                 order-dir (h/parse-order-dir params)
-                extra-filters (when tenant-id
-                                [[:or
-                                  [:in :id {:select-distinct [:sa/supplier_id]
-                                            :from [[:receipts :r]]
-                                            :join [[:supplier_aliases :sa] [:= :sa/id :r/supplier_alias_id]]
-                                            :where [:and [:= :r/tenant_id tenant-id]
-                                                    [:is-not :r/supplier_alias_id nil]]}]
-                                  [:in :id {:select-distinct [:supplier_id]
-                                            :from [:expenses]
-                                            :where [:and [:= :tenant_id tenant-id]
-                                                    [:is-not :supplier_id nil]]}]]])
+                created-at-from (h/parse-instant-param (h/get-param params :created-at-from))
+                created-at-to (h/parse-instant-param (h/get-param params :created-at-to))
+                extra-filters (cond-> []
+                                tenant-id
+                                (conj [:or
+                                       [:in :id {:select-distinct [:sa/supplier_id]
+                                                 :from [[:receipts :r]]
+                                                 :join [[:supplier_aliases :sa] [:= :sa/id :r/supplier_alias_id]]
+                                                 :where [:and [:= :r/tenant_id tenant-id]
+                                                         [:is-not :r/supplier_alias_id nil]]}]
+                                       [:in :id {:select-distinct [:supplier_id]
+                                                 :from [:expenses]
+                                                 :where [:and [:= :tenant_id tenant-id]
+                                                         [:is-not :supplier_id nil]]}]])
+                                created-at-from
+                                (conj [:>= :created_at created-at-from])
+                                created-at-to
+                                (conj [:<= :created_at created-at-to]))
+                normalized-key (h/get-param params :normalized-key)
                 opts (cond-> {:limit limit
                               :offset offset}
                        (some? search) (assoc :search search)
                        order-by (assoc :order-by order-by)
                        order-dir (assoc :order-dir order-dir)
-                       extra-filters (assoc :extra-filters extra-filters))
+                       (seq extra-filters) (assoc :extra-filters extra-filters)
+                       (some? normalized-key) (assoc :normalized-key normalized-key))
                 suppliers-svc (requiring-resolve 'app.domain.backend.expenses.services.suppliers/list-suppliers)
                 count-suppliers (requiring-resolve 'app.domain.backend.expenses.services.suppliers/count-suppliers)
                 suppliers (vec (suppliers-svc db opts))
-                total (long (or (count-suppliers db (cond-> {:search search}
-                                                      extra-filters (assoc :extra-filters extra-filters)))
+                total (long (or (count-suppliers db (select-keys opts [:search :extra-filters :normalized-key]))
                               0))]
             (h/json-response {:data suppliers
                               :total total

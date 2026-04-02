@@ -54,7 +54,7 @@
    [effective-last-login-at-expr :last_login_at]])
 
 (defn- build-user-list-filter-clauses
-  [{:keys [search status email-verified
+  [{:keys [search status email full-name email-verified
            created-at-from created-at-to
            updated-at-from updated-at-to
            last-login-at-from last-login-at-to]}]
@@ -63,6 +63,8 @@
                   [:ilike :u/email (str "%" search "%")]
                   [:ilike :u/full_name (str "%" search "%")]])
     status (conj [:= :u/status (tc/cast-for-database :user-status status)])
+    email (conj [:ilike :u/email (str "%" email "%")])
+    full-name (conj [:ilike :u/full_name (str "%" full-name "%")])
     (some? email-verified) (conj [:= :u/email_verified email-verified])
     created-at-from (conj [:>= :u/created_at created-at-from])
     created-at-to (conj [:<= :u/created_at created-at-to])

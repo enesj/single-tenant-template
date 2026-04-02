@@ -10,11 +10,24 @@
   (:require
     [app.domain.backend.expenses.handlers.user-expenses.helpers :as h]
     [app.domain.backend.expenses.services.expense-categories :as expense-categories]
+    [clojure.string :as str]
     [taoensso.timbre :as log]))
 
 ;; -----------------------------------------------------------------------------
 ;; Handlers
 ;; -----------------------------------------------------------------------------
+
+(defn- parse-instant-param
+  [raw]
+  (when-let [value (some-> raw str str/trim not-empty)]
+    (or (try
+          (java.time.Instant/parse value)
+          (catch Exception _ nil))
+      (try
+        (-> (java.time.LocalDate/parse value)
+          (.atStartOfDay java.time.ZoneOffset/UTC)
+          .toInstant)
+        (catch Exception _ nil)))))
 
 (defn list-expense-categories-handler
   [db]
@@ -29,19 +42,28 @@
                 tenant-id (h/get-tenant-id request)
                 limit (h/parse-page-limit qp 200)
                 offset (h/parse-page-offset qp)
-                search (h/get-param qp :search)
+                search (or (h/get-param qp :search)
+                         (h/get-param qp :name))
                 order-by (h/parse-order-by qp)
                 order-dir (h/parse-order-dir qp)
+                created-at-from (parse-instant-param (h/get-param qp :created-at-from))
+                created-at-to (parse-instant-param (h/get-param qp :created-at-to))
+                extra-filters (cond-> []
+                                created-at-from (conj [:>= :created_at created-at-from])
+                                created-at-to (conj [:<= :created_at created-at-to]))
                 opts (cond-> {:limit limit
                               :offset offset
                               :search search}
                        tenant-id (assoc :tenant-id tenant-id)
                        order-by (assoc :order-by order-by)
-                       order-dir (assoc :order-dir order-dir))
+                       order-dir (assoc :order-dir order-dir)
+                       (seq extra-filters) (assoc :extra-filters extra-filters))
                 rows (h/to-app ((:list expense-categories/service) db opts))
                 rows (cond-> rows (sequential? rows) vec)
-                total (long (or ((:count expense-categories/service) db (cond-> {:search search}
-                                                                          tenant-id (assoc :tenant-id tenant-id))) 0))]
+                count-opts (cond-> {:search search}
+                             tenant-id (assoc :tenant-id tenant-id)
+                             (seq extra-filters) (assoc :extra-filters extra-filters))
+                total (long (or ((:count expense-categories/service) db count-opts) 0))]
             (h/json-response {:data rows
                               :total total
                               :limit limit

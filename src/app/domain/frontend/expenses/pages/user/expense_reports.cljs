@@ -62,9 +62,8 @@
 
 (defui expense-reports-page []
   (let [t (use-t)
-        summary (or (use-subscribe [:user-expenses/summary]) {})
-        summary-loading? (boolean (use-subscribe [:user-expenses/summary-loading?]))
-        by-month (or (use-subscribe [:user-expenses/by-month]) [])
+        summary (or (use-subscribe [:user-expenses/report-summary]) {})
+        summary-loading? (boolean (use-subscribe [:user-expenses/report-summary-loading?]))
         by-supplier (or (use-subscribe [:user-expenses/by-supplier]) [])
         expense-categories-data (or (use-subscribe [:user-expenses/expense-categories]) [])
         template-expense-categories (or (use-subscribe [:app.template.frontend.subs.entity/entities :expense-categories]) [])
@@ -202,6 +201,7 @@
                               :on-change #(rf/dispatch [:user-expenses/reports-set-filter
                                                         :months-back
                                                         (js/parseInt (.. % -target -value) 10)])}
+                    ($ :option {:value 1} (t :expense-reports/time-30d))
                     ($ :option {:value 3} (t :expense-reports/time-3mo))
                     ($ :option {:value 6} (t :expense-reports/time-6mo))
                     ($ :option {:value 12} (t :expense-reports/time-12mo))

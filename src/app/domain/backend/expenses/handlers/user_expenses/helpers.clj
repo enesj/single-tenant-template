@@ -93,6 +93,22 @@
   [params]
   (max 0 (long (or (some-> (get-param params :offset) parse-long) 0))))
 
+(defn parse-instant-param
+  "Parse an instant-like query param.
+
+  Accepts ISO instants or YYYY-MM-DD dates; returns nil when the value is blank
+  or invalid. Date-only values are interpreted at UTC start-of-day."
+  [raw]
+  (when-let [value (some-> raw str str/trim not-empty)]
+    (or (try
+          (java.time.Instant/parse value)
+          (catch Exception _ nil))
+      (try
+        (-> (java.time.LocalDate/parse value)
+          (.atStartOfDay java.time.ZoneOffset/UTC)
+          .toInstant)
+        (catch Exception _ nil)))))
+
 (defn get-user
   "Return the user map from the request (session or identity), or nil if missing.
 

@@ -242,32 +242,15 @@
    - :supplier-id / :supplier_id
    - :article-id / :article_id
    - :unmapped-only (boolean, filters to article_id IS NULL)"
-  [db {:keys [limit offset order-by order-dir search supplier-id supplier_id article-id article_id unmapped-only]
-       :or {limit 50 offset 0 order-dir :asc}
-       :as opts}]
+  [db {:keys [supplier-id supplier_id article-id article_id unmapped-only] :as opts}]
   (let [supplier-uuid (try-uuid (or supplier-id supplier_id))
         article-uuid (try-uuid (or article-id article_id))
         base-filters (cond-> (vec (or (:base-filters config) []))
                        supplier-uuid (conj [:= :aa/supplier_id supplier-uuid])
                        article-uuid (conj [:= :aa/article_id article-uuid])
                        unmapped-only (conj [:is :aa/article_id nil]))
-        config* (assoc config :base-filters base-filters)
-        base-query (factory/build-query-with-filters
-                     config*
-                     {:limit limit
-                      :offset offset
-                      :order-by order-by
-                      :order-dir order-dir})
-        final-query (cond-> base-query
-                      (seq (:text-filter-columns config*))
-                      (shared-qb/apply-text-filters (:text-filter-columns config*) opts)
-
-                      (and search (seq (:search-fields config*)))
-                      (factory/apply-search-filter (:search-fields config*) search))]
-    (if (or supplier-uuid article-uuid unmapped-only
-          (shared-qb/has-text-filters? (keys (:text-filter-columns config*)) opts))
-      (jdbc/execute! db (sql/format final-query) {:builder-fn rs/as-unqualified-lower-maps})
-      ((:list service) db opts))))
+        config* (assoc config :base-filters base-filters)]
+    ((factory/build-list-function config*) db opts)))
 
 (defn count-article-aliases
   "Count article aliases with optional filters.
@@ -277,7 +260,7 @@
    - :supplier-id / :supplier_id
    - :article-id / :article_id
    - :unmapped-only (boolean, filters to article_id IS NULL)"
-  [db {:keys [search supplier-id supplier_id article-id article_id unmapped-only] :as opts}]
+  [db {:keys [supplier-id supplier_id article-id article_id unmapped-only] :as opts}]
   (let [supplier-uuid (try-uuid (or supplier-id supplier_id))
         article-uuid (try-uuid (or article-id article_id))
         base-filters (cond-> (vec (or (:base-filters config) []))
@@ -285,20 +268,7 @@
                        article-uuid (conj [:= :aa/article_id article-uuid])
                        unmapped-only (conj [:is :aa/article_id nil]))
         config* (assoc config :base-filters base-filters)]
-    (if (or supplier-uuid article-uuid unmapped-only
-          (shared-qb/has-text-filters? (keys (:text-filter-columns config*)) opts))
-      (let [base-query (factory/build-base-query config*)
-            count-query (-> base-query
-                          (dissoc :order-by :limit :offset)
-                          (assoc :select [[[:count :*] :total]]))
-            final-query (cond-> count-query
-                          (seq (:text-filter-columns config*))
-                          (shared-qb/apply-text-filters (:text-filter-columns config*) opts)
-
-                          (and search (seq (:search-fields config*)))
-                          (factory/apply-search-filter (:search-fields config*) search))]
-        (:total (jdbc/execute-one! db (sql/format final-query) {:builder-fn rs/as-unqualified-lower-maps})))
-      ((:count service) db {:search search}))))
+    ((factory/build-count-function config*) db opts)))
 
 (defn list-unmapped-aliases
   "List unmapped article aliases (article_id IS NULL) with occurrence counts.
