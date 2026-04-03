@@ -1,0 +1,111 @@
+-- allium: 3
+-- frontend-config-runtime-resolution.candidate.allium
+--
+-- Scope: operator-managed frontend list configuration for admin-facing and
+--        user-facing pages.
+--
+-- Captures:
+--   - defaults exist for every mutable config channel
+--   - operators can save runtime snapshots for a chosen scope and config kind
+--   - effective reads use defaults when no runtime snapshot exists
+--   - the latest saved snapshot is the one that affects subsequent reads
+--   - saved snapshots behave as replacements, so explicit removals persist
+--
+-- Excludes:
+--   - storage choice (files, database, generated code, etc.)
+--   - build-time preload wiring for admin entity registry metadata
+--   - UI layout and component structure of the settings pages
+
+entity ConfigChannel {
+    scope: admin | user
+    kind: view_options | form_fields | table_columns
+    has_runtime_snapshot: Boolean = false
+}
+
+invariant OneChannelPerScopeAndKind {
+    for left in ConfigChannel:
+        for right in ConfigChannel where right != left:
+            not (left.scope = right.scope and left.kind = right.kind)
+}
+
+rule SaveRuntimeConfigSnapshot {
+    when: OperatorSavesConfig(channel, snapshot)
+    ensures: channel.has_runtime_snapshot = true
+    ensures: ConfigChanged(channel.scope, channel.kind)
+}
+
+surface SettingsAdministrationBoundary {
+    provides:
+        OperatorSavesConfig(channel, snapshot)
+
+    @guarantee SnapshotReplacement
+        -- Saving a channel replaces the entire previously saved runtime snapshot
+        -- for that channel rather than patching individual nested keys in place.
+
+    @guarantee LatestSaveWins
+        -- The latest successful save for a channel is the snapshot that affects
+        -- subsequent reads for that same channel.
+
+    @guarantee ChannelIsolation
+        -- Saving one channel does not alter any other scope or config kind.
+}
+
+surface EffectiveConfigReadBoundary {
+    context channel: ConfigChannel
+
+    provides:
+        ReadEffectiveConfig(channel)
+
+    @guarantee DefaultsWhenUnsaved
+        -- When channel.has_runtime_snapshot = false, reads return the channel's
+        -- defaults.
+
+    @guarantee LatestSnapshotShapesReads
+        -- When channel.has_runtime_snapshot = true, reads return configuration
+        -- derived from the channel defaults and the latest saved runtime snapshot.
+
+    @guarantee ExplicitRemovalPersists
+        -- Explicit removals captured by the latest saved runtime snapshot remain
+        -- absent on later reads until a later save restores them.
+
+    @guarantee FreshEnvironmentOperable
+        -- Fresh environments remain operable before any operator save because
+        -- defaults are sufficient to answer effective-config reads.
+}
+
+surface AdminSettingsPage {
+    context channel: ConfigChannel
+
+    provides:
+        OperatorSavesConfig(channel, snapshot)
+            when channel.scope = admin
+
+    @guarantee AdminScopeOnly
+        -- This surface only manages admin-scoped mutable config channels.
+}
+
+surface UserSettingsPage {
+    context channel: ConfigChannel
+
+    provides:
+        OperatorSavesConfig(channel, snapshot)
+            when channel.scope = user
+
+    @guarantee UserScopeOnly
+        -- This surface only manages user-scoped mutable config channels.
+}
+
+surface ListPageConfigConsumer {
+    context channel: ConfigChannel
+
+    provides:
+        ReadEffectiveConfig(channel)
+
+    @guarantee AdminPagesReadAdminScope
+        -- Admin-facing list pages consume admin-scoped effective config.
+
+    @guarantee UserPagesReadUserScope
+        -- User-facing list pages consume user-scoped effective config.
+}
+
+open question "Should user-facing entities metadata remain source-controlled, or eventually join the runtime-managed config model?"
