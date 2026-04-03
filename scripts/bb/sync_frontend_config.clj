@@ -62,6 +62,8 @@
       (println "  unknown entities:" (pr-str unknown-entities)))
     (doseq [[entity info] (sort-by (comp str key) summary)]
       (println "  entity" (pr-str entity))
+      (when (:remove-entity? info)
+        (println "    remove stale entity entry"))
       (when (seq (:add-available info))
         (println "    add to :available-columns:" (pr-str (:add-available info))))
       (when (seq (:removed info))
@@ -79,16 +81,28 @@
       (z/of-node root-node))
     zloc))
 
+(defn- remove-entity
+  [zloc entity]
+  (if-let [entity-loc (z/find-value zloc z/next entity)]
+    (let [root-node (-> entity-loc
+                      z/right
+                      z/remove
+                      z/remove
+                      z/root)]
+      (z/of-node root-node))
+    zloc))
+
 (defn- apply-file-updates!
-  [path updates-by-entity]
-  (when (seq updates-by-entity)
+  [{:keys [path updates remove-entities]}]
+  (when (or (seq updates) (seq remove-entities))
     (let [content (slurp path)
           zloc (z/of-string content)
-          zloc* (reduce (fn [loc [entity updates]]
-                          (update-entity loc entity updates))
-                  zloc
-                  updates-by-entity)
-          new-content (z/root-string zloc*)]
+          zloc* (reduce remove-entity zloc remove-entities)
+          zloc** (reduce (fn [loc [entity entity-updates]]
+                           (update-entity loc entity entity-updates))
+                   zloc*
+                   updates)
+          new-content (z/root-string zloc**)]
       (spit path new-content))))
 
 (defn -main
@@ -115,9 +129,10 @@
 
         (and apply? changes?)
         (do
-          (doseq [{:keys [path updates]} patches
-                  :when (seq updates)]
-            (apply-file-updates! path updates))
+          (doseq [patch patches
+                  :when (or (seq (:updates patch))
+                          (seq (:remove-entities patch)))]
+            (apply-file-updates! patch))
           (println "\n✅ Applied sync updates."))
 
         (and apply? (not changes?))

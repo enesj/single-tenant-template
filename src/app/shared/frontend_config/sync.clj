@@ -260,6 +260,21 @@
      :unknown-entities []}
     data))
 
+(defn- plan-entities
+  [data schema-index]
+  (let [removed-entities (->> (keys data)
+                           (remove #(contains? (:entities schema-index)
+                                      (discovery/normalize-entity-id %)))
+                           vec)
+        summary (into {}
+                  (map (fn [entity]
+                         [entity {:remove-entity? true}])
+                    removed-entities))]
+    {:updates {}
+     :summary summary
+     :remove-entities removed-entities
+     :unknown-entities []}))
+
 (defn plan-sync
   "Compute sync patches per bundle. Returns a vector of file patches."
   [bundles schema-index allowlist]
@@ -270,17 +285,21 @@
               computed (validation/computed-fields-by-entity (:table-columns data))]
           (for [[kind value] data
                 :let [plan (case kind
+                             :entities (plan-entities value schema-index)
                              :table-columns (plan-table-columns value schema-index computed allowlist)
                              :form-fields (plan-form-fields value schema-index allowlist)
                              :view-options (plan-view-options value schema-index computed allowlist)
-                             :entities {:updates {} :summary {} :unknown-entities []})
-                      has-changes? (or (seq (:updates plan))
-                                     (seq (:unknown-entities plan)))]]
+                             {:updates {} :summary {} :unknown-entities []})
+                      has-changes? (boolean
+                                     (or (seq (:updates plan))
+                                       (seq (:remove-entities plan))
+                                       (seq (:unknown-entities plan))))]]
             (merge bundle
               {:kind kind
                :path (get-in bundle [:paths kind])
                :updates (:updates plan)
                :summary (:summary plan)
+               :remove-entities (:remove-entities plan)
                :unknown-entities (:unknown-entities plan)
                :has-changes? has-changes?}))))
       bundles)))
