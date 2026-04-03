@@ -1,11 +1,14 @@
 (ns app.backend.routes.api-test
   "Tests for public API endpoints.
-   
+
    Tests metrics, config, and health endpoints."
   (:require
     [app.backend.test-helpers :as h]
     [app.domain.backend.registry :as domain-registry]
+    [app.shared.frontend-config.io :as frontend-config-io]
+    [app.shared.frontend-config.template-user :as template-user]
     [app.template.backend.routes.admin.settings-io :as settings-io]
+    [app.template.backend.routes.api :as api-routes]
     [clojure.string :as str]
     [clojure.test :refer [deftest is testing]]
     [ring.mock.request :as mock]))
@@ -36,20 +39,27 @@
 ;; ============================================================================
 
 (deftest config-endpoint-test
-  (testing "config endpoint returns 200"
-    (let [handler (h/build-handler)
-          resp (handler (mock/request :get "/api/v1/config"))]
-      (is (h/ok? resp))))
+  (let [runtime-ui-config {:entities {:expenses {:title "Runtime Expenses"}}
+                           :view-options {:expenses {:display-defaults {:show-filtering? true}}}
+                           :form-fields {:expenses {:create-fields [:amount]}}
+                           :table-columns {:expenses {:available-columns [:amount]}}}]
+    (clojure.core/with-redefs-fn
+      {#'api-routes/single-domain-runtime-ui-config (fn [_db] runtime-ui-config)}
+      (fn []
+        (testing "config endpoint returns 200"
+          (let [handler (h/build-handler)
+                resp (handler (mock/request :get "/api/v1/config"))]
+            (is (h/ok? resp))))
 
-  (testing "config endpoint returns models data"
-    (let [service-container (h/stub-service-container
-                              {:models-data {:items {:fields {:id :uuid
-                                                              :name :string}}}})
-          handler (h/build-handler service-container)
-          resp (handler (mock/request :get "/api/v1/config"))]
-      (is (h/ok? resp))
-      (let [body (h/parse-json-body resp)]
-        (is (map? body))))))
+        (testing "config endpoint returns models data"
+          (let [service-container (h/stub-service-container
+                                    {:models-data {:items {:fields {:id :uuid
+                                                                    :name :string}}}})
+                handler (h/build-handler service-container)
+                resp (handler (mock/request :get "/api/v1/config"))]
+            (is (h/ok? resp))
+            (let [body (h/parse-json-body resp)]
+              (is (map? body)))))))))
 
 (deftest config-endpoint-loads-runtime-user-ui-config-in-single-domain-mode
   (testing "config endpoint returns runtime-aware user UI config on refresh"
@@ -72,6 +82,43 @@
                 (get-in body [:domain-ui-config :view-options :unmapped-aliases :display-locks])))
           (is (= {:form-display "modal"}
                 (get-in body [:domain-ui-config :view-options :unmapped-aliases :list-config]))))))))
+
+(deftest config-endpoint-preserves-multi-domain-shape
+  (testing "config endpoint keeps the nested multi-domain response shape"
+    (clojure.core/with-redefs-fn
+      {#'domain-registry/get-ui-config-paths (constantly {:expenses {:entities "expenses-entities"
+                                                                     :view-options "expenses-view-options"}
+                                                          :sales {:entities "sales-entities"
+                                                                  :table-columns "sales-table-columns"}})
+       #'template-user/paths {:entities "template-entities"}
+       #'frontend-config-io/read-edn-or-empty+validate
+       (fn [{:keys [path]}]
+         (case path
+           "expenses-entities" {:expenses {:title "Expenses"}}
+           "expenses-view-options" {:expenses {:display-defaults {:show-filtering? true}}}
+           "sales-entities" {:sales {:title "Sales"}}
+           "sales-table-columns" {:sales {:available-columns ["id" "total_amount"]}}
+           "template-entities" {:tenant-members {:title "Tenant Members"}}
+           {}))
+       #'settings-io/read-user-entities (fn [_db] (throw (ex-info "should not read runtime store in multi-domain mode" {})))
+       #'settings-io/read-user-view-options (fn [_db] (throw (ex-info "should not read runtime store in multi-domain mode" {})))
+       #'settings-io/read-user-form-fields (fn [_db] (throw (ex-info "should not read runtime store in multi-domain mode" {})))
+       #'settings-io/read-user-table-columns (fn [_db] (throw (ex-info "should not read runtime store in multi-domain mode" {})))}
+      (fn []
+        (let [handler (h/build-handler)
+              resp (handler (mock/request :get "/api/v1/config"))
+              body (h/parse-json-body resp)]
+          (is (h/ok? resp))
+          (is (= {:expenses {:title "Expenses"}}
+                (get-in body [:domain-ui-config :expenses :entities])))
+          (is (= {:show-filtering? true}
+                (get-in body [:domain-ui-config :expenses :view-options :expenses :display-defaults])))
+          (is (= {:sales {:title "Sales"}}
+                (get-in body [:domain-ui-config :sales :entities])))
+          (is (= ["id" "total_amount"]
+                (get-in body [:domain-ui-config :sales :table-columns :sales :available-columns])))
+          (is (= {:tenant-members {:title "Tenant Members"}}
+                (get-in body [:domain-ui-config :template :entities]))))))))
 
 ;; ============================================================================
 ;; Home Route Tests

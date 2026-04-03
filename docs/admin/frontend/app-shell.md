@@ -39,7 +39,7 @@ This document covers the **admin console** entrypoint, state shape, event system
   (domain-registry/init-all-domains!))
 ```
 
-Admin UI configuration is stored as EDN under `src/app/admin/frontend/config/*.edn` (system scope) and `src/app/domain/**/admin/config/*.edn` (domain scope, currently Expenses). Only the **entity registry metadata** (`entities.edn`) is inlined at build time via preload namespaces; runtime-editable settings (`view-options.edn`, `form-fields.edn`, `table-columns.edn`) are loaded and saved via the authenticated settings API (`/admin/api/settings*`).
+Admin UI configuration is defined as EDN under `src/app/admin/frontend/config/*.edn` (system scope) and `src/app/domain/**/admin/config/*.edn` (domain scope). Only the **entity registry metadata** (`entities.edn`) is inlined at build time via preload namespaces; mutable settings (`view-options.edn`, `form-fields.edn`, `table-columns.edn`) serve as bootstrap defaults — at runtime they are read from and saved to the DB via the settings API (`/admin/api/settings*`).
 
 ## State Management (app-db)
 

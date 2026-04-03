@@ -27,10 +27,8 @@
     [ring.util.response :as response]
     [taoensso.timbre :as log]))
 
-;; UI config paths are now provided by domain-registry/get-ui-config-paths
-
 (def ^:private domain-ui-config-validators
-  "Validators for each config type, used when loading domain UI config."
+  "Validators for each config type, used when loading file-backed multi-domain UI config."
   {:entities entities-spec/validate-user-entities
    :view-options view-options-spec/validate-view-options-strict
    :form-fields form-fields-spec/validate-form-fields-strict
@@ -39,8 +37,8 @@
 (defn- safe-read-edn-file
   "Read an EDN file from disk. Returns {} when missing/unreadable.
 
-  These files are edited at runtime via /admin/user-settings, so we load them
-  dynamically to avoid shadow-cljs treating them as build inputs."
+   This remains only for the multi-domain response shape, where runtime user
+   config is still stored as a flat single-domain snapshot."
   [k path]
   (let [validate-fn (get domain-ui-config-validators k)]
     (frontend-config-io/read-edn-or-empty+validate
@@ -57,41 +55,33 @@
            [k (safe-read-edn-file k path)]))
     (or paths {})))
 
-(defn- load-domain-ui-config
-  "Load user-facing UI config from template defaults plus enabled domains.
-
-   In the common single-domain case, prefer the runtime-aware settings readers
-   so saved admin changes survive hard refreshes of user pages. If runtime
-   config cannot be read, fall back to the file-backed defaults instead of
-   breaking /api/v1/config.
-
-   Multi-domain mode keeps the existing nested domain shape and exposes the
-   template bundle under :template. Runtime user config is currently stored as a
-   flat single-domain snapshot, so nested multi-domain responses still fall back
-   to file-backed defaults."
+(defn- single-domain-runtime-ui-config
   [db]
-  (let [template-config (load-config-path-map template-user/paths)
-        all-paths (domain-registry/get-ui-config-paths)
-        file-backed-single-domain-config
-        (fn []
-          (merge template-config
-            (load-config-path-map (domain-registry/primary-user-ui-config-paths))))]
+  {:entities (settings-io/read-user-entities db)
+   :view-options (settings-io/read-user-view-options db)
+   :form-fields (settings-io/read-user-form-fields db)
+   :table-columns (settings-io/read-user-table-columns db)})
+
+(defn- load-domain-ui-config
+  "Load user-facing UI config.
+
+   Single-domain mode reads the DB-backed runtime store directly.
+   Multi-domain mode preserves the existing nested response shape using the
+   source-controlled domain bundles until runtime config becomes domain-aware."
+  [db]
+  (let [all-paths (domain-registry/get-ui-config-paths)]
     (if (<= (count all-paths) 1)
-      (try
-        {:entities (settings-io/read-user-entities db)
-         :view-options (settings-io/read-user-view-options db)
-         :form-fields (settings-io/read-user-form-fields db)
-         :table-columns (settings-io/read-user-table-columns db)}
-        (catch Exception e
-          (log/warn e "Falling back to file-backed user UI config for /api/v1/config")
-          (file-backed-single-domain-config)))
-      (assoc
-        (into {}
-          (map (fn [[domain-id paths]]
-                 [domain-id (load-config-path-map paths)]))
-          all-paths)
-        :template
-        template-config))))
+      (single-domain-runtime-ui-config db)
+      (do
+        (log/warn "Multi-domain /api/v1/config still uses file-backed user UI config"
+          {:domains (keys all-paths)})
+        (assoc
+          (into {}
+            (map (fn [[domain-id paths]]
+                   [domain-id (load-config-path-map paths)]))
+            all-paths)
+          :template
+          (load-config-path-map template-user/paths))))))
 
 (defn- compile-schema
   "A custom schema compiler that ignores the second argument (options)
@@ -223,9 +213,7 @@
                                           frontend-config {:entity-configs {}
                                                            :models-data safe-models-data
                                                            :validation-specs processed-models
-                                                           ;; Domain-owned UI config (user-facing list pages).
-                                                           ;; This is loaded dynamically so editing these EDNs via the
-                                                           ;; admin settings UI does not trigger shadow rebuilds.
+                                                           ;; User-facing UI config (DB-backed).
                                                            :domain-ui-config (load-domain-ui-config db)}]
                                       (response/response frontend-config))
                                     (catch Exception e

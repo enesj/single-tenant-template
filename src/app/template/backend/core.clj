@@ -3,6 +3,7 @@
   (:require
     [aero.core :as aero]
     [app.admin.backend.services.admin.auth :as admin-auth]
+    [app.template.backend.routes.admin.settings-bootstrap :as settings-bootstrap]
     [app.template.backend.webserver :as webserver]
     [app.template.backend.utils.json-config :as json-config]
     [app.shared.model-naming :as model-naming]
@@ -309,6 +310,7 @@
                     database          (let [db (create-conn-pool @config)]
                                         (when (= :dev profile)
                                           (ensure-default-dev-admin! db))
+                                        (settings-bootstrap/bootstrap-runtime-configs! db)
                                         db)
                     service-container (try
                                         (create-service-container database @models-data @config)

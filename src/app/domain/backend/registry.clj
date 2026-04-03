@@ -86,13 +86,11 @@
 (defn get-admin-ui-config-paths
   "Get the ADMIN UI config path maps for all enabled domains.
 
-   This is used by admin settings I/O to merge domain-provided defaults
-   (e.g. domain-owned admin view-options/table-columns/form-fields) with the
-   template/admin core settings.
+   Used by the bootstrap path to assemble admin config defaults from
+   domain-owned EDN files (view-options/table-columns/form-fields).
 
    Prefers explicit domain-owned admin config when present (`:ui-config :admin :paths`).
-   Falls back to the domain's user UI config paths when no admin paths are provided,
-   so admin settings can still configure domain-owned admin pages.
+   Falls back to the domain's user UI config paths when no admin paths are provided.
 
      Returns a vector of maps like:
      [{:view-options <path> :form-fields <path> :table-columns <path>} ...]"

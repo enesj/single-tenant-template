@@ -1,11 +1,9 @@
 (ns app.shared.frontend-config.io
   "Shared EDN I/O helpers for frontend configuration.
 
-  Motivation:
-  - Domain UI config EDNs are edited at runtime via admin screens; the backend
-    must read them dynamically without treating them as build inputs.
-  - Admin settings APIs also read/write EDN bundles; keeping I/O behavior
-    centralized prevents drift (missing-file behavior, error logging, etc.)."
+  Used by the bootstrap path to seed runtime config rows from
+  source-controlled EDN defaults, and by the sync/validate tooling
+  to keep those defaults aligned with the DB schema."
   (:require
     [clojure.edn :as edn]
     [clojure.java.io :as io]
@@ -102,7 +100,7 @@
   Returns the parsed EDN (or `{}` on missing/unreadable)."
   [{:keys [config-key path validate-fn log-message log-context] :as _opts}]
   (let [data (read-edn-or-empty path {:log-message (or log-message "Failed to read EDN file")
-                                     :log-context (merge {:config config-key} log-context)})]
+                                      :log-context (merge {:config config-key} log-context)})]
     (when validate-fn
       (let [validation (validate-fn data)]
         (when-not (:valid? validation)
@@ -121,7 +119,7 @@
   Returns the parsed EDN (or `{}` when missing)."
   [{:keys [config-key path validate-fn log-message log-context] :as _opts}]
   (let [data (read-edn-or-throw path {:log-message (or log-message "Failed to read EDN file")
-                                     :log-context (merge {:config config-key} log-context)})]
+                                      :log-context (merge {:config config-key} log-context)})]
     (when validate-fn
       (let [validation (validate-fn data)]
         (when-not (:valid? validation)

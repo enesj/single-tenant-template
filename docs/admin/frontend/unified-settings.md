@@ -27,11 +27,12 @@ Each scope has three configuration categories: **View Options**, **Form Fields**
 ### Data Flow
 
 ```
-Source-controlled EDN defaults
+DB runtime store (frontend_runtime_configs)
+  seeded from EDN defaults at bootstrap
         │
         ▼
 Backend I/O layer (settings_io.clj)
-  merges EDN defaults + runtime overrides from DB
+  reads directly from DB
         │
         ▼
 GET /admin/api/settings (admin) or /admin/api/settings/user-ui-config (user)
@@ -63,9 +64,9 @@ Settings are persisted in the `frontend_runtime_configs` database table:
 | `config_key` | `view-options`, `form-fields`, or `table-columns` |
 | `config_edn` | EDN-encoded configuration map |
 
-Source-controlled EDN files provide defaults that the backend merges with runtime overrides:
+Source-controlled EDN files provide bootstrap defaults that seed the DB for fresh environments (read once at startup, not at request time):
 
-| Scope | Files |
+| Scope | Files (bootstrap defaults) |
 |-------|-------|
 | Admin | `src/app/admin/frontend/config/{view-options,form-fields,table-columns}.edn` |
 | User (template) | `src/app/template/frontend/config/{view-options,form-fields,table-columns}.edn` |
@@ -404,7 +405,8 @@ All endpoints are in `src/app/template/backend/routes/admin/settings.clj` with I
 | `src/app/admin/frontend/events/unified_settings.cljs` | Unified page events (init, mode, scope, save, discard) |
 | `src/app/admin/frontend/settings/definitions.cljs` | Setting keys, labels, domain groups, action gates catalog |
 | `src/app/template/backend/routes/admin/settings.clj` | Backend API route handlers |
-| `src/app/template/backend/routes/admin/settings_io.clj` | Backend I/O layer (merge EDN defaults + DB runtime overrides) |
+| `src/app/template/backend/routes/admin/settings_io.clj` | Backend I/O layer (DB-only reads/writes) |
+| `src/app/template/backend/routes/admin/settings_bootstrap.clj` | Bootstrap: seeds DB from EDN defaults for fresh environments |
 
 ## Local Overrides
 

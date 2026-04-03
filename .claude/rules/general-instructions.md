@@ -35,7 +35,7 @@
 
 - Runtime: `config/base.edn` (dev web **8085**, DB **55432**; test web **8086**, DB **55433**).
 - Secrets: `config/.secrets.edn` or `~/.secrets.edn` (or env vars). **Agents must not edit secrets files**; tell the user exactly what to change (path + keys/shape) using placeholders like `"REDACTED"`.
-- User UI config: edited via `/admin/user-settings`, loaded dynamically (see `src/app/template/backend/routes/api.clj`).
+- User UI config: edited via `/admin/user-settings`, read from DB at runtime (see `src/app/template/backend/routes/api.clj`).
 - Dev helpers: rate limit/session helpers under `/admin/api/*` (see `docs/template/backend/security-middleware.md`).
 
 ## DB & migrations

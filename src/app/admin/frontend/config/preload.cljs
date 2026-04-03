@@ -1,10 +1,10 @@
 (ns app.admin.frontend.config.preload
   "Preload critical admin *entity registry* so admin routes and adapters are available early.
 
-   NOTE: We intentionally do NOT inline mutable admin settings files (view-options.edn,
-   form-fields.edn, table-columns.edn). Those are edited at runtime via /admin/admin-settings;
-   inlining them makes shadow-cljs treat them as build inputs, which triggers full
-   page reloads on save.
+   NOTE: We intentionally do NOT inline admin settings files (view-options.edn,
+   form-fields.edn, table-columns.edn). Those are managed at runtime via the DB
+   (seeded from these files at bootstrap); inlining them would make shadow-cljs
+   treat them as build inputs.
 
    Domain admin entity configs can also be preloaded via domain config preloaders
    when the admin panel exposes domain pages.

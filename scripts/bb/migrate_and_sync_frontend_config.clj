@@ -1,7 +1,7 @@
 #!/usr/bin/env bb
 
 (ns migrate-and-sync-frontend-config
-  "Run DB migrations, apply frontend-config sync, then validate frontend config."
+  "Run DB migrations, sync EDN bootstrap defaults with schema, then validate."
   (:require
     [babashka.process :as process]
     [clojure.string :as str]))

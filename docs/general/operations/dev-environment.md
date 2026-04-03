@@ -17,10 +17,10 @@ Quick reference for the hot-reload stack (backend + Shadow CLJS + watchers) on p
 
 ## Live Reload Flow
 1) `bb run-app` → script checks 8085 → launches dev profile under monitor.  
-2) Backend watcher restarts on `.clj/.cljc/.edn` changes in `src/app`, `dev`, `config`, `vendor`, **except** runtime-edited UI config EDNs:
+2) Backend watcher restarts on `.clj/.cljc/.edn` changes in `src/app`, `dev`, `config`, `vendor`, **except** UI config bootstrap-default EDNs:
    - `src/app/admin/frontend/config/*.edn`
    - `src/app/domain/frontend/**/config/*.edn`
-   These are edited via `/admin/admin-settings` and `/admin/user-settings`; restarting on every save would cause disruptive full-page reloads.  
+   These serve as bootstrap defaults (seeded into the DB at startup). Runtime config is managed via the DB through `/admin/admin-settings` and `/admin/user-settings`.  
 3) Models watcher restarts on `resources/db/models.edn` changes.  
 4) Shadow `watch :app` pushes frontend updates automatically.  
 5) nREPL stays available for editor/Portal connections.
