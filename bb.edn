@@ -142,6 +142,10 @@
          {:doc "Sync frontend config EDNs with DB schema (dry-run by default). Usage: bb sync-frontend-config [--apply] [--only <domain>] [--skip <domain>] [--allowlist <path>] [--schema <path>]",
           :task (apply shell {:extra-env (dotenv)} "bb" "scripts/bb/sync_frontend_config.clj" *command-line-args*)},
 
+         export-frontend-config-from-db
+         {:doc "Promote DB-backed frontend config snapshots into source-controlled EDN defaults (dry-run by default). Usage: bb export-frontend-config-from-db [--profile <profile>] [--only <domain>] [--skip <domain>] [--apply]. Dry-run exits nonzero when pending file updates are found.",
+          :task (apply shell {:extra-env (dotenv)} "bb" "scripts/bb/export_frontend_config_from_db.clj" *command-line-args*)},
+
          migrate-and-sync-frontend-config
          {:doc "Run migrations, apply frontend config sync, then validate. Usage: bb migrate-and-sync-frontend-config [--profile <profile>] [--only <domain>] [--skip <domain>] [--allowlist <path>] [--schema <path>]",
           :task (apply shell {:extra-env (dotenv)} "bb" "scripts/bb/migrate_and_sync_frontend_config.clj" *command-line-args*)},
