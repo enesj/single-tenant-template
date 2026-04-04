@@ -200,6 +200,23 @@ From the production nREPL you can:
 railway run bb seed-geo-reference prod
 ```
 
+### Frontend Config Tasks Against Railway
+
+Use the Railway-aware Babashka tasks when you need to inspect or promote live frontend config from production:
+
+```bash
+# Promote Railway prod runtime config back into source-controlled EDN defaults (dry-run)
+bb railway-export-frontend-config-from-db
+
+# Same export, scoped to one domain
+bb railway-export-frontend-config-from-db --only expenses
+
+# Run the full migration-adjacent frontend-config workflow against Railway prod
+bb railway-migrate-and-sync-frontend-config --only expenses
+```
+
+`bb railway-frontend-config` is the generic entrypoint behind these helpers. It injects the Railway production DB URL through the public TCP proxy for DB-backed settings tasks, and forwards non-DB validation/sync tasks through the same workflow naming.
+
 ### Shell into the Running Container
 
 ```bash

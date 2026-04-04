@@ -1,0 +1,321 @@
+-- allium: 1
+-- Email Privacy At Rest
+-- Status: candidate
+--
+-- This spec captures the intended behavior when email remains an active
+-- application identifier but should be protected from plaintext disclosure in
+-- database storage, backups, and casual operational surfaces.
+--
+-- The spec focuses on observable behavior:
+-- - exact email identity matching remains available for auth, reset, and invite flows
+-- - routine admin surfaces are pseudonymous and do not reveal user email addresses
+-- - admins may still follow structural links between users, tenants, receipts, and expenses
+-- - invitation mismatch errors disclose the exact invited email
+-- - partial substring search over email is intentionally not part of the contract
+-- - audit and operational views avoid exposing raw email unless explicitly required
+-- - payment integrations keep stable provider mappings without requiring routine admin email access
+
+use "./authentication.allium" as auth
+use "./admin-invitation.candidate.allium" as admin_invitation
+
+value EmailIdentity {
+    address: String
+    masked: String
+}
+
+value AdminVisibleUserRef {
+    label: String
+}
+
+value AdminVisibleTenantRef {
+    label: String
+}
+
+entity UserEmailDirectoryEntry {
+    user: auth/User
+    user_ref: AdminVisibleUserRef
+    nickname: String?
+}
+
+entity AdminEmailDirectoryEntry {
+    admin: auth/Admin
+    admin_ref: AdminVisibleUserRef
+    nickname: String?
+}
+
+entity EmailAuditView {
+    actor_type: user | admin | system
+    action: String
+    email_hint: String?
+    masked_email: EmailIdentity?
+}
+
+entity PseudonymousReceiptReviewEntry {
+    receipt_id: String
+    owner_ref: AdminVisibleUserRef?
+    tenant_ref: AdminVisibleTenantRef
+    status: String
+}
+
+entity PseudonymousExpenseReviewEntry {
+    expense_id: String
+    owner_ref: AdminVisibleUserRef?
+    tenant_ref: AdminVisibleTenantRef
+    status: String
+}
+
+entity PaymentProviderAccountLink {
+    account_kind: user | tenant
+    account_ref: String
+    provider: String
+    provider_customer_ref: String
+    status: String
+}
+
+rule PasswordLoginMatchesExactEmailIdentity {
+    when: UserLogsInWithPassword(email, password, session)
+
+    let user = auth/User{email: email}
+
+    requires: exists user
+    requires: user.status = active
+    requires: verify_password(password, user.password_hash)
+
+    ensures: session.user = user
+    ensures: UserAuthenticated(user: user)
+
+    @guidance
+        -- Exact email identity matching remains supported.
+        -- The implementation may replace plaintext database lookup with a blind index,
+        -- but the observable behavior must remain equality-based on the full normalized address.
+}
+
+rule PasswordResetMatchesExactEmailIdentity {
+    when: PasswordResetRequested(email)
+
+    ensures:
+        if exists user in auth/User where user.email = email:
+            PasswordResetIssued(email: email, principal_type: user)
+        else if exists admin in auth/Admin where admin.email = email:
+            PasswordResetIssued(email: email, principal_type: admin)
+        else:
+            PasswordResetRequestAcceptedWithoutDisclosure(email: email)
+
+    @guidance
+        -- The user-facing response remains non-enumerating even when no account exists.
+        -- Internally, exact email matching remains required.
+}
+
+rule OAuthMatchesExistingAccountByExactEmailIdentity {
+    when: OAuthCallbackReceived(provider, oauth_email, _, _, _, session)
+
+    let user = auth/User{email: oauth_email}
+
+    requires: exists user
+    requires: user.auth_provider != password
+
+    ensures: session.user = user
+    ensures: UserAuthenticated(user: user)
+
+    @guidance
+        -- OAuth identity correlation continues to rely on exact email equality.
+}
+
+rule TenantInvitationRejectsMismatchedEmailWithExactTarget {
+    when: UserAcceptsTenantInvitation(user, invitation)
+
+    requires: invitation.status = pending
+    requires: user.email != invitation.email
+
+    ensures: InvitationAcceptanceRejected(
+        invitation: invitation,
+        reason: email_mismatch,
+        invited_email: invitation.email,
+        actual_email: user.email
+    )
+
+    @guidance
+        -- The mismatch error intentionally displays the exact invited email address.
+        -- This disclosure is allowed only inside the invitation acceptance flow after
+        -- the token has already identified a concrete invitation.
+}
+
+rule AdminInvitationAcceptsUsingExactEmailIdentity {
+    when: AdminAcceptsInvitation(token_value, full_name, password)
+
+    let invitation = admin_invitation/AdminInvitation{token: token_value}
+
+    requires: exists invitation
+    requires: invitation.is_valid
+    requires: not exists auth/Admin{email: invitation.email}
+
+    ensures:
+        let admin = auth/Admin.created(
+            email: invitation.email,
+            full_name: full_name,
+            role: invitation.role,
+            status: active,
+            password_hash: hash_password(password)
+        )
+        invitation.status = accepted
+        AdminAccountCreatedViaInvitation(admin: admin, invitation: invitation)
+
+    @guidance
+        -- The invite target email remains authoritative and exact.
+}
+
+rule LinkAccountToPaymentProviderCreatesProviderLink {
+    when: LinkAccountToPaymentProvider(viewer, account_kind, account_ref, provider, provider_customer_ref)
+
+    ensures:
+        PaymentProviderAccountLink.created(
+            account_kind: account_kind,
+            account_ref: account_ref,
+            provider: provider,
+            provider_customer_ref: provider_customer_ref,
+            status: active
+        )
+}
+
+rule PaymentProviderStatusCanBeUpdated {
+    when: UpdatePaymentProviderStatus(viewer, account_kind, account_ref, provider, status)
+
+    let link = PaymentProviderAccountLink{account_kind: account_kind, account_ref: account_ref, provider: provider}
+
+    requires: exists link
+
+    ensures: link.status = status
+}
+
+surface AdminUsersDirectory {
+    facing viewer: auth/Admin
+
+    exposes:
+        for entry in UserEmailDirectoryEntry:
+            entry.user
+            entry.user_ref
+            entry.nickname
+            entry.user.status
+            entry.user.email_verified
+            entry.user.auth_provider
+
+    provides:
+        FindUserByRef(viewer, user_ref)
+        SearchUsersByNickname(viewer, query)
+
+    @guarantee NoRoutineEmailDisclosure
+        -- The admin users surface does not expose full or masked email addresses in routine usage.
+
+    @guarantee NoPartialEmailSearchContract
+        -- Substring or contains-style email search is not part of the contract.
+}
+
+surface AdminAdminsDirectory {
+    facing viewer: auth/Admin
+
+    exposes:
+        for entry in AdminEmailDirectoryEntry:
+            entry.admin
+            entry.admin_ref
+            entry.nickname
+            entry.admin.role
+            entry.admin.status
+
+    provides:
+        FindAdminByRef(viewer, admin_ref)
+        SearchAdminsByNickname(viewer, query)
+
+    @guarantee NoRoutineEmailDisclosure
+        -- The admin admins surface does not expose full or masked email addresses in routine usage.
+
+    @guarantee NoPartialEmailSearchContract
+        -- Substring or contains-style email search is not part of the contract.
+}
+
+surface AdminReceiptReview {
+    facing viewer: auth/Admin
+
+    exposes:
+        for entry in PseudonymousReceiptReviewEntry:
+            entry.receipt_id
+            entry.owner_ref
+            entry.tenant_ref
+            entry.status
+
+    @guarantee StructuralLinkageWithoutEmail
+        -- Admins may follow which receipts belong to the same pseudonymous user or tenant
+        -- without learning the email address behind those refs.
+}
+
+surface AdminExpenseReview {
+    facing viewer: auth/Admin
+
+    exposes:
+        for entry in PseudonymousExpenseReviewEntry:
+            entry.expense_id
+            entry.owner_ref
+            entry.tenant_ref
+            entry.status
+
+    @guarantee StructuralLinkageWithoutEmail
+        -- Admins may follow which expenses belong to the same pseudonymous user or tenant
+        -- without learning the email address behind those refs.
+}
+
+surface TenantInvitationAcceptance {
+    facing visitor: auth/User
+
+    exposes:
+        exact_invited_email
+
+    @guarantee ExactInvitationMismatchDisclosure
+        -- When invitation acceptance fails because the signed-in user email does not
+        -- match the invitation target, the product may show the exact invited email.
+}
+
+surface AuditAndOperationsViews {
+    facing viewer: auth/Admin
+
+    exposes:
+        for entry in EmailAuditView:
+            entry.actor_type
+            entry.action
+            entry.email_hint
+            entry.masked_email
+
+    @guarantee NoRawEmailInAuditViews
+        -- Audit and operational views expose only masked or redacted email hints
+        -- unless a separate surface explicitly authorizes full address disclosure.
+}
+
+surface ExceptionalIdentityReveal {
+    facing viewer: auth/Admin
+
+    provides:
+        RevealUserEmailForSupport(viewer, user_ref, reason)
+        RevealTenantMemberEmailForSupport(viewer, tenant_ref, user_ref, reason)
+
+    @guarantee AuditedAndExceptional
+        -- Identity reveal is not part of routine admin browsing.
+        -- Every reveal requires an explicit reason and must be audit logged.
+}
+
+surface BillingOperations {
+    facing viewer: auth/Admin
+
+    exposes:
+        for link in PaymentProviderAccountLink:
+            link.account_kind
+            link.account_ref
+            link.provider
+            link.provider_customer_ref
+            link.status
+
+    provides:
+        LinkAccountToPaymentProvider(viewer, account_kind, account_ref, provider, provider_customer_ref)
+        UpdatePaymentProviderStatus(viewer, account_kind, account_ref, provider, status)
+
+    @guarantee BillingWithoutRoutineEmailAccess
+        -- Payment-provider reconciliation can use stable internal account refs and provider
+        -- customer references without exposing user email addresses in routine admin views.
+}

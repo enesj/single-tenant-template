@@ -146,6 +146,26 @@
          {:doc "Promote DB-backed frontend config snapshots into source-controlled EDN defaults (dry-run by default). Usage: bb export-frontend-config-from-db [--profile <profile>] [--only <domain>] [--skip <domain>] [--apply]. Dry-run exits nonzero when pending file updates are found.",
           :task (apply shell {:extra-env (dotenv)} "bb" "scripts/bb/export_frontend_config_from_db.clj" *command-line-args*)},
 
+         railway-frontend-config
+         {:doc "Run frontend-config tasks against Railway production. Usage: bb railway-frontend-config <validate-frontend-config|sync-frontend-config|export-frontend-config-from-db|migrate-and-sync-frontend-config> [args...]",
+          :task (apply shell {:extra-env (dotenv)} "bb" "scripts/bb/railway_frontend_config.clj" *command-line-args*)},
+
+         railway-validate-frontend-config
+         {:doc "Run frontend-config validation in the Railway production workflow. Usage: bb railway-validate-frontend-config [--only <domain>] [--skip <domain>] [--allowlist <path>] [--schema <path>]",
+          :task (apply shell {:extra-env (dotenv)} "bb" "scripts/bb/railway_frontend_config.clj" "validate-frontend-config" *command-line-args*)},
+
+         railway-sync-frontend-config
+         {:doc "Run frontend-config sync in the Railway production workflow (dry-run by default). Usage: bb railway-sync-frontend-config [--apply] [--only <domain>] [--skip <domain>] [--allowlist <path>] [--schema <path>]",
+          :task (apply shell {:extra-env (dotenv)} "bb" "scripts/bb/railway_frontend_config.clj" "sync-frontend-config" *command-line-args*)},
+
+         railway-export-frontend-config-from-db
+         {:doc "Promote Railway production frontend config snapshots into source-controlled EDN defaults (dry-run by default). Usage: bb railway-export-frontend-config-from-db [--only <domain>] [--skip <domain>] [--apply]",
+          :task (apply shell {:extra-env (dotenv)} "bb" "scripts/bb/railway_frontend_config.clj" "export-frontend-config-from-db" *command-line-args*)},
+
+         railway-migrate-and-sync-frontend-config
+         {:doc "Run migrations, apply frontend-config sync, and validate against Railway production. Usage: bb railway-migrate-and-sync-frontend-config [--only <domain>] [--skip <domain>] [--allowlist <path>] [--schema <path>]",
+          :task (apply shell {:extra-env (dotenv)} "bb" "scripts/bb/railway_frontend_config.clj" "migrate-and-sync-frontend-config" *command-line-args*)},
+
          migrate-and-sync-frontend-config
          {:doc "Run migrations, apply frontend config sync, then validate. Usage: bb migrate-and-sync-frontend-config [--profile <profile>] [--only <domain>] [--skip <domain>] [--allowlist <path>] [--schema <path>]",
           :task (apply shell {:extra-env (dotenv)} "bb" "scripts/bb/migrate_and_sync_frontend_config.clj" *command-line-args*)},
