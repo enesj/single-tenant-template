@@ -1,5 +1,5 @@
 ---
-description: "Map OCR article aliases on Railway prod DB using the canonical workflow: batch articles_research, manual review, create_articles, map_aliases, and mandatory manufacturer backfill"
+description: "Map OCR article aliases on Railway prod DB using the canonical workflow: batch articles_research, manual review, create_articles, map_aliases, and handoff to the dedicated manufacturers workflow"
 metadata:
   tags: ["articles", "aliases", "taxonomy", "ocr", "serper", "babashka", "railway", "prod"]
 ---
@@ -8,7 +8,7 @@ metadata:
 
 Map raw `article_aliases` (where `article_id IS NULL`) to canonical `articles` on the
 **Railway production database**. Same canonical workflow as `create-articles`:
-`articles-research → review → create_articles → map_aliases → backfill`, but
+`articles-research → review → create_articles → map_aliases → manufacturers`, but
 without the local REPL receipt-retry / receipt re-OCR pre-phase.
 
 ---
@@ -103,9 +103,9 @@ Follow this exact order for each supplier batch on prod:
 2. Review and correct both generated `.edn` files in one pass
 3. `create_articles.clj` dry-run, then apply
 4. `map_aliases.clj` dry-run, then apply
-5. `backfill_brand_rule_manufacturers.clj` dry-run, then apply
+5. Run `/manufacturers-remote-db` as the primary manufacturer pass
 
-Do **not** skip the backfill step for known-brand manufacturer cleanup, and do **not** use
+Do **not** skip the dedicated manufacturers step for known-brand manufacturer cleanup, and do **not** use
 manual Serper-only research as the primary workflow. Serper is optional support for ambiguous
 items during review, not the main batch pipeline.
 
@@ -220,14 +220,14 @@ Review `tmp/*articles-suggested.edn` and `tmp/*mappings-suggested.edn` together 
 Focus on:
 
 - canonical naming / obvious OCR cleanup
-- manufacturer fixes for known brands visible anywhere in the full label
+- only obvious manufacturer fixes for known brands visible anywhere in the full label
 - category/subcategory reuse from existing DB taxonomy
 - size / weight / volume variants staying separate
 - duplicate article merges and mapping redirects
 - removing mappings for confirmed noise aliases
 
 `manufacturer_id = NULL` is acceptable only for truly unbranded items (loose produce, services, bags, many diagnostics).
-If Generic stays high for clearly branded products after review, use targeted web searches only for the ambiguous misses.
+Do not do exhaustive manufacturer discovery here; `/manufacturers-remote-db` owns that pass after mapping.
 
 Optional support for unresolved edge cases:
 
@@ -365,21 +365,17 @@ Use `--allow-reassign` only for deliberate remaps.
 > context window. Split into batches of ~80 entries by supplier group, running `map_aliases.clj`
 > once per batch. Each run is safe to re-run (skips already-mapped aliases).
 
-### Step 5c — Brand-rule manufacturer backfill (mandatory)
+### Step 5c — Run the dedicated manufacturers workflow (mandatory)
 
-After creating articles and mapping aliases, run the manufacturer safety net that applies the
-current taxonomy to any newly-created brand matches still missing `manufacturer_id`.
+After creating articles and mapping aliases, hand off manufacturer creation/reuse/wiring to:
 
-```bash
-# Dry-run first
-bb railway-articles-run scripts/bb/articles/backfill_brand_rule_manufacturers.clj --pretty
-
-# Then apply
-bb railway-articles-run scripts/bb/articles/backfill_brand_rule_manufacturers.clj --apply --pretty
+```text
+/manufacturers-remote-db
 ```
 
-If the dry-run reports missing manufacturers, create/fix those manufacturer rows first and rerun
-this step before moving on.
+That command is now the **primary** manufacturer solution for production article batches.
+It already includes the Railway postgres-mcp switch/restore bookends, mandatory previews,
+and confirmation gates before real writes.
 
 ---
 
@@ -438,7 +434,7 @@ Check the report:
 - [ ] Requested backlog slice: articles created + aliases mapped.
 - [ ] Variant risks addressed: no different sizes mapped to the same article.
 - [ ] Taxonomy linked for created articles (manufacturer + subcategory where known).
-- [ ] Brand-rule manufacturer backfill run after mapping; known-brand misses resolved or documented.
+- [ ] Dedicated manufacturers workflow run after mapping; known-brand misses resolved or documented.
 - [ ] No subcategory named `"General"` -- all subcategories are descriptive.
 - [ ] `Generic` manufacturer ≤ ~30% of **branded-product** articles (lab tests, services, parking, bulk produce are exempt).
 - [ ] `Other` category is used sparingly.
@@ -454,13 +450,13 @@ Report after each run:
 
 1. **Summary counts**
    - New articles created vs existing articles reused
-   - New manufacturers created vs existing reused
    - New subcategories created vs existing reused
 2. What was created (articles + taxonomy) and what was mapped (aliases -> articles).
-3. How variant/size conflation was prevented.
-4. Where evidence lives in `tmp/` (progress report, created-articles EDN, etc.).
-5. What remains unmapped and why (noise vs ambiguity).
-6. **Suggested new categories** (in Bosnian, with justification) for items that fell into `Other`.
+3. **Manufacturer handoff** — confirm `/manufacturers-remote-db` was run and summarize what it resolved, including new vs reused manufacturers.
+4. How variant/size conflation was prevented.
+5. Where evidence lives in `tmp/` (progress report, created-articles EDN, etc.).
+6. What remains unmapped and why (noise vs ambiguity).
+7. **Suggested new categories** (in Bosnian, with justification) for items that fell into `Other`.
 
 ---
 
@@ -488,7 +484,6 @@ Deletes all files under `tmp/`.
 | `create_articles.clj` | `bb railway-articles-run scripts/bb/articles/create_articles.clj --dry-run --pretty` | Create/upsert articles + taxonomy |
 | `ensure_taxonomy.clj` | `bb railway-articles-run scripts/bb/articles/ensure_taxonomy.clj --dry-run --pretty` | Ensure manufacturers/categories/subcategories |
 | `map_aliases.clj` | `bb railway-articles-run scripts/bb/articles/map_aliases.clj --dry-run --pretty` | Batch alias mapping |
-| `backfill_brand_rule_manufacturers.clj` | `bb railway-articles-run scripts/bb/articles/backfill_brand_rule_manufacturers.clj [--apply] --pretty` | Backfill NULL manufacturers from dynamic brand taxonomy |
 | `delete_unmapped_aliases.clj` | `bb railway-articles-run scripts/bb/articles/delete_unmapped_aliases.clj --pretty` | Noise deletion (dry-run default) |
 | `group_aliases_by_brand.clj` | `bb railway-articles-run scripts/bb/expenses/group_aliases_by_brand.clj --json` | Variant risk detection |
 | `phase1_triage.clj` | `bb scripts/bb/articles/phase1_triage.clj` (local, no DB) | OCR noise triage |

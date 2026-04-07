@@ -1,5 +1,5 @@
 ---
-description: "Streamlined article mapping: batch research via Perplexity, local heuristics, taxonomy upserts, and batch alias mapping"
+description: "Streamlined article mapping: batch research via Perplexity, local heuristics, taxonomy upserts, batch alias mapping, and handoff to the dedicated manufacturers workflow"
 metadata:
   tags: ["articles", "aliases", "taxonomy", "ocr", "perplexity", "babashka"]
 ---
@@ -240,13 +240,13 @@ bb articles-research dev --supplier "APOTEKE" --output-prefix apoteke --pretty
 
 > **File overwrite warning:** Each research run overwrites `tmp/articles-suggested.edn`
 > and `tmp/mappings-suggested.edn`. When processing multiple suppliers sequentially,
-> **complete the full research → review → create → map → backfill cycle for each supplier batch** before
+> **complete the full research → review → create → map → manufacturers cycle for each supplier batch** before
 > running the next. The workflow per supplier is:
 > 1. `bb articles-research dev --supplier "X" --pretty`
 > 2. Review + correct `tmp/articles-suggested.edn` and `tmp/mappings-suggested.edn` (Step 1c quality review)
 > 3. Create articles (Phase 3a)
 > 4. Map aliases (Phase 3b)
-> 5. Run manufacturer backfill (Step 3d, mandatory)
+> 5. Run `/manufacturers` as the primary manufacturer pass (Step 3d, mandatory)
 > 6. Then proceed to next supplier
 
 ### Step 1c — Quality review (single pass over both files)
@@ -273,7 +273,11 @@ checks below in a single editing pass. Do not re-read the files between checks.
 | OCR merge artifact | Two product names joined by hex token (`"PRODUCT 2f5 PRODUCT"`) | Delete from articles + mappings; schedule alias for noise deletion |
 | Trailing hex/numbers | `[0-9a-f]{3,4}` at end, not a weight unit | Remove suffix |
 
-#### B. Manufacturers — scan `:manufacturer-name` values
+#### B. Manufacturers — keep only obvious high-confidence fixes in `:manufacturer-name`
+
+The dedicated `/manufacturers` workflow is now the **primary** way to create/reuse manufacturers
+and wire articles after mapping. During `tmp/articles-suggested.edn` review, only fix clear,
+high-confidence mistakes that would otherwise carry obviously wrong data forward.
 
 | Check | Pattern | Fix |
 |-------|---------|-----|
@@ -285,14 +289,14 @@ checks below in a single editing pass. Do not re-read the files between checks.
 | OCR-shortened brand variant | `"VIOLET"`, `"PADJENI"`-style near-matches | Normalize to canonical brand/company (`Violeta`, `Mljekara Pađeni`, ...) |
 | Descriptor mistaken for brand | `"INTENSO"`, `"SOFT"`, `"ESPRESSO"`, `"FORTE"`, `"PRŽENI"` | Keep nil unless another trusted brand token resolves the manufacturer |
 
-After sweep: branded should be >40% of consumer-product articles. Services/produce/parking
-are legitimately Generic.
+Do not do exhaustive manufacturer discovery here. If a label is plausible but not obvious,
+leave it for `/manufacturers` after Phase 3.
 
 > **Whole-label rule (critical):** A recognizable brand can appear at the **beginning, middle, or end** of the raw label. Do not decide `:manufacturer-name nil` until you have scanned the full raw label, not just the first token.
 
 > **Regression lesson:** Prompt tightening fixed obvious branded-null rows like `Violeta maramice u` and `PAPIRNE MARAMICE 60-1 U KUTIJI VIOLETA`, but ambiguous descriptor-led rows like `KAPSULE INTENSO...` and `KIKIRIKI GUD PRZENI...` still stayed nil. Treat that split as expected behavior: fix obvious known-brand misses aggressively, but do **not** force a manufacturer onto descriptor-only labels without stronger evidence.
 
-> **New brand→manufacturer discovered?** Add it to the appropriate taxonomy file:
+> **New brand→manufacturer discovered during review?** Add it to the appropriate taxonomy file:
 > - `scripts/bb/articles/taxonomy/brand-parent-mappings.edn` — brand→parent-company map
 >   (when brand name differs from manufacturer, e.g. `"Milka" "Mondelez International"`)
 > - `scripts/bb/articles/taxonomy/self-named-brands.edn` — vector of brands where brand = manufacturer
@@ -396,47 +400,24 @@ bb scripts/bb/articles/map_aliases.clj dev \
   --mappings-file tmp/mappings-extra.edn --pretty
 ```
 
-### Step 3d — Brand-rule manufacturer backfill (mandatory)
+### Step 3d — Run the dedicated manufacturers workflow (mandatory)
 
-After creating articles and mapping aliases, run a **post-creation safety net** that
-catches articles where research missed a manufacturer that the taxonomy already knows about.
+After creating articles and mapping aliases, hand off manufacturer creation/reuse/wiring to
+the dedicated manufacturers workflow:
 
-This step exists because Perplexity research sometimes returns `null` manufacturer for
-articles whose brand is clearly present in the canonical name (e.g. all Balea products
-should be `dm`, all Milka products should be `Mondelēz`). The taxonomy patterns are only
-applied at research time — they don't retroactively fix articles already in the DB.
-
-Run the dedicated script in **dry-run** mode first:
-
-```bash
-bb scripts/bb/articles/backfill_brand_rule_manufacturers.clj dev --pretty
+```text
+/manufacturers
 ```
 
-This script dynamically loads known-brand knowledge from:
+That command is now the **primary** manufacturer solution for this job. It handles:
 
-- `scripts/bb/articles/taxonomy/brand-rules.edn`
-- `scripts/bb/articles/taxonomy/brand-parent-mappings.edn`
-- `scripts/bb/articles/taxonomy/self-named-brands.edn`
+1. surveying articles still missing `manufacturer_id`
+2. reusing existing manufacturers when possible
+3. creating new manufacturer rows when needed
+4. wiring articles to the correct manufacturer with its own review gates
 
-It then:
-
-1. finds all articles where `manufacturer_id IS NULL`
-2. matches them against the current taxonomy rules in memory
-3. reports safe updates plus any missing manufacturer rows
-
-If the dry-run output looks correct, apply it:
-
-```bash
-bb scripts/bb/articles/backfill_brand_rule_manufacturers.clj dev --apply --pretty
-```
-
-If the script reports `:missing-manufacturers`, create/fix those manufacturer rows first
-via the standard taxonomy/article workflow, then rerun Step 3d.
-
-> **Why this step is mandatory:** Brand-rule patterns represent high-confidence
-> brand→manufacturer mappings. If an article matches a known brand pattern and has no
-> manufacturer, it is a research miss — never intentional. Skipping this step causes
-> the same class of bug repeatedly across batches.
+Use the obvious fixes you made in `tmp/articles-suggested.edn` as a head start, but do not
+try to replicate the full manufacturers workflow inside `create-articles`.
 
 ---
 
@@ -503,7 +484,7 @@ to the tables in this file.
 
 - [ ] Pre-phase done (review_required receipts resolved or documented).
 - [ ] Articles created + aliases mapped for requested backlog slice.
-- [ ] Brand-rule manufacturer backfill run (Step 3d) — 0 known-brand articles with NULL manufacturer.
+- [ ] Dedicated manufacturers workflow run (Step 3d) — obvious known-brand misses handled or documented.
 - [ ] No variant/size conflation. No subcategory named `"General"`.
 - [ ] `Generic` ≤ ~30% of branded-product articles; `Ostalo` < ~20%.
 - [ ] Progress verified via `report_progress.clj`.
@@ -517,15 +498,16 @@ to the tables in this file.
 Report after each run:
 
 1. **Receipt resolution** — review_required count, resolved vs stuck.
-2. **Summary counts** — articles created, aliases mapped, manufacturers/subcategories added.
+2. **Summary counts** — articles created, aliases mapped, subcategories added.
 3. **EDN corrections** — grouped by type:
    - *Manufacturers*: `"DUNHIL"→BAT`, `"HARIBO BE"→Haribo`, …
    - *Names*: `"Bombo ne"→"Bomboni"`, `"Foliija"→"Folija"`, …
    - *Categories*: Profissimo Salvete: Sredstva za čišćenje → Papirna galanterija, …
    - *Duplicates/redirects*: LIMUN SVJEŽI → existing `limun`, …
    - *Noise*: deleted aliases and reasons
-4. **Remaining unmapped** and classification (mappable / noise / ambiguous).
-5. **Prompt changes** — list files changed with one-line reasons, or "No changes needed."
+4. **Manufacturer handoff** — confirm `/manufacturers` was run and summarize what it resolved, or note what remains for that pass.
+5. **Remaining unmapped** and classification (mappable / noise / ambiguous).
+6. **Prompt changes** — list files changed with one-line reasons, or "No changes needed."
 
 ---
 
@@ -546,7 +528,6 @@ bb clear-folder
 | `map_aliases.clj` | `bb scripts/bb/articles/map_aliases.clj dev` | Batch alias mapping |
 | `delete_unmapped_aliases.clj` | `bb scripts/bb/articles/delete_unmapped_aliases.clj dev` | Noise deletion |
 | `report_progress.clj` | `bb scripts/bb/articles/report_progress.clj dev` | Coverage report |
-| `backfill_brand_rule_manufacturers.clj` | `bb scripts/bb/articles/backfill_brand_rule_manufacturers.clj dev [--apply]` | Backfill NULL manufacturers from dynamic brand taxonomy |
 | `group_aliases_by_brand.clj` | `bb group-aliases-by-brand dev` | Variant risk detection |
 | `list_categories.clj` | `bb list-categories dev [--with-subcategories]` | List categories |
 | `unmapped_aliases_counts.clj` | `bb scripts/bb/articles/unmapped_aliases_counts.clj dev` | Grouped counts |
