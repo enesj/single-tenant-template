@@ -364,6 +364,34 @@
                                             (rf/dispatch (column-config/update-table-width-event entity-kw (js/parseInt new-value)))
                                             (.blur (.-target e))))))})))
 
+        ;; Table height control
+        (let [current-height (use-subscribe [::settings-events/table-height entity-kw])
+              [temp-height, set-temp-height] (use-state (str current-height))]
+          ($ :div {:id "table-height-control"
+                   :class "flex items-center gap-2 p-1 rounded-md"}
+            ($ :span {:class "text-sm font-medium"} "Table Height:")
+            ($ :input {:id (str "table-height-input-" (name entity-kw))
+                       :type "number"
+                       :min "150"
+                       :max "2000"
+                       :step "50"
+                       :value temp-height
+                       :placeholder "auto"
+                       :class "w-20 px-2 py-1 border border-gray-300 rounded text-sm"
+                       :on-change (fn [e]
+                                    (let [new-value (.. e -target -value)]
+                                      (set-temp-height new-value)))
+                       :on-blur (fn [e]
+                                  (let [new-value (.. e -target -value)]
+                                    (when (and new-value (not= new-value (str current-height)))
+                                      (rf/dispatch [::settings-events/update-table-height entity-kw (js/parseInt new-value)]))))
+                       :on-key-down (fn [e]
+                                      (when (= (.-key e) "Enter")
+                                        (let [new-value (.. e -target -value)]
+                                          (when (and new-value (not= new-value (str current-height)))
+                                            (rf/dispatch [::settings-events/update-table-height entity-kw (js/parseInt new-value)])
+                                            (.blur (.-target e))))))})))
+
         ;; Rows per page control - moved from pagination component
         (when (and per-page on-per-page-change rows-per-page-options)
           ($ :div {:id "rows-per-page-control"

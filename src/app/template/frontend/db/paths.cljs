@@ -307,6 +307,11 @@
   [entity-name]
   [:ui :entity-prefs entity-name :columns :width])
 
+(defn entity-prefs-table-height
+  "Returns [:ui :entity-prefs entity-name :table :height] path vector for table height."
+  [entity-name]
+  [:ui :entity-prefs entity-name :table :height])
+
 (defn entity-prefs-filters-fields
   "Returns [:ui :entity-prefs entity-name :filters :fields] path vector for filterable fields."
   [entity-name]

@@ -28,7 +28,7 @@
     [app.template.frontend.utils.column-config :as column-config]
     [app.template.frontend.utils.id :as id-utils]
     [re-frame.core :as rf]
-    [uix.core :as uix :refer [$ defui use-effect use-state]]
+    [uix.core :as uix :refer [$ defui use-effect use-ref use-state]]
     [uix.dom]
     [uix.re-frame :refer [use-subscribe]]))
 
@@ -213,9 +213,16 @@
                              #(rf/dispatch [::ui-events/set-per-page entity-name %]))
         {:keys [show-highlights?]} merged-display-settings
         table-width (use-subscribe [::settings-events/table-width (some-> entity-name keyword)])
+        table-height (use-subscribe [::settings-events/table-height (some-> entity-name keyword)])
 
         ;; Column order preferences (drag-and-drop settings)
         column-order (use-subscribe [::settings-events/column-order entity-name])
+
+        ;; Ref for the table shell element (used by ResizeObserver)
+        shell-ref (use-ref nil)
+        ;; Mutable refs for ResizeObserver debounce
+        skip-first-ref (use-ref true)
+        timer-ref (use-ref nil)
 
         ;; State management for inline filter
         [active-inline-filter, set-active-inline-filter] (use-state nil)
@@ -340,6 +347,33 @@
             500))
         js/undefined)
       [on-add-success use-modal-forms? add-modal-open? has-custom-add-form? form-success? form-submitted? entity-kw])
+
+    ;; ResizeObserver: persist table height when user drags the CSS resize handle.
+    (use-effect
+      (fn []
+        (reset! skip-first-ref true)
+        (let [el @shell-ref
+              observer (when el
+                         (js/ResizeObserver.
+                           (fn [entries]
+                             (if @skip-first-ref
+                               (reset! skip-first-ref false)
+                               (let [entry (aget entries 0)
+                                     h (js/Math.round (.. entry -contentRect -height))]
+                                 (when @timer-ref
+                                   (js/clearTimeout @timer-ref))
+                                 (reset! timer-ref
+                                   (js/setTimeout
+                                     #(rf/dispatch [::settings-events/update-table-height entity-kw h])
+                                     300)))))))]
+          (when (and observer el)
+            (.observe observer el))
+          (fn []
+            (when @timer-ref
+              (js/clearTimeout @timer-ref))
+            (when observer
+              (.disconnect observer)))))
+      [entity-kw entity-name])
 
     ;; Handle events/actions via extracted handler module.
     (let [{:keys [handle-select-change
@@ -559,8 +593,14 @@
                               ")")))))
 
                     ($ :div {:id (str "table-shell-" (kw/ensure-name entity-name))
+                             :ref shell-ref
                              :class "w-full flex flex-col overflow-hidden rounded-xl border border-base-300 bg-base-100 shadow-sm"
-                             :style {:max-height "min(70vh, calc(100vh - 12rem))"}}
+                             :style {:height (if (and table-height (pos? table-height))
+                                               (str table-height "px")
+                                               "min(70vh, calc(100vh - 12rem))")
+                                     :min-height "150px"
+                                     :max-height "calc(100vh - 6rem)"
+                                     :resize "vertical"}}
                       ($ :div {:id (str "table-scroll-viewport-" (kw/ensure-name entity-name))
                                :class "min-h-0 flex-1 overflow-auto"}
                         ($ table

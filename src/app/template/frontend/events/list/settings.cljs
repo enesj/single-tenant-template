@@ -117,6 +117,22 @@
         (assoc-in db (paths/entity-prefs-columns-width entity-key) width-num))
       db)))
 
+(rf/reg-sub
+  ::table-height
+  (fn [db [_ entity-key]]
+    (let [entity-key (model-naming/ensure-app-keyword entity-key)]
+      (get-in db (paths/entity-prefs-table-height entity-key)))))
+
+(rf/reg-event-db
+  ::update-table-height
+  [persistence/persist-entity-prefs]
+  (fn [db [_ entity-name height]]
+    (if (and entity-name height)
+      (let [entity-key (model-naming/ensure-app-keyword entity-name)
+            height-num (if (string? height) (js/parseInt height) height)]
+        (assoc-in db (paths/entity-prefs-table-height entity-key) height-num))
+      db)))
+
 (rf/reg-event-db
   ::set-column-order
   [persistence/persist-entity-prefs]
