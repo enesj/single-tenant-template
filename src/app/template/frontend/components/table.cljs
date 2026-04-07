@@ -134,11 +134,10 @@
                            (when sticky? "font-bold text-primary "))}
           children
           (when sticky?
-            ($ :span {:class "ml-1 text-xs opacity-90"}
-              (case sticky-position
-                :left "📌"
-                :right "📌"
-                ""))))
+            ($ :span {:class "absolute bottom-0 text-[10px] opacity-60 leading-none"
+                      :style {:right (when (= sticky-position :left) "0")
+                              :left (when (= sticky-position :right) "0")}}
+              "📌")))
         ($ :div {:class "flex items-center h-full w-full min-w-0"
                  :style {:overflow-wrap "anywhere"
                          :word-break "break-word"}}
@@ -217,7 +216,7 @@
   "sticky top-0 z-[19000] bg-base-100")
 
 (def settings-row-cell-class
-  "px-2 py-1 border-t border-b bg-base-200 shadow-[inset_0_-1px_0_rgba(15,23,42,0.08)]")
+  "px-2 py-1 bg-base-200")
 
 (defui table
   {:prop-types table-props}

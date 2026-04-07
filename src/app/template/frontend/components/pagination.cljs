@@ -22,11 +22,12 @@
                               (when (and (>= page 1) (<= page total-pages))
                                 (on-page-change page)
                                 (set-go-to-page! (str page)))))]
-    ($ :div {:style (when table-width {:max-width (str table-width "px")})}
-      ($ :hr {:class "ds-divider m-3"})
+    ($ :div {:class "px-2 py-3"
+             :style (when table-width {:max-width (str table-width "px")})}
       ($ :div {:class "flex items-center justify-between"}
         ($ :div
-          ($ :span (str "Page " current-page " of " total-pages)))
+          ($ :span {:class "text-sm text-base-content/70"}
+            (str "Page " current-page " of " total-pages)))
 
         ($ :div {:class "flex items-center space-x-3"}
           ;; Go to page input and button
@@ -80,5 +81,4 @@
              :id "btn-last-page"
              :disabled (= current-page total-pages)
              :on-click #(on-page-change total-pages)
-             :children last-icon-el})))
-      ($ :hr {:class "ds-divider m-3"}))))
+             :children last-icon-el}))))))

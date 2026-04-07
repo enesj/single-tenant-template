@@ -624,7 +624,7 @@
                       (when (and (get merged-display-settings :show-pagination? true)
                               (> pagination-total-pages 1))
                         ($ :div {:id (str "table-pagination-" (kw/ensure-name entity-name))
-                                 :class "shrink-0 border-t border-base-300 bg-base-100"}
+                                 :class "shrink-0 border-t border-base-300 bg-base-200"}
                           ($ pagination
                             {:current-page pagination-current-page
                              :total-pages pagination-total-pages
