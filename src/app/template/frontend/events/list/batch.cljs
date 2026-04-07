@@ -13,6 +13,18 @@
     [day8.re-frame.http-fx]
     [re-frame.core :as rf]))
 
+;; Template entities with custom admin batch endpoints
+(def ^:private template-batch-endpoints
+  {:users "/admin/api/users/actions/batch"})
+
+(defn- admin-batch-update-endpoint
+  "Build the admin batch update endpoint for an entity.
+   Template entities (users) have custom endpoints.
+   Domain entities use /admin/api/expenses/{name}/batch."
+  [entity-name]
+  (or (get template-batch-endpoints entity-name)
+    (str "/admin/api/expenses/" (name entity-name) "/batch")))
+
 ;;; -------------------------
 ;;; Batch Operations
 ;;; -------------------------
@@ -94,8 +106,7 @@
                                    (fn [acc field-key _value]
                                     ;; Find field spec for this field
                                      (let [field-spec (first (filter #(= (keyword (:id %)) field-key) entity-spec))
-                                           input-type (when field-spec (:input-type field-spec))
-                                           options (when field-spec (:options field-spec))]
+                                           input-type (when field-spec (:input-type field-spec))]
 
                                        (cond
                                         ;; Convert number fields (decimal, integer)
@@ -104,15 +115,8 @@
                                                                   (js/parseFloat %)
                                                                   %))
 
-                                        ;; Convert select fields with keyword options to integers
-                                         (and
-                                           (= input-type "select")
-                                           (vector? options)
-                                           (= 2 (count options))
-                                           (every? keyword? options))
-                                         (update acc field-key #(js/parseInt % 10))
-
                                         ;; Default case - no formatting needed
+                                        ;; Select/FK values pass through as-is; backend handles type conversion
                                          :else
                                          acc)))
                                    base-values
@@ -130,7 +134,7 @@
               ;; Use admin HTTP request helper for proper authentication
               {:db (assoc-in db (paths/entity-loading? entity-name) true)
                :http-xhrio (admin-utils/create-user-http-request
-                             :put "/admin/api/users/actions/batch"
+                             :put (admin-batch-update-endpoint entity-name)
                              :params request-params
                              :on-success [::batch-update-success entity-name]
                              :on-failure [::batch-update-failure entity-name])

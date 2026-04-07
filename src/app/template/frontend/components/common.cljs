@@ -1,10 +1,10 @@
 (ns app.template.frontend.components.common
   (:require
-   [app.template.frontend.events.list.crud :as crud-events]
-   [re-frame.core :as rf]
-   [uix.core :refer [$ defui] :as uix]
-   [uix.hooks.alpha :as hooks]
-   [uix.re-frame :as urf]))
+    [app.template.frontend.events.list.crud :as crud-events]
+    [re-frame.core :as rf]
+    [uix.core :refer [$ defui] :as uix]
+    [uix.hooks.alpha :as hooks]
+    [uix.re-frame :as urf]))
 
 (def label-props
   {:text {:type :string :required true}
@@ -108,10 +108,13 @@
                                          (every? #(or (keyword? %) (string? %)) options))
                                      options
                                      [nil nil])
+          ;; Normalize entity-name to keyword for consistent app-db lookups
+          entity-name-kw (when entity-name
+                           (if (keyword? entity-name) entity-name (keyword entity-name)))
         ;; Get current entity type to avoid circular fetches
           current-entity-type (urf/use-subscribe [:app.template.frontend.subs.list/current-entity-type])
           entity-subscription (seq (urf/use-subscribe [::select-options
-                                                       (or entity-name :default)
+                                                       (or entity-name-kw :default)
                                                        (or field-name :default)]))
           final-options (or
                           entity-subscription
@@ -121,8 +124,8 @@
           value-prop (:value props)
           safe-value-prop (if (nil? value-prop) "" value-prop)
 
-          is-foreign-key? (and entity-name field-name)
-          entity-data (urf/use-subscribe [:app.template.frontend.subs.entity/entities entity-name])
+          is-foreign-key? (and entity-name-kw field-name)
+          entity-data (urf/use-subscribe [:app.template.frontend.subs.entity/entities entity-name-kw])
 
         ;; Check for entity with matching name
           matching-items (when (and is-foreign-key?
@@ -157,22 +160,21 @@
 
         ;; Fix 2: Always ensure the value prop is not null
           resolved-props (cond-> (-> props
-                                (assoc :value resolved-value)
-                                (dissoc :error :disabled? :validate-server? :form-id :formId :show-mixed-values?)
-                                (assoc :class "ds-select")
-                                (assoc :id (or id (when form-id (str form-id "-select")))))
+                                   (assoc :value resolved-value)
+                                   (dissoc :error :disabled? :validate-server? :form-id :formId :show-mixed-values?)
+                                   (assoc :class "ds-select")
+                                   (assoc :id (or id (when form-id (str form-id "-select")))))
                            effective-style
                            (assoc :style effective-style))]
 
       (uix/use-effect
         (fn []
-        ;; Only fetch entities if we're not already on the same entity page (to avoid infinite loops)
-          (when (and entity-name
-                  (keyword? entity-name)
-                  (not (= entity-name current-entity-type)))
-            (rf/dispatch [::crud-events/fetch-entities entity-name]))
+        ;; Fetch FK entities using keyword entity name for consistent app-db storage
+          (when (and entity-name-kw
+                  (not (= entity-name-kw current-entity-type)))
+            (rf/dispatch [::crud-events/fetch-entities entity-name-kw]))
           js/undefined)
-        [entity-name current-entity-type])
+        [entity-name-kw current-entity-type])
 
       ($ :div
         ($ :select resolved-props

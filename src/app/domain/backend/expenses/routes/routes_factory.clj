@@ -529,6 +529,52 @@
                         :errors (vec @errors)}})))))
       (str "Failed to batch delete " (name entity-key)))))
 
+(defn build-batch-update-handler
+  "Builds a generic batch update handler for an entity.
+
+  Expects JSON body like:
+  {:items [{:id \"uuid\" :field1 \"val1\" ...} ...]}"
+  [{:keys [service entity-key parse-id]}]
+  (fn [db]
+    (utils/with-error-handling
+      (fn [request]
+        (let [raw-body (read-json-body request)
+              body (normalize-keys-deep->app raw-body)
+              items (or (:items body) [])
+              update-fn (resolve-service-op-fn service (symbol (str "update-" (name entity-key) "!")) :update!)]
+          (log/info "Batch update" (name entity-key)
+            {:item-count (count items)
+             :raw-body-keys (keys raw-body)
+             :first-item-keys (keys (first items))
+             :first-item (first items)})
+          (if (empty? items)
+            (utils/error-response "No items provided for batch update" :status 400)
+            (let [results (atom [])
+                  errors (atom [])]
+              (doseq [item items]
+                (try
+                  (let [raw-id (or (:id item) (str (:id item)))
+                        id (if parse-id
+                             (parse-id raw-id)
+                             (utils/parse-uuid-custom raw-id))
+                        updates (dissoc item :id :created-at :updated-at)
+                        db-updates (to-db-deep updates)]
+                    (log/info "Batch update item" {:id id :updates updates :db-updates db-updates})
+                    (if-let [updated (when id (update-fn db id db-updates))]
+                      (swap! results conj (to-app updated))
+                      (swap! errors conj {:id (str raw-id) :error "not found"})))
+                  (catch Exception e
+                    (log/error e "Batch update item failed" {:id (:id item)})
+                    (swap! errors conj {:id (str (:id item))
+                                        :error (.getMessage e)}))))
+              (utils/success-response
+                {:data {:results (vec @results)
+                        :failures (vec @errors)
+                        :summary {:total (count items)
+                                  :successful (count @results)
+                                  :failed (count @errors)}}})))))
+      (str "Failed to batch update " (name entity-key)))))
+
 (defn build-search-handler
   "Builds a generic search handler for an entity."
   [{:keys [service entity-plural query-param-name search-fn-name transform-response]}]
@@ -564,7 +610,8 @@
         base ["" {:get ((:list handlers) db)
                   :post ((:create handlers) db)}]
         batch ["/batch" {:conflicting true
-                         :delete ((:batch-delete handlers) db)}]
+                         :delete ((:batch-delete handlers) db)
+                         :put ((:batch-update handlers) db)}]
         by-id ["/:id" {:get ((:get handlers) db)
                        :put ((:update handlers) db)}]
         header (if route-meta [route-path route-meta] [route-path])]
@@ -581,7 +628,8 @@
         base-routes ["" {:get ((:list handlers) db)
                          :post ((:create handlers) db)}]
         batch-routes ["/batch" {:conflicting true
-                                :delete ((:batch-delete handlers) db)}]
+                                :delete ((:batch-delete handlers) db)
+                                :put ((:batch-update handlers) db)}]
         id-routes ["/:id" {:get ((:get handlers) db)
                            :put ((:update handlers) db)}]
         header (if route-meta [route-path route-meta] [route-path])
@@ -636,6 +684,7 @@
                   :update (build-update-handler config)
                   :delete (build-delete-handler config)
                   :batch-delete (build-batch-delete-handler config)
+                  :batch-update (build-batch-update-handler config)
                   :search (when (:has-search? config)
                             (build-search-handler config))}
         ;; Add custom handlers

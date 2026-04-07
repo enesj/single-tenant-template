@@ -7,7 +7,8 @@
     [re-frame.core :as rf]))
 
 (defn create-change-handler
-  "Creates a change handler for batch edit fields with validation"
+  "Creates a change handler for batch edit fields with validation.
+   Uses single-field updates to avoid stale closure issues with fork's merge-based set-values."
   [{:keys [field-key entity-name values set-values set-form-values set-dirty-fields validators]}]
   (fn [e]
     (let [target-value (cond
@@ -36,13 +37,12 @@
           ;; Clear validation error if no error
           (rf/dispatch [::form-events/clear-field-error entity-name field-key])))
 
-      ;; Update both form values
+      ;; Update fork values with only the changed field to avoid stale closure overwriting other fields
       (when set-values
-        (let [updated-values (assoc values field-key target-value)]
-          (set-values updated-values)
-          ;; Also update component state if available
-          (when set-form-values
-            (set-form-values updated-values)))))))
+        (set-values {field-key target-value})
+        ;; Also update component state if available
+        (when set-form-values
+          (set-form-values (fn [prev] (assoc prev field-key target-value))))))))
 
 (defn build-field-props
   "Builds the props map for a batch edit field"
