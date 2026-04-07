@@ -8,12 +8,12 @@
     [app.admin.backend.services.admin.audit :as audit]
     [app.admin.backend.services.admin.auth :as admin-auth]
     [app.shared.adapters.database :refer [convert-pg-objects]]
+    [app.template.backend.security.email :as email-privacy]
     [cheshire.core :as json]
     [honey.sql :as sql]
     [java-time.api :as time]
     [next.jdbc :as jdbc]
-    [next.jdbc.result-set :as rs]
-    [taoensso.timbre :as log])
+    [next.jdbc.result-set :as rs])
   (:import
     [java.util UUID]))
 
@@ -56,16 +56,21 @@
 (defn list-grants-for-tenant
   "List all grants (active + revoked) for a tenant, joined with admin info."
   [db tenant-id]
-  (mapv convert-pg-objects
-    (jdbc/execute! db
-      (sql/format {:select [:ig.*
-                            [:a.email :admin_email]
-                            [:a.full_name :admin_name]]
-                   :from   [[:impersonation_grants :ig]]
-                   :join   [[:admins :a] [:= :ig.admin_id :a.id]]
-                   :where  [:= :ig.tenant_id (uuid-cast tenant-id)]
-                   :order-by [[:ig.created_at :desc]]})
-      {:builder-fn rs/as-unqualified-lower-maps})))
+  (->> (jdbc/execute! db
+         (sql/format {:select [:ig.*
+                               [:a.email_ciphertext :admin_email_ciphertext]
+                               [:a.full_name :admin_name]]
+                      :from   [[:impersonation_grants :ig]]
+                      :join   [[:admins :a] [:= :ig.admin_id :a.id]]
+                      :where  [:= :ig.tenant_id (uuid-cast tenant-id)]
+                      :order-by [[:ig.created_at :desc]]})
+         {:builder-fn rs/as-unqualified-lower-maps})
+    (mapv convert-pg-objects)
+    (mapv (fn [grant]
+            (let [admin-email (some-> (:admin_email_ciphertext grant)
+                                email-privacy/decrypt-email)]
+              (cond-> grant
+                admin-email (assoc :admin_email admin-email)))))))
 
 (defn list-active-grants-for-admin
   "List active grants for an admin, joined with tenant info."

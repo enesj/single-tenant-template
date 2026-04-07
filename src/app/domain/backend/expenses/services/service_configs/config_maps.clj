@@ -3,6 +3,7 @@
   (:require
     [app.domain.backend.expenses.services.articles :as articles]
     [app.domain.backend.expenses.services.service-configs.normalization :as normalize]
+
     [clojure.string :as str]
     [honey.sql :as sql]
     [next.jdbc :as jdbc]
@@ -423,18 +424,24 @@
    :select-fields [[:p/*]
                    [:pt/label :payer_type_label]
                    [:pt/is_system :payer_type_is_system]
-                   ;; Correlated subquery: email of the user whose system payer this is.
-                   ;; Uses a subquery (not JOIN) to avoid row duplication when multiple
-                   ;; user_expense_settings rows reference the same payer.
-                   [{:select [:u/email]
+                   ;; Correlated subquery: stable user linkage for the system payer.
+                   ;; We surface refs/names downstream, never raw email, so admin
+                   ;; tables can still follow structure without exposing identity.
+                   [{:select [:u/id]
                      :from [[:users :u]]
                      :join [[:user_expense_settings :ues] [:= :ues/user_id :u/id]]
                      :where [:= :ues/default_payer_id :p/id]
                      :limit 1}
-                    :user_email]]
+                    :user_id]
+                   [{:select [:u/full_name]
+                     :from [[:users :u]]
+                     :join [[:user_expense_settings :ues] [:= :ues/user_id :u/id]]
+                     :where [:= :ues/default_payer_id :p/id]
+                     :limit 1}
+                    :user_full_name]]
    :before-insert (fn [data]
                     (when-not (get data :payer_type_id)
-                      (throw (ex-info "payer_type_id is required" {:data data})))
+                      (throw (ex-info "payer_type_id is required" {:status 400 :field :payer_type_id})))
                     (-> data
                       (assoc :id (UUID/randomUUID))
                       (update :is_default #(boolean %))

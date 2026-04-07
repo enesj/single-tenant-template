@@ -3,6 +3,7 @@
   (:require
     [app.shared.adapters.database :as shared-db]
     [app.shared.type-conversion :as tc]
+    [app.template.backend.security.email :as email-privacy]
     [buddy.hashers :as hashers]
     [honey.sql :as hsql]
     [java-time.api :as time]
@@ -45,12 +46,13 @@
 ;; ============================================================================
 
 (defn find-admin-by-email
-  "Find an admin by email address"
+  "Find an admin by email address using the blind lookup hash."
   [db email]
   (jdbc/execute-one! db
     (hsql/format {:select [:*]
                   :from [:admins]
-                  :where [:= :email email]})
+                  :where (email-privacy/email-match-clause :email_lookup_hash :email email)
+                  :limit 1})
     {:builder-fn rs/as-unqualified-lower-maps}))
 
 (defn find-admin-by-id
@@ -63,19 +65,20 @@
     {:builder-fn rs/as-unqualified-lower-maps}))
 
 (defn create-admin!
-  "Creates a new admin user with hashed password"
+  "Creates a new admin user with hashed password and encrypted email storage."
   [db {:keys [email password full_name role] :as _admin-data}]
   (let [admin-id (UUID/randomUUID)
         now (time/instant)]
     (jdbc/execute! db (hsql/format
                         {:insert-into :admins
-                         :values [{:id admin-id
-                                   :email email
-                                   :password_hash (hash-password password)
-                                   :full_name full_name
-                                   :role (tc/cast-for-database :admin-role (or role "admin"))
-                                   :status (tc/cast-for-database :admin-status "active")
-                                   :created_at now}]}))))
+                         :values [(email-privacy/merge-email-storage
+                                    {:id admin-id
+                                     :password_hash (hash-password password)
+                                     :full_name full_name
+                                     :role (tc/cast-for-database :admin-role (or role "admin"))
+                                     :status (tc/cast-for-database :admin-status "active")
+                                     :created_at now}
+                                    email)]}))))
 
 ;; ============================================================================
 ;; Authentication
@@ -84,17 +87,23 @@
 (defn authenticate-admin
   "Authenticate an admin with email and password."
   [db email password]
-  (some-> (find-admin-by-email db email)
-    (as-> admin
-      (when (= (str (:status admin)) "active")
-        (let [password-hash (:password_hash admin)]
-          (if (verify-bcrypt-password password password-hash)
-            (do
-              (log/info "Admin authentication successful" {:email email})
-              (dissoc admin :password_hash))
-            (do
-              (log/warn "Admin authentication failed - invalid password" {:email email})
-              nil)))))))
+  (let [normalized-email (email-privacy/normalize-email email)]
+    (some-> (find-admin-by-email db normalized-email)
+      (as-> admin
+        (when (= (str (:status admin)) "active")
+          (let [password-hash (:password_hash admin)]
+            (if (verify-bcrypt-password password password-hash)
+              (do
+                (log/info "Admin authentication successful"
+                  {:email-masked (email-privacy/mask-email normalized-email)
+                   :admin-ref (email-privacy/admin-ref (:id admin))})
+                (-> admin
+                  (dissoc :password_hash :email_ciphertext :email_lookup_hash :email_key_version)
+                  (assoc :email (email-privacy/resolve-email admin))))
+              (do
+                (log/warn "Admin authentication failed - invalid password"
+                  {:email-masked (email-privacy/mask-email normalized-email)})
+                nil))))))))
 
 ;; ============================================================================
 ;; Session Management (DB-backed)
@@ -136,7 +145,9 @@
                                      [:> :s.expires_at now]]})
               {:builder-fn rs/as-unqualified-lower-maps})]
     (when row
-      {:admin (dissoc row :impersonation_context :password_hash)
+      {:admin (-> row
+                (dissoc :impersonation_context :password_hash :email_ciphertext :email_lookup_hash :email_key_version)
+                (assoc :email (email-privacy/resolve-email row)))
        :impersonation-context (some-> (:impersonation_context row)
                                 shared-db/convert-pg-objects)})))
 

@@ -1,6 +1,7 @@
 (ns app.template.backend.routes.admin.auth
   "Admin authentication handlers"
   (:require
+    [app.template.backend.security.email :as email-privacy]
     [app.template.backend.routes.admin.utils :as utils]
     [app.admin.backend.services.admin.auth :as admin-auth]
     [app.template.backend.services.monitoring.login-events :as login-monitoring]
@@ -39,7 +40,8 @@
 
               ;; Log to audit trail for admin actions
               (utils/log-admin-action "login" admin-id "admin" admin-id
-                {:email admin-email :role admin-role})
+                (merge {:role admin-role}
+                  (email-privacy/redact-email-change admin-email)))
 
               (-> (utils/json-response
                     {:success true

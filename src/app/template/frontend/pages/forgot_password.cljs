@@ -37,13 +37,12 @@
           (fn [e]
             (.preventDefault e)
             (let [current-email (when @email-ref (.-value @email-ref))
-                  _ (log/info "Form submit - email from ref:" current-email)
                   validation-errors (validate-form current-email)]
               (log/info "Form submit - validation-errors:" validation-errors)
               (if (empty? validation-errors)
                 (do
                   (set-form-errors! {})
-                  (log/info "Dispatching request-password-reset with email:" current-email)
+                  (log/info "Dispatching request-password-reset")
                   (rf/dispatch [::auth-events/request-password-reset current-email]))
                 (set-form-errors! validation-errors))))
           [validate-form])]

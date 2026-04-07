@@ -2,6 +2,7 @@
   "Postmark email service implementation for real email sending"
   (:require
     [app.template.backend.auth.email-verification :as email-verification]
+    [app.template.backend.security.email :as email-privacy]
     [cheshire.core :as json]
     [clj-http.client :as http]
     [clojure.string :as str]
@@ -112,7 +113,8 @@
   email-verification/EmailService
 
   (send-verification-email [_service user token]
-    (log/info "Sending verification email to" (:email user) "via Postmark")
+    (log/info "Sending verification email via Postmark"
+      {:email-masked (email-privacy/mask-email (:email user))})
     (let [{:keys [text html]} (create-verification-email-body user token base-url)
           tenant-name "Your Organization"
           subject (str "Verify your email address for " tenant-name)]
@@ -120,7 +122,8 @@
       (send-postmark-email api-key from-email (:email user) subject text html {:db db})))
 
   (send-verification-success-email [_service user]
-    (log/info "Sending verification success email to" (:email user) "via Postmark")
+    (log/info "Sending verification success email via Postmark"
+      {:email-masked (email-privacy/mask-email (:email user))})
     (let [{:keys [text html]} (create-success-email-body user base-url)
           tenant-name "Your Organization"
           subject (str "Email verified successfully - " tenant-name)]

@@ -6,6 +6,7 @@
   (:require
     [app.domain.backend.expenses.services.payer-types :as payer-types]
     [app.domain.backend.expenses.services.payers :as payers]
+    [app.template.backend.security.email :as email-privacy]
     [app.template.backend.services.tenant :as tenant-svc]
     [clojure.string :as str]
     [next.jdbc :as jdbc]
@@ -43,13 +44,27 @@
   ([db] (ensure-test-user! db {}))
   ([db {:keys [email name] :or {email "test@example.com" name "Test User"}}]
    (let [id (UUID/randomUUID)]
-     (or (jdbc/execute-one! db
-           ["select * from users where email = ? limit 1" email]
-           {:builder-fn rs/as-unqualified-lower-maps})
-       (jdbc/execute-one! db
-         ["insert into users (id, email, full_name, password_hash) values (?, ?, ?, ?) returning *"
-          id email name "$2a$11$fakehashfortesting000000000000000000000000000000"]
-         {:builder-fn rs/as-unqualified-lower-maps})))))
+     (or (some-> (jdbc/execute-one! db
+                  ["select * from users where email_lookup_hash = ? limit 1"
+                   (email-privacy/email->lookup-hash email)]
+                  {:builder-fn rs/as-unqualified-lower-maps})
+           (as-> row
+             (cond-> row
+               (email-privacy/resolve-email row)
+               (assoc :email (email-privacy/resolve-email row)))))
+       (some-> (jdbc/execute-one! db
+                ["insert into users (id, email_ciphertext, email_lookup_hash, email_key_version, full_name, password_hash) values (?, ?, ?, ?, ?, ?) returning *"
+                 id
+                 (email-privacy/encrypt-email email)
+                 (email-privacy/email->lookup-hash email)
+                 (email-privacy/current-key-version)
+                 name
+                 "$2a$11$fakehashfortesting000000000000000000000000000000"]
+                {:builder-fn rs/as-unqualified-lower-maps})
+         (as-> row
+           (cond-> row
+             (email-privacy/resolve-email row)
+             (assoc :email (email-privacy/resolve-email row)))))))))
 
 (defn ensure-payer-type!
   "Ensure a payer type exists (by label) and return the row.

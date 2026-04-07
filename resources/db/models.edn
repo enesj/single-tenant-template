@@ -138,11 +138,9 @@
  :admins
  {:fields
   [[:id :uuid {:primary-key true}]
-   [:email
-    [:varchar 255]
-    {:null false,
-     :unique true,
-     :check [:raw "email ~* '^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$'"]}]
+   [:email_ciphertext :text {:null false}]
+   [:email_lookup_hash [:varchar 64] {:null false}]
+   [:email_key_version [:varchar 32] {:null false}]
    [:full_name [:varchar 255]]
    [:password_hash :text {:null false}]
    [:role [:enum :admin-role] {:null false, :default "admin"}]
@@ -154,7 +152,9 @@
   [[:admin-role :enum {:choices ["admin" "support" "owner"]}]
    [:admin-status :enum {:choices ["active" "suspended"]}]],
   :indexes
-  [[:idx_admins_email :btree {:fields [:email], :unique true}]
+  [[:idx_admins_email_lookup_hash
+    :btree
+    {:fields [:email_lookup_hash], :unique true}]
    [:idx_admins_status :btree {:fields [:status]}]
    [:uniq_admins_active_owner
     :btree
@@ -282,7 +282,9 @@
    [:tenant_id
     :uuid
     {:foreign-key :tenants/id, :null false, :on-delete :cascade}]
-   [:email :text {:null false}]
+   [:email_ciphertext :text {:null false}]
+   [:email_lookup_hash [:varchar 64] {:null false}]
+   [:email_key_version [:varchar 32] {:null false}]
    [:role [:enum :invitation-role] {:null false}]
    [:invited_by
     :uuid
@@ -304,7 +306,9 @@
     :btree
     {:fields [:token], :unique true}]
    [:idx_tenant_invitations_tenant :btree {:fields [:tenant_id]}]
-   [:idx_tenant_invitations_email :btree {:fields [:email]}]
+   [:idx_tenant_invitations_email_lookup_hash
+    :btree
+    {:fields [:email_lookup_hash]}]
    [:idx_tenant_invitations_status :btree {:fields [:status]}]]},
  :store_aliases
  {:fields
@@ -437,6 +441,33 @@
     {:fields [:tenant_id :is_default],
      :unique true,
      :where [:= :is_default true]}]]},
+ :payment_provider_account_links
+ {:fields
+  [[:id :uuid {:primary-key true}]
+   [:account_kind [:enum :payment-provider-account-kind] {:null false}]
+   [:account_id :uuid {:null false}]
+   [:provider [:varchar 64] {:null false}]
+   [:provider_customer_ref [:varchar 255] {:null false}]
+   [:status :text {:null false, :default "active"}]
+   [:created_at :timestamptz {:default [:now]}]
+   [:updated_at :timestamptz {:default [:now]}]],
+  :types
+  [[:payment-provider-account-kind
+    :enum
+    {:choices ["user" "tenant"]}]],
+  :indexes
+  [[:uniq_payment_provider_account_links_account_provider
+    :btree
+    {:fields [:account_kind :account_id :provider], :unique true}]
+   [:uniq_payment_provider_account_links_provider_customer_ref
+    :btree
+    {:fields [:provider :provider_customer_ref], :unique true}]
+   [:idx_payment_provider_account_links_account
+    :btree
+    {:fields [:account_kind :account_id]}]
+   [:idx_payment_provider_account_links_status
+    :btree
+    {:fields [:status]}]]},
  :admin_sessions
  {:fields
   [[:id :uuid {:primary-key true}]
@@ -531,7 +562,9 @@
  :admin_invitations
  {:fields
   [[:id :uuid {:primary-key true}]
-   [:email :text {:null false}]
+   [:email_ciphertext :text {:null false}]
+   [:email_lookup_hash [:varchar 64] {:null false}]
+   [:email_key_version [:varchar 32] {:null false}]
    [:role [:enum :admin-invitation-role] {:null false}]
    [:invited_by
     :uuid
@@ -552,7 +585,9 @@
   [[:idx_admin_invitations_token
     :btree
     {:fields [:token], :unique true}]
-   [:idx_admin_invitations_email :btree {:fields [:email]}]
+   [:idx_admin_invitations_email_lookup_hash
+    :btree
+    {:fields [:email_lookup_hash]}]
    [:idx_admin_invitations_status :btree {:fields [:status]}]]},
  :audit_logs
  {:fields
@@ -828,19 +863,9 @@
  :users
  {:fields
   [[:id :uuid {:primary-key true}]
-   [:email
-    [:varchar 255]
-    {:null false,
-     :unique true,
-     :check [:raw "email ~* '^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$'"],
-     :validation
-     {:type :email,
-      :constraints
-      {:pattern "^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$", :max-length 255},
-      :messages
-      {:invalid "Please enter a valid email address",
-       :required "Email is required"},
-      :ui {:input-type "email", :placeholder "Enter email"}}}]
+   [:email_ciphertext :text {:null false}]
+   [:email_lookup_hash [:varchar 64] {:null false}]
+   [:email_key_version [:varchar 32] {:null false}]
    [:full_name [:varchar 255]]
    [:password_hash :text {:null false}]
    [:status [:enum :user-status] {:null false, :default "active"}]
@@ -855,7 +880,9 @@
    [:audit-actor-type :enum {:choices ["user" "admin" "system"]}]
    [:login-principal-type :enum {:choices ["user" "admin"]}]],
   :indexes
-  [[:idx_users_email :btree {:fields [:email], :unique true}]
+  [[:idx_users_email_lookup_hash
+    :btree
+    {:fields [:email_lookup_hash], :unique true}]
    [:idx_users_status :btree {:fields [:status]}]
    [:idx_users_email_verified :btree {:fields [:email_verified]}]
    [:idx_users_created_at :btree {:fields [:created_at]}]]}}

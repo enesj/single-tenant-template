@@ -5,6 +5,7 @@
   cross-role step cascade, and progress summary computation."
   (:require
     [app.backend.fixtures :as fixtures]
+    [app.template.backend.security.email :as email-privacy]
     [app.template.backend.services.onboarding.config :as cfg]
     [app.template.backend.services.onboarding.core :as onboarding]
     [clojure.test :refer [deftest is testing use-fixtures]]
@@ -21,10 +22,16 @@
 
 (defn- create-test-user! [db email]
   (let [id (UUID/randomUUID)]
-    (jdbc/execute-one! db
-      ["INSERT INTO users (id, email, full_name, password_hash) VALUES (?, ?, ?, ?) RETURNING *"
-       id email "Test User" "$2a$11$fakehashfortesting000000000000000000000000000000"]
-      {:builder-fn rs/as-unqualified-lower-maps})))
+    (some-> (jdbc/execute-one! db
+              ["INSERT INTO users (id, email_ciphertext, email_lookup_hash, email_key_version, full_name, password_hash) VALUES (?, ?, ?, ?, ?, ?) RETURNING *"
+               id
+               (email-privacy/encrypt-email email)
+               (email-privacy/email->lookup-hash email)
+               (email-privacy/current-key-version)
+               "Test User"
+               "$2a$11$fakehashfortesting000000000000000000000000000000"]
+              {:builder-fn rs/as-unqualified-lower-maps})
+      (assoc :email email))))
 
 ;; ---------------------------------------------------------------------------
 ;; Config (pure)

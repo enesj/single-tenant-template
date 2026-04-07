@@ -1,6 +1,7 @@
 (ns app.template.backend.routes.admin.audit
   "Admin audit log handlers"
   (:require
+    [app.template.backend.security.email :as email-privacy]
     [app.template.backend.routes.admin.utils :as utils]
     [app.admin.backend.services.admin.audit :as audit-service]
     [app.shared.adapters.database :as shared-db]
@@ -37,11 +38,15 @@
   (utils/with-error-handling
     (fn [request]
       (let [admin (:admin request)
+            admin-id (:id admin)
             body (:body request)
             ids (or (:ids body) [])
             ;; Parse UUIDs
             parsed-ids (keep utils/parse-uuid-custom ids)]
-        (log/info "Admin" (:email admin) "attempting to bulk delete" (count parsed-ids) "audit logs")
+        (log/info "Admin attempting to bulk delete audit logs"
+          {:admin-id admin-id
+           :admin-ref (email-privacy/admin-ref admin-id)
+           :count (count parsed-ids)})
 
         (if (empty? parsed-ids)
           (utils/error-response "No valid IDs provided" :status 400)
@@ -53,8 +58,11 @@
                            ["DELETE FROM audit_logs WHERE id = ANY(?::uuid[])"
                             (into-array String (map str parsed-ids))]))
                 deleted-count (:next.jdbc/update-count result)]
-            (log/info "Successfully bulk deleted" deleted-count "audit logs by admin" (:email admin))
-            (utils/log-admin-action "bulk_delete_audit_logs" (:id admin)
+            (log/info "Successfully bulk deleted audit logs"
+              {:admin-id admin-id
+               :admin-ref (email-privacy/admin-ref admin-id)
+               :deleted-count deleted-count})
+            (utils/log-admin-action "bulk_delete_audit_logs" admin-id
               "audit_logs" nil {:count deleted-count :ids (map str parsed-ids)})
             (utils/success-response {:message (str deleted-count " audit logs deleted successfully")
                                      :deleted-count deleted-count})))))

@@ -6,7 +6,7 @@
    generic CRUD type-casting pipeline."
   (:require
     [app.shared.adapters.database :refer [convert-pg-objects]]
-    [app.template.backend.auth.service :as auth-service]
+    [app.template.backend.security.email :as email-privacy]
     [app.template.backend.services.onboarding.core :as onboarding]
     [clojure.string :as str]
     [honey.sql :as sql]
@@ -62,13 +62,13 @@
   "Derive a human-friendly workspace name from a user record."
   [user]
   (let [full-name (some-> (or (:full_name user) (:users/full_name user)) str/trim not-empty)
-        email     (or (:email user) (:users/email user))]
+        email     (or (:email user) (:users/email user) (email-privacy/resolve-email user))]
     (if full-name
       (str full-name "'s workspace")
       (str (first (str/split email #"@")) "'s workspace"))))
 
 (defn- user-email [user]
-  (or (:email user) (:users/email user)))
+  (or (:email user) (:users/email user) (email-privacy/resolve-email user)))
 
 (defn- user-full-name [user]
   (or (:full_name user) (:users/full_name user)))
@@ -91,24 +91,24 @@
   "Create a new tenant + owner membership + seed lookup tables, all inside a
    single transaction. Returns {:tenant <row> :membership <row>}."
   [db config user]
-  (let [db         (->jdbc-conn db)
-        base-slug  (generate-slug (user-email user))
-        slug       (ensure-unique-slug db base-slug)
-        name       (generate-tenant-name user)
-        tenant-id  (java.util.UUID/randomUUID)
-        member-id  (java.util.UUID/randomUUID)
-        now        (java.time.LocalDateTime/now)
-        defaults   (:tenant-defaults config)
-        locale     (or (:default-locale config) :bs)]
+  (let [db (->jdbc-conn db)
+        base-slug (generate-slug (user-email user))
+        slug (ensure-unique-slug db base-slug)
+        name (generate-tenant-name user)
+        tenant-id (java.util.UUID/randomUUID)
+        member-id (java.util.UUID/randomUUID)
+        now (java.time.LocalDateTime/now)
+        defaults (:tenant-defaults config)
+        locale (or (:default-locale config) :bs)]
     (jdbc/with-transaction [tx db]
       ;; 1) Create tenant
       (let [tenant (convert-pg-objects
                      (jdbc/execute-one! tx
                        (sql/format {:insert-into [:tenants]
-                                    :values [{:id         tenant-id
-                                              :name       name
-                                              :slug       slug
-                                              :status     [:cast "active" :tenant_status]
+                                    :values [{:id tenant-id
+                                              :name name
+                                              :slug slug
+                                              :status [:cast "active" :tenant_status]
                                               :created_at now
                                               :updated_at now}]
                                     :returning [:*]})))
@@ -116,98 +116,97 @@
             membership (convert-pg-objects
                          (jdbc/execute-one! tx
                            (sql/format {:insert-into [:tenant_memberships]
-                                        :values [{:id         member-id
-                                                  :tenant_id  tenant-id
-                                                  :user_id    (user-id user)
-                                                  :role       [:cast "owner" :membership_role]
-                                                  :status     [:cast "active" :membership_status]
+                                        :values [{:id member-id
+                                                  :tenant_id tenant-id
+                                                  :user_id (user-id user)
+                                                  :role [:cast "owner" :membership_role]
+                                                  :status [:cast "active" :membership_status]
                                                   :created_at now
                                                   :updated_at now}]
-                                        :returning [:*]})))]
+                                        :returning [:*]})))
+            system-pt-id (java.util.UUID/randomUUID)
+            owner-label (or (some-> (user-full-name user) str/trim not-empty)
+                          (first (str/split (user-email user) #"@")))
+            owner-payer-id (java.util.UUID/randomUUID)]
 
         ;; 3a) Create system "user" payer type (auto-provisioned, not admin-managed)
-        (let [system-pt-id (java.util.UUID/randomUUID)
-              _ (jdbc/execute-one! tx
-                  (sql/format {:insert-into [:payer_types]
-                               :values [{:id         system-pt-id
-                                         :tenant_id  tenant-id
-                                         :label      "user"
-                                         :is_default false
-                                         :is_system  true
-                                         :created_at now
-                                         :updated_at now}]}))
+        (jdbc/execute-one! tx
+          (sql/format {:insert-into [:payer_types]
+                       :values [{:id system-pt-id
+                                 :tenant_id tenant-id
+                                 :label "user"
+                                 :is_default false
+                                 :is_system true
+                                 :created_at now
+                                 :updated_at now}]}))
 
-              ;; 3b) Seed config payer_types (admin-managed types)
-              pt-rows (mapv
-                        (fn [pt]
-                          (jdbc/execute-one! tx
-                            (sql/format {:insert-into [:payer_types]
-                                         :values [{:id         (java.util.UUID/randomUUID)
-                                                   :tenant_id  tenant-id
-                                                   :label      (resolve-label (:label pt) locale)
-                                                   :is_default (boolean (:is-default pt))
-                                                   :is_system  false
-                                                   :created_at now
-                                                   :updated_at now}]
-                                         :returning [:id :is_default]})
-                            {:builder-fn rs/as-unqualified-lower-maps}))
-                        (:payer-types defaults))
-              default-pt-id (->> pt-rows (filter :is_default) first :id)]
-
-          ;; 4) Create owner payer (linked to system "user" payer type)
-          (let [owner-label (or (some-> (user-full-name user) str/trim not-empty)
-                              (first (str/split (user-email user) #"@")))
-                owner-payer-id (java.util.UUID/randomUUID)]
-            (jdbc/execute-one! tx
-              (sql/format {:insert-into [:payers]
-                           :values [{:id            owner-payer-id
-                                     :tenant_id     tenant-id
-                                     :payer_type_id system-pt-id
-                                     :label         owner-label
-                                     :is_default    true
-                                     :is_active     true
-                                     :created_at    now
-                                     :updated_at    now}]}))
-
-            ;; 4b) Create user_expense_settings for the owner
-            (jdbc/execute-one! tx
-              (sql/format {:insert-into [:user_expense_settings]
-                           :values [{:id               (java.util.UUID/randomUUID)
-                                     :tenant_id        tenant-id
-                                     :user_id          (user-id user)
-                                     :default_payer_id owner-payer-id
-                                     :created_at       now
-                                     :updated_at       now}]})))
-
-          ;; 4c) Provision tenant_settings for the new tenant (Phase 2 — settings hierarchy)
+        ;; 3b) Seed config payer types (admin-managed)
+        (doseq [pt (:payer-types defaults)]
           (jdbc/execute-one! tx
-            (sql/format {:insert-into [:tenant_settings]
-                         :values [{:id                  (java.util.UUID/randomUUID)
-                                   :tenant_id           tenant-id
-                                   :email_notifications true
-                                   :created_at          now
-                                   :updated_at          now}]
-                         :on-conflict [:tenant_id]
-                         :do-nothing true}))
+            (sql/format {:insert-into [:payer_types]
+                         :values [{:id (java.util.UUID/randomUUID)
+                                   :tenant_id tenant-id
+                                   :label (resolve-label (:label pt) locale)
+                                   :is_default (boolean (:is-default pt))
+                                   :is_system false
+                                   :created_at now
+                                   :updated_at now}]})))
 
-          ;; 5) Initialise onboarding for owner role
-          (onboarding/initialise-onboarding! tx (user-id user) "owner")
+        ;; 4) Create owner payer (linked to system "user" payer type)
+        (jdbc/execute-one! tx
+          (sql/format {:insert-into [:payers]
+                       :values [{:id owner-payer-id
+                                 :tenant_id tenant-id
+                                 :payer_type_id system-pt-id
+                                 :label owner-label
+                                 :is_default true
+                                 :is_active true
+                                 :created_at now
+                                 :updated_at now}]}))
 
-          ;; 6) Seed expense_categories
-          (doseq [cat (:expense-categories defaults)]
-            (jdbc/execute-one! tx
-              (sql/format {:insert-into [:expense_categories]
-                           :values [{:id         (java.util.UUID/randomUUID)
-                                     :tenant_id  tenant-id
-                                     :name       (resolve-label (:name cat) locale)
-                                     :created_at now
-                                     :updated_at now}]})))
+        ;; 4b) Create user_expense_settings for the owner
+        (jdbc/execute-one! tx
+          (sql/format {:insert-into [:user_expense_settings]
+                       :values [{:id (java.util.UUID/randomUUID)
+                                 :tenant_id tenant-id
+                                 :user_id (user-id user)
+                                 :default_payer_id owner-payer-id
+                                 :created_at now
+                                 :updated_at now}]}))
 
-          (log/info "Provisioned tenant" slug "for user" (user-email user)
-            "with" (count (:payer-types defaults)) "payer types,"
-            (count (:expense-categories defaults)) "expense categories, and owner payer")
+        ;; 4c) Provision tenant_settings for the new tenant (Phase 2 — settings hierarchy)
+        (jdbc/execute-one! tx
+          (sql/format {:insert-into [:tenant_settings]
+                       :values [{:id (java.util.UUID/randomUUID)
+                                 :tenant_id tenant-id
+                                 :email_notifications true
+                                 :created_at now
+                                 :updated_at now}]
+                       :on-conflict [:tenant_id]
+                       :do-nothing true}))
 
-          {:tenant tenant :membership membership})))))
+        ;; 5) Initialise onboarding for owner role
+        (onboarding/initialise-onboarding! tx (user-id user) "owner")
+
+        ;; 6) Seed expense_categories
+        (doseq [cat (:expense-categories defaults)]
+          (jdbc/execute-one! tx
+            (sql/format {:insert-into [:expense_categories]
+                         :values [{:id (java.util.UUID/randomUUID)
+                                   :tenant_id tenant-id
+                                   :name (resolve-label (:name cat) locale)
+                                   :created_at now
+                                   :updated_at now}]})))
+
+        (log/info "Provisioned tenant"
+          {:tenant-slug slug
+           :user-id (user-id user)
+           :user-ref (email-privacy/user-ref (user-id user))
+           :email-masked (email-privacy/mask-email (user-email user))
+           :payer-type-count (count (:payer-types defaults))
+           :expense-category-count (count (:expense-categories defaults))})
+
+        {:tenant tenant :membership membership}))))
 
 ;; ============================================================================
 ;; User Payer Provisioning
@@ -264,7 +263,13 @@
                      :on-conflict [:tenant_id :user_id]
                      :do-update-set {:default_payer_id payer-id
                                      :updated_at       now}}))
-      (log/info "Provisioned user payer" label "for user" user-email "in tenant" t-id)
+      (log/info "Provisioned user payer"
+        {:label label
+         :tenant-id t-id
+         :tenant-ref (email-privacy/tenant-ref t-id)
+         :user-id u-id
+         :user-ref (email-privacy/user-ref u-id)
+         :email-masked (email-privacy/mask-email user-email)})
       payer)))
 
 ;; ============================================================================
@@ -315,20 +320,20 @@
   "Return all active memberships for a user, joined with tenant info."
   [db user-id]
   (let [db      (->jdbc-conn db)
-        uuid-id (if (string? user-id) [:cast user-id :uuid] user-id)]
-    (let [opts {:builder-fn rs/as-unqualified-maps}]
-      (mapv convert-pg-objects
-        (jdbc/execute! db
-          (sql/format {:select [:tm.*
-                                [:t.name :tenant_name]
-                                [:t.slug :tenant_slug]]
-                       :from   [[:tenant_memberships :tm]]
-                       :join   [[:tenants :t] [:= :tm.tenant_id :t.id]]
-                       :where  [:and
-                                [:= :tm.user_id uuid-id]
-                                [:= :tm.status [:cast "active" :membership_status]]
-                                [:= :t.status [:cast "active" :tenant_status]]]})
-          opts)))))
+        uuid-id (if (string? user-id) [:cast user-id :uuid] user-id)
+        opts {:builder-fn rs/as-unqualified-maps}]
+    (mapv convert-pg-objects
+      (jdbc/execute! db
+        (sql/format {:select [:tm.*
+                              [:t.name :tenant_name]
+                              [:t.slug :tenant_slug]]
+                     :from   [[:tenant_memberships :tm]]
+                     :join   [[:tenants :t] [:= :tm.tenant_id :t.id]]
+                     :where  [:and
+                              [:= :tm.user_id uuid-id]
+                              [:= :tm.status [:cast "active" :membership_status]]
+                              [:= :t.status [:cast "active" :tenant_status]]]})
+        opts))))
 
 (defn get-tenant-members
   "Return members of a tenant, joined with user info.
@@ -347,15 +352,19 @@
                         (not include-suspended?)
                         (conj [:= :tm.status [:cast "active" :membership_status]]))
          query {:select [:tm.*
-                         [:u.email :user_email]
+                         [:u.email_ciphertext :user_email_ciphertext]
                          [:u.full_name :user_full_name]
                          [:u.status :user_status]]
                 :from [[:tenant_memberships :tm]]
                 :join [[:users :u] [:= :tm.user_id :u.id]]
                 :where where-clause
                 :order-by [[:tm.created_at :asc]]}]
-     (mapv convert-pg-objects
-       (jdbc/execute! db (sql/format query) opts)))))
+     (->> (jdbc/execute! db (sql/format query) opts)
+       (mapv convert-pg-objects)
+       (mapv (fn [row]
+               (let [email (email-privacy/resolve-email row)]
+                 (cond-> row
+                   email (assoc :user_email email)))))))))
 
 (defn get-membership
   "Return the single active membership for a user in a tenant, or nil."

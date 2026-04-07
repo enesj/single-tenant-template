@@ -57,6 +57,7 @@ Common tasks:
 
 **Operations**
 - `./operations/README.md` — commands, env, deployment notes
+- `./operations/email-privacy-key-management.md` — email privacy key storage, operational guardrails, and future key-rotation migration procedure
 - `./migrations/migration-overview.md` — models/migrations workflow
 
 **Domains**

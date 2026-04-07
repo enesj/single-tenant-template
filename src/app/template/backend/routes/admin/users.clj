@@ -1,10 +1,13 @@
 (ns app.template.backend.routes.admin.users
   "Admin basic user management handlers"
   (:require
+    [app.template.backend.middleware.admin :as admin-mw]
     [app.template.backend.routes.admin.utils :as utils]
+    [app.admin.backend.services.admin.identity-reveal :as identity-reveal]
     [app.admin.backend.services.admin.users :as admin-users]
     [app.admin.backend.services.admin.users.deletion :as user-deletion]
     [app.shared.adapters.database :as shared-db]
+    [app.template.backend.security.email :as email-privacy]
     [app.template.backend.services.tenant :as tenant-svc]
     [taoensso.timbre :as log]))
 
@@ -20,7 +23,6 @@
                           [:created-at :updated-at :last-login-at])
             filters (merge {:search (:search params)
                             :status (:status params)
-                            :email (:email params)
                             :full-name (:full-name params)
                             :email-verified (utils/parse-boolean-param params :email-verified)}
                       date-ranges)
@@ -44,11 +46,13 @@
         (fn [user-id _request]
           (if-let [user (admin-users/get-user-details db user-id)]
             (let [converted-user (shared-db/to-app user)
-                  memberships    (try
-                                   (tenant-svc/get-user-memberships db user-id)
-                                   (catch Exception e
-                                     (log/warn "Failed to fetch memberships for user" user-id (.getMessage e))
-                                     []))]
+                  memberships (try
+                                (->> (tenant-svc/get-user-memberships db user-id)
+                                  (mapv email-privacy/routine-membership-view)
+                                  shared-db/to-app)
+                                (catch Exception e
+                                  (log/warn "Failed to fetch memberships for user" user-id (.getMessage e))
+                                  []))]
               (utils/json-response {:user converted-user
                                     :memberships memberships}))
             (utils/error-response "User not found" :status 404)))))
@@ -64,10 +68,12 @@
           (let [updated-user (admin-users/update-user! db user-id updates
                                (-> context :admin :id)
                                (:ip-address context)
-                               (:user-agent context))]
+                               (:user-agent context))
+                audit-updates (cond-> (dissoc updates :email)
+                                (:email updates) (merge (email-privacy/redact-email-change (:email updates))))]
 
             (utils/log-admin-action "update_user" (-> context :admin :id)
-              "user" user-id updates)
+              "user" user-id audit-updates)
 
             ;; Return the updated user data for frontend processing
             (let [converted-user (shared-db/to-app updated-user)]
@@ -80,9 +86,13 @@
   (utils/with-validation-error-handling
     (fn [request]
       (let [{:keys [ip-address user-agent admin]} (utils/extract-request-context request)
-            user-data (:body request)]
+            user-data (:body request)
+            audit-user-data (cond-> (dissoc user-data :email)
+                              (:email user-data) (merge (email-privacy/redact-email-change (:email user-data))))]
 
-        (log/info "Admin create user request:" user-data)
+        (log/info "Admin create user request"
+          {:email-masked (email-privacy/mask-email (:email user-data))
+           :status (:status user-data)})
 
         (let [created-user (admin-users/create-user! db user-data
                              (:id admin)
@@ -90,7 +100,7 @@
                              user-agent)]
 
           (utils/log-admin-action "create_user" (:id admin) "user"
-            (:id created-user) user-data)
+            (:id created-user) audit-user-data)
 
           (let [converted-user (shared-db/to-app created-user)]
             (utils/json-response {:user converted-user})))))
@@ -204,6 +214,23 @@
                         :errors (vec @errors)}}))))))
     "Failed to batch delete users"))
 
+(defn reveal-user-email-handler
+  "Reveal a user's email for exceptional support workflows.
+
+   Requires a support reason and always emits an audit entry."
+  [db]
+  (utils/with-validation-error-handling
+    (fn [request]
+      (utils/handle-uuid-body-request request :id
+        (fn [user-id body context _request]
+          (let [result (identity-reveal/reveal-email! db :user user-id
+                         {:admin-id (-> context :admin :id)
+                          :reason (:reason body)
+                          :ip-address (:ip-address context)
+                          :user-agent (:user-agent context)})]
+            (utils/json-response result)))))
+    "Failed to reveal user email"))
+
 ;; Route definitions
 (defn routes
   "Basic user management route definitions"
@@ -214,4 +241,7 @@
    ["/batch" {:delete (batch-delete-users-handler db)}]
    ["/:id"
     {:get (get-user-details-handler db)
-     :put (update-user-handler db)}]])
+     :put (update-user-handler db)}]
+   ["/:id/reveal-email"
+    {:post {:middleware [#(admin-mw/wrap-admin-role % :support)]
+            :handler (reveal-user-email-handler db)}}]])

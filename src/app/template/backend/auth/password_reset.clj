@@ -1,12 +1,13 @@
 (ns app.template.backend.auth.password-reset
   "Password reset service for users and admins.
-   
+
    This namespace handles:
    - Password reset token generation and verification
    - Forgot password flow (request → email → reset)
    - Change password flow (authenticated users/admins)"
   (:require
     [app.template.backend.db.protocols :as db-protocols]
+    [app.template.backend.security.email :as email-privacy]
     [buddy.hashers :as hashers]
     [java-time.api :as time]
     [taoensso.timbre :as log])
@@ -185,19 +186,31 @@
 ;; Principal Lookup
 ;; ============================================================================
 
+(defn- normalize-principal-record
+  [row]
+  (when row
+    (cond-> (dissoc row :email_ciphertext :email_lookup_hash :email_key_version)
+      (email-privacy/resolve-email row) (assoc :email (email-privacy/resolve-email row)))))
+
 (defn find-principal-by-email
   "Find a user or admin by email"
   [db principal-type email]
   (let [table (if (= principal-type :admin) "admins" "users")
-        query (str "SELECT id, email, full_name, password_hash FROM " table " WHERE email = ?")]
-    (first (db-protocols/execute! db query [email]))))
+        normalized-email (email-privacy/normalize-email email)
+        lookup-hash (email-privacy/email->lookup-hash normalized-email)
+        query (str "SELECT id, email_ciphertext, email_lookup_hash, email_key_version, full_name, password_hash "
+                "FROM " table " WHERE email_lookup_hash = ? LIMIT 1")]
+    (some-> (first (db-protocols/execute! db query [lookup-hash]))
+      normalize-principal-record)))
 
 (defn find-principal-by-id
   "Find a user or admin by ID"
   [db principal-type principal-id]
   (let [table (if (= principal-type :admin) "admins" "users")
-        query (str "SELECT id, email, full_name, password_hash FROM " table " WHERE id = ?")]
-    (first (db-protocols/execute! db query [principal-id]))))
+  query (str "SELECT id, email_ciphertext, email_lookup_hash, email_key_version, full_name, password_hash "
+                "FROM " table " WHERE id = ? LIMIT 1")]
+    (some-> (first (db-protocols/execute! db query [principal-id]))
+      normalize-principal-record)))
 
 ;; ============================================================================
 ;; Password Reset Operations
@@ -205,17 +218,19 @@
 
 (defn request-password-reset!
   "Request a password reset for a user or admin.
-   
+
    Args:
      db - database connection
      email - email address
      principal-type - :user or :admin
      send-email-fn - function to send reset email (fn [to-email token reset-url full-name])
      base-url - base URL for reset links
-   
+
    Returns: {:success boolean :message string}"
   [db email principal-type send-email-fn base-url]
-  (let [principal (find-principal-by-email db principal-type email)
+  (let [normalized-email (email-privacy/normalize-email email)
+        masked-email (email-privacy/mask-email normalized-email)
+        principal (find-principal-by-email db principal-type normalized-email)
         principal-id (:id principal)
         principal-email (:email principal)
         full-name (:full_name principal)]
@@ -232,16 +247,19 @@
         (when send-email-fn
           (try
             (send-email-fn principal-email token reset-url full-name)
-            (log/info "Password reset email sent" {:email email :type principal-type})
+            (log/info "Password reset email sent"
+              {:email-masked masked-email :type principal-type})
             (catch Exception e
-              (log/error e "Failed to send reset email" {:email email}))))
+              (log/error e "Failed to send reset email"
+                {:email-masked masked-email :type principal-type}))))
 
         {:success true
          :message "If an account exists with this email, you will receive password reset instructions."})
 
       ;; No account found - return same message to prevent enumeration
       (do
-        (log/warn "Password reset requested for unknown email" {:email email :type principal-type})
+        (log/warn "Password reset requested for unknown email"
+          {:email-masked masked-email :type principal-type})
         {:success true
          :message "If an account exists with this email, you will receive password reset instructions."}))))
 

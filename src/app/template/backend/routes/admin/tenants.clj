@@ -16,6 +16,7 @@
     [app.shared.adapters.database :refer [convert-pg-objects]]
     [app.template.backend.middleware.admin :as admin-mw]
     [app.template.backend.routes.admin.utils :as utils]
+    [app.template.backend.security.email :as email-privacy]
     [app.template.backend.services.member :as member-svc]
     [clojure.string :as str]
     [honey.sql :as sql]
@@ -37,7 +38,6 @@
    :slug :t/slug
    :status :t/status
    :member-count :member_count
-   :owner-email :owner_u/email
    :owner-name :owner_u/full_name})
 
 (defn- normalize-order-dir [order-dir]
@@ -56,7 +56,8 @@
         order-direction (normalize-order-dir order-dir)
         query (cond-> {:select [:t.*
                                 [[:raw "COALESCE(mc.member_count, 0)"] :member_count]
-                                [:owner_u.email :owner_email]
+                                [:owner_u.id :owner_user_id]
+                                [:owner_u.email_ciphertext :owner_email_ciphertext]
                                 [:owner_u.full_name :owner_name]]
                        :from   [[:tenants :t]]
                        :left-join [[{:select   [:tenant_id [[:count :*] :member_count]]
@@ -77,9 +78,10 @@
                 where-clause (assoc :where where-clause)
                 limit (assoc :limit limit)
                 offset (assoc :offset offset))]
-    (mapv convert-pg-objects
-      (jdbc/execute! db (sql/format query)
-        {:builder-fn rs/as-unqualified-lower-maps}))))
+    (->> (jdbc/execute! db (sql/format query)
+           {:builder-fn rs/as-unqualified-lower-maps})
+      (mapv convert-pg-objects)
+      (mapv email-privacy/routine-tenant-view))))
 
 (defn- count-tenants
   "Count tenants matching filters."
@@ -101,7 +103,8 @@
   [db tenant-id]
   (let [query {:select [:t.*
                         [[:raw "COALESCE(mc.member_count, 0)"] :member_count]
-                        [:owner_u.email :owner_email]
+                        [:owner_u.id :owner_user_id]
+                        [:owner_u.email_ciphertext :owner_email_ciphertext]
                         [:owner_u.full_name :owner_name]]
                :from   [[:tenants :t]]
                :left-join [[{:select   [:tenant_id [[:count :*] :member_count]]
@@ -123,21 +126,23 @@
                :where [:= :t.id (uuid-cast tenant-id)]}]
     (some-> (jdbc/execute-one! db (sql/format query)
               {:builder-fn rs/as-unqualified-lower-maps})
-      convert-pg-objects)))
+      convert-pg-objects
+      email-privacy/routine-tenant-view)))
 
 (defn- list-tenant-members
   "List all members of a tenant with user info."
   [db tenant-id]
-  (mapv convert-pg-objects
-    (jdbc/execute! db
-      (sql/format {:select [:tm.* [:u.email :user_email] [:u.full_name :user_full_name]]
-                   :from   [[:tenant_memberships :tm]]
-                   :join   [[:users :u] [:= :tm.user_id :u.id]]
-                   :where  [:and
-                            [:= :tm.tenant_id (uuid-cast tenant-id)]
-                            [:= :tm.status [:cast "active" :membership_status]]]
-                   :order-by [[:tm.created_at :asc]]})
-      {:builder-fn rs/as-unqualified-lower-maps})))
+  (->> (jdbc/execute! db
+      (sql/format {:select [:tm.* [:u.email_ciphertext :user_email_ciphertext] [:u.full_name :user_full_name]]
+                      :from   [[:tenant_memberships :tm]]
+                      :join   [[:users :u] [:= :tm.user_id :u.id]]
+                      :where  [:and
+                               [:= :tm.tenant_id (uuid-cast tenant-id)]
+                               [:= :tm.status [:cast "active" :membership_status]]]
+                      :order-by [[:tm.created_at :asc]]})
+         {:builder-fn rs/as-unqualified-lower-maps})
+    (mapv convert-pg-objects)
+    (mapv email-privacy/routine-membership-view)))
 
 (defn- get-membership-by-id
   "Get a single membership by ID."

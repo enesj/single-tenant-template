@@ -4,6 +4,7 @@
     [app.shared.adapters.database :as shared-db]
     [app.shared.query-builders :as shared-qb]
     [app.shared.type-conversion :as tc]
+    [app.template.backend.security.email :as email-privacy]
     [honey.sql :as hsql]
     [java-time.api :as time]
     [next.jdbc :as jdbc]
@@ -135,7 +136,7 @@
    :principal-type :login_events.principal_type
    :success :login_events.success
    :reason :login_events.reason
-   :principal-email [:raw "COALESCE(admins.email, users.email)"]
+   :principal-ref :login_events.principal_id
    :principal-name [:raw "COALESCE(admins.full_name, users.full_name)"]})
 
 (defn- build-login-events-conditions
@@ -160,9 +161,7 @@
                       :login_events.ip
                       :login_events.user_agent
                       :login_events.created_at
-                      [:admins.email :admin_email]
                       [:admins.full_name :admin_name]
-                      [:users.email :user_email]
                       [:users.full_name :user_name]]
              :from [[:login_events]]
              :left-join [[:admins :admins] [:= :admins.id :login_events.principal_id]
@@ -223,16 +222,16 @@
                                 (:login-events/success converted))
                   reason-val (or (:reason converted)
                                (:login-events/reason converted))
-                  admin-email (or (:admin-email converted)
-                                (:admins/admin-email converted))
                   admin-name (or (:admin-name converted)
                                (:admins/admin-name converted))
-                  user-email (or (:user-email converted)
-                               (:users/user-email converted))
                   user-name (or (:user-name converted)
                               (:users/user-name converted))
-                  principal-email (or admin-email user-email)
-                  principal-name (or admin-name user-name)]
+                  principal-type-key (some-> principal-type-val name keyword)
+                  principal-ref (case principal-type-key
+                                  :admin (email-privacy/admin-ref principal-id-val)
+                                  :user (email-privacy/user-ref principal-id-val)
+                                  nil)
+                  principal-name (or admin-name user-name principal-ref)]
               (-> converted
                 ;; Normalize core fields to flat, non-namespaced keys
                 (assoc :id id-val
@@ -242,9 +241,9 @@
                   :reason reason-val)
                 (cond-> created-at (assoc :created-at (->millis created-at))
                   ip (assoc :ip-address ip)
-                  ua (assoc :user-agent ua))
-                (assoc :principal-email principal-email
-                  :principal-name principal-name)
+                  ua (assoc :user-agent ua)
+                  principal-ref (assoc :principal-ref principal-ref))
+                (assoc :principal-name principal-name)
                 (dissoc :admin-email :admin-name :user-email :user-name
                   :admins/admin-email :admins/admin-name
                   :users/user-email :users/user-name

@@ -6,6 +6,7 @@
     [app.shared.data :as shared-data]
     [app.shared.adapters.database :as shared-db]
     [app.shared.adapters.normalization :as norm]
+    [app.template.backend.security.email :as email-privacy]
     [app.template.backend.utils.adapters.persistence :as persist]
     [app.shared.type-conversion :as tc]
     [clojure.string :as str]
@@ -32,7 +33,7 @@
       (jdbc/execute-one! tx ["SET LOCAL app.bypass_rls = true"])
       (let [current-users (when (seq user-ids)
                             (jdbc/execute! tx
-                              (hsql/format {:select [:id :email field-key]
+                              (hsql/format {:select [:id field-key]
                                             :from [:users]
                                             :where [:in :id user-ids]})))
             _result (when (seq user-ids)
@@ -77,7 +78,7 @@
 
 (defn- export-users-query
   [user-ids]
-  (cond-> {:select [:u.id :u.email :u.full_name :u.role :u.status
+  (cond-> {:select [:u.id :u.email_ciphertext :u.full_name :u.role :u.status
                     :u.email_verified :u.auth_provider :u.created_at :u.last_login_at
                     [:t.name :tenant_name] [:t.slug :tenant_slug]]
            :from [[:users :u]]
@@ -94,9 +95,14 @@
                   db
                   (export-users-query user-ids)
                   (fn [raw]
-                    (-> raw
-                      shared-db/convert-pg-objects
-                      (norm/normalize-admin-result export-user-config))))
+                    (let [normalized (-> raw
+                                       shared-db/convert-pg-objects
+                                       (norm/normalize-admin-result export-user-config))]
+                      (mapv (fn [user]
+                              (let [email (email-privacy/resolve-email user)]
+                                (cond-> (dissoc user :email-ciphertext :email-lookup-hash :email-key-version)
+                                  email (assoc :email email))))
+                        normalized))))
 
           ;; Convert to CSV format
           csv-headers "ID,Email,Full Name,Role,Status,Email Verified,Auth Provider,Created At,Last Login,Tenant Name,Tenant Slug"
@@ -138,10 +144,12 @@
   [user-row]
   (let [m (shared-db/convert-pg-objects user-row)
         ;; Drop any table namespaces (e.g. :users/id -> :id)
-        plain (into {} (map (fn [[k v]] [(keyword (name k)) v])) m)]
+        plain (into {} (map (fn [[k v]] [(keyword (name k)) v])) m)
+        resolved-email (email-privacy/resolve-email m)]
     (-> plain
       ;; Strip sensitive fields (support a few naming variants defensively)
-      (dissoc :password_hash :password-hash)
+      (dissoc :password_hash :password-hash :email_ciphertext :email_lookup_hash :email_key_version)
+      (cond-> resolved-email (assoc :email resolved-email))
       ;; Ensure cookie-safe serialization
       shared-data/sanitize-for-serialization)))
 

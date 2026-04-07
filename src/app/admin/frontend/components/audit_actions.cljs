@@ -21,7 +21,12 @@
 (defn create-audit-action-handlers
   "Factory function to create all action handlers for an audit log"
   [audit-log]
-  (let [{:keys [id admin-email action entity-type created-at]} audit-log]
+  (let [{:keys [id actor-id admin-ref admin-name action entity-type created-at]} audit-log
+        admin-summary (or (when (and admin-name admin-ref (not= admin-name admin-ref))
+                            (str admin-name " (" admin-ref ")"))
+                        admin-name
+                        admin-ref
+                        "System")]
     {:view-details (fn [e]
                      (.stopPropagation e)
                      (log/info "Viewing audit log details:" id)
@@ -29,8 +34,8 @@
 
      :filter-by-admin (fn [e]
                         (.stopPropagation e)
-                        (log/info "Filtering audit logs by admin:" admin-email)
-                        (rf/dispatch [:admin/apply-audit-filter :admin-email admin-email]))
+                        (log/info "Filtering audit logs by admin actor id:" actor-id)
+                        (rf/dispatch [:admin/apply-audit-filter :admin-id actor-id]))
 
      :filter-by-action (fn [e]
                          (.stopPropagation e)
@@ -52,7 +57,7 @@
                    (log/info "Delete audit log action triggered:" id)
                    (confirm-dialog/show-confirm
                      {:message (str "Are you sure you want to delete this audit log entry?\n\n"
-                                 "Admin: " admin-email "\n"
+                                 "Admin: " admin-summary "\n"
                                  "Action: " action "\n"
                                  "Date: " (when created-at (timestamp/format-timestamp-string created-at)) "\n\n"
                                  "This action cannot be undone and may affect compliance requirements.")
@@ -69,7 +74,13 @@
   "Enhanced admin audit actions using shared components"
   [{:keys [audit-log]}]
   (let [audit-id (:id audit-log)
-        admin-email (:admin-email audit-log)
+        actor-id (:actor-id audit-log)
+        admin-ref (:admin-ref audit-log)
+        admin-name (:admin-name audit-log)
+        admin-summary (or (when (and admin-name admin-ref (not= admin-name admin-ref))
+                            (str admin-name " (" admin-ref ")"))
+                        admin-name
+                        admin-ref)
         action (:action audit-log)
         entity-type (:entity-type audit-log)
 
@@ -93,14 +104,14 @@
                                         :on-click (:view-details action-handlers)}]})
 
                            ;; Filters group
-                        (conj (when (or admin-email action entity-type)
+                        (conj (when (or actor-id action entity-type)
                                 {:group-title "Filters"
                                  :items (cond-> []
-                                          admin-email
+                                          actor-id
                                           (conj {:id "filter-by-admin"
                                                  :icon ($ shared-actions/filter-icon)
                                                  :label "Filter by Admin"
-                                                 :description (str "Show logs from " admin-email)
+                                                 :description (str "Show logs from " (or admin-summary admin-ref "this admin"))
                                                  :on-click (:filter-by-admin action-handlers)})
 
                                           action

@@ -1,6 +1,7 @@
 (ns app.template.backend.routes.admin.login-events
   "Admin login events handlers"
   (:require
+    [app.template.backend.security.email :as email-privacy]
     [app.template.backend.routes.admin.utils :as utils]
     [app.template.backend.services.monitoring.login-events :as login-monitoring]
     [next.jdbc :as next-jdbc]
@@ -36,8 +37,12 @@
     (fn [request]
       (utils/handle-uuid-request request :id
         (fn [event-id request]
-          (let [admin (:admin request)]
-            (log/info "Admin" (:email admin) "attempting to delete login event" event-id)
+          (let [admin (:admin request)
+                admin-id (:id admin)]
+            (log/info "Admin attempting to delete login event"
+              {:admin-id admin-id
+               :admin-ref (email-privacy/admin-ref admin-id)
+               :event-id event-id})
 
             ;; Execute delete with admin context - set RLS bypass
             (let [result (next-jdbc/transact db
@@ -50,8 +55,11 @@
                            {})]
               (if (> (:next.jdbc/update-count result) 0)
                 (do
-                  (log/info "Successfully deleted login event" event-id "by admin" (:email admin))
-                  (utils/log-admin-action "delete_login_event" (:id admin)
+                  (log/info "Successfully deleted login event"
+                    {:admin-id admin-id
+                     :admin-ref (email-privacy/admin-ref admin-id)
+                     :event-id event-id})
+                  (utils/log-admin-action "delete_login_event" admin-id
                     "login_event" event-id {})
                   (utils/success-response {:message "Login event deleted successfully"}))
                 (utils/error-response "Login event not found" :status 404)))))))
@@ -63,11 +71,15 @@
   (utils/with-error-handling
     (fn [request]
       (let [admin (:admin request)
+            admin-id (:id admin)
             body (:body request)
             ids (or (:ids body) [])
             ;; Parse UUIDs
             parsed-ids (keep utils/parse-uuid-custom ids)]
-        (log/info "Admin" (:email admin) "attempting to bulk delete" (count parsed-ids) "login events")
+        (log/info "Admin attempting to bulk delete login events"
+          {:admin-id admin-id
+           :admin-ref (email-privacy/admin-ref admin-id)
+           :count (count parsed-ids)})
 
         (if (empty? parsed-ids)
           (utils/error-response "No valid IDs provided" :status 400)
@@ -81,8 +93,11 @@
                               (into-array String (map str parsed-ids))]))
                          {})
                 deleted-count (:next.jdbc/update-count result)]
-            (log/info "Successfully bulk deleted" deleted-count "login events by admin" (str (:email admin)))
-            (utils/log-admin-action "bulk_delete_login_events" (:id admin)
+              (log/info "Successfully bulk deleted login events"
+                {:admin-id admin-id
+                 :admin-ref (email-privacy/admin-ref admin-id)
+                 :deleted-count deleted-count})
+              (utils/log-admin-action "bulk_delete_login_events" admin-id
               "login_events" nil {:count deleted-count :ids (map str parsed-ids)})
             (utils/success-response {:message (str deleted-count " login events deleted successfully")
                                      :deleted-count deleted-count})))))

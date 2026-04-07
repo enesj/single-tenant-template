@@ -23,12 +23,12 @@
 
 (defn create-user-action-handlers
   "Factory function to create all action handlers for a user"
-  [user user-id user-email]
+  [user user-id user-label]
   (merge
-    (shared-actions/create-status-action-handlers user-id user-email "user" :admin/update-user-status)
+    (shared-actions/create-status-action-handlers user-id user-label "user" :admin/update-user-status)
     {:edit-user (fn [e]
                   (.stopPropagation e)
-                  (log/info "Editing user" user-id user-email)
+                  (log/info "Editing user" user-id user-label)
                   (rf/dispatch [::crud-events/clear-error :users])
                   (rf/dispatch [::form-events/clear-form-errors :users])
                   (if-let [on-edit-click (:on-edit-click user)]
@@ -37,60 +37,60 @@
 
      :view-details (fn [e]
                      (.stopPropagation e)
-                     (log/info "Viewing user details" user-id user-email)
+                     (log/info "Viewing user details" user-id user-label)
                      (rf/dispatch [:admin/view-user-details user-id]))
 
      :view-activity (fn [e]
                       (.stopPropagation e)
-                      (log/info "Viewing user activity" user-id user-email)
+                      (log/info "Viewing user activity" user-id user-label)
                       (rf/dispatch [:admin/view-user-activity user-id]))
 
      :impersonate (fn []
-                    (log/info "Impersonating user" user-id user-email)
+                    (log/info "Impersonating user" user-id user-label)
                     (rf/dispatch [:admin/impersonate-user user-id]))
 
      :reset-password (fn []
-                       (log/info "Resetting user password" user-id user-email)
+                       (log/info "Resetting user password" user-id user-label)
                        (rf/dispatch [:admin/reset-user-password user-id]))
 
      :verify-email (fn []
-                     (log/info "Force verifying email" user-id user-email)
+                     (log/info "Force verifying email" user-id user-label)
                      (rf/dispatch [:admin/force-verify-email user-id]))
 
      :delete-user (fn []
-                    (log/info "Deleting user" user-id user-email)
+                    (log/info "Deleting user" user-id user-label)
                     (rf/dispatch [:admin/delete-user user-id]))}))
 
 (defn create-user-confirmation-handlers
   "Factory function to create confirmation handlers that wrap action handlers"
-  [handlers user-email]
+  [handlers user-label]
   (merge
-    (shared-actions/create-confirmation-handlers handlers user-email "user")
+    (shared-actions/create-confirmation-handlers handlers user-label "user")
     {:impersonate (fn [e]
                     (.stopPropagation e)
                     (confirm-dialog/show-confirm
-                      {:message (str "Impersonate user " user-email "? This will log you in as this user.")
+                      {:message (str "Impersonate user " user-label "? This will log you in as this user.")
                        :title "Confirm User Impersonation"
                        :on-confirm (:impersonate handlers)}))
 
      :reset-password (fn [e]
                        (.stopPropagation e)
                        (confirm-dialog/show-confirm
-                         {:message (str "Reset password for " user-email "? They will receive a reset email.")
+                         {:message (str "Reset password for " user-label "? They will receive a reset email.")
                           :title "Confirm Password Reset"
                           :on-confirm (:reset-password handlers)}))
 
      :verify-email (fn [e]
                      (.stopPropagation e)
                      (confirm-dialog/show-confirm
-                       {:message (str "Force verify email for " user-email "?")
+                       {:message (str "Force verify email for " user-label "?")
                         :title "Confirm Email Verification"
                         :on-confirm (:verify-email handlers)}))
 
      :delete-user (fn [e]
                     (.stopPropagation e)
                     (confirm-dialog/show-confirm
-                      {:message (str "Permanently delete user " user-email "? This action cannot be undone and will remove all associated data.")
+                      {:message (str "Permanently delete user " user-label "? This action cannot be undone and will remove all associated data.")
                        :title "Confirm User Deletion"
                        :danger? true
                        :on-confirm (:delete-user handlers)}))}))
@@ -105,7 +105,15 @@
   (let [user-id (id-utils/extract-entity-id user)
         ;; Use shared utilities to extract entity data
         user-status (shared-actions/get-entity-status user :user)
-        user-email (shared-actions/get-entity-name user :user)
+      user-label (or (:full-name user)
+           (:full_name user)
+           (:user-display-name user)
+           (:user_display_name user)
+           (:user-ref user)
+           (:user_ref user)
+           (:email-masked user)
+           (:email_masked user)
+           "this user")
         email-verified (or (:users/email-verified user) (:email-verified user))
 
         ;; Subscribe to loading states
@@ -114,8 +122,8 @@
         loading-user-details? (use-subscribe [:admin/loading-user-details?])
 
         ;; Create action handlers
-        action-handlers (create-user-action-handlers user user-id user-email)
-        confirmation-handlers (create-user-confirmation-handlers action-handlers user-email)
+        action-handlers (create-user-action-handlers user user-id user-label)
+        confirmation-handlers (create-user-confirmation-handlers action-handlers user-label)
 
         ;; Deletion constraints are now checked in batch at the page level
 

@@ -17,48 +17,48 @@
 
 (defn create-admin-action-handlers
   "Factory function to create all action handlers for an admin"
-  [admin-id admin-email]
+  [admin-id admin-label]
   {:view-details (fn [e]
                    (.stopPropagation e)
-                   (log/info "Viewing admin details" admin-id admin-email)
+                   (log/info "Viewing admin details" admin-id admin-label)
                    (rf/dispatch [:admin/view-admin-details admin-id]))
 
    :update-status-active (fn []
-                           (log/info "Activating admin" admin-id admin-email)
+                           (log/info "Activating admin" admin-id admin-label)
                            (rf/dispatch [:admin/update-admin-status admin-id "active"]))
 
    :update-status-suspended (fn []
-                              (log/info "Suspending admin" admin-id admin-email)
+                              (log/info "Suspending admin" admin-id admin-label)
                               (rf/dispatch [:admin/update-admin-status admin-id "suspended"]))
 
    :delete-admin (fn []
-                   (log/info "Deleting admin" admin-id admin-email)
+                   (log/info "Deleting admin" admin-id admin-label)
                    (rf/dispatch [:admin/delete-admin admin-id]))
 
    :update-role (fn [new-role]
-                  (log/info "Updating admin role" admin-id admin-email new-role)
+                  (log/info "Updating admin role" admin-id admin-label new-role)
                   (rf/dispatch [:admin/update-admin-role admin-id (name new-role)]))
 
    :transfer-ownership (fn []
-                         (log/info "Transferring admin ownership" admin-id admin-email)
+                         (log/info "Transferring admin ownership" admin-id admin-label)
                          (rf/dispatch [:admin/transfer-admin-ownership admin-id]))})
 
 (defn create-admin-confirmation-handlers
   "Factory function to create confirmation handlers that wrap action handlers"
-  [handlers admin-email]
+  [handlers admin-label]
   {:view-details (:view-details handlers)
 
    :update-status-active (fn [e]
                            (.stopPropagation e)
                            (confirm-dialog/show-confirm
-                             {:message (str "Activate admin " admin-email "?")
+                             {:message (str "Activate admin " admin-label "?")
                               :title "Confirm Admin Activation"
                               :on-confirm (:update-status-active handlers)}))
 
    :update-status-suspended (fn [e]
                               (.stopPropagation e)
                               (confirm-dialog/show-confirm
-                                {:message (str "Suspend admin " admin-email "? They will lose access to the admin panel.")
+                                {:message (str "Suspend admin " admin-label "? They will lose access to the admin panel.")
                                  :title "Confirm Admin Suspension"
                                  :danger? true
                                  :on-confirm (:update-status-suspended handlers)}))
@@ -66,7 +66,7 @@
    :delete-admin (fn [e]
                    (.stopPropagation e)
                    (confirm-dialog/show-confirm
-                     {:message (str "Permanently delete admin " admin-email "? This action cannot be undone.")
+                     {:message (str "Permanently delete admin " admin-label "? This action cannot be undone.")
                       :title "Confirm Admin Deletion"
                       :danger? true
                       :on-confirm (:delete-admin handlers)}))
@@ -76,7 +76,7 @@
    :transfer-ownership (fn [e]
                          (.stopPropagation e)
                          (confirm-dialog/show-confirm
-                           {:message (str "Transfer platform ownership to " admin-email "? You will be downgraded to admin.")
+                           {:message (str "Transfer platform ownership to " admin-label "? You will be downgraded to admin.")
                             :title "Confirm Ownership Transfer"
                             :danger? true
                             :on-confirm (:transfer-ownership handlers)}))})
@@ -99,7 +99,14 @@
         ;; Extract admin data
         admin-status-raw (or (:admins/status admin) (:status admin))
         admin-status (normalize-admin-value admin-status-raw)
-        admin-email (or (:admins/email admin) (:email admin))
+        admin-label (or (:full-name admin)
+                      (:full_name admin)
+                      (:admins/full_name admin)
+                      (:admin-ref admin)
+                      (:admin_ref admin)
+                      (:email-masked admin)
+                      (:email_masked admin)
+                      "this admin")
         admin-role-raw (or (:admins/role admin) (:role admin))
         admin-role (normalize-admin-value admin-role-raw)
 
@@ -140,8 +147,8 @@
         updating-admin? (use-subscribe [:admin/updating-admin?])
 
         ;; Create action handlers
-        action-handlers (create-admin-action-handlers admin-id admin-email)
-        confirmation-handlers (create-admin-confirmation-handlers action-handlers admin-email)
+        action-handlers (create-admin-action-handlers admin-id admin-label)
+        confirmation-handlers (create-admin-confirmation-handlers action-handlers admin-label)
 
         ;; Determine which actions should be disabled
         can-change-role? (and is-current-owner? (not is-self?) (not is-last-owner?))

@@ -5,11 +5,13 @@
     [app.template.backend.auth.tenant :as tenant-auth]
     [app.template.backend.routes.impersonation :as impersonation-routes]
     [app.template.backend.routes.utils :as route-utils]
+    [app.template.backend.security.email :as email-privacy]
     [app.template.backend.services.invitation :as invitation-svc]
     [app.template.backend.services.invitation-email :as invitation-email]
     [app.template.backend.services.member :as member-svc]
     [app.template.backend.services.onboarding.core :as onboarding]
     [app.template.backend.services.tenant :as tenant-svc]
+    [clojure.string :as str]
     [clojure.walk :as walk]
     [ring.util.response :as response]
     [taoensso.timbre :as log])
@@ -77,7 +79,7 @@
 
 (defn- switch-tenant-handler
   "POST /tenant/switch — switch the active tenant in the session."
-  [db config]
+  [db _config]
   (fn [req]
     (route-utils/with-error-handling "tenant-switch"
       (let [user      (get-user req)
@@ -169,7 +171,8 @@
                    :role         (or role "member")})
                 (catch Exception e
                   (log/warn "Failed to send invitation email:" (.getMessage e))))))
-          (log/warn "Email service not configured — invitation email NOT sent" {:to-email email}))
+          (log/warn "Email service not configured — invitation email NOT sent"
+            {:email-masked (email-privacy/mask-email email)}))
         ;; Auto-complete invite_members onboarding step for the inviter
         (let [actor-role (or (:role actor-m) (:tenant_memberships/role actor-m))]
           (onboarding/try-complete-step! db (:id user) actor-role "invite_members"))
@@ -250,7 +253,8 @@
                    :role         (:role invitation)})
                 (catch Exception e
                   (log/warn "Failed to resend invitation email:" (.getMessage e))))))
-          (log/warn "Email service not configured — invitation email NOT resent" {:to-email (:email invitation)}))
+          (log/warn "Email service not configured — invitation email NOT resent"
+            {:email-masked (email-privacy/mask-email (:email invitation))}))
         (response/response {:success true :invitation (sanitize invitation)})))))
 
 (defn- revoke-invitation-handler
@@ -285,20 +289,17 @@
             _          (require-role! actor-m ["owner" "admin"])
             target-id  (get-in req [:path-params :id])
             new-role   (get-in req [:body-params :role])
-            target-m   (tenant-svc/get-membership db tenant-id
-                         ;; target-id is the membership id, but we need to find by tenant+user
-                         ;; Actually the plan says :id is the membership id, so look it up directly
-                         nil)]
+            target-membership (first (filter #(= (str (or (:id %) (:tenant_memberships/id %)))
+                                                  (str target-id))
+                                            (tenant-svc/get-tenant-members db tenant-id)))]
         ;; We need to find the target membership by its id
         ;; Since get-membership is by tenant+user, let's query directly
-        (let [target-membership (first (filter #(= (str (or (:id %) (:tenant_memberships/id %))) (str target-id))
-                                         (tenant-svc/get-tenant-members db tenant-id)))]
-          (when-not target-membership
-            (throw (ex-info "Member not found" {:type :entity-not-found})))
-          (let [result (member-svc/change-role! db {:actor-membership  actor-m
-                                                    :target-membership target-membership
-                                                    :new-role          new-role})]
-            (response/response {:success true :membership (sanitize result)})))))))
+        (when-not target-membership
+          (throw (ex-info "Member not found" {:type :entity-not-found})))
+        (let [result (member-svc/change-role! db {:actor-membership  actor-m
+                                                  :target-membership target-membership
+                                                  :new-role          new-role})]
+          (response/response {:success true :membership (sanitize result)}))))))
 
 (defn- transfer-ownership-handler
   "POST /tenant/transfer-ownership — transfer ownership to an admin."
@@ -437,7 +438,7 @@
               _         (require-role! actor-m ["owner"])
               body      (:body-params req)
               new-name  (or (:name body) (get body "name"))]
-          (when (or (nil? new-name) (clojure.string/blank? new-name))
+          (when (or (nil? new-name) (str/blank? new-name))
             (throw (ex-info "Name is required"
                      {:type :validation-error
                       :errors {:name ["Workspace name cannot be blank"]}})))

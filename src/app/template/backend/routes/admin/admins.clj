@@ -12,9 +12,11 @@
    - POST /admin/api/admins/:id/transfer-ownership - Transfer global ownership"
   (:require
     [app.admin.backend.services.admin.admins :as admin-admins]
+    [app.admin.backend.services.admin.identity-reveal :as identity-reveal]
     [app.shared.adapters.database :as shared-db]
     [app.template.backend.middleware.admin :as admin-mw]
     [app.template.backend.routes.admin.utils :as utils]
+    [app.template.backend.security.email :as email-privacy]
     [taoensso.timbre :as log]))
 
 ;; ============================================================================
@@ -32,7 +34,6 @@
             filters (merge {:search (:search params)
                             :status (:status params)
                             :role (:role params)
-                            :email (:email params)
                             :full-name (:full-name params)}
                       date-ranges)
             admins (admin-admins/list-all-admins db (merge filters pagination))
@@ -72,9 +73,13 @@
     (fn [request]
       (let [{:keys [ip-address user-agent admin]} (utils/extract-request-context request)
             admin-data (:body request)
-            requested-role (some-> (:role admin-data) str)]
+            requested-role (some-> (:role admin-data) str)
+            audit-admin-data (cond-> (dissoc admin-data :password :email)
+                               (:email admin-data) (merge (email-privacy/redact-email-change (:email admin-data))))]
 
-        (log/info "Admin create request:" {:email (:email admin-data) :role requested-role})
+        (log/info "Admin create request"
+          {:email-masked (email-privacy/mask-email (:email admin-data))
+           :role requested-role})
 
         ;; Basic validation
         (when-not (:email admin-data)
@@ -92,7 +97,7 @@
                               user-agent)]
 
           (utils/log-admin-action "create_admin" (:id admin) "admin"
-            (:id created-admin) (dissoc admin-data :password))
+            (:id created-admin) audit-admin-data)
 
           (let [converted-admin (shared-db/to-app created-admin)]
             (utils/json-response {:admin converted-admin} :status 201)))))
@@ -112,10 +117,12 @@
           (let [updated-admin (admin-admins/update-admin! db admin-id updates
                                 (-> context :admin :id)
                                 (:ip-address context)
-                                (:user-agent context))]
+                                (:user-agent context))
+                audit-updates (cond-> (dissoc updates :email)
+                                (:email updates) (merge (email-privacy/redact-email-change (:email updates))))]
 
             (utils/log-admin-action "update_admin" (-> context :admin :id)
-              "admin" admin-id updates)
+              "admin" admin-id audit-updates)
 
             (let [converted-admin (shared-db/to-app updated-admin)]
               (utils/json-response {:admin converted-admin}))))))
@@ -267,6 +274,23 @@
                 (utils/json-response {:admin converted-admin})))))))
     "Failed to update admin status"))
 
+(defn reveal-admin-email-handler
+  "Reveal an admin's email for exceptional support workflows.
+
+   Requires a support reason and always emits an audit entry."
+  [db]
+  (utils/with-validation-error-handling
+    (fn [request]
+      (utils/handle-uuid-body-request request :id
+        (fn [admin-id body context _request]
+          (let [result (identity-reveal/reveal-email! db :admin admin-id
+                         {:admin-id (-> context :admin :id)
+                          :reason (:reason body)
+                          :ip-address (:ip-address context)
+                          :user-agent (:user-agent context)})]
+            (utils/json-response result)))))
+    "Failed to reveal admin email"))
+
 ;; ============================================================================
 ;; Route Definitions
 ;; ============================================================================
@@ -281,6 +305,9 @@
    ["/:id"
     {:get (get-admin-details-handler db)
      :put (update-admin-handler db)}]
+   ["/:id/reveal-email"
+    {:post {:middleware [#(admin-mw/wrap-admin-role % :support)]
+            :handler (reveal-admin-email-handler db)}}]
    ["/:id/role"
     {:put (update-admin-role-handler db)}]
    ["/:id/status"

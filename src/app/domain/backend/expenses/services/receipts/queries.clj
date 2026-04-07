@@ -4,6 +4,8 @@
     [app.domain.backend.expenses.services.expenses :as expenses]
     [app.domain.backend.expenses.services.receipts.storage :as storage]
     [app.shared.query-builders :as shared-qb]
+    [app.template.backend.security.email :as email-privacy]
+    [clojure.string :as str]
     [honey.sql :as sql]
     [next.jdbc :as jdbc]
     [next.jdbc.result-set :as rs]))
@@ -193,7 +195,7 @@
 
 (defn- parse-instant-param
   [raw]
-  (when-let [value (some-> raw str clojure.string/trim not-empty)]
+  (when-let [value (some-> raw str str/trim not-empty)]
     (or (try
           (java.time.Instant/parse value)
           (catch Exception _ nil))
@@ -232,7 +234,7 @@
   "Mapping from text filter keys to SQL column identifiers for receipts."
   {:original-filename :receipts.original_filename
    :supplier-guess    :receipts.supplier_guess
-   :created-by-name   [:raw "coalesce(cb.full_name, cb.email)"]})
+   :created-by-name   :cb.full_name})
 
 (def ^:private sortable-receipt-columns
   "Whitelist mapping client-supplied column names to ORDER BY expressions.
@@ -262,8 +264,7 @@
               purchased-at-guess-from purchased-at-guess-to
               created-at-from created-at-to
               updated-at-from updated-at-to]
-       :or {limit 50 offset 0 order-dir :desc}
-       :as opts}]
+       :or {limit 50 offset 0 order-dir :desc}}]
   (let [helpers (build-status-query-helpers)
         {:keys [lines-total-sql effective-status-sql]} helpers
         where-clause (build-receipts-where-clause status nil helpers
@@ -286,7 +287,8 @@
                                 :receipts.payer_id
                                 :receipts.expense_id
                                 :receipts.created_by
-                                [[:coalesce :cb.full_name :cb.email] :created_by_name]
+                                [:cb.id :created_by_user_id]
+                                [:cb.full_name :created_by_full_name]
                                 :receipts.file_purged_at
                                 [[:raw "coalesce((receipts.raw_extract_json->>'refine_pending')::boolean, false)"] :refine_pending]
                                 :receipts.created_at
@@ -305,7 +307,8 @@
                                              :created-at-to created-at-to
                                              :updated-at-from updated-at-from
                                              :updated-at-to updated-at-to}))]
-    (jdbc/execute! db (sql/format query) {:builder-fn rs/as-unqualified-lower-maps})))
+    (->> (jdbc/execute! db (sql/format query) {:builder-fn rs/as-unqualified-lower-maps})
+      (mapv email-privacy/routine-created-by-view))))
 
 (defn list-user-receipts
   "List receipts visible to a specific user.
@@ -325,8 +328,7 @@
                       purchased-at-guess-from purchased-at-guess-to
                       created-at-from created-at-to
                       updated-at-from updated-at-to]
-               :or {limit 50 offset 0 order-dir :desc}
-               :as opts}]
+               :or {limit 50 offset 0 order-dir :desc}}]
   (when-not user-id
     (throw (ex-info "user-id is required" {:status 400})))
   (let [helpers (build-status-query-helpers)
@@ -378,8 +380,7 @@
   [db {:keys [status tenant-id original-filename supplier-guess created-by-name show-purged?
               purchased-at-guess-from purchased-at-guess-to
               created-at-from created-at-to
-              updated-at-from updated-at-to]
-       :as opts}]
+              updated-at-from updated-at-to]}]
   (let [helpers (build-status-query-helpers)
         where-clause (build-receipts-where-clause status nil helpers
                        :tenant-id tenant-id
@@ -408,8 +409,7 @@
   [db user-id {:keys [status tenant-id original-filename supplier-guess created-by-name show-purged?
                       purchased-at-guess-from purchased-at-guess-to
                       created-at-from created-at-to
-                      updated-at-from updated-at-to]
-               :as opts}]
+                      updated-at-from updated-at-to]}]
   (when-not user-id
     (throw (ex-info "user-id is required" {:status 400})))
   (let [helpers (build-status-query-helpers)

@@ -4,6 +4,7 @@
     [aero.core :as aero]
     [app.admin.backend.services.admin.auth :as admin-auth]
     [app.template.backend.routes.admin.settings-bootstrap :as settings-bootstrap]
+    [app.template.backend.security.email :as email-privacy]
     [app.template.backend.webserver :as webserver]
     [app.template.backend.utils.json-config :as json-config]
     [app.shared.model-naming :as model-naming]
@@ -256,39 +257,58 @@
                                         :password password
                                         :full_name full_name
                                         :role role})
-          (log/info "Seeded default dev admin" {:email email :role role})
+          (log/info "Seeded default dev admin"
+            {:email-masked (email-privacy/mask-email email)
+             :role role})
           (catch Exception e
-            (log/warn e "Failed to seed default dev admin with preferred role; retrying with role=admin" {:email email})
+            (log/warn e "Failed to seed default dev admin with preferred role; retrying with role=admin"
+              {:email-masked (email-privacy/mask-email email)})
             (try
               (admin-auth/create-admin! db {:email email
                                             :password password
                                             :full_name full_name
                                             :role "admin"})
-              (log/info "Seeded default dev admin" {:email email :role "admin"})
+              (log/info "Seeded default dev admin"
+                {:email-masked (email-privacy/mask-email email)
+                 :role "admin"})
               (catch Exception e2
-                (log/warn e2 "Failed to seed default dev admin" {:email email})))))))
+                (log/warn e2 "Failed to seed default dev admin"
+                  {:email-masked (email-privacy/mask-email email)})))))))
     (catch Exception e
       (log/warn e "Skipping default dev admin seed (DB not ready?)"))))
 
 (defn- validate-config!
   "Fail fast if required secrets are absent.
   Called after load-config but before other resources are opened.
-  Hard errors: database credentials. Warnings: optional integrations (email, OAuth)."
+  Hard errors: database credentials + production email privacy keys.
+  Warnings: optional integrations and non-prod fallback email privacy keys."
   [config profile]
   (let [db-url-override (some-> (System/getenv "DATABASE_URL") str/trim not-empty)
-        errors          (cond-> []
-                          (and (not db-url-override)
-                            (nil? (get-in config [:database :password])))
-                          (conj "[:database :password] — set DB_PASSWORD (prod) or DB_DEV_PASSWORD/DB_TEST_PASSWORD env var"))
-        warnings        (cond-> []
-                          (and (= :prod profile)
-                            (nil? (get-in config [:oauth :google :client-secret])))
-                          (conj "[:oauth :google :client-secret] — Google OAuth disabled (set GOOGLE_OAUTH_CLIENT_SECRET to enable)")
+        encryption-key (some-> (System/getenv "EMAIL_PRIVACY_ENCRYPTION_KEY_B64") str/trim not-empty)
+        lookup-key (some-> (System/getenv "EMAIL_PRIVACY_LOOKUP_KEY_B64") str/trim not-empty)
+        errors (cond-> []
+                 (and (not db-url-override)
+                   (nil? (get-in config [:database :password])))
+                 (conj "[:database :password] — set DB_PASSWORD (prod) or DB_DEV_PASSWORD/DB_TEST_PASSWORD env var")
 
-                          (and (= :prod profile)
-                            (nil? (get-in config [:email :smtp :pass]))
-                            (nil? (get-in config [:email :postmark :api-key])))
-                          (conj "[:email] — email sending disabled (set SMTP_PASS or POSTMARK_API_KEY to enable)"))]
+                 (and (= :prod profile) (nil? encryption-key))
+                 (conj "EMAIL_PRIVACY_ENCRYPTION_KEY_B64 — required in production for encrypted-at-rest email storage")
+
+                 (and (= :prod profile) (nil? lookup-key))
+                 (conj "EMAIL_PRIVACY_LOOKUP_KEY_B64 — required in production for blind-index email lookup"))
+        warnings (cond-> []
+                   (and (= :prod profile)
+                     (nil? (get-in config [:oauth :google :client-secret])))
+                   (conj "[:oauth :google :client-secret] — Google OAuth disabled (set GOOGLE_OAUTH_CLIENT_SECRET to enable)")
+
+                   (and (= :prod profile)
+                     (nil? (get-in config [:email :smtp :pass]))
+                     (nil? (get-in config [:email :postmark :api-key])))
+                   (conj "[:email] — email sending disabled (set SMTP_PASS or POSTMARK_API_KEY to enable)")
+
+                   (and (not= :prod profile)
+                     (or (nil? encryption-key) (nil? lookup-key)))
+                   (conj "[email-privacy] — using non-production fallback keys; set EMAIL_PRIVACY_ENCRYPTION_KEY_B64 and EMAIL_PRIVACY_LOOKUP_KEY_B64 for realistic local testing"))]
     (when (seq warnings)
       (log/warn {:event :config/missing-optional-secrets
                  :profile profile

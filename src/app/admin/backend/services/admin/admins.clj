@@ -3,6 +3,7 @@
   (:require
     [app.admin.backend.services.admin.audit :as audit]
     [app.admin.backend.services.admin.auth :as auth]
+    [app.template.backend.security.email :as email-privacy]
     [app.shared.adapters.normalization :as norm]
     [app.shared.type-conversion :as tc]
     [honey.sql :as hsql]
@@ -25,9 +26,10 @@
 (defn- db-admin->app
   "Normalize an admin row from the database using shared utilities"
   [admin]
-  (-> admin
+  (some-> admin
     (norm/normalize-admin-result admin-config)
-    (dissoc :password_hash :password-hash)))
+    (dissoc :password_hash :password-hash)
+    email-privacy/routine-admin-view))
 
 (def ^:private valid-admin-roles
   #{"admin" "support" "owner"})
@@ -97,15 +99,14 @@
 ;; ============================================================================
 
 (defn- build-admin-list-filter-clauses
-  [{:keys [search status role email full-name
+  [{:keys [search status role full-name
            last-login-at-from last-login-at-to]}]
   (cond-> []
     search (conj [:or
-                  [:ilike :a/email (str "%" search "%")]
-                  [:ilike :a/full_name (str "%" search "%")]])
+                  [:ilike :a/full_name (str "%" search "%")]
+                  [:ilike [:cast :a/id :text] (str "%" search "%")]])
     status (conj [:= :a/status (tc/cast-for-database :admin-status status)])
     role (conj [:= :a/role (tc/cast-for-database :admin-role role)])
-    email (conj [:ilike :a/email (str "%" email "%")])
     full-name (conj [:ilike :a/full_name (str "%" full-name "%")])
     last-login-at-from (conj [:>= :a/last_login_at last-login-at-from])
     last-login-at-to (conj [:<= :a/last_login_at last-login-at-to])))
@@ -164,14 +165,17 @@
    Wraps auth/create-admin! with additional validation and audit."
   [db {:keys [email password full_name role] :as _admin-data}
    current-admin-id ip-address user-agent]
-  (let [requested-role (or (some-> role str) "admin")]
-    (log/info "Creating new admin" {:email email :role requested-role :by-admin current-admin-id})
+  (let [requested-role (or (some-> role str) "admin")
+        normalized-email (email-privacy/normalize-email email)
+        masked-email (email-privacy/mask-email normalized-email)]
+    (log/info "Creating new admin"
+      {:email-masked masked-email :role requested-role :by-admin current-admin-id})
 
     (validate-admin-role! requested-role)
     (validate-owner-assignment! db requested-role)
 
     ;; Check if email already exists
-    (when (auth/find-admin-by-email db email)
+    (when (auth/find-admin-by-email db normalized-email)
       (throw (ex-info "An admin with this email already exists"
                {:status 400
                 :field :email
@@ -182,13 +186,14 @@
           result (jdbc/execute-one! db
                    (hsql/format
                      {:insert-into :admins
-                      :values [{:id admin-id
-                                :email email
-                                :password_hash (auth/hash-password password)
-                                :full_name full_name
-                                :role (tc/cast-for-database :admin-role requested-role)
-                                :status (tc/cast-for-database :admin-status "active")
-                                :created_at now}]
+                      :values [(email-privacy/merge-email-storage
+                                 {:id admin-id
+                                  :password_hash (auth/hash-password password)
+                                  :full_name full_name
+                                  :role (tc/cast-for-database :admin-role requested-role)
+                                  :status (tc/cast-for-database :admin-status "active")
+                                  :created_at now}
+                                 normalized-email)]
                       :returning [:*]}))]
 
       ;; Log the creation
@@ -197,11 +202,13 @@
          :action "create_admin"
          :entity-type "admin"
          :entity-id admin-id
-         :changes {:email email :role requested-role}
+         :changes (merge {:role requested-role}
+                    (email-privacy/redact-email-change normalized-email))
          :ip-address ip-address
          :user-agent user-agent})
 
-      (log/info "Admin created successfully" {:admin-id admin-id :email email :role requested-role})
+      (log/info "Admin created successfully"
+        {:admin-id admin-id :email-masked masked-email :role requested-role})
       (db-admin->app result))))
 
 ;; ============================================================================
@@ -218,16 +225,19 @@
                         (as-> u
                           (if (:full-name u)
                             (-> u (assoc :full_name (:full-name u)) (dissoc :full-name))
-                            u)))]
+                            u)))
+        normalized-email (some-> (:email clean-updates) email-privacy/normalize-email)
+        persistence-updates (cond-> (dissoc clean-updates :email)
+                              normalized-email (merge (email-privacy/email-storage normalized-email)))]
 
-    (when (empty? clean-updates)
+    (when (empty? persistence-updates)
       (throw (ex-info "No valid fields to update"
                {:status 400
                 :reason :no-valid-fields})))
 
     ;; Check for email uniqueness if email is being changed
-    (when-let [new-email (:email clean-updates)]
-      (when-let [existing (auth/find-admin-by-email db new-email)]
+    (when normalized-email
+      (when-let [existing (auth/find-admin-by-email db normalized-email)]
         (when (not= (str (or (:id existing) (:admins/id existing))) (str admin-id))
           (throw (ex-info "An admin with this email already exists"
                    {:status 400
@@ -236,7 +246,7 @@
 
     (let [result (jdbc/execute-one! db
                    (hsql/format {:update :admins
-                                 :set clean-updates
+                                 :set persistence-updates
                                  :where [:= :id admin-id]
                                  :returning [:*]}))]
 
@@ -246,11 +256,17 @@
            :action "update_admin"
            :entity-type "admin"
            :entity-id admin-id
-           :changes clean-updates
+           :changes (cond-> (dissoc persistence-updates
+                              :email_ciphertext :email_lookup_hash :email_key_version)
+                      normalized-email (merge (email-privacy/redact-email-change normalized-email)))
            :ip-address ip-address
            :user-agent user-agent})
 
-        (log/info "Admin updated" {:admin-id admin-id :changes clean-updates}))
+        (log/info "Admin updated"
+          {:admin-id admin-id
+           :changes (cond-> (dissoc persistence-updates
+                              :email_ciphertext :email_lookup_hash :email_key_version)
+                      normalized-email (assoc :email_masked (email-privacy/mask-email normalized-email)))}))
 
       (some-> result db-admin->app))))
 
@@ -427,11 +443,14 @@
        :action "delete_admin"
        :entity-type "admin"
        :entity-id admin-id
-       :changes {:deleted-email (:email admin)}
+       :changes (email-privacy/redact-email-change (:email admin))
        :ip-address ip-address
        :user-agent user-agent})
 
-    (log/info "Admin deleted" {:admin-id admin-id :email (:email admin)})
+     (log/info "Admin deleted"
+      {:admin-id admin-id
+       :admin-ref (email-privacy/admin-ref admin-id)
+       :email-masked (email-privacy/mask-email (:email admin))})
 
     {:success true
      :message "Admin deleted successfully"

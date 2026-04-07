@@ -1,17 +1,8 @@
 {;; Users (application users)
  :users {:fields [[:id :uuid {:primary-key true}]
-                  [:email [:varchar 255]
-                   {:null false
-                    :unique true
-                    ;; CHECK (email LIKE '%@%.%') — simple format guard to avoid double-escaping issues
-                    :check [:raw "email ~* '^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$'"]
-                    :validation {:type :email
-                                 :constraints {:pattern "^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$"
-                                               :max-length 255}
-                                 :messages {:invalid "Please enter a valid email address"
-                                            :required "Email is required"}
-                                 :ui {:input-type "email"
-                                      :placeholder "Enter email"}}}]
+                           [:email_ciphertext :text {:null false}]
+                           [:email_lookup_hash [:varchar 64] {:null false}]
+                           [:email_key_version [:varchar 32] {:null false}]
                   [:full_name [:varchar 255]]
                   [:password_hash :text {:null false}]
                   [:status [:enum :user-status] {:null false :default "active"}]
@@ -24,17 +15,16 @@
          :types [[:user-status :enum {:choices ["active" "inactive" "suspended"]}]
                  [:audit-actor-type :enum {:choices ["user" "admin" "system"]}]
                  [:login-principal-type :enum {:choices ["user" "admin"]}]]
-         :indexes [[:idx_users_email :btree {:fields [:email] :unique true}]
+         :indexes [[:idx_users_email_lookup_hash :btree {:fields [:email_lookup_hash] :unique true}]
                    [:idx_users_status :btree {:fields [:status]}]
                    [:idx_users_email_verified :btree {:fields [:email_verified]}]
                    [:idx_users_created_at :btree {:fields [:created_at]}]]}
 
  ;; Admin users (system administrators)
  :admins {:fields [[:id :uuid {:primary-key true}]
-                   [:email [:varchar 255] {:null false
-                                           :unique true
-                                           ;; CHECK (email LIKE '%@%.%') — simple format guard to avoid double-escaping issues
-                                           :check [:raw "email ~* '^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$'"]}]
+                   [:email_ciphertext :text {:null false}]
+                   [:email_lookup_hash [:varchar 64] {:null false}]
+                   [:email_key_version [:varchar 32] {:null false}]
                    [:full_name [:varchar 255]]
                    [:password_hash :text {:null false}]
                    [:role [:enum :admin-role] {:null false :default "admin"}]
@@ -44,7 +34,7 @@
                    [:updated_at :timestamptz {:default [:now]}]]
           :types [[:admin-role :enum {:choices ["admin" "support" "owner"]}]
                   [:admin-status :enum {:choices ["active" "suspended"]}]]
-          :indexes [[:idx_admins_email :btree {:fields [:email] :unique true}]
+          :indexes [[:idx_admins_email_lookup_hash :btree {:fields [:email_lookup_hash] :unique true}]
                     [:idx_admins_status :btree {:fields [:status]}]
                     [:uniq_admins_active_owner :btree {:fields [:role]
                                                        :unique true
@@ -68,7 +58,9 @@
  ;; Admin invitations (email-based admin onboarding)
  :admin_invitations
  {:fields [[:id :uuid {:primary-key true}]
-           [:email :text {:null false}]
+           [:email_ciphertext :text {:null false}]
+           [:email_lookup_hash [:varchar 64] {:null false}]
+           [:email_key_version [:varchar 32] {:null false}]
            [:role [:enum :admin-invitation-role] {:null false}]
            [:invited_by :uuid {:foreign-key :admins/id :null false :on-delete :cascade}]
            [:status [:enum :admin-invitation-status] {:null false :default "pending"}]
@@ -78,8 +70,8 @@
            [:updated_at :timestamptz {:default [:now]}]]
   :types [[:admin-invitation-status :enum {:choices ["pending" "accepted" "expired" "revoked"]}]
           [:admin-invitation-role :enum {:choices ["support" "admin"]}]]
-  :indexes [[:idx_admin_invitations_token :btree {:fields [:token] :unique true}]
-            [:idx_admin_invitations_email :btree {:fields [:email]}]
+        :indexes [[:idx_admin_invitations_token :btree {:fields [:token] :unique true}]
+            [:idx_admin_invitations_email_lookup_hash :btree {:fields [:email_lookup_hash]}]
             [:idx_admin_invitations_status :btree {:fields [:status]}]]}
 
  ;; Persisted runtime frontend config overrides for admin and user settings.
@@ -133,7 +125,9 @@
  ;; Tenant Invitations (pending invitations to join a tenant)
  :tenant_invitations {:fields [[:id :uuid {:primary-key true}]
                                [:tenant_id :uuid {:foreign-key :tenants/id :null false :on-delete :cascade}]
-                               [:email :text {:null false}]
+                               [:email_ciphertext :text {:null false}]
+                               [:email_lookup_hash [:varchar 64] {:null false}]
+                               [:email_key_version [:varchar 32] {:null false}]
                                [:role [:enum :invitation-role] {:null false}]
                                [:invited_by :uuid {:foreign-key :users/id :null false :on-delete :cascade}]
                                [:status [:enum :invitation-status] {:null false :default "pending"}]
@@ -145,7 +139,7 @@
                               [:invitation-role :enum {:choices ["admin" "member" "viewer"]}]]
                       :indexes [[:idx_tenant_invitations_token :btree {:fields [:token] :unique true}]
                                 [:idx_tenant_invitations_tenant :btree {:fields [:tenant_id]}]
-                                [:idx_tenant_invitations_email :btree {:fields [:email]}]
+                                [:idx_tenant_invitations_email_lookup_hash :btree {:fields [:email_lookup_hash]}]
                                 [:idx_tenant_invitations_status :btree {:fields [:status]}]]}
 
  ;; Impersonation Grants (platform admin access to tenant data)
@@ -164,6 +158,29 @@
                         :indexes [[:idx_impersonation_grants_tenant :btree {:fields [:tenant_id]}]
                                   [:idx_impersonation_grants_admin :btree {:fields [:admin_id]}]
                                   [:idx_impersonation_grants_status :btree {:fields [:status]}]]}
+
+ :payment_provider_account_links
+ {:fields [[:id :uuid {:primary-key true}]
+           [:account_kind [:enum :payment-provider-account-kind] {:null false}]
+           [:account_id :uuid {:null false}]
+           [:provider [:varchar 64] {:null false}]
+           [:provider_customer_ref [:varchar 255] {:null false}]
+           [:status :text {:null false :default "active"}]
+           [:created_at :timestamptz {:default [:now]}]
+           [:updated_at :timestamptz {:default [:now]}]]
+  :types [[:payment-provider-account-kind :enum {:choices ["user" "tenant"]}]]
+  :indexes [[:uniq_payment_provider_account_links_account_provider
+             :btree
+             {:fields [:account_kind :account_id :provider] :unique true}]
+            [:uniq_payment_provider_account_links_provider_customer_ref
+             :btree
+             {:fields [:provider :provider_customer_ref] :unique true}]
+            [:idx_payment_provider_account_links_account
+             :btree
+             {:fields [:account_kind :account_id]}]
+            [:idx_payment_provider_account_links_status
+             :btree
+             {:fields [:status]}]]}
 
  ;; User Sessions (server-side session store)
  :user_sessions {:fields [[:id :uuid {:primary-key true}]

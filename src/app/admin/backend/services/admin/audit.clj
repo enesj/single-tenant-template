@@ -5,6 +5,7 @@
     [app.shared.adapters.normalization :as norm]
     [app.shared.query-builders :as shared-qb]
     [app.shared.type-conversion :as tc]
+    [app.template.backend.security.email :as email-privacy]
     [app.template.backend.utils.query-builders :as qb]
     [cheshire.core :as json]
     [clojure.string :as str]
@@ -326,7 +327,7 @@
    :action :al/action
    :actor-type :al/actor_type
    :target-type :al/target_type
-   :admin-email :a/email
+   :admin-ref :al/actor_id
    :admin-name :a/full_name})
 
 (defn- build-audit-filters-map
@@ -345,7 +346,6 @@
   [{:keys [limit offset order-by order-dir] :as opts}]
   (let [join-clause [[:admins :a] [:= :al.actor_id :a.id]]
         base-query {:select [:al.*
-                             [:a.email :admin_email]
                              [:a.full_name :admin_name]]
                     :from [[:audit_logs :al]]
                     :left-join join-clause}
@@ -395,16 +395,23 @@
                 (try
                   (let [normalized (db-audit-log->app log)
                         actor-type-str (some-> (:actor-type normalized) str)
+                        actor-id* (:actor-id normalized)
                         is-system? (= actor-type-str "system")
+                        is-admin? (= actor-type-str "admin")
                         entity-type-str (some-> (:target-type normalized) str)
                         entity-id* (:target-id normalized)
                         entity-name (when (and (not is-system?)
                                             entity-type-str entity-id*)
                                       (resolve-entity-name db entity-type-str entity-id*))
+                        admin-name (some-> (:admin-name normalized) str str/trim not-empty)
+                        admin-ref (when is-admin?
+                                    (email-privacy/admin-ref actor-id*))
                         ;; For system entries, extract display info from metadata
                         metadata-map (:changes normalized)]
-                    (cond-> normalized
+                    (cond-> (dissoc normalized :admin-email)
                       entity-name (assoc :entity-name entity-name)
+                      (and is-admin? admin-ref) (assoc :admin-ref admin-ref)
+                      is-admin? (assoc :admin-name (or admin-name admin-ref))
                       ;; Enrich system entries with actor display info
                       is-system? (assoc :actor-display-name "System"
                                    :is-api-failure true)

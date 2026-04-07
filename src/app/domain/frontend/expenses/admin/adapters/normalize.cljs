@@ -215,7 +215,8 @@
                   :is_default [:is-default]
                   :is_active [:is-active]
                   :created_at [:created-at]
-                  :user_email [:user-email]}}))
+                  :user_ref [:user-ref]
+                  :user_display_name [:user-display-name]}}))
 
 (defn payer-type->template-entity
   [payer-type]

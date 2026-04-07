@@ -6,6 +6,7 @@
     [app.shared.date :as shared-date]
     [app.template.backend.auth.service :as auth-service]
     [app.template.backend.auth.tenant :as tenant-auth]
+    [app.template.backend.security.email :as email-privacy]
     [app.template.backend.routes.utils :as route-utils]
     [app.template.backend.services.monitoring.login-events :as login-monitoring]
     [app.template.backend.services.onboarding.core :as onboarding]
@@ -29,7 +30,7 @@
   Previous approach preserved non-auth keys (e.g. :admin-token), but this caused
   cookie-store serialization issues where stale auth data persisted despite logout.
   A full session clear is safer — admin sessions can be re-established independently."
-  (fn [req]
+  (fn [_req]
     (log/info "Processing logout request")
     (-> (response/response (json/generate-string {:success true}))
       (response/content-type "application/json")
@@ -163,22 +164,22 @@
   (when (and db user-id)
     (when-let [u-id (->uuid user-id)]
       (let [opts {:builder-fn rs/as-unqualified-maps}
-            row  (jdbc/execute-one! db
-                   (sql/format {:select [:id
-                                         :email
-                                         :full_name
-                                         :status
-                                         :auth_provider
-                                         :email_verified
-                                         :avatar_url
-                                         :created_at
-                                         :updated_at]
-                                :from   [:users]
-                                :where  [:= :id u-id]})
-                   opts)]
-        (some->> row
-          (map (fn [[k v]] [(keyword (name k)) v]))
-          (into {}))))))
+            row (jdbc/execute-one! db
+                  (sql/format {:select [:id
+                                        :email_ciphertext
+                                        :email_lookup_hash
+                                        :email_key_version
+                                        :full_name
+                                        :status
+                                        :auth_provider
+                                        :email_verified
+                                        :avatar_url
+                                        :created_at
+                                        :updated_at]
+                               :from [:users]
+                               :where [:= :id u-id]})
+                  opts)]
+        (some-> row auth-service/db-user->plain)))))
 
 (defn- incomplete-auth-session?
   [{:keys [user tenant membership tenant-selection-required no-tenant]}]
@@ -271,7 +272,8 @@
     (route-utils/with-error-handling "user-registration"
       (let [{:keys [email full-name password]} (:body-params req)
             existing-session (or (:session req) {})]
-        (log/info "Processing registration request for:" email)
+        (log/info "Processing registration request"
+          {:email-masked (email-privacy/mask-email email)})
         ;; Note: We log the keys of the request, but be careful not to log the password!
         (log/info "Request keys:" (keys req))
         (log/info "Body params keys:" (keys (:body-params req)))
@@ -408,17 +410,22 @@
   "Handle authentication status check"
   [req]
   (route-utils/with-error-handling "auth-status"
-    (let [;; Check for our new auth session first
-          auth-session (get-in req [:session :auth-session])
+    (let [auth-session (get-in req [:session :auth-session])
           user (:user auth-session)
           db (resolve-db req)
           invalid-message (when (and auth-session db)
                             (invalid-auth-session-message db auth-session))
           repair-result (when (and auth-session db)
                           (repair-incomplete-auth-session req db auth-session))
-          effective-auth-session (or (:auth-session repair-result) auth-session)]
+          effective-auth-session (or (:auth-session repair-result) auth-session)
+          effective-user-id (or (get-in effective-auth-session [:user :id])
+                              (get-in effective-auth-session [:user :users/id]))
+          display-user (or (when (and db effective-user-id)
+                             (fetch-user-record db effective-user-id))
+                         (:user effective-auth-session))
+          display-auth-session (cond-> effective-auth-session
+                                 display-user (assoc :user display-user))]
       (cond
-        ;; Auth session exists but is no longer valid (user/tenant/membership status changed)
         (and auth-session invalid-message)
         (do
           (log/warn "Auth session invalid; clearing session"
@@ -441,32 +448,28 @@
            :body (json/generate-string (:body repair-result))
            :session (clear-user-auth-session (:session req))})
 
-        ;; New session format (from our auth service)
-        effective-auth-session
+        display-auth-session
         (do
           (when (= :repair (:action repair-result))
             (log/info "Repaired incomplete auth session"
               {:reason (:reason repair-result)
-               :user-id (or (get-in effective-auth-session [:user :id])
-                          (get-in effective-auth-session [:user :users/id]))
-               :tenant-id (or (get-in effective-auth-session [:tenant :id])
-                            (get-in effective-auth-session [:tenant :tenants/id]))}))
-          ;; Fetch lightweight onboarding summary and lazily initialize missing
-          ;; onboarding for verified users with active memberships.
+               :user-id (or (get-in display-auth-session [:user :id])
+                          (get-in display-auth-session [:user :users/id]))
+               :tenant-id (or (get-in display-auth-session [:tenant :id])
+                            (get-in display-auth-session [:tenant :tenants/id]))}))
           (let [onboarding-summary
-                (when-let [eff-user (:user effective-auth-session)]
-                  (let [role (or (get-in effective-auth-session [:membership :role])
-                               (:membership-role effective-auth-session))]
+                (when-let [eff-user (:user display-auth-session)]
+                  (let [role (or (get-in display-auth-session [:membership :role])
+                               (:membership-role display-auth-session))]
                     (ensure-onboarding-summary db (:id eff-user) role)))]
             (cond-> {:status 200
                      :headers {"Content-Type" "application/json"}
                      :body (json/generate-string
-                             (build-auth-status-body effective-auth-session
+                             (build-auth-status-body display-auth-session
                                {:onboarding onboarding-summary}))}
               (= :repair (:action repair-result))
               (assoc :session (assoc (or (:session req) {}) :auth-session effective-auth-session)))))
 
-        ;; Not authenticated
         :else
         {:status 200
          :headers {"Content-Type" "application/json"}
@@ -494,7 +497,8 @@
                 existing-session (or (:session req) {})
                 new-session (assoc existing-session :auth-session {:user user})]
 
-            (log/info "Test authentication session created for user:" (:email (:user session)))
+            (log/info "Test authentication session created"
+              {:email-masked (email-privacy/mask-email (:email (:user session)))})
 
             {:status 200
              :headers {"Content-Type" "application/json"}

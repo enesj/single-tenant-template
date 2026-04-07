@@ -37,15 +37,24 @@
 (defui audit-log-entry
   "Display a single audit log entry"
   [{:keys [entry]}]
-  ($ :tr
-    ($ :td
-      ($ :div {:class "text-sm font-medium"} (:action entry))
-      ($ :div {:class "text-xs text-gray-500"}
-        (timestamp/format-timestamp-string (:created-at entry))))
+  (let [admin-name (:admin-name entry)
+        admin-ref (:admin-ref entry)
+        admin-summary (or (when (and admin-name admin-ref (not= admin-name admin-ref))
+                            (str admin-name " (" admin-ref ")"))
+                        admin-name
+                        admin-ref
+                        "System")]
+    ($ :tr
+      ($ :td
+        ($ :div {:class "text-sm font-medium"} (:action entry))
+        ($ :div {:class "text-xs text-gray-500"}
+          (timestamp/format-timestamp-string (:created-at entry))))
 
-    ($ :td
-      ($ :div {:class "text-sm"} (or (:admin-email entry) "System"))
-      ($ :div {:class "text-xs text-gray-500"} (or (:admin-name entry) "")))
+      ($ :td
+        ($ :div {:class "text-sm"} admin-summary)
+        ($ :div {:class "text-xs text-gray-500"}
+          (when (and admin-name admin-ref (not= admin-name admin-ref))
+            (str "Ref: " admin-ref)))))
 
     ($ :td
       (if (:changes entry)

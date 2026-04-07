@@ -2,6 +2,7 @@
   "Standalone invitation email functions — not part of the EmailService protocol.
    Dispatches to Gmail SMTP (dev) or Gmail API (prod) based on the service record."
   (:require
+    [app.template.backend.security.email :as email-privacy]
     [app.template.backend.services.gmail-api :as gmail-api]
     [app.template.backend.services.gmail-smtp :as gmail-smtp]
     [taoensso.timbre :as log]))
@@ -37,7 +38,7 @@
    `params` keys: :to-email, :inviter-name, :tenant-name, :accept-url, :role"
   [email-service {:keys [to-email inviter-name tenant-name accept-url role]}]
   (log/info "Sending invitation email"
-    {:to-email     to-email
+    {:email-masked (email-privacy/mask-email to-email)
      :tenant-name  tenant-name
      :accept-url   accept-url
      :service-type (type email-service)
@@ -49,39 +50,43 @@
                                 {:inviter-name inviter-name
                                  :tenant-name  tenant-name
                                  :accept-url   accept-url
-                                 :role          role})]
-      (let [result (cond
-                     (:smtp-config email-service)
-                     (do
-                       (log/info "Attempting SMTP send"
-                         {:host (get-in email-service [:smtp-config :host])
-                          :port (get-in email-service [:smtp-config :port])})
-                       (gmail-smtp/send-smtp-email
-                         (:smtp-config email-service)
-                         (:from-email email-service)
-                         to-email subject text html))
+                                 :role          role})
+          result (cond
+                   (:smtp-config email-service)
+                   (do
+                     (log/info "Attempting SMTP send"
+                       {:host (get-in email-service [:smtp-config :host])
+                        :port (get-in email-service [:smtp-config :port])})
+                     (gmail-smtp/send-smtp-email
+                       (:smtp-config email-service)
+                       (:from-email email-service)
+                       to-email subject text html))
 
-                     (:gmail-api-config email-service)
-                     (do
-                       (log/info "Attempting Gmail API send" {:to-email to-email})
-                       (gmail-api/send-gmail-api-email
-                         (:gmail-api-config email-service)
-                         (:from-email email-service)
-                         to-email subject text html))
+                   (:gmail-api-config email-service)
+                   (do
+                     (log/info "Attempting Gmail API send"
+                       {:email-masked (email-privacy/mask-email to-email)})
+                     (gmail-api/send-gmail-api-email
+                       (:gmail-api-config email-service)
+                       (:from-email email-service)
+                       to-email subject text html))
 
-                     :else
-                     (do
-                       (log/warn "Cannot send invitation email — no transport on email service"
-                         {:service-type (type email-service)
-                          :service-keys (keys email-service)})
-                       {:success false :error :no-transport}))]
-        (if (:success result)
-          (log/info "Invitation email sent successfully" {:to-email to-email})
-          (when-not (= :no-transport (:error result))
-            (log/error "Invitation email NOT delivered" {:to-email to-email :details result})))))
+                   :else
+                   (do
+                     (log/warn "Cannot send invitation email — no transport on email service"
+                       {:service-type (type email-service)
+                        :service-keys (keys email-service)})
+                     {:success false :error :no-transport}))]
+      (if (:success result)
+        (log/info "Invitation email sent successfully"
+          {:email-masked (email-privacy/mask-email to-email)})
+        (when-not (= :no-transport (:error result))
+          (log/error "Invitation email NOT delivered"
+            {:email-masked (email-privacy/mask-email to-email)
+             :details result}))))
     (catch Exception e
       (log/error e "Failed to send invitation email"
-        {:to-email to-email
+        {:email-masked (email-privacy/mask-email to-email)
          :error    (.getMessage e)
          :cause    (some-> (.getCause e) .getMessage)}))))
 
@@ -120,7 +125,7 @@
    `params` keys: :to-email, :inviter-name, :accept-url, :role"
   [email-service {:keys [to-email inviter-name accept-url role]}]
   (log/info "Sending admin invitation email"
-    {:to-email     to-email
+    {:email-masked (email-privacy/mask-email to-email)
      :accept-url   accept-url
      :service-type (type email-service)})
   (try
@@ -128,31 +133,34 @@
           {:keys [text html]} (build-admin-invitation-email-body
                                 {:inviter-name inviter-name
                                  :accept-url   accept-url
-                                 :role          role})]
-      (let [result (cond
+                                 :role          role})
+          result (cond
+                   (:smtp-config email-service)
+                   (gmail-smtp/send-smtp-email
                      (:smtp-config email-service)
-                     (gmail-smtp/send-smtp-email
-                       (:smtp-config email-service)
-                       (:from-email email-service)
-                       to-email subject text html)
+                     (:from-email email-service)
+                     to-email subject text html)
 
+                   (:gmail-api-config email-service)
+                   (gmail-api/send-gmail-api-email
                      (:gmail-api-config email-service)
-                     (gmail-api/send-gmail-api-email
-                       (:gmail-api-config email-service)
-                       (:from-email email-service)
-                       to-email subject text html)
+                     (:from-email email-service)
+                     to-email subject text html)
 
-                     :else
-                     (do
-                       (log/warn "Cannot send admin invitation email — no transport on email service")
-                       {:success false :error :no-transport}))]
-        (if (:success result)
-          (log/info "Admin invitation email sent successfully" {:to-email to-email})
-          (when-not (= :no-transport (:error result))
-            (log/error "Admin invitation email NOT delivered" {:to-email to-email :details result})))))
+                   :else
+                   (do
+                     (log/warn "Cannot send admin invitation email — no transport on email service")
+                     {:success false :error :no-transport}))]
+      (if (:success result)
+        (log/info "Admin invitation email sent successfully"
+          {:email-masked (email-privacy/mask-email to-email)})
+        (when-not (= :no-transport (:error result))
+          (log/error "Admin invitation email NOT delivered"
+            {:email-masked (email-privacy/mask-email to-email)
+             :details result}))))
     (catch Exception e
       (log/error e "Failed to send admin invitation email"
-        {:to-email to-email
+        {:email-masked (email-privacy/mask-email to-email)
          :error    (.getMessage e)}))))
 
 (comment

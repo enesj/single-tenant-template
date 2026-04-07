@@ -7,6 +7,7 @@
   (:require
     [app.backend.test-helpers :as h]
     [app.template.backend.routes.admin.login-events :as login-events]
+    [app.template.backend.security.email :as email-privacy]
     [app.template.backend.services.monitoring.login-events :as login-monitoring]
     [clojure.test :refer [deftest is testing use-fixtures]]
     [honey.sql :as hsql]
@@ -170,6 +171,24 @@
 
   (testing "get-login-history function exists"
     (is (fn? login-monitoring/get-login-history)))
+
+  (testing "list-login-events exposes pseudonymous principal refs without raw email"
+    (let [principal-id (java.util.UUID/randomUUID)
+          row {:id (java.util.UUID/randomUUID)
+               :principal_type "admin"
+               :principal_id principal-id
+               :success true
+               :reason nil
+               :ip "127.0.0.1"
+               :user_agent "Test Browser"
+               :created_at (java.time.Instant/parse "2026-01-01T00:00:00Z")
+               :admin_name nil}
+          result (first (with-redefs [hsql/format identity
+                                      next.jdbc/execute! (fn [_db _query] [row])]
+                          (login-monitoring/list-login-events ::db {:limit 1 :offset 0})))]
+      (is (= (email-privacy/admin-ref principal-id) (:principal-ref result)))
+      (is (= (:principal-ref result) (:principal-name result)))
+      (is (not (contains? result :principal-email)))))
 
   (testing "successful logins also update the principal last_login_at field"
     (let [calls (atom [])

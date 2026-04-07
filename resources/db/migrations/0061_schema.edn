@@ -1,0 +1,39 @@
+({:action :create-type,
+  :type-name :payment-provider-account-kind,
+  :model-name :payment_provider_account_links,
+  :options {:choices ["user" "tenant"], :type :enum}}
+ {:action :create-table,
+  :model-name :payment_provider_account_links,
+  :fields
+  {:id {:primary-key true, :type :uuid},
+   :account-kind
+   {:null false, :type [:enum :payment-provider-account-kind]},
+   :account-id {:null false, :type :uuid},
+   :provider {:null false, :type [:varchar 64]},
+   :provider-customer-ref {:null false, :type [:varchar 255]},
+   :status {:null false, :default "active", :type :text},
+   :created-at {:default [:now], :type :timestamptz},
+   :updated-at {:default [:now], :type :timestamptz}}}
+ {:action :create-index,
+  :index-name :idx-payment-provider-account-links-account,
+  :model-name :payment_provider_account_links,
+  :options {:fields [:account_kind :account_id], :type :btree}}
+ {:action :create-index,
+  :index-name
+  :uniq-payment-provider-account-links-provider-customer-ref,
+  :model-name :payment_provider_account_links,
+  :options
+  {:fields [:provider :provider_customer_ref],
+   :unique true,
+   :type :btree}}
+ {:action :create-index,
+  :index-name :idx-payment-provider-account-links-status,
+  :model-name :payment_provider_account_links,
+  :options {:fields [:status], :type :btree}}
+ {:action :create-index,
+  :index-name :uniq-payment-provider-account-links-account-provider,
+  :model-name :payment_provider_account_links,
+  :options
+  {:fields [:account_kind :account_id :provider],
+   :unique true,
+   :type :btree}})

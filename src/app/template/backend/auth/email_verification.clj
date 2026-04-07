@@ -2,6 +2,7 @@
   "Email verification service for single-tenant authentication"
   (:require
     [app.template.backend.db.protocols :as db-protocols]
+    [app.template.backend.security.email :as email-privacy]
     [java-time.api :as time]
     [taoensso.timbre :as log])
   (:import
@@ -49,18 +50,21 @@
 
    In the single-tenant template we don't need RLS bypass or tenant joins."
   [db token]
-  (some->> (db-protocols/execute! db
-             "SELECT evt.*,
-                     u.email AS verification_email,
-                     u.full_name AS verification_full_name
-              FROM email_verification_tokens evt
-              JOIN users u ON evt.user_id = u.id
-              WHERE evt.token = ?"
-             [token])
-    first
-    (into {}
-      (map (fn [[k v]]
-             [(keyword (name k)) v])))))
+  (let [row (some->> (db-protocols/execute! db
+                      "SELECT evt.*,
+                              u.email_ciphertext AS verification_email_ciphertext,
+                              u.full_name AS verification_full_name
+                       FROM email_verification_tokens evt
+                       JOIN users u ON evt.user_id = u.id
+                       WHERE evt.token = ?"
+                      [token])
+              first
+              (into {}
+                (map (fn [[k v]]
+                       [(keyword (name k)) v]))))
+        verification-email (some-> row email-privacy/resolve-email)]
+    (cond-> row
+      verification-email (assoc :verification_email verification-email))))
 
 (defn- token-expired?
   "Return true if the token has expired given the raw expires_at value from the DB."

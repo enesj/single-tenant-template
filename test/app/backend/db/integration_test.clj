@@ -11,6 +11,7 @@
     [app.admin.backend.services.admin.audit :as audit-service]
     [app.admin.backend.services.admin.auth :as admin-auth]
     [app.admin.backend.services.admin.users :as user-service]
+    [app.template.backend.security.email :as email-privacy]
     [clojure.set :as set]
     [clojure.test :refer [deftest is testing use-fixtures]]
     [honey.sql :as hsql]
@@ -50,15 +51,15 @@
     ;; Note: PostgreSQL enum types use snake_case (user_status)
     (jdbc/execute! db
       (hsql/format {:insert-into :users
-                    :values [{:id user-id
-                              :email user-email
-                              :full_name (or full_name "Test User")
-                              :password_hash "test-hash-not-real"
-                              :status [:cast (or status "active") :user_status]
-                              :email_verified false
-                              :auth_provider "email"
-                              :created_at now
-                              :updated_at now}]}))
+                    :values [(merge {:id user-id
+                                     :full_name (or full_name "Test User")
+                                     :password_hash "test-hash-not-real"
+                                     :status [:cast (or status "active") :user_status]
+                                     :email_verified false
+                                     :auth_provider "email"
+                                     :created_at now
+                                     :updated_at now}
+                               (email-privacy/email-storage user-email))]}))
     ;; Return the created user
     (jdbc/execute-one! db
       (hsql/format {:select [:*]
@@ -69,8 +70,11 @@
   "Strip namespaces from DB result keys without changing snake_case."
   [record]
   (when record
-    (into {}
-      (map (fn [[k v]] [(keyword (name k)) v]) record))))
+    (let [plain (into {}
+                  (map (fn [[k v]] [(keyword (name k)) v]) record))
+          email (email-privacy/resolve-email record)]
+      (cond-> (dissoc plain :email_ciphertext :email_lookup_hash :email_key_version)
+        email (assoc :email email)))))
 
 ;; ============================================================================
 ;; Database Connection Tests

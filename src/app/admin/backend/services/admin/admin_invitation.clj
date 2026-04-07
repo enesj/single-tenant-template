@@ -7,6 +7,7 @@
     [app.admin.backend.services.admin.audit :as audit]
     [app.admin.backend.services.admin.auth :as auth]
     [app.shared.adapters.database :refer [convert-pg-objects]]
+    [app.template.backend.security.email :as email-privacy]
     [honey.sql :as sql]
     [java-time.api :as time]
     [next.jdbc :as jdbc]
@@ -16,6 +17,30 @@
     [java.util UUID]))
 
 (def ^:private valid-invitation-roles #{"support" "admin"})
+
+(defn- with-resolved-invitation-identities
+  [invitation]
+  (let [email (some-> invitation email-privacy/resolve-email)
+        inviter-email (or (:inviter_email invitation)
+                        (some-> (:inviter_email_ciphertext invitation)
+                          email-privacy/decrypt-email))]
+    (cond-> invitation
+      email (assoc :email email)
+      inviter-email (assoc :inviter_email inviter-email))))
+
+(defn- routine-invitation-view
+  [invitation]
+  (let [email (email-privacy/resolve-email invitation)
+        inviter-email (some-> (:inviter_email invitation) email-privacy/mask-email)]
+    (cond-> (-> invitation
+              (dissoc :email
+                :email_ciphertext
+                :email_lookup_hash
+                :email_key_version
+                :inviter_email
+                :inviter_email_ciphertext)
+              email (assoc :email_masked (email-privacy/mask-email email)))
+      inviter-email (assoc :inviter_email_masked inviter-email))))
 
 ;; ============================================================================
 ;; Guards
@@ -30,26 +55,21 @@
 (defn- assert-no-pending-invite! [db email]
   (let [existing (jdbc/execute-one! db
                    (sql/format {:select [:id]
-                                :from   [:admin_invitations]
-                                :where  [:and
-                                         [:= :email email]
-                                         [:= :status [:cast "pending" :admin_invitation_status]]]
-                                :limit  1}))]
+                                :from [:admin_invitations]
+                                :where [:and
+                                        (email-privacy/email-match-clause :email_lookup_hash :email email)
+                                        [:= :status [:cast "pending" :admin_invitation_status]]]
+                                :limit 1}))]
     (when existing
       (throw (ex-info "A pending invitation already exists for this email"
                {:type :validation-error
                 :errors {:email ["A pending invitation already exists for this email"]}})))))
 
 (defn- assert-not-already-admin! [db email]
-  (let [existing (jdbc/execute-one! db
-                   (sql/format {:select [:id]
-                                :from   [:admins]
-                                :where  [:= :email email]
-                                :limit  1}))]
-    (when existing
-      (throw (ex-info "An admin account already exists with this email"
-               {:type :validation-error
-                :errors {:email ["An admin account already exists with this email"]}})))))
+  (when (auth/find-admin-by-email db email)
+    (throw (ex-info "An admin account already exists with this email"
+             {:type :validation-error
+              :errors {:email ["An admin account already exists with this email"]}}))))
 
 ;; ============================================================================
 ;; CRUD
@@ -58,26 +78,28 @@
 (defn create-invitation!
   "Create a pending admin invitation. Validates role, uniqueness, and no existing admin."
   [db {:keys [email role invited-by]}]
-  (assert-valid-role! role)
-  (assert-no-pending-invite! db email)
-  (assert-not-already-admin! db email)
-  (let [token      (auth/generate-session-token)
-        expires-at (time/plus (time/instant) (time/days 7))
-        inv-id     (UUID/randomUUID)
-        now        (time/instant)
-        inv-by     (if (string? invited-by) (UUID/fromString invited-by) invited-by)]
-    (let [result (convert-pg-objects
+  (let [normalized-email (email-privacy/normalize-email email)]
+    (assert-valid-role! role)
+    (assert-no-pending-invite! db normalized-email)
+    (assert-not-already-admin! db normalized-email)
+    (let [token (auth/generate-session-token)
+          expires-at (time/plus (time/instant) (time/days 7))
+          inv-id (UUID/randomUUID)
+          now (time/instant)
+          inv-by (if (string? invited-by) (UUID/fromString invited-by) invited-by)
+          result (convert-pg-objects
                    (jdbc/execute-one! db
                      (sql/format {:insert-into [:admin_invitations]
-                                  :values [{:id         inv-id
-                                            :email      email
-                                            :role       [:cast role :admin_invitation_role]
-                                            :invited_by inv-by
-                                            :status     [:cast "pending" :admin_invitation_status]
-                                            :token      token
-                                            :expires_at expires-at
-                                            :created_at now
-                                            :updated_at now}]
+                                  :values [(merge
+                                             {:id inv-id
+                                              :role [:cast role :admin_invitation_role]
+                                              :invited_by inv-by
+                                              :status [:cast "pending" :admin_invitation_status]
+                                              :token token
+                                              :expires_at expires-at
+                                              :created_at now
+                                              :updated_at now}
+                                             (email-privacy/email-storage normalized-email))]
                                   :returning [:*]})
                      {:builder-fn rs/as-unqualified-maps}))]
       (audit/log-audit! db
@@ -85,32 +107,35 @@
          :action "create_admin_invitation"
          :entity-type "admin_invitation"
          :entity-id inv-id
-         :changes {:email email :role role}})
-      result)))
+         :changes (merge {:role role}
+                    (email-privacy/redact-email-change normalized-email))})
+      (routine-invitation-view result))))
 
 (defn find-invitation-by-token
   "Lookup an invitation by token, joined with the inviter's name."
   [db token]
-  (convert-pg-objects
-    (jdbc/execute-one! db
-      (sql/format {:select [:ai.*
-                            [:a.full_name :inviter_name]
-                            [:a.email :inviter_email]]
-                   :from   [[:admin_invitations :ai]]
-                   :join   [[:admins :a] [:= :ai.invited_by :a.id]]
-                   :where  [:= :ai.token token]})
-      {:builder-fn rs/as-unqualified-maps})))
+  (some-> (jdbc/execute-one! db
+            (sql/format {:select [:ai.*
+                                  [:a.full_name :inviter_name]
+                                  [:a.email_ciphertext :inviter_email_ciphertext]]
+                         :from   [[:admin_invitations :ai]]
+                         :join   [[:admins :a] [:= :ai.invited_by :a.id]]
+                         :where  [:= :ai.token token]})
+            {:builder-fn rs/as-unqualified-maps})
+    convert-pg-objects
+    with-resolved-invitation-identities))
 
 (defn find-invitation-by-id
   "Lookup an invitation by its UUID."
   [db invitation-id]
   (let [inv-id (if (string? invitation-id) (UUID/fromString invitation-id) invitation-id)]
-    (convert-pg-objects
-      (jdbc/execute-one! db
-        (sql/format {:select [:*]
-                     :from   [:admin_invitations]
-                     :where  [:= :id inv-id]})
-        {:builder-fn rs/as-unqualified-maps}))))
+    (some-> (jdbc/execute-one! db
+              (sql/format {:select [:*]
+                           :from   [:admin_invitations]
+                           :where  [:= :id inv-id]})
+              {:builder-fn rs/as-unqualified-maps})
+      convert-pg-objects
+      with-resolved-invitation-identities)))
 
 (defn- assert-invitation-valid! [invitation]
   ;; Guard: must be pending
@@ -146,54 +171,56 @@
              {:type :validation-error
               :errors {:password ["Password must be at least 10 characters"]}})))
 
-  (let [invitation (find-invitation-by-token db token)]
+  (let [invitation (find-invitation-by-token db token)
+        invitation-email (email-privacy/resolve-email invitation)]
     (when-not invitation
       (throw (ex-info "Invalid invitation token"
                {:type :validation-error
                 :errors {:token ["This invitation token is invalid"]}})))
 
     (assert-invitation-valid! invitation)
-
-    ;; Guard: not already an admin (race condition protection)
-    (assert-not-already-admin! db (:email invitation))
+    (assert-not-already-admin! db invitation-email)
 
     (jdbc/with-transaction [tx db]
       (let [admin-id (UUID/randomUUID)
-            now      (time/instant)
-            ;; Create admin account
+            now (time/instant)
             admin (convert-pg-objects
                     (jdbc/execute-one! tx
                       (sql/format {:insert-into [:admins]
-                                   :values [{:id            admin-id
-                                             :email         (:email invitation)
-                                             :full_name     full-name
-                                             :password_hash (auth/hash-password password)
-                                             :role          [:cast (str (:role invitation)) :admin_role]
-                                             :status        [:cast "active" :admin_status]
-                                             :created_at    now
-                                             :updated_at    now}]
+                                   :values [(merge
+                                              {:id admin-id
+                                               :full_name full-name
+                                               :password_hash (auth/hash-password password)
+                                               :role [:cast (str (:role invitation)) :admin_role]
+                                               :status [:cast "active" :admin_status]
+                                               :created_at now
+                                               :updated_at now}
+                                              (email-privacy/email-storage invitation-email))]
                                    :returning [:*]})
                       {:builder-fn rs/as-unqualified-maps}))
-            ;; Mark invitation accepted
             _ (jdbc/execute-one! tx
                 (sql/format {:update [:admin_invitations]
-                             :set    {:status     [:cast "accepted" :admin_invitation_status]
-                                      :updated_at now}
-                             :where  [:= :id (:id invitation)]}))
-            ;; Create admin session (auto-login)
+                             :set {:status [:cast "accepted" :admin_invitation_status]
+                                   :updated_at now}
+                             :where [:= :id (:id invitation)]}))
             session (auth/create-admin-session! tx admin-id
                       (or ip-address "invitation-accept")
                       (or user-agent "invitation-accept"))]
-        (log/info "Admin invitation accepted — created admin" (:email admin) "as" (:role invitation)
-          "invited by" (:invited_by invitation))
+        (log/info "Admin invitation accepted"
+          {:admin-ref (email-privacy/admin-ref admin-id)
+           :role (str (:role invitation))
+           :invited-by (:invited_by invitation)})
         (audit/log-audit! tx
           {:admin_id (:invited_by invitation)
            :action "admin_invitation_accepted"
            :entity-type "admin"
            :entity-id admin-id
-           :changes {:email (:email admin) :role (str (:role invitation))
-                     :invited_by (str (:invited_by invitation))}})
-        {:admin   (dissoc admin :password_hash)
+           :changes (merge {:role (str (:role invitation))
+                            :invited_by (str (:invited_by invitation))}
+                      (email-privacy/redact-email-change invitation-email))})
+        {:admin (-> admin
+                  (dissoc :password_hash :email_ciphertext :email_lookup_hash :email_key_version)
+                  (assoc :email invitation-email))
          :session session}))))
 
 (defn revoke-invitation!
@@ -237,22 +264,22 @@
          :action "resend_admin_invitation"
          :entity-type "admin_invitation"
          :entity-id (:id inv)
-         :changes {:email (:email inv)}})
-      (assoc inv :expires_at new-expires :updated_at now))))
+        :changes (email-privacy/redact-email-change (email-privacy/resolve-email inv))})
+      (routine-invitation-view (assoc inv :expires_at new-expires :updated_at now)))))
 
 (defn list-pending-invitations
   "List all pending admin invitations, joined with inviter info."
   [db]
-  (mapv convert-pg-objects
-    (jdbc/execute! db
-      (sql/format {:select [:ai.*
-                            [:a.full_name :inviter_name]
-                            [:a.email :inviter_email]]
-                   :from   [[:admin_invitations :ai]]
-                   :join   [[:admins :a] [:= :ai.invited_by :a.id]]
-                   :where  [:= :ai.status [:cast "pending" :admin_invitation_status]]
-                   :order-by [[:ai.created_at :desc]]})
-      {:builder-fn rs/as-unqualified-maps})))
+  (->> (jdbc/execute! db
+         (sql/format {:select [:ai.*
+                               [:a.full_name :inviter_name]
+                               [:a.email_ciphertext :inviter_email_ciphertext]]
+                      :from   [[:admin_invitations :ai]]
+                      :join   [[:admins :a] [:= :ai.invited_by :a.id]]
+                      :where  [:= :ai.status [:cast "pending" :admin_invitation_status]]
+                      :order-by [[:ai.created_at :desc]]})
+         {:builder-fn rs/as-unqualified-maps})
+    (mapv #(-> % convert-pg-objects with-resolved-invitation-identities routine-invitation-view))))
 
 (comment
   ;; (require 'app.admin.backend.services.admin.admin-invitation :reload)

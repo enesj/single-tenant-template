@@ -29,12 +29,11 @@
   common-interceptors
   (fn [{:keys [db]} [response]]
     (let [success? (get response :success false)
-          user (get response :user)
           message (get response :message "Login successful")]
 
       (if success?
         (do
-          (log/info "Email/password login successful for user:" (:email user))
+          (log/info "Email/password login successful")
           ;; Trigger auth status refresh to get complete session data
           {:db (-> db
                  (assoc-in [:session :loading?] false)

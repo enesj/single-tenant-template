@@ -99,9 +99,10 @@
               ($ :tbody
                 (for [inv invitations]
                   (let [inv-id (:id inv)
+                        email-label (or (:email-masked inv) (:email_masked inv) "Hidden")
                         expires-at (or (:expires-at inv) (:expires_at inv))]
                     ($ :tr {:key inv-id}
-                      ($ :td (:email inv))
+                      ($ :td email-label)
                       ($ :td
                         ($ :span {:class "ds-badge ds-badge-sm ds-badge-outline"}
                           (or (:role inv) "")))

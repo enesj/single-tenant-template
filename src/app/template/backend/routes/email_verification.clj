@@ -3,12 +3,41 @@
   (:require
     [app.domain.backend.registry :as domain-registry]
     [app.template.backend.auth.email-verification :as email-verify]
+    [app.template.backend.auth.service :as auth-service]
     [app.template.backend.auth.tenant :as tenant-auth]
+    [app.template.backend.db.protocols :as db-protocols]
     [app.template.backend.routes.utils :as route-utils]
     [app.template.backend.services.tenant :as tenant-svc]
     [app.shared.data :as shared-data]
     [cheshire.core :as json]
+    [honey.sql :as sql]
+    [next.jdbc :as jdbc]
+    [next.jdbc.result-set :as rs]
     [taoensso.timbre :as log]))
+
+(defn- fetch-user-record
+  [db user-id]
+  (when (and db user-id)
+    (if (satisfies? db-protocols/DatabaseAdapter db)
+      (some-> (db-protocols/find-by-id db :users user-id)
+        auth-service/db-user->plain)
+      (let [opts {:builder-fn rs/as-unqualified-maps}
+            row (jdbc/execute-one! db
+                  (sql/format {:select [:id
+                                        :email_ciphertext
+                                        :email_lookup_hash
+                                        :email_key_version
+                                        :full_name
+                                        :status
+                                        :auth_provider
+                                        :email_verified
+                                        :avatar_url
+                                        :created_at
+                                        :updated_at]
+                               :from [:users]
+                               :where [:= :id user-id]})
+                  opts)]
+        (some-> row auth-service/db-user->plain)))))
 
 (defn- maybe-build-session-update
   [req db-conn config result]
@@ -37,7 +66,7 @@
   [db email-service config]
   (fn [req]
     (try
-      (let [token   (get-in req [:query-params "token"])
+      (let [token (get-in req [:query-params "token"])
             ;; `db` is a db-adapter (PostgresAdapter) in DI wiring; tenant service
             ;; uses raw next.jdbc and needs the underlying DataSource/connection.
             db-conn (or (:connection db) db)]
@@ -46,14 +75,16 @@
            :headers {"Content-Type" "application/json"}
            :body (json/generate-string {:error "Missing verification token"})}
 
-          (let [result         (email-verify/verify-email-token! db token)
-                already-used?  (= :token-already-used (:error result))
+          (let [result          (email-verify/verify-email-token! db token)
+                already-used?   (= :token-already-used (:error result))
                 should-proceed? (or (:success result) already-used?)
-                user-id        (:user-id result)
-                user-email     (or (:email result)
-                                 (get-in req [:session :auth-session :user :email]))
-                user-full-name (or (:full_name result)
-                                 (get-in req [:session :auth-session :user :full_name]))]
+                user-id         (:user-id result)
+                user-record     (fetch-user-record db user-id)
+                user-email      (or (:email result)
+                                  (:email user-record))
+                user-full-name  (or (:full_name result)
+                                  (:full_name user-record)
+                                  (get-in req [:session :auth-session :user :full_name]))]
             (if should-proceed?
               (do
                 (if already-used?
@@ -77,7 +108,7 @@
                           {:id user-id
                            :email user-email
                            :full_name user-full-name})
-                        (log/info "Provisioned workspace for newly verified user" user-email)
+                        (log/info "Provisioned workspace for newly verified user" user-id)
                         (catch Exception e
                           (log/error e "Failed to provision workspace after email verification")
                           (throw (ex-info "Workspace provisioning failed"
@@ -100,9 +131,9 @@
                       (log/warn "Failed to send verification success email (non-critical):" (.getMessage e)))))
 
                 (let [{:keys [session redirect-url]} (maybe-build-session-update req db-conn config
-                                                    (assoc result
-                                                      :email user-email
-                                                      :full_name user-full-name))]
+                                                       (assoc result
+                                                         :email user-email
+                                                         :full_name user-full-name))]
                   (cond-> {:status 302
                            :headers {"Location" (or redirect-url "/email-verified?success=true")}}
                     session (assoc :session session))))
@@ -146,24 +177,30 @@
 
           :else
           (try
-            (let [token (email-verify/resend-verification-token! db (:id user))]
+            (let [token (email-verify/resend-verification-token! db (:id user))
+                  delivery-user (or (fetch-user-record db (:id user)) user)]
 
               ;; Mark user as pending verification
               (email-verify/mark-user-verification-pending! db (:id user))
 
-              ;; Send verification email
-              (let [email-result (email-verify/send-verification-email
-                                   email-service
-                                   user
-                                   token)]
-                (if (:success email-result)
-                  {:status 200
-                   :headers {"Content-Type" "application/json"}
-                   :body (json/generate-string {:success true :message "Verification email sent"})}
+              (if-not (:email delivery-user)
+                {:status 500
+                 :headers {"Content-Type" "application/json"}
+                 :body (json/generate-string {:error "Unable to resolve email for verification delivery"})}
 
-                  {:status 500
-                   :headers {"Content-Type" "application/json"}
-                   :body (json/generate-string {:error "Failed to send verification email"})})))
+                ;; Send verification email
+                (let [email-result (email-verify/send-verification-email
+                                     email-service
+                                     delivery-user
+                                     token)]
+                  (if (:success email-result)
+                    {:status 200
+                     :headers {"Content-Type" "application/json"}
+                     :body (json/generate-string {:success true :message "Verification email sent"})}
+
+                    {:status 500
+                     :headers {"Content-Type" "application/json"}
+                     :body (json/generate-string {:error "Failed to send verification email"})}))))
 
             (catch Exception e
               (log/error e "Error resending verification email for user" (:id user))

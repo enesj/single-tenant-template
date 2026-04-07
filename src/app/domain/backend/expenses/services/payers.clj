@@ -4,6 +4,7 @@
   (:require
     [app.domain.backend.expenses.services.service-configs :as configs]
     [app.domain.backend.expenses.services.services-factory :as factory]
+    [app.template.backend.security.email :as email-privacy]
     [honey.sql :as sql]
     [next.jdbc :as jdbc]
     [next.jdbc.result-set :as rs]))
@@ -29,6 +30,22 @@
 
 (def ^:private create-payer!* (:create! service))
 (def ^:private update-payer!* (:update! service))
+
+(def ^:private list-payers* (:list service))
+(def ^:private get-payer* (:get service))
+
+(defn list-payers
+  "List payers with routine user-linked fields pseudonymized for admin browsing."
+  [db opts]
+  (mapv email-privacy/routine-payer-view (list-payers* db opts)))
+
+(defn get-payer
+  "Get a payer by id with routine user-linked fields pseudonymized."
+  ([db payer-id]
+   (get-payer db payer-id nil))
+  ([db payer-id opts]
+   (some-> (get-payer* db payer-id opts)
+     email-privacy/routine-payer-view)))
 
 (defn- assert-payer-type-not-system!
   "Guard: throw if the given payer_type_id belongs to a system payer type.

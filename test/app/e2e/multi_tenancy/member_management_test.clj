@@ -7,6 +7,7 @@
   (:require
     [app.e2e.fixtures :as fixtures]
     [app.e2e.helpers :as h]
+    [app.template.backend.security.email :as email-privacy]
     [clojure.test :refer [deftest is testing use-fixtures]]))
 
 (use-fixtures :each fixtures/with-browser-context)
@@ -79,8 +80,8 @@
                                FROM tenant_memberships tm
                                JOIN users u ON u.id = tm.user_id
                                JOIN tenants t ON t.id = tm.tenant_id
-                               WHERE u.email = ? AND t.slug = 'e2e-user-a'"
-                              (:email h/user-c))
+                               WHERE u.email_lookup_hash = ? AND t.slug = 'e2e-user-a'"
+                              (email-privacy/email->lookup-hash (:email h/user-c)))
             m (first all-memberships)]
         (is (= "suspended" (:status m))
           "Removed member's status should be 'suspended'")))))

@@ -3,6 +3,7 @@
   (:require
     [app.admin.backend.services.admin.audit :as audit]
     [app.template.backend.auth.email-verification :as email-verification]
+    [app.template.backend.security.email :as email-privacy]
     [clojure.string :as str]
     [java-time.api :as time]
     [postal.core :as postal]
@@ -180,10 +181,13 @@
 
         (if (= :SUCCESS (:error result))
           (do
-            (log/info "Email sent successfully via SMTP to:" to-email)
+            (log/info "Email sent successfully via SMTP"
+              {:email-masked (email-privacy/mask-email to-email)})
             {:success true :message-id (:id result)})
           (do
-            (log/error "Failed to send email via SMTP. Error:" (:message result))
+            (log/error "Failed to send email via SMTP"
+              {:email-masked (email-privacy/mask-email to-email)
+               :message (:message result)})
             (when-let [db (:db opts)]
               (audit/log-api-failure! db
                 {:api-name :gmail-smtp :operation "send-email"
@@ -226,7 +230,8 @@
   email-verification/EmailService
 
   (send-verification-email [_service user token]
-    (log/info "Sending verification email to" (:email user) "via Gmail SMTP")
+    (log/info "Sending verification email via Gmail SMTP"
+      {:email-masked (email-privacy/mask-email (:email user))})
     (let [{:keys [text html]} (create-verification-email-body user token base-url)
           tenant-name "Your Organization"
           subject (str "Verify your email address for " tenant-name)]
@@ -234,7 +239,8 @@
       (send-smtp-email smtp-config from-email (:email user) subject text html {:db db})))
 
   (send-verification-success-email [_service user]
-    (log/info "Sending verification success email to" (:email user) "via Gmail SMTP")
+    (log/info "Sending verification success email via Gmail SMTP"
+      {:email-masked (email-privacy/mask-email (:email user))})
     (let [{:keys [text html]} (create-success-email-body user base-url)
           tenant-name "Your Organization"
           subject (str "Email verified successfully - " tenant-name)]

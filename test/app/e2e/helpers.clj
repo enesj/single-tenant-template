@@ -10,6 +10,7 @@
    - DB query helpers for verification"
   (:require
     [app.e2e.fixtures :as fixtures]
+    [app.template.backend.security.email :as email-privacy]
     [cheshire.core :as json]
     [clojure.string :as str])
   (:import
@@ -517,7 +518,8 @@
 (defn get-user-by-email
   "Look up a user by email."
   [email]
-  (first (query-db "SELECT * FROM users WHERE email = ?" email)))
+  (first (query-db "SELECT * FROM users WHERE email_lookup_hash = ?"
+           (email-privacy/email->lookup-hash email))))
 
 (defn get-memberships-for-user
   "Get all active memberships for a user by email."
@@ -527,19 +529,24 @@
      FROM tenant_memberships tm
      JOIN users u ON u.id = tm.user_id
      JOIN tenants t ON t.id = tm.tenant_id
-     WHERE u.email = ? AND tm.status = 'active'
-     ORDER BY tm.created_at" email))
+     WHERE u.email_lookup_hash = ? AND tm.status = 'active'
+     ORDER BY tm.created_at"
+    (email-privacy/email->lookup-hash email)))
 
 (defn get-memberships-for-tenant
   "Get all memberships for a tenant by slug."
   [slug]
-  (query-db
-    "SELECT tm.*, u.email, u.full_name
-     FROM tenant_memberships tm
-     JOIN users u ON u.id = tm.user_id
-     JOIN tenants t ON t.id = tm.tenant_id
-     WHERE t.slug = ?
-     ORDER BY tm.created_at" slug))
+  (mapv (fn [row]
+          (let [email (email-privacy/resolve-email row)]
+            (cond-> row
+              email (assoc :email email))))
+    (query-db
+      "SELECT tm.*, u.email_ciphertext AS user_email_ciphertext, u.full_name
+       FROM tenant_memberships tm
+       JOIN users u ON u.id = tm.user_id
+       JOIN tenants t ON t.id = tm.tenant_id
+       WHERE t.slug = ?
+       ORDER BY tm.created_at" slug)))
 
 (defn get-invitation-token
   "Get the invitation token for a pending invitation by email."
@@ -547,16 +554,22 @@
   (:token
    (first (query-db
             "SELECT token FROM tenant_invitations
-              WHERE email = ? AND status = 'pending'
-              ORDER BY created_at DESC LIMIT 1" email))))
+              WHERE email_lookup_hash = ? AND status = 'pending'
+              ORDER BY created_at DESC LIMIT 1"
+             (email-privacy/email->lookup-hash email)))))
 
 (defn get-invitation-by-email
   "Get the most recent invitation for an email."
   [email]
-  (first (query-db
-           "SELECT * FROM tenant_invitations
-            WHERE email = ?
-            ORDER BY created_at DESC LIMIT 1" email)))
+  (some-> (first (query-db
+                   "SELECT * FROM tenant_invitations
+                    WHERE email_lookup_hash = ?
+                    ORDER BY created_at DESC LIMIT 1"
+                   (email-privacy/email->lookup-hash email)))
+    (as-> row
+      (cond-> row
+        (email-privacy/resolve-email row)
+        (assoc :email (email-privacy/resolve-email row))))))
 
 (defn get-expense-categories-for-tenant
   "Get expense categories for a tenant by slug."

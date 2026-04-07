@@ -134,14 +134,14 @@
    "id"],
   :default-visible-columns
   ["canonical_name"
-    "unit"
+   "unit"
    "category_name"
    "subcategory_name"
    "manufacturer_display_name"
    "created_at"],
   :filterable-columns
   ["canonical_name"
-    "unit"
+   "unit"
    "category_name"
    "subcategory_name"
    "manufacturer_display_name"
@@ -151,9 +151,9 @@
    "updated_at"],
   :sortable-columns
   ["canonical_name"
-    "unit"
-    "category_name"
-    "subcategory_name"
+   "unit"
+   "category_name"
+   "subcategory_name"
    "manufacturer_display_name"
    "link"
    "normalized_key"
@@ -169,7 +169,7 @@
   {:manufacturer_display_name {:label-key :common/manufacturer},
    :manufacturer_id {:label-key :common/manufacturer-id},
    :normalized_key {:label-key :common/normalized-key},
-    :unit {:label-key :common/unit},
+   :unit {:label-key :common/unit},
    :updated_at {:label-key :common/updated-at},
    :category_name {:label-key :common/category},
    :link {:label-key :common/link},
@@ -278,19 +278,19 @@
    :id {:label-key :common/id}}},
  :payers
  {:available-columns
-  ["label" "payer_type_label" "is_default" "user_email" "created_at" "updated_at" "id" "tenant_id"],
-  :default-visible-columns ["label" "payer_type_label" "is_default" "user_email"],
+  ["label" "payer_type_label" "is_default" "user_ref" "created_at" "updated_at" "id" "tenant_id"],
+  :default-visible-columns ["label" "payer_type_label" "is_default" "user_ref"],
   :filterable-columns ["label" "payer_type_label" "is_default"],
   :sortable-columns ["label" "payer_type_label" "is_default"],
   :always-visible ["label"],
   :computed-fields
   {:payer_type_label {:type "string", :label "Payer Type"},
-   :user_email {:type "string", :label "Email"}},
+   :user_ref {:type "string", :label "User Ref"}},
   :column-metadata
   {:label {:label-key :common/label},
    :payer_type_label {:label-key :common/payer-type},
    :is_default {:label-key :common/is-default},
-   :user_email {:label "Email"},
+   :user_ref {:label "User Ref"},
    :created_at {:label-key :common/created-at},
    :updated_at {:label-key :common/updated-at},
    :id {:label-key :common/id}}},

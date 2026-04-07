@@ -88,3 +88,7 @@ railway shell             # bash in the running container (JRE-only image — no
 ```
 
 Full reference: [railway-deployment.md](railway-deployment.md#production-debugging).
+
+## Security Runbooks
+
+- [email-privacy-key-management.md](email-privacy-key-management.md) — how email privacy keys work today, where to keep them, and the staged migration procedure required before any future key rotation.

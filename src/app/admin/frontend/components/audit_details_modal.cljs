@@ -16,7 +16,7 @@
 
 (defui audit-identity-block
   [{:keys [audit-log]}]
-  (let [{:keys [action entity-type created-at timestamp admin-email admin-name ip-address]} audit-log
+  (let [{:keys [action entity-type created-at timestamp admin-ref admin-name ip-address]} audit-log
         action-label (when action (fmt/format-value action))
         entity-label (when entity-type (fmt/format-value entity-type))
         timestamp-primary (when (or created-at timestamp)
@@ -27,9 +27,10 @@
                                   ts)
                                 (date/format-display-date ts))))
         admin-summary (cond
-                        (and admin-name admin-email) (str admin-name " (" admin-email ")")
-                        admin-email admin-email
+                        (and admin-name admin-ref (not= admin-name admin-ref))
+                        (str admin-name " (" admin-ref ")")
                         admin-name admin-name
+                        admin-ref admin-ref
                         :else nil)
         summary-text (->> [(when admin-summary
                              (str admin-summary
@@ -82,8 +83,14 @@
 
 (defui audit-details-body
   [{:keys [audit-log]}]
-  (let [{:keys [id created-at timestamp action entity-type entity-id admin-email admin-name
-                ip-address user-agent changes]} audit-log]
+  (let [{:keys [id created-at timestamp action entity-type entity-id actor-id admin-ref admin-name
+                ip-address user-agent changes]} audit-log
+        admin-summary (cond
+                        (and admin-name admin-ref (not= admin-name admin-ref))
+                        (str admin-name " (" admin-ref ")")
+                        admin-name admin-name
+                        admin-ref admin-ref
+                        :else "System")]
     ;; Capture debug info for display
     ($ :div {:class "space-y-6"}
       ($ audit-identity-block {:audit-log audit-log})
@@ -119,10 +126,13 @@
                                                  ($ :span {:class "font-mono text-sm"} entity-id))}]})
         ($ ui/detail-card
           {:title "Administrative Information"
-           :fields [{:label "Admin Email" :value ($ :div {:class "flex flex-col"}
-                                                   ($ :span {:class "font-medium"} admin-email)
-                                                   (when admin-name
-                                                     ($ :span {:class "text-sm text-base-content/60"} admin-name)))}
+           :fields [{:label "Admin" :value ($ :div {:class "flex flex-col"}
+                                             ($ :span {:class "font-medium"} admin-summary)
+                                             (when (and admin-name admin-ref (not= admin-name admin-ref))
+                                               ($ :span {:class "text-sm text-base-content/60"}
+                                                 (str "Ref: " admin-ref))))}
+                    {:label "Admin ID" :value (when actor-id
+                                                ($ :span {:class "font-mono text-sm"} actor-id))}
                     {:label "IP Address" :value (ui/ip-address-badge ip-address)}
                     {:label "User Agent" :value ($ :div {:class "text-sm text-base-content/70 max-w-xs break-words"}
                                                   (or user-agent "Unknown"))}]}))
@@ -179,13 +189,13 @@
             "Export")
 
           ;; Filter by this admin
-          (when admin-email
+          (when actor-id
             ($ button {:id "btn-filter-by-admin-from-details"
                        :btn-type :outline
                        :class "ds-btn-sm"
                        :on-click #(do
-                                    (log/info "Filtering by admin from details modal:" admin-email)
-                                    (dispatch [:admin/apply-audit-filter :admin-email admin-email])
+                                    (log/info "Filtering by admin from details modal:" actor-id)
+                                    (dispatch [:admin/apply-audit-filter :admin-id actor-id])
                                     (dispatch [:admin/hide-audit-details]))}
               ($ :svg {:class "w-4 h-4" :fill "none" :stroke "currentColor" :view-box "0 0 24 24"}
                 ($ :path {:stroke-linecap "round" :stroke-linejoin "round" :stroke-width "2" :d "M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.207A1 1 0 013 6.5V4z"}))
@@ -239,7 +249,7 @@
                          (nil? value) false
                          (and (string? value) (str/blank? value)) false
                          :else true))
-            {:keys [id action entity-type entity-id admin-email admin-name]} (or audit-log {})
+            {:keys [id action entity-type entity-id admin-ref admin-name]} (or audit-log {})
             audit-id (when (present? id) id)
             action-str (when (present? action) (str action))
             action-key (when action-str (keyword action-str))
@@ -260,10 +270,10 @@
                                (when (present? entity-id)
                                  (str " • " entity-id))))
             admin-summary (cond
-                            (and (present? admin-name) (present? admin-email))
-                            (str admin-name " (" admin-email ")")
-                            (present? admin-email) admin-email
+                            (and (present? admin-name) (present? admin-ref) (not= admin-name admin-ref))
+                            (str admin-name " (" admin-ref ")")
                             (present? admin-name) admin-name
+                            (present? admin-ref) admin-ref
                             :else nil)
             header-meta (let [primary-name (cond
                                              (present? entity-summary)

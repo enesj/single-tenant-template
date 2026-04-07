@@ -47,8 +47,7 @@
             {:id "member_count" :label "Members" :type :number}
             {:id "owner_name"
              :label "Owner"
-             :type :text
-             :display-source-field "owner_email"}
+             :type :text}
             {:id "created_at"
              :label "Created"
              :type :datetime
@@ -101,15 +100,21 @@
 (defui admin-member-row [{:keys [member tenant-id is-admin-owner?]}]
   (let [mid (or (:id member) (:tenant_memberships/id member))
         role (str (or (:role member) (:tenant_memberships/role member)))
-        email (or (:user_email member) (:email member) "")
-        name (or (:user_full_name member) (:full_name member) email)
+        email-label (or (:email-masked member) (:email_masked member) "Hidden")
+        name (or (:user-display-name member)
+               (:user_display_name member)
+               (:user_full_name member)
+               (:full_name member)
+               (:user-ref member)
+               (:user_ref member)
+               email-label)
         created (format-date (or (:created_at member) (:joined_at member)))
         is-target-owner? (= role "owner")
         can-modify? (and is-admin-owner? (not is-target-owner?))
         [confirming? set-confirming!] (use-state nil)]
     ($ :tr {:id (str "admin-member-row-" mid)}
       ($ :td {:class "font-medium"} name)
-      ($ :td email)
+      ($ :td email-label)
       ($ :td
         ($ :span {:class (str "ds-badge ds-badge-sm " (role-badge-class role))}
           role))
@@ -170,7 +175,12 @@
         error (use-subscribe [:admin/tenants-error])
         admin-role (use-subscribe [:admin/current-user-role])
         is-admin-owner? (= admin-role :owner)
-        tenant-id (or (:id tenant) (:tenants/id tenant))]
+        tenant-id (or (:id tenant) (:tenants/id tenant))
+        owner-label (or (:owner_name tenant)
+                      (:owner-name tenant)
+                      (:owner_ref tenant)
+                      (:owner-ref tenant)
+                      "—")]
     ($ :div {:class "p-6 max-w-5xl mx-auto"}
       (when show-back-button?
         ($ :button {:class "ds-btn ds-btn-ghost ds-btn-sm mb-4"
@@ -200,7 +210,7 @@
               ($ :div {:class "grid grid-cols-2 md:grid-cols-4 gap-4 mt-4 text-sm"}
                 ($ :div
                   ($ :span {:class "text-base-content/60"} "Owner: ")
-                  ($ :span {:class "font-medium"} (or (:owner_name tenant) (:owner_email tenant) "—")))
+                  ($ :span {:class "font-medium"} owner-label))
                 ($ :div
                   ($ :span {:class "text-base-content/60"} "Created: ")
                   ($ :span {:class "font-medium"} (format-date (:created_at tenant)))))))
@@ -218,7 +228,7 @@
                       ($ :thead
                         ($ :tr
                           ($ :th "Name")
-                          ($ :th "Email")
+                          ($ :th "Email hint")
                           ($ :th "Role")
                           ($ :th "Joined")
                           ($ :th "Actions")))

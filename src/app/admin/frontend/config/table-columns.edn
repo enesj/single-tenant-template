@@ -62,7 +62,8 @@
  :admins
  {:available-columns
   ["id"
-   "email"
+   "admin-ref"
+   "email-masked"
    "full-name"
    "role"
    "status"
@@ -72,7 +73,8 @@
    "password-hash"],
   :default-visible-columns
   ["id"
-   "email"
+   "admin-ref"
+   "email-masked"
    "full-name"
    "role"
    "status"
@@ -81,14 +83,15 @@
    "updated-at"
    "password-hash"],
   :filterable-columns
-  ["email" "full-name" "role" "status" "last-login-at"],
-  :sortable-columns ["email" "full-name" "role" "status" "created-at"],
-  :always-visible [],
+  ["full-name" "role" "status" "last-login-at"],
+  :sortable-columns ["full-name" "role" "status" "created-at"],
+  :always-visible ["admin-ref"],
   :computed-fields {},
   :column-config
-  {:role {:width "100px", :formatter "admin-role-badge"},
+  {:admin-ref {:width "160px"},
+   :email-masked {:width "220px"},
+   :role {:width "100px", :formatter "admin-role-badge"},
    :updated-at {:width "140px", :formatter "date"},
-   :email {:width "220px", :formatter "email-link"},
    :last-login-at {:width "160px", :formatter "date"},
    :status {:width "100px", :formatter "status-badge"},
    :full-name {:width "180px"},
@@ -235,30 +238,22 @@
   :column-config {:supplier_id {:type "text"}}},
  :audit-logs
  {:available-columns
-  ["action" "entity-name" "admin-email" "admin-name" "user-agent" "id" "actor-type" "actor-id" "target-type" "target-id" "metadata" "ip" "created-at" "updated-at"],
+  ["action" "entity-name" "admin-ref" "admin-name" "user-agent" "id" "actor-type" "actor-id" "target-type" "target-id" "metadata" "ip" "created-at" "updated-at"],
   :default-visible-columns
-  ["action" "entity-name" "admin-email" "admin-name"],
+  ["action" "entity-name" "admin-ref" "admin-name"],
   :filterable-columns
-  ["action" "entity-name" "admin-email" "admin-name" "user-agent"],
+  ["action" "entity-name" "admin-ref" "admin-name" "user-agent"],
   :sortable-columns
-  ["action" "entity-name" "admin-email" "admin-name" "user-agent"],
+  ["action" "entity-name" "admin-ref" "admin-name" "user-agent"],
   :always-visible ["action"],
   :computed-fields
   {:entity-name
    {:type "join",
     :compute-fn "join-entity-name",
-    :dependencies ["entity-type" "entity-id"]},
-   :admin-email
-   {:type "join",
-    :compute-fn "join-admin-email",
-    :dependencies ["admin-id"]},
-   :admin-name
-   {:type "join",
-    :compute-fn "join-admin-name",
-    :dependencies ["admin-id"]}},
+    :dependencies ["entity-type" "entity-id"]}},
   :column-config
   {:user-agent {:width "200px"},
-   :admin-email {:width "180px"},
+   :admin-ref {:width "180px"},
    :entity-name {:width "200px", :computed-field true},
    :action {:width "120px", :formatter "audit-action-badge"},
    :admin-name {:width "140px"}}},
@@ -480,7 +475,8 @@
  :users
  {:available-columns
   ["id"
-   "email"
+   "user-ref"
+   "email-masked"
    "full-name"
    "status"
    "last-login-at"
@@ -491,7 +487,8 @@
    "auth-provider"],
   :default-visible-columns
   ["id"
-   "email"
+   "user-ref"
+   "email-masked"
    "full-name"
    "status"
    "last-login-at"
@@ -502,12 +499,13 @@
    "auth-provider"],
   :filterable-columns
   ["status" "last-login-at" "created-at" "updated-at"],
-  :sortable-columns ["status" "created-at"],
-  :always-visible ["id" "email"],
+  :sortable-columns ["user-ref" "status" "created-at"],
+  :always-visible ["id" "user-ref"],
   :computed-fields {},
   :column-config
   {:updated-at {:width "140px", :formatter "date"},
-   :email {:width "200px", :formatter "email-link"},
+   :user-ref {:width "160px"},
+   :email-masked {:width "200px"},
    :last-login-at {:width "160px", :formatter "date"},
    :status {:width "100px", :formatter "status-badge"},
    :full-name {:width "180px"},

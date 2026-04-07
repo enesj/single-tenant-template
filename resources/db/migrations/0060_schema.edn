@@ -1,0 +1,64 @@
+({:action :add-column,
+  :field-name :email-ciphertext,
+  :model-name :users,
+  :options {:type :text}}
+ {:action :add-column,
+  :field-name :email-ciphertext,
+  :model-name :admin_invitations,
+  :options {:type :text}}
+ {:action :add-column,
+  :field-name :email-lookup-hash,
+  :model-name :admins,
+  :options {:type [:varchar 64]}}
+ {:action :add-column,
+  :field-name :email-lookup-hash,
+  :model-name :admin_invitations,
+  :options {:type [:varchar 64]}}
+ {:action :create-index,
+  :index-name :idx-admin-invitations-email-lookup-hash,
+  :model-name :admin_invitations,
+  :options {:fields [:email_lookup_hash], :type :btree}}
+ {:action :create-index,
+  :index-name :idx-admins-email-lookup-hash,
+  :model-name :admins,
+  :options {:fields [:email_lookup_hash], :unique true, :type :btree}}
+ {:action :add-column,
+  :field-name :email-lookup-hash,
+  :model-name :tenant_invitations,
+  :options {:type [:varchar 64]}}
+ {:action :add-column,
+  :field-name :email-lookup-hash,
+  :model-name :users,
+  :options {:type [:varchar 64]}}
+ {:action :create-index,
+  :index-name :idx-users-email-lookup-hash,
+  :model-name :users,
+  :options {:fields [:email_lookup_hash], :unique true, :type :btree}}
+ {:action :add-column,
+  :field-name :email-key-version,
+  :model-name :tenant_invitations,
+  :options {:type [:varchar 32]}}
+ {:action :add-column,
+  :field-name :email-key-version,
+  :model-name :admins,
+  :options {:type [:varchar 32]}}
+ {:action :add-column,
+  :field-name :email-ciphertext,
+  :model-name :tenant_invitations,
+  :options {:type :text}}
+ {:action :add-column,
+  :field-name :email-key-version,
+  :model-name :admin_invitations,
+  :options {:type [:varchar 32]}}
+ {:action :create-index,
+  :index-name :idx-tenant-invitations-email-lookup-hash,
+  :model-name :tenant_invitations,
+  :options {:fields [:email_lookup_hash], :type :btree}}
+ {:action :add-column,
+  :field-name :email-ciphertext,
+  :model-name :admins,
+  :options {:type :text}}
+ {:action :add-column,
+  :field-name :email-key-version,
+  :model-name :users,
+  :options {:type [:varchar 32]}})

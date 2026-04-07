@@ -120,12 +120,12 @@
             (let [tenant (h/get-tenant-by-slug "e2e-user-a")
                   tenant-id (:id tenant)]
               (when tenant-id
-                (let [{:keys [status body]} (admin-api-get admin-ctx
+                (let [{:keys [status]} (admin-api-get admin-ctx
                                               (str "/admin/api/tenants/" tenant-id) token)]
                   (is (= 200 status) "Admin can view tenant detail"))
 
                 ;; List tenant members
-                (let [{:keys [status body]} (admin-api-get admin-ctx
+                (let [{:keys [status]} (admin-api-get admin-ctx
                                               (str "/admin/api/tenants/" tenant-id "/members") token)]
                   (is (= 200 status) "Admin can view tenant members"))))))
         (finally
@@ -142,8 +142,7 @@
     (h/api-register! h/user-a)
 
     ;; As tenant owner, create an impersonation grant for the admin
-    (let [admin-db (first (h/query-db "SELECT id, email FROM admins WHERE email = ?" (:email admin-creds)))
-          grant-resp (h/api-post "/api/v1/tenant/impersonation-grants"
+    (let [grant-resp (h/api-post "/api/v1/tenant/impersonation-grants"
                        {:admin-email (:email admin-creds) :role "viewer"})]
       (is (or (= 200 (:status grant-resp)) (= 201 (:status grant-resp)))
         "Creating impersonation grant should succeed")

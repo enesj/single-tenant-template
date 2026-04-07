@@ -15,9 +15,8 @@
   ids/request-password-reset
   common-interceptors
   (fn [{:keys [db]} [email]]
-    (log/info "Password reset event - email param:" email "type:" (type email))
     (let [request-params {:email email}]
-      (log/info "Password reset request params:" request-params)
+      (log/info "Password reset request dispatched")
       {:db (-> db
              (assoc-in [:password-reset :loading?] true)
              (update :password-reset dissoc :error :success?))

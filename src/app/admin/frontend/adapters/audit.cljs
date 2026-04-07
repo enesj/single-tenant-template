@@ -26,6 +26,8 @@
     (update :id #(when % (str %)))
     (update :audit-log-id #(when % (str %)))
     (update :entity-id #(when % (str %)))
+    (update :actor-id #(when % (str %)))
+    (update :target-id #(when % (str %)))
     (update :user-id #(when % (str %)))
     (update :admin-id #(when % (str %)))
       ;; Ensure we have an :id field for the template system
@@ -63,7 +65,7 @@
           selected-ids-path (paths/entity-selected-ids :audit-logs)
           ;; Seed only current-page and preserve existing pagination (including per-page) if present.
           ;; Per-page defaults are seeded by list-view from entities.edn (:display-settings :per-page).
-              db* (db-utils/assoc-paths db
+          db* (db-utils/assoc-paths db
                 [[(conj metadata-path :sort) {:field :created-at :direction :desc}]
                  [(conj metadata-path :filters) {}]
                  [ui-state-path {:sort {:field :created-at :direction :desc}

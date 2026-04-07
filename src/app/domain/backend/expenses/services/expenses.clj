@@ -4,6 +4,7 @@
     [app.domain.backend.expenses.services.article-aliases :as aliases]
     [app.domain.backend.expenses.services.articles :as articles]
     [app.domain.backend.expenses.services.exchange-rates :as exchange-rates]
+    [app.template.backend.security.email :as email-privacy]
     [clojure.string :as str]
     [honey.sql :as sql]
     [next.jdbc :as jdbc]
@@ -417,7 +418,8 @@
                         [:p.label :payer_label]
                         [:pt.label :payer_type]
                         [:ec.name :expense_category_name]
-                        [[:coalesce :cb.full_name :cb.email] :created_by_name]]
+                        [:cb.id :created_by_user_id]
+                        [:cb.full_name :created_by_full_name]]
                :from [[:expenses :e]]
                :left-join [[:suppliers :s] [:= :s.id :e.supplier_id]
                            [:payers :p] [:= :p.id :e.payer_id]
@@ -428,7 +430,8 @@
                :order-by [[:e.purchased_at order-dir]]
                :limit limit
                :offset offset}]
-    (jdbc/execute! db (sql/format query) {:builder-fn rs/as-unqualified-lower-maps})))
+    (->> (jdbc/execute! db (sql/format query) {:builder-fn rs/as-unqualified-lower-maps})
+      (mapv email-privacy/routine-created-by-view))))
 
 (defn- lookup-tenant-id
   [db table-name entity-id]

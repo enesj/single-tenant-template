@@ -5,6 +5,7 @@
     [app.template.backend.middleware.admin :as admin-middleware]
     [app.template.backend.routes.admin.admin-invitations :as admin-invitations]
     [app.template.backend.routes.admin.admins :as admin-admins]
+    [app.template.backend.routes.admin.billing :as admin-billing]
     [app.template.backend.routes.admin.tenants :as admin-tenants]
     [app.template.backend.routes.admin.audit :as admin-audit]
     [app.template.backend.routes.admin.auth :as admin-auth]
@@ -55,6 +56,9 @@
 
       ;; Login events
       ["/login-events" (admin-login-events/routes db)]
+
+      ;; Billing operations
+      (admin-billing/routes db)
 
       ;; Settings (view-options.edn management)
       (admin-settings/routes db)

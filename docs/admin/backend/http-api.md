@@ -57,9 +57,14 @@ For shared HTTP shapes, auth expectations, and generic entity CRUD, see [Templat
 - `DELETE /admin/api/audit/bulk` – delete multiple audit logs; body `{:ids [<uuid> ...]}`.
 
 ### Login Events (protected, `app.template.backend.routes.admin.login-events`)
-- `GET /admin/api/login-events` – list login events for admins and users. Filters: `principal-type` (`admin|user`), `success?` (`true|false`), `limit` (default 100), `offset` (default 0). Response fields include `principal-id`, `principal-name/email` when available, `ip-address`, `user-agent`, `created-at`, and `reason`.
+- `GET /admin/api/login-events` – list login events for admins and users. Filters: `principal-type` (`admin|user`), `success?` (`true|false`), `limit` (default 100), `offset` (default 0). Response fields include `principal-id`, `principal-name`, pseudonymous `principal-ref` when available, `ip-address`, `user-agent`, `created-at`, and `reason`.
 - `DELETE /admin/api/login-events/:id` – delete a login event (admin action; RLS bypassed within txn).
 - `DELETE /admin/api/login-events/bulk` – delete multiple login events; body `{:ids [<uuid> ...]}`.
+
+### Billing Operations (protected, `app.template.backend.routes.admin.billing`)
+- `GET /admin/api/billing/provider-links` – list payment-provider account links. Filters: `account-kind` (`user|tenant`), `provider`, `status`, `search`, `limit`, `offset`, `order-by`, `order-dir`. Routine identity is exposed via pseudonymous `account-ref`, not email.
+- `POST /admin/api/billing/provider-links` – create a provider link using `{:account-kind <"user"|"tenant"> :account-id <uuid> :provider <string> :provider-customer-ref <string> :status <optional string>}`.
+- `PUT /admin/api/billing/provider-links/:id/status` – update a provider link status with body `{:status <string>}`.
 
 ### Domain APIs (admin scope)
 - Expenses admin endpoints live under `/admin/api/expenses` → see [Expenses HTTP API](../../domain/expenses/http-api.md).
@@ -90,7 +95,7 @@ Returns `{:success true :data {:events [...], :total <count>}}` with normalized 
 GET /admin/api/audit?principal-type=user&principal-id=a55fef53-f21e-4860-8c73-70bf7dc2ce57&limit=25
 x-admin-token: <token>
 ```
-Returns paginated audit rows suitable for the global audit page and per-user modal.
+Returns paginated audit rows suitable for the global audit page and per-user modal. Routine actor identity is exposed via admin name/reference fields rather than raw admin email.
 
 ## Notes for Contributors
 - Add new admin endpoints under `src/app/template/backend/routes/admin/*` and compose them in `app.template.backend.routes.admin-api/admin-api-routes`.

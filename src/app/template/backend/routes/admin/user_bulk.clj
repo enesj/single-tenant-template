@@ -4,8 +4,16 @@
     [app.template.backend.routes.admin.utils :as utils]
     [app.admin.backend.services.admin.users :as admin-users]
     [app.admin.backend.services.admin.users.bulk :as admin-users-bulk]
+    [app.template.backend.security.email :as email-privacy]
     [ring.util.response :as response]
     [taoensso.timbre :as log]))
+
+(defn- redact-email-fields
+  [payload]
+  (if-not (map? payload)
+    payload
+    (cond-> (dissoc payload :email)
+      (:email payload) (merge (email-privacy/redact-email-change (:email payload))))))
 
 (defn bulk-update-user-status-handler
   "Bulk update user status"
@@ -82,8 +90,10 @@
             user-agent (get-in request [:headers "user-agent"])
             body (:body request)
             items (:items body)]
-        (log/info "Admin" (:email admin) "performing batch user update"
-          {:item-count (count items)})
+        (log/info "Admin performing batch user update"
+          {:admin-id admin-id
+           :admin-ref (email-privacy/admin-ref admin-id)
+           :item-count (count items)})
 
         (if (empty? items)
           (utils/error-response "No items provided for batch update")
@@ -92,7 +102,9 @@
                                     updates (dissoc item :id :created-at  :updated-at)]
                               :when (and user-id (seq updates))]
                           (try
-                            (log/info "Batch updating user" user-id "with" updates)
+                            (log/info "Batch updating user"
+                              {:user-id user-id
+                               :updates (redact-email-fields updates)})
                             (admin-users/update-user! db user-id updates admin-id ip-address user-agent)
                             (catch Exception e
                               (log/error e "Failed to update user in batch" user-id)

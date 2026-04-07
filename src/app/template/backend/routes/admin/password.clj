@@ -187,7 +187,6 @@
 
           :else
           (let [admin-id (:id admin)
-                admin-email (:email admin)
                 admin-name (:full_name admin)
                 result (pwd-reset/change-password!
                          db :admin admin-id current-pwd new-pwd)]
@@ -201,7 +200,11 @@
                 ;; Send password changed confirmation email
                 (when email-service
                   (try
-                    (send-password-changed! email-service admin-email admin-name base-url)
+                    (let [delivery-admin (pwd-reset/find-principal-by-id db :admin admin-id)]
+                      (send-password-changed! email-service
+                        (:email delivery-admin)
+                        (or (:full_name delivery-admin) admin-name)
+                        base-url))
                     (catch Exception e
                       (log/warn "Failed to send password changed email:" (.getMessage e)))))
 

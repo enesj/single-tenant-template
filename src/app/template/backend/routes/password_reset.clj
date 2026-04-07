@@ -177,7 +177,11 @@
                 ;; Optionally send password changed confirmation email
                 (when email-service
                   (try
-                    (send-password-changed! email-service (:email user) (:full_name user) base-url)
+                    (let [delivery-user (pwd-reset/find-principal-by-id db-adapter :user user-id)]
+                      (send-password-changed! email-service
+                        (:email delivery-user)
+                        (:full_name delivery-user)
+                        base-url))
                     (catch Exception e
                       (log/warn "Failed to send password changed email:" (.getMessage e)))))
 

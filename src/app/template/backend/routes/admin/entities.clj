@@ -6,8 +6,16 @@
     [app.admin.backend.services.admin.users :as admin-users]
     [app.admin.backend.services.admin.users.deletion :as user-deletion]
     [app.admin.backend.services.admin.users.validation :as user-validation]
+    [app.template.backend.security.email :as email-privacy]
     [app.shared.adapters.database :as shared-db]
     [taoensso.timbre :as log]))
+
+(defn- redact-email-fields
+  [payload]
+  (if-not (map? payload)
+    payload
+    (cond-> (dissoc payload :email)
+      (:email payload) (merge (email-privacy/redact-email-change (:email payload))))))
 
 (defn delete-entity-handler
   "Delete entity with admin privileges (cross-tenant)"
@@ -30,7 +38,13 @@
                                (= "true" (:dry-run query-params))))]
 
         (log/info "Admin" (:email admin) "attempting to delete" entity "with id" id
-          {:force-delete force-delete :dry-run dry-run :source-flags {:body (select-keys body [:force-delete :dry-run])}
+          {:admin-id (:id admin)
+           :admin-ref (email-privacy/admin-ref (:id admin))
+           :entity entity
+           :entity-id id
+           :force-delete force-delete
+           :dry-run dry-run
+           :source-flags {:body (select-keys body [:force-delete :dry-run])}
            :query (select-keys query-params [:force-delete :dry-run])})
 
         ;; Route to appropriate admin service based on entity type
@@ -108,7 +122,11 @@
             ;; Handle successful deletion
             (:success result)
             (do
-              (log/info "Successfully deleted" entity id "by admin" (:email admin))
+              (log/info "Successfully deleted entity"
+                {:admin-id (:id admin)
+                 :admin-ref (email-privacy/admin-ref (:id admin))
+                 :entity entity
+                 :entity-id id})
               ;; Additional audit logging is already handled in the service layer
               (let [entity-key (case entity
                                  "users" :deleted-user
@@ -144,7 +162,11 @@
             ip-address (utils/get-client-ip request)
             user-agent (get-in request [:headers "user-agent"])]
 
-        (log/info "Admin" (:email admin) "creating" entity "with data:" data)
+        (log/info "Admin creating entity"
+          {:admin-id (:id admin)
+           :admin-ref (email-privacy/admin-ref (:id admin))
+           :entity entity
+           :data (redact-email-fields data)})
 
         ;; Route to appropriate admin service based on entity type
         (let [result (case entity
@@ -167,11 +189,14 @@
 
           (if result
             (do
-              (log/info "Successfully created" entity "by admin" (:email admin))
+              (log/info "Successfully created entity"
+                {:admin-id (:id admin)
+                 :admin-ref (email-privacy/admin-ref (:id admin))
+                 :entity entity})
               ;; Log admin action with request context
               (utils/log-admin-action-with-context
                 "create_entity" (:id admin) entity (or (:id result) (:number result))
-                {:entity-type entity :data data :result result}
+                {:entity-type entity :data (redact-email-fields data) :result result}
                 ip-address user-agent)
               (utils/success-response
                 (shared-db/to-app result)))
@@ -186,7 +211,11 @@
       (let [{:keys [entity id]} (:path-params request)
             admin (:admin request)]
 
-        (log/info "Admin" (:email admin) "requesting" entity "with id" id)
+        (log/info "Admin requesting entity"
+          {:admin-id (:id admin)
+           :admin-ref (email-privacy/admin-ref (:id admin))
+           :entity entity
+           :entity-id id})
 
         ;; Route to appropriate admin service based on entity type
         (let [result (case entity
@@ -217,7 +246,12 @@
             ip-address (utils/get-client-ip request)
             user-agent (get-in request [:headers "user-agent"])]
 
-        (log/info "Admin" (:email admin) "updating" entity id "with:" updates)
+        (log/info "Admin updating entity"
+          {:admin-id (:id admin)
+           :admin-ref (email-privacy/admin-ref (:id admin))
+           :entity entity
+           :entity-id id
+           :updates (redact-email-fields updates)})
 
         ;; Route to appropriate admin service based on entity type
         (let [result (case entity
@@ -244,11 +278,15 @@
 
           (if result
             (do
-              (log/info "Successfully updated" entity id "by admin" (:email admin))
+              (log/info "Successfully updated entity"
+                {:admin-id (:id admin)
+                 :admin-ref (email-privacy/admin-ref (:id admin))
+                 :entity entity
+                 :entity-id id})
               ;; Log admin action with request context
               (utils/log-admin-action-with-context
                 "update_entity" (:id admin) entity id
-                {:entity-type entity :changes updates :result result}
+                {:entity-type entity :changes (redact-email-fields updates) :result result}
                 ip-address user-agent)
               (utils/success-response
                 (shared-db/to-app result)))
@@ -264,7 +302,11 @@
             admin (:admin request)
             query-params (:query-params request)]
 
-        (log/info "Admin" (:email admin) "listing" entity "with filters:" query-params)
+        (log/info "Admin listing entities"
+          {:admin-id (:id admin)
+           :admin-ref (email-privacy/admin-ref (:id admin))
+           :entity entity
+           :filters (redact-email-fields query-params)})
 
         ;; Route to appropriate admin service based on entity type
         (let [result (case entity
@@ -298,7 +340,11 @@
       (let [{:keys [entity]} (:path-params request)
             admin (:admin request)
             ids (or (get-in request [:body :ids]) [])]
-        (log/info "Admin" (:email admin) "batch deleting" entity "count" (count ids))
+        (log/info "Admin batch deleting entities"
+          {:admin-id (:id admin)
+           :admin-ref (email-privacy/admin-ref (:id admin))
+           :entity entity
+           :count (count ids)})
 
         (let [result (case entity
                        "backlog"
@@ -338,8 +384,11 @@
                       "users" (:user_ids body)
                       (:user_ids body))
             entity-ids (->> ids-raw (map utils/parse-uuid-custom) (filter some?) vec)
-            _ (log/info "Admin" (:email admin) "batch checking deletion constraints for" entity
-                {:count (count entity-ids)})
+            _ (log/info "Admin batch checking deletion constraints"
+              {:admin-id (:id admin)
+               :admin-ref (email-privacy/admin-ref (:id admin))
+               :entity entity
+               :count (count entity-ids)})
             result (case entity
                      "users" (user-validation/check-users-deletion-constraints-batch db entity-ids)
                      {:error true

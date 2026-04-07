@@ -4,6 +4,7 @@
     [app.admin.backend.services.admin.audit :as audit]
     [app.admin.backend.services.admin.users.management :as management]
     [app.admin.backend.services.admin.users.validation :as validation]
+    [app.template.backend.security.email :as email-privacy]
     [app.template.backend.services.monitoring.login-events :as login-monitoring]
     [app.shared.adapters.database :as shared-db]
     [app.shared.adapters.normalization :as norm]
@@ -19,14 +20,18 @@
 (defn- db-user->app
   "Normalize a user row from the database using shared utilities"
   [user]
-  (norm/normalize-admin-result user user-config))
+  (some-> (norm/normalize-admin-result user user-config)
+    email-privacy/routine-user-view))
 
 (defn- normalize-user-result
   "Normalization fn for admin user queries (handles single row or row collections)."
   [raw]
-  (-> raw
-    shared-db/convert-pg-objects
-    (norm/normalize-admin-result user-config)))
+  (let [normalized (-> raw
+                     shared-db/convert-pg-objects
+                     (norm/normalize-admin-result user-config))]
+    (if (sequential? normalized)
+      (mapv email-privacy/routine-user-view normalized)
+      (some-> normalized email-privacy/routine-user-view))))
 
 (def ^:private latest-successful-user-login-query
   {:select [[:le.principal_id :principal_id]
@@ -42,7 +47,9 @@
 
 (def ^:private user-list-select-columns
   [[:u.id :id]
-   [:u.email :email]
+   [:u.email_ciphertext :email_ciphertext]
+   [:u.email_lookup_hash :email_lookup_hash]
+   [:u.email_key_version :email_key_version]
    [:u.full_name :full_name]
    [:u.password_hash :password_hash]
    [:u.status :status]
@@ -54,16 +61,15 @@
    [effective-last-login-at-expr :last_login_at]])
 
 (defn- build-user-list-filter-clauses
-  [{:keys [search status email full-name email-verified
+  [{:keys [search status full-name email-verified
            created-at-from created-at-to
            updated-at-from updated-at-to
            last-login-at-from last-login-at-to]}]
   (cond-> []
     search (conj [:or
-                  [:ilike :u/email (str "%" search "%")]
-                  [:ilike :u/full_name (str "%" search "%")]])
+                  [:ilike :u/full_name (str "%" search "%")]
+                  [:ilike [:cast :u/id :text] (str "%" search "%")]])
     status (conj [:= :u/status (tc/cast-for-database :user-status status)])
-    email (conj [:ilike :u/email (str "%" email "%")])
     full-name (conj [:ilike :u/full_name (str "%" full-name "%")])
     (some? email-verified) (conj [:= :u/email_verified email-verified])
     created-at-from (conj [:>= :u/created_at created-at-from])
@@ -82,7 +88,7 @@
 (def ^:private allowed-user-order-by
   {:created-at :u/created_at
    :updated-at :u/updated_at
-   :email :u/email
+   :user-ref :u/id
    :full-name :u/full_name
    :status :u/status
    :email-verified :u/email_verified
@@ -154,7 +160,6 @@
         query (cond-> base-query
                 search (update :where (fn [w]
                                         (let [clause [:or
-                                                      [:ilike :u/email (str "%" search "%")]
                                                       [:ilike :u/full_name (str "%" search "%")]]]
                                           (if w [:and w clause] clause))))
                 status (update :where (fn [w]

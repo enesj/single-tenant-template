@@ -4,6 +4,7 @@
    Requires env vars: GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET, GMAIL_REFRESH_TOKEN."
   (:require
     [app.template.backend.auth.email-verification :as email-verification]
+    [app.template.backend.security.email :as email-privacy]
     [app.template.backend.services.gmail-smtp :as gmail-smtp]
     [cheshire.core :as json]
     [clj-http.client :as http]
@@ -73,11 +74,15 @@
                           :throw-exceptions   false})]
       (if (= 200 (:status resp))
         (do
-          (log/info "Email sent via Gmail API" {:to to-email :id (get-in resp [:body :id])})
+          (log/info "Email sent via Gmail API"
+            {:email-masked (email-privacy/mask-email to-email)
+             :id (get-in resp [:body :id])})
           {:success true :message-id (get-in resp [:body :id])})
         (do
           (log/error "Gmail API send failed"
-            {:status (:status resp) :body (:body resp) :to to-email})
+            {:status (:status resp)
+             :body (:body resp)
+             :email-masked (email-privacy/mask-email to-email)})
           (when-let [db (:db api-config)]
             (audit/log-api-failure! db
               {:api-name :gmail :operation "send-email"
@@ -86,7 +91,8 @@
                :error-type "http-error" :request-url "https://gmail.googleapis.com" :severity :error}))
           {:success false :error :gmail-api-error :details (:body resp)})))
     (catch Exception e
-      (log/error e "Exception while sending email via Gmail API" {:to to-email})
+      (log/error e "Exception while sending email via Gmail API"
+        {:email-masked (email-privacy/mask-email to-email)})
       (when-let [db (:db api-config)]
         (audit/log-api-failure! db
           {:api-name :gmail :operation "send-email"
@@ -121,14 +127,16 @@
   email-verification/EmailService
 
   (send-verification-email [_service user token]
-    (log/info "Sending verification email via Gmail API" {:to (:email user)})
+    (log/info "Sending verification email via Gmail API"
+      {:email-masked (email-privacy/mask-email (:email user))})
     (let [{:keys [text html]} (gmail-smtp/create-verification-email-body user token base-url)
           subject             "Verify your email address for Your Organization"
           cfg                 (assoc gmail-api-config :db db)]
       (send-gmail-api-email cfg from-email (:email user) subject text html)))
 
   (send-verification-success-email [_service user]
-    (log/info "Sending verification success email via Gmail API" {:to (:email user)})
+    (log/info "Sending verification success email via Gmail API"
+      {:email-masked (email-privacy/mask-email (:email user))})
     (let [{:keys [text html]} (gmail-smtp/create-success-email-body user base-url)
           subject             "Email verified successfully - Your Organization"
           cfg                 (assoc gmail-api-config :db db)]

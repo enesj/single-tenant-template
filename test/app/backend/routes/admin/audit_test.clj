@@ -7,7 +7,10 @@
     [app.backend.test-helpers :as h]
     [app.shared.adapters.database :as shared-db]
     [app.template.backend.routes.admin.audit :as audit-routes]
-    [clojure.test :refer [deftest is testing use-fixtures]]))
+    [app.template.backend.security.email :as email-privacy]
+    [clojure.test :refer [deftest is testing use-fixtures]]
+    [honey.sql :as hsql]
+    [next.jdbc :as jdbc]))
 
 ;; ============================================================================
 ;; Audit Log Structure Tests
@@ -90,7 +93,30 @@
                   (fn [_ {:keys [limit]}]
                     (vec (repeat (or limit 10) {:id (random-uuid)})))]
       (let [result (audit/get-audit-logs nil {:limit 5})]
-        (is (= 5 (count result)))))))
+        (is (= 5 (count result))))))
+
+  (testing "routine audit results expose admin refs without raw admin email"
+    (let [admin-id (random-uuid)
+          target-id (random-uuid)
+          raw-log {:id (random-uuid)
+                   :actor_id admin-id
+                   :actor_type "admin"
+                   :action "update_user"
+                   :target_type "user"
+                   :target_id target-id
+                   :admin_name nil
+                   :created_at (java.time.Instant/parse "2026-01-01T00:00:00Z")}
+          results (with-redefs-fn {#'hsql/format identity
+                                   #'jdbc/execute! (fn [_ _] [raw-log])
+                                   #'app.admin.backend.services.admin.audit/resolve-entity-name
+                                   (fn [_ _ _] "Example User")}
+                    #(audit/get-audit-logs nil {:limit 1 :offset 0}))
+          result (first results)]
+      (is (= 1 (count results)))
+      (is (= "Example User" (:entity-name result)))
+      (is (= (email-privacy/admin-ref admin-id) (:admin-ref result)))
+      (is (= (:admin-ref result) (:admin-name result)))
+      (is (not (contains? result :admin-email))))))
 
 (deftest get-audit-logs-handler-pagination-metadata-test
   (testing "audit handler returns logs, total, limit, and offset with filter-aware total"

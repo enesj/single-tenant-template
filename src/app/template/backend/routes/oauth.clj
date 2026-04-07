@@ -4,6 +4,7 @@
     [app.template.backend.auth.service :as auth-service]
     [app.template.backend.auth.tenant :as tenant-auth]
     [app.template.backend.routes.utils :as route-utils :refer [get-oauth-configs]]
+    [app.template.backend.security.email :as email-privacy]
     [app.template.backend.services.onboarding.core :as onboarding]
     [clj-http.client :as http]
     [clojure.string :as str]
@@ -279,17 +280,19 @@
             ;; Parse query parameters
             query-params (or (:query-params req)
                            (when (:query-string req)
-                             (into {} (map (fn [param]
-                                             (let [[k v] (clojure.string/split param #"=" 2)]
-                                               [k (when v (java.net.URLDecoder/decode v "UTF-8"))]))
-                                        (clojure.string/split (:query-string req) #"&")))))
+                             (into {}
+                               (map (fn [param]
+                                      (let [[k v] (clojure.string/split param #"=" 2)]
+                                        [k (when v (java.net.URLDecoder/decode v "UTF-8"))]))
+                                 (clojure.string/split (:query-string req) #"&")))))
             code (get query-params "code")
             ;; Extract return URL from state parameter (base64-encoded "return:<url>")
             state-raw (get query-params "state")
             state-return (when state-raw
                            (try
                              (let [decoded (String. (.decode (java.util.Base64/getUrlDecoder)
-                                                      state-raw) "UTF-8")]
+                                                      state-raw)
+                                             "UTF-8")]
                                (when (str/starts-with? decoded "return:")
                                  (safe-return-path (subs decoded 7))))
                              (catch Exception _ nil)))
@@ -310,48 +313,53 @@
                                   nil)]
                   (if user-info
                     (do
-                      (log/info "Processing OAuth callback for provider:" provider "user:" (:email user-info))
+                      (log/info "Processing OAuth callback for provider:" provider
+                        "user:" (email-privacy/mask-email (:email user-info)))
 
                       ;; Use auth service to process OAuth callback with tenant context
                       (try
-                        (let [session-data              (auth-service/process-oauth-callback auth-service user-info provider)
-                              user-raw                  (:user session-data)
-                              user-email                (:email user-raw)
-                              sanitized-user            (sanitize-for-serialization user-raw)
-                              new-signup?               (:is-new-signup session-data)
-                              verification-required?    (:verification-required session-data)
-                              verification-email-sent?  (:verification-email-sent? session-data)
-                              verification-email-error  (:verification-email-error session-data)]
+                        (let [session-data             (auth-service/process-oauth-callback auth-service user-info provider)
+                              user-raw                 (:user session-data)
+                              user-email               (:email user-raw)
+                              masked-user-email        (email-privacy/mask-email user-email)
+                              sanitized-user           (sanitize-for-serialization user-raw)
+                              pending-auth-session     {:user (sanitize-for-serialization
+                                                                (email-privacy/user-session-payload user-raw))}
+                              new-signup?              (:is-new-signup session-data)
+                              verification-required?   (:verification-required session-data)
+                              verification-email-sent? (:verification-email-sent? session-data)
+                              verification-email-error (:verification-email-error session-data)]
 
                           (if (and new-signup? verification-required?)
                             (if verification-email-sent?
                               ;; New OAuth user: redirect to "check your email" page
                               (do
-                                (log/info "New OAuth user" user-email "— verification email sent, redirecting to pending page")
+                                (log/info "New OAuth user" masked-user-email
+                                  "— verification email sent, redirecting to pending page")
                                 (-> (response/redirect "/email-verified?pending=true")
-                                  (assoc :session {:auth-session {:user sanitized-user}})))
+                                  (assoc :session {:auth-session pending-auth-session})))
                               ;; New OAuth user but verification delivery failed: don't pretend email was sent
                               (do
                                 (log/warn "New OAuth user verification email delivery failed"
-                                  {:email user-email
+                                  {:email masked-user-email
                                    :provider provider
                                    :error verification-email-error})
                                 (-> (response/redirect "/email-verified?error=email-send-failed")
-                                  (assoc :session {:auth-session {:user sanitized-user}}))))
+                                  (assoc :session {:auth-session pending-auth-session}))))
 
                             ;; Existing user: resolve tenant context and redirect normally
-                            (let [oauth-db     (or db (get-in req [:service-container :db]))
-                                  tenant-ctx   (tenant-auth/resolve-tenant-context oauth-db config user-raw
-                                                 {:client-ip (:remote-addr req)})
+                            (let [oauth-db (or db (get-in req [:service-container :db]))
+                                  tenant-ctx (tenant-auth/resolve-tenant-context oauth-db config user-raw
+                                               {:client-ip (:remote-addr req)})
                                   auth-session (sanitize-for-serialization
                                                  (tenant-auth/build-auth-session {:user sanitized-user} tenant-ctx))
                                   ;; Prefer return URL from OAuth state param (e.g. invitation accept)
                                   ;; over the default post-login redirect.
-                                  redirect-url  (or state-return
-                                                  (post-login-redirect-url oauth-db tenant-ctx auth-session))]
+                                  redirect-url (or state-return
+                                                 (post-login-redirect-url oauth-db tenant-ctx auth-session))]
 
-                              (log/info "Authentication successful for:" user-email)
-                              (log/info "Redirecting user" user-email "to:" redirect-url
+                              (log/info "Authentication successful for:" masked-user-email)
+                              (log/info "Redirecting user" masked-user-email "to:" redirect-url
                                 (when state-return "(from OAuth state return URL)"))
 
                               (-> (response/redirect redirect-url)
@@ -408,7 +416,7 @@
               "Request details:<br/>"
               "URI: " (:uri req) "<br/>"
               "Query string: " (:query-string req) "<br/>"
-              "Provider: " (if provider (name provider) "Not detected"))))))))
+              "Provider: " provider)))))))
 
 (defn get-google-user-info-for-status
   "Public function to fetch Google user info for auth status checks"

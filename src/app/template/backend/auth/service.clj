@@ -6,9 +6,13 @@
     [app.template.backend.db.protocols :as db-protocols]
     [app.template.protocols :as core-protocols]
     [app.shared.patterns.email :as email-patterns]
+    [app.template.backend.security.email :as email-privacy]
     [buddy.hashers :as hashers]
     [clojure.string :as str]
+
     [java-time.api :as time]
+    [next.jdbc :as jdbc]
+    [next.jdbc.result-set :as rs]
     [taoensso.timbre :as log])
   (:import
     [java.security SecureRandom]
@@ -138,10 +142,82 @@
 
 ;; Database user normalization helper
 (defn db-user->plain
-  "Convert database user record to plain format for frontend"
+  "Convert database user record to plain format for frontend."
   [user-record]
-  (into {}
-    (map (fn [[k v]] [(keyword (name k)) v]) user-record)))
+  (let [base (into {}
+               (map (fn [[k v]] [(keyword (name k)) v]) user-record))
+        resolved-email (email-privacy/resolve-email user-record)]
+    (cond-> (dissoc base :email_ciphertext :email_lookup_hash :email_key_version)
+      resolved-email (assoc :email resolved-email)
+      (:id base) (assoc :user_ref (email-privacy/user-ref (:id base))))))
+
+(defn- protocol-missing-method?
+  [method-name throwable]
+  (let [message (some-> throwable .getMessage str)]
+    (boolean
+      (and message
+        (str/includes? message (str "No implementation of method: :" method-name))))))
+
+(defn- jdbc-source
+  [db]
+  (or (when (map? db) (:connection db)) db))
+
+(defn- create-user-record!
+  [db metadata user-data]
+  (try
+    (db-protocols/create db metadata :users user-data)
+    (catch IllegalArgumentException e
+      (if (protocol-missing-method? "create" e)
+        (jdbc/execute-one! (jdbc-source db)
+          ["INSERT INTO users (id, email_ciphertext, email_lookup_hash, email_key_version, full_name, avatar_url, password_hash, status, auth_provider, email_verified, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING *"
+           (:id user-data)
+           (:email_ciphertext user-data)
+           (:email_lookup_hash user-data)
+           (:email_key_version user-data)
+           (:full_name user-data)
+           (:avatar_url user-data)
+           (:password_hash user-data)
+           (:status user-data)
+           (:auth_provider user-data)
+           (:email_verified user-data)
+           (:created_at user-data)]
+          {:builder-fn rs/as-unqualified-maps})
+        (throw e)))))
+
+(defn- update-user-record!
+  [db metadata user-id update-data]
+  (try
+    (db-protocols/update-record db metadata :users user-id update-data)
+    (catch IllegalArgumentException e
+      (if (protocol-missing-method? "update-record" e)
+        (jdbc/execute-one! (jdbc-source db)
+          ["UPDATE users SET full_name = ?, avatar_url = ?, auth_provider = ?, email_ciphertext = ?, email_lookup_hash = ?, email_key_version = ? WHERE id = ? RETURNING *"
+           (:full_name update-data)
+           (:avatar_url update-data)
+           (:auth_provider update-data)
+           (:email_ciphertext update-data)
+           (:email_lookup_hash update-data)
+           (:email_key_version update-data)
+           user-id]
+          {:builder-fn rs/as-unqualified-maps})
+        (throw e)))))
+
+(defn- find-user-by-email
+  [db email]
+  (let [normalized-email (email-privacy/normalize-email email)
+        lookup-hash (email-privacy/email->lookup-hash normalized-email)]
+    (try
+      (db-protocols/find-by-field db :users :email_lookup_hash lookup-hash)
+      (catch IllegalArgumentException e
+        (if (protocol-missing-method? "find-by-field" e)
+          (jdbc/execute-one! (jdbc-source db)
+            ["SELECT * FROM users WHERE email_lookup_hash = ? LIMIT 1" lookup-hash]
+            {:builder-fn rs/as-unqualified-maps})
+          (throw e))))))
+
+(defn- user-exists-by-email?
+  [db email]
+  (some? (find-user-by-email db email)))
 
 ;; Email/Password user registration function
 (defn register-user-with-password!
@@ -150,12 +226,12 @@
   [auth-service {:keys [email full-name password]}]
   (let [{:keys [db metadata password-manager email-service]} auth-service
         now (time/local-date-time)
-        ;; Normalize incoming values
-        email (some-> email str/trim)
+        email (email-privacy/normalize-email email)
         full-name (some-> full-name str/trim)]
-    (log/info "register-user input" {:email email :full-name full-name})
+    (log/info "register-user input"
+      {:email-masked (email-privacy/mask-email email)
+       :full-name full-name})
 
-    ;; 0) Validate required fields in a single place (service layer)
     (when (or (str/blank? email)
             (str/blank? full-name)
             (str/blank? password))
@@ -169,44 +245,39 @@
                           (when (str/blank? password)
                             {:password ["Password is required"]}))})))
 
-    ;; 0a) Validate email format before hitting the database so we never
-    ;; rely on the users_email_check constraint for user-visible errors.
     (when-not (or (email-patterns/valid-email? email)
                 (email-patterns/valid-email-simple? email))
       (throw (ex-info "Invalid email format"
                {:type :validation-error
                 :errors {:email ["Please enter a valid email address"]}})))
 
-    ;; 1) Check for existing user
-    (when (db-protocols/exists? db :users :email email)
+    (when (user-exists-by-email? db email)
       (throw (ex-info "Email already registered"
                {:type :validation-error
                 :errors {:email ["This email is already registered"]}})))
 
-    ;; 2) Password strength validation
     (when (< (count password) 10)
       (throw (ex-info "Weak password"
                {:type :validation-error
                 :errors {:password ["Password must be at least 10 characters"]}})))
 
-    ;; 3) Hash password and create user
     (let [password-hash (auth-protocols/hash-password password-manager password)
           user-id (java.util.UUID/randomUUID)
-          user-record (db-protocols/create db metadata :users
-                        {:id user-id
-                         :email email
-                         :full_name full-name
-                         :password_hash password-hash
-                         :status "active"
-                         :auth_provider "password"
-                         :email_verified false
-                         :created_at now})
+          user-record (create-user-record!
+                        db metadata
+                        (email-privacy/merge-email-storage
+                          {:id user-id
+                           :full_name full-name
+                           :password_hash password-hash
+                           :status "active"
+                           :auth_provider "password"
+                           :email_verified false
+                           :created_at now}
+                          email))
           user-plain (db-user->plain user-record)
           verification-token (email-verification/create-verification-token!
                                db
                                user-id)]
-
-      ;; 5) Send verification email
       (when email-service
         (try
           (email-verification/send-verification-email
@@ -214,7 +285,10 @@
             user-plain
             verification-token)
           (catch Exception e
-            (log/warn "Failed to send verification email for" email ":" (.getMessage e)))))
+            (log/warn "Failed to send verification email for"
+              (email-privacy/mask-email email)
+              ":"
+              (.getMessage e)))))
 
       {:user user-plain
        :verification-required true
@@ -226,18 +300,16 @@
    Returns {:user <user-map>} or throws ex-info."
   [auth-service {:keys [email password]}]
   (let [{:keys [db password-manager]} auth-service
-        user-record (db-protocols/find-by-field db :users :email email)]
-
+        normalized-email (email-privacy/normalize-email email)
+        user-record (find-user-by-email db normalized-email)]
     (when-not user-record
       (throw (ex-info "Invalid credentials"
                {:type :validation-error
                 :errors {:email ["Invalid email or password"]}})))
 
-    ;; Verify password - handle both namespaced and non-namespaced keys
     (let [user (db-user->plain user-record)
           password-hash (:password_hash user)
           user-status (:status user)]
-
       (when-not password-hash
         (throw (ex-info "Invalid credentials"
                  {:type :validation-error
@@ -248,7 +320,6 @@
                  {:type :validation-error
                   :errors {:password ["Invalid email or password"]}})))
 
-      ;; Status checks
       (when (not= "active" user-status)
         (throw (ex-info "User is not active"
                  {:type :forbidden
@@ -280,68 +351,60 @@
   [auth-service oauth-data provider]
   (try
     (let [{:keys [db metadata password-manager]} auth-service
-          user-email (:email oauth-data)]
+          normalized (normalize-oauth-user-data oauth-data provider)
+          user-email (email-privacy/normalize-email (:email normalized))]
       (when-not user-email
         (throw (ex-info "Email not provided by OAuth provider"
                  {:provider provider
                   :oauth-data oauth-data})))
 
-      (let [normalized (normalize-oauth-user-data oauth-data provider)
-            existing-user (db-protocols/find-by-field db :users :email user-email)
+      (let [existing-user (find-user-by-email db user-email)
             existing-user-plain (some-> existing-user db-user->plain)
             now (time/local-date-time)
             new-user? (nil? existing-user-plain)
-
-            ;; Security check: Prevent OAuth from overwriting password-based accounts
-            ;; Handle both namespaced and non-namespaced keys
             existing-auth-provider (:auth_provider existing-user-plain)
             _ (when (and existing-user-plain
                       (= "password" existing-auth-provider))
-                (log/warn "OAuth login blocked for password-based account:" user-email)
+                (log/warn "OAuth login blocked for password-based account"
+                  {:provider provider
+                   :email-masked (email-privacy/mask-email user-email)})
                 (throw (ex-info "Email already registered with password authentication"
                          {:type :account-conflict
                           :provider provider
                           :email user-email
                           :message "This email is already registered with password authentication. Please log in with your password instead."})))
-
-            ;; Ensure we always have some password hash value even though
-            ;; OAuth users do not log in with a local password.
             placeholder-password (auth-protocols/hash-password
                                    password-manager
                                    (str "oauth-" (name provider) "-user"))
             user-record (if existing-user-plain
-                          ;; Update existing OAuth user (only if auth_provider is already OAuth)
                           (let [user-id (:id existing-user-plain)
-                                update-data {:full_name (:full-name normalized)
-                                             :avatar_url (:avatar-url normalized)
-                                             :auth_provider (name provider)}]
-                            (db-protocols/update-record db metadata :users user-id update-data)
-                            (db-protocols/find-by-id db :users user-id))
-                          ;; Create new OAuth user (unverified — must verify email first)
+                                update-data (merge
+                                              {:full_name (:full-name normalized)
+                                               :avatar_url (:avatar-url normalized)
+                                               :auth_provider (name provider)}
+                                              (email-privacy/email-storage user-email))]
+                            (update-user-record! db metadata user-id update-data))
                           (let [user-id (java.util.UUID/randomUUID)
-                                create-data {:id user-id
-                                             :email user-email
-                                             :full_name (:full-name normalized)
-                                             :avatar_url (:avatar-url normalized)
-                                             :password_hash placeholder-password
-                                             :status "active"
-                                             :auth_provider (name provider)
-                                             :email_verified false
-                                             :created_at now}]
-                            (db-protocols/create db metadata :users create-data)))
-            ;; Convert any namespaced keys (e.g. :users/email) to plain keys
-            user-plain (into {}
-                         (map (fn [[k v]]
-                                [(keyword (name k)) v])
-                           user-record))
+                                create-data (merge
+                                              {:id user-id
+                                               :full_name (:full-name normalized)
+                                               :avatar_url (:avatar-url normalized)
+                                               :password_hash placeholder-password
+                                               :status "active"
+                                               :auth_provider (name provider)
+                                               :email_verified false
+                                               :created_at now}
+                                              (email-privacy/email-storage user-email))]
+                            (create-user-record! db metadata create-data)))
+            user-plain (db-user->plain user-record)
             verification-email-state (when new-user?
-                                       (let [uid           (:id user-plain)
-                                             token         (email-verification/create-verification-token! db uid)
+                                       (let [uid (:id user-plain)
+                                             token (email-verification/create-verification-token! db uid)
                                              email-service (:email-service auth-service)]
                                          (if-not email-service
                                            (do
                                              (log/warn "OAuth signup created without email service; verification email not sent"
-                                               {:email user-email
+                                               {:email-masked (email-privacy/mask-email user-email)
                                                 :provider provider})
                                              {:required? true
                                               :sent? false
@@ -354,7 +417,7 @@
                                                   :sent? true}
                                                  (do
                                                    (log/warn "Failed to send verification email for OAuth user"
-                                                     {:email user-email
+                                                     {:email-masked (email-privacy/mask-email user-email)
                                                       :provider provider
                                                       :error (:error email-result)
                                                       :details (dissoc email-result :details)})
@@ -364,12 +427,11 @@
                                                              :verification-email-send-failed)})))
                                              (catch Exception e
                                                (log/warn e "Failed to send verification email for OAuth user"
-                                                 {:email user-email
+                                                 {:email-masked (email-privacy/mask-email user-email)
                                                   :provider provider})
                                                {:required? true
                                                 :sent? false
                                                 :error :verification-email-send-failed})))))]
-
         {:user user-plain
          :authenticated (not new-user?)
          :verification-required (boolean (:required? verification-email-state))

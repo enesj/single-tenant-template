@@ -7,6 +7,7 @@
     [app.admin.backend.services.admin.admin-invitation :as inv-svc]
     [app.shared.adapters.database :as shared-db]
     [app.template.backend.routes.admin.utils :as utils]
+    [app.template.backend.security.email :as email-privacy]
     [app.template.backend.services.invitation-email :as inv-email]
     [taoensso.timbre :as log]))
 
@@ -154,7 +155,8 @@
                    :accept-url   accept-url
                    :role         role})
                 (catch Exception e
-                  (log/error e "Failed to send admin invitation email" {:email email})))))
+                  (log/error e "Failed to send admin invitation email"
+                    {:email-masked (email-privacy/mask-email email)})))))
           (let [converted (shared-db/to-app invitation)]
             (utils/json-response {:invitation converted} :status 201)))))
     "Failed to create admin invitation"))
