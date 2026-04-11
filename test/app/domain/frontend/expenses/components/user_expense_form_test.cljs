@@ -16,9 +16,9 @@
   (testing "Receipt normalization keeps OCR-derived unit on line items"
     (let [normalized (norm/normalize-receipt-data
                        {:raw_extract_json {:extraction {:items [{:raw_label "JAGODA SVJEZA"
-                                                                :qty 0.750
-                                                                :unit "kg"
-                                                                :line_total 5.25}]}}})]
+                                                                 :qty 0.750
+                                                                 :unit "kg"
+                                                                 :line_total 5.25}]}}})]
       (is (= "kg" (-> normalized :items first :unit))))))
 
 (deftest prepare-expense-submit-values-preserves-item-unit-test
@@ -30,3 +30,23 @@
                                :line_total "5.25"}]})]
       (is (= "kg" (-> prepared :items first :unit)))
       (is (= 5.25 (:total_amount prepared))))))
+
+(deftest receipt-review-changed-test
+  (testing "Receipt review changes are detected from meaningful payload differences"
+    (let [initial {:supplier_id "supplier-1"
+                   :payer_id "payer-1"
+                   :expense_category_id "category-1"
+                   :purchased_at "2026-03-29T14:17"
+                   :currency "BAM"
+                   :notes "Extracted from receipt: IMG_4184.jpeg"
+                   :total_amount "9.00"
+                   :items [{:id "line-1"
+                            :raw_label "Espresso kafa"
+                            :qty "3"
+                            :unit_price "3.00"
+                            :line_total "9.00"}]}
+          changed-currency (assoc initial :currency "EUR")
+          changed-line-total (assoc-in initial [:items 0 :line_total] "8.00")]
+      (is (false? (norm/receipt-review-changed? initial initial)))
+      (is (true? (norm/receipt-review-changed? initial changed-currency)))
+      (is (true? (norm/receipt-review-changed? initial changed-line-total))))))

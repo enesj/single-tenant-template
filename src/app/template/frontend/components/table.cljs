@@ -219,6 +219,7 @@
    :entity-spec {:type :any :required false}
    :editing {:type :any :required false}
    :show-highlights? {:type :boolean :required false}
+   :measured-table-height {:type :number :required false}
    :pagination {:type :any :required false}})
 
 (def sticky-thead-props
@@ -233,7 +234,7 @@
 
 (defui table
   {:prop-types table-props}
-  [{:keys [headers rows row-key render-row render-row-expansion editing entity-name entity-spec _display-settings _page-display-settings
+  [{:keys [headers rows row-key render-row render-row-expansion editing entity-name entity-spec measured-table-height _display-settings _page-display-settings
            per-page on-per-page-change rows-per-page-options]
     :as props}]
   (let [header-cells (ensure-seq headers)
@@ -346,6 +347,7 @@
                                                :current-entity-name effective-entity-name
                                                :entity-spec entity-spec
                                                :compact? true
+                                               :measured-table-height measured-table-height
                                                ;; Pass hardcoded settings from view-options.edn
                                                ;; These controls will be hidden in the settings panel
                                                :hardcoded-display-settings hardcoded-settings

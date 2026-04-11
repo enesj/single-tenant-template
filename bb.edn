@@ -737,6 +737,22 @@
         • After browser cache issues affect debugging",
           :task (shell "rm -rf /tmp/chrome-debug-profile 2>/dev/null || true && rm -rf ~/.cache/chrome-devtools-mcp/chrome-profile 2>/dev/null || true")},
 
+         chrome-devtools
+         {:doc "Launch a dedicated Chrome instance with remote debugging enabled for chrome-devtools MCP.
+
+        The task starts Chrome on 127.0.0.1:9222 with:
+        • a dedicated profile under tmp/chrome-devtools-profile-9222
+        • a stable DevTools endpoint for browser automation
+        • a log file at tmp/chrome-devtools-9222.log
+
+        Usage: bb chrome-devtools
+
+        Example scenarios:
+        • Before using chrome-devtools MCP against localhost:9222
+        • When the main Chrome session is not exposing remote debugging
+        • When you need a clean browser profile for browser automation",
+          :task (shell "bash" "scripts/sh/monitoring/run-chrome-devtools.sh")},
+
          fix-lint
          {:doc "Fix lint warnings automatically using clojure-lsp clean-ns and custom unused binding fixes. Use --interactive for interactive mode.",
           :task (apply shell "bb" "scripts/bb/code_quality/fix_lint_warnings.clj" *command-line-args*)},

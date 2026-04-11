@@ -167,7 +167,14 @@
         loading? (boolean (use-subscribe [receipt-detail-loading-sub]))
         action-loading? (boolean (use-subscribe [receipt-action-loading-sub]))
         error (use-subscribe [receipts-error-sub])
-        can-approve? (boolean (use-subscribe [:expenses/can? :expenses/receipts.approve]))
+        can-approve-query (let [query (:can-approve-sub ctx)]
+                            (cond
+                              (vector? query) query
+                              (keyword? query) [query]
+                              :else [:expenses/can? :expenses/receipts.approve]))
+        can-approve? (boolean (use-subscribe can-approve-query))
+        approve-unavailable-message (or (:approve-unavailable-message ctx)
+                                      "Receipt approval is unavailable in this view.")
         ;; Left column visibility toggle
         [show-left-column? set-show-left-column!] (use-state true)
         ;; Left column tabs: :image, :extracted-html, :raw-json
@@ -406,28 +413,32 @@
                 (when action-loading?
                   ($ :span {:class "text-xs text-base-content/60"} "Working...")))
 
-              (if (and can-approve? approve-form-visible?)
-                (when approve-form
-                  ($ approve-form
-                    {:receipt-id rid-str
-                     :receipt receipt
-                     :split-layout? true
-                     :on-success (fn []
-                                   (close-modal-fn))
-                     :on-review-saved (fn []
-                                        (rf/dispatch [fetch-receipt-event receipt-id]))
-                     :on-cancel nil}))
+              (cond
+                (and approve-form-visible? can-approve? approve-form)
+                ($ approve-form
+                  {:receipt-id rid-str
+                   :receipt receipt
+                   :split-layout? true
+                   :on-success (fn []
+                                 (close-modal-fn))
+                   :on-review-saved (fn []
+                                      (rf/dispatch [fetch-receipt-event receipt-id]))
+                   :on-cancel nil})
 
+                (and approve-form-visible? (not can-approve?))
+                ($ :div {:class "ds-alert ds-alert-info"}
+                  ($ :span "You don't have permission to approve receipts."))
+
+                approve-form-visible?
+                ($ :div {:class "ds-alert ds-alert-info"}
+                  ($ :span approve-unavailable-message))
+
+                :else
                 ($ :div {:class "ds-alert ds-alert-info"}
                   ($ :span
-                    (cond
-                      (not can-approve?)
-                      "You don't have permission to approve receipts."
-
-                      :else
-                      (str "Approval is available when status is extracted or review_required. Current status: "
-                        (or (capitalize-words status) "unknown")
-                        "."))))))))))))
+                    (str "Approval is available when status is extracted or review_required. Current status: "
+                      (or (capitalize-words status) "unknown")
+                      ".")))))))))))
 
 (defui receipt-detail-modal
   "Shared receipt details modal.

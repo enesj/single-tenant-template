@@ -120,16 +120,16 @@
                                            (:label item)
                                            (:name item))
                                qty (safe-parse-number (:qty item))
-                     unit (some-> (:unit item) str str/trim not-empty)
+                               unit (some-> (:unit item) str str/trim not-empty)
                                unit-price (safe-parse-number (:unit-price item))
                                line-total (safe-parse-number (:line-total item))]
-                   (cond-> {:id (str id)
-                      :raw_label (or (some-> raw-label str) "")
-                      :qty (if (number? qty) (str qty) "")
-                      :unit_price (if (number? unit-price) (format-decimal unit-price) "")
-                      :line_total (if (number? line-total) (format-decimal line-total) "")
-                      :line_total_auto? true}
-                   unit (assoc :unit unit))))
+                           (cond-> {:id (str id)
+                                    :raw_label (or (some-> raw-label str) "")
+                                    :qty (if (number? qty) (str qty) "")
+                                    :unit_price (if (number? unit-price) (format-decimal unit-price) "")
+                                    :line_total (if (number? line-total) (format-decimal line-total) "")
+                                    :line_total_auto? true}
+                             unit (assoc :unit unit))))
 
         filename (or (:original-filename receipt)
                    (:storage-key receipt)
@@ -185,31 +185,31 @@
                          (random-uuid))
                     raw-label (or (:raw-label item) "")
                     qty (:qty item)
-            unit (some-> (:unit item) str str/trim not-empty)
+                    unit (some-> (:unit item) str str/trim not-empty)
                     unit-price (:unit-price item)
                     line-total (:line-total item)
                     auto? (if (contains? item :line-total-auto?)
                             (not (false? (:line-total-auto? item)))
                             true)]
-        (cond-> {:id (str id)
-            :raw_label (if (some? raw-label) (str raw-label) "")
-            :qty (cond
-              (string? qty) qty
-              (number? qty) (str qty)
-              (nil? qty) ""
-              :else (str qty))
-            :unit_price (cond
-                (string? unit-price) unit-price
-                (number? unit-price) (format-decimal unit-price)
-                (nil? unit-price) ""
-                :else (str unit-price))
-            :line_total (cond
-                (string? line-total) line-total
-                (number? line-total) (format-decimal line-total)
-                (nil? line-total) ""
-                :else (str line-total))
-            :line_total_auto? auto?}
-          unit (assoc :unit unit))))]
+                (cond-> {:id (str id)
+                         :raw_label (if (some? raw-label) (str raw-label) "")
+                         :qty (cond
+                                (string? qty) qty
+                                (number? qty) (str qty)
+                                (nil? qty) ""
+                                :else (str qty))
+                         :unit_price (cond
+                                       (string? unit-price) unit-price
+                                       (number? unit-price) (format-decimal unit-price)
+                                       (nil? unit-price) ""
+                                       :else (str unit-price))
+                         :line_total (cond
+                                       (string? line-total) line-total
+                                       (number? line-total) (format-decimal line-total)
+                                       (nil? line-total) ""
+                                       :else (str line-total))
+                         :line_total_auto? auto?}
+                  unit (assoc :unit unit))))]
       (let [supplier-id (or (:supplier-id expense) (:expenses/supplier-id expense))
             payer-id (or (:payer-id expense) (:expenses/payer-id expense))
             expense-category-id (or (:expense-category-id expense) (:expenses/expense-category-id expense))
@@ -316,3 +316,9 @@
      :notes (:notes values)
      :total_amount effective-total
      :items prepared-items}))
+
+(defn receipt-review-changed?
+  "Return true when the current review values differ from the initial review values."
+  [initial-values current-values]
+  (not= (prepare-expense-submit-values initial-values)
+    (prepare-expense-submit-values current-values)))

@@ -100,6 +100,7 @@
         (set-zoom! 1.0)
         (set-pan! {:x 0 :y 0})
         (set-drag! nil)
+        (set-rotation! 0)
         js/undefined)
       [preview-download-url download-url])
 

@@ -49,12 +49,16 @@
   Optional opts support the receipt-approval UX."
   ([suppliers payers]
    (get-expense-form-spec suppliers payers nil))
-  ([suppliers payers {:keys [receipt-approval? supplier-guess receipt receipt-id exclude-line-items? expense-categories enabled-currencies]}]
+  ([suppliers payers {:keys [receipt-approval? supplier-guess receipt receipt-id exclude-line-items? expense-categories enabled-currencies]
+                      :as opts}]
    (let [receipt-id* (or receipt-id (:id receipt))
          receipt-id-str (some-> receipt-id* str)
          currency-options (if (seq enabled-currencies)
                             enabled-currencies
                             currency-ui/fallback-currency-options)
+         supplier-component (if (contains? opts :supplier-component)
+                              (:supplier-component opts)
+                              user-supplier-select-with-inline-create)
          receipt-supplier-guess (some-> (or (:supplier-guess receipt) supplier-guess)
                                   str
                                   str/trim
@@ -62,20 +66,21 @@
          receipt-total-guess (:total-amount-guess receipt)
          totals-match? (:total-guess-equals-lines-total-guess? receipt)
          base-fields
-         [{:id :supplier_id
-           :type :select
-           :component user-supplier-select-with-inline-create
-           :label "Supplier"
-           :required true
-           :placeholder "Select supplier"
-           :create-default-display-name (when receipt-approval?
-                                          receipt-supplier-guess)
-           :receipt-id receipt-id-str
-           :receipt-supplier-guess receipt-supplier-guess
-           :options (map (fn [s]
-                           {:value (:id s)
-                            :label (select-options/supplier-label s)})
-                      suppliers)}
+         [(cond-> {:id :supplier_id
+                   :type :select
+                   :label "Supplier"
+                   :required true
+                   :placeholder "Select supplier"
+                   :create-default-display-name (when receipt-approval?
+                                                  receipt-supplier-guess)
+                   :receipt-id receipt-id-str
+                   :receipt-supplier-guess receipt-supplier-guess
+                   :options (map (fn [s]
+                                   {:value (:id s)
+                                    :label (select-options/supplier-label s)})
+                              suppliers)}
+            supplier-component
+            (assoc :component supplier-component))
           {:id :payer_id
            :type :select
            :label "Payer"

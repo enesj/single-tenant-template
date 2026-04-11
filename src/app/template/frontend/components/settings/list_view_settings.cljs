@@ -12,7 +12,7 @@
     [app.shared.model-naming :as model-naming]
     [clojure.string :as str]
     [re-frame.core :as rf]
-    [uix.core :refer [$ defui use-state]]
+    [uix.core :refer [$ defui use-effect use-state]]
     [uix.re-frame :refer [use-subscribe]]))
 
 (defn- toggle-column!
@@ -195,11 +195,19 @@
                                                 ;; Dispatch the filter toggle helper
                                                 (toggle-field-filtering! entity-kw field-id)))}))))))))))
 
+(defn displayed-table-height
+  "Prefer the live measured table height and fall back to an explicit stored height."
+  [measured-height persisted-height]
+  (cond
+    (and (number? measured-height) (pos? measured-height)) measured-height
+    (and (number? persisted-height) (pos? persisted-height)) persisted-height
+    :else nil))
+
 (defui list-view-settings-panel
   "Controls for table display options"
   [{:keys [entity-name _show-timestamps? _show-edit? _show-delete? _show-highlights? _show-select? _show-filtering?
            global-settings? current-entity-name compact? entity-spec hardcoded-display-settings
-           per-page on-per-page-change rows-per-page-options]}]
+           per-page on-per-page-change rows-per-page-options measured-table-height]}]
 
   (let [;; Normalize entity name to keyword consistently
         entity-kw (if (keyword? entity-name) entity-name (keyword entity-name))
@@ -340,6 +348,11 @@
         ;; Table width control
         (let [current-width (use-subscribe [::settings-events/table-width entity-kw])
               [temp-width, set-temp-width] (use-state (str current-width))]
+          (use-effect
+            (fn []
+              (set-temp-width (str current-width))
+              js/undefined)
+            [current-width])
           ($ :div {:id "table-width-control"
                    :class "flex items-center gap-2 p-1 rounded-md"}
             ($ :span {:class "text-sm font-medium"} "Table Width:")
@@ -366,7 +379,24 @@
 
         ;; Table height control
         (let [current-height (use-subscribe [::settings-events/table-height entity-kw])
-              [temp-height, set-temp-height] (use-state (str current-height))]
+              effective-height (displayed-table-height measured-table-height current-height)
+              effective-height-str (if effective-height (str effective-height) "")
+              [temp-height, set-temp-height] (use-state effective-height-str)
+              commit-height! (fn [raw-value]
+                               (let [new-value (some-> raw-value str str/trim)]
+                                 (cond
+                                   (str/blank? new-value)
+                                   (set-temp-height effective-height-str)
+
+                                   (not= new-value effective-height-str)
+                                   (let [parsed (js/parseInt new-value 10)]
+                                     (when (not (js/isNaN parsed))
+                                       (rf/dispatch [::settings-events/update-table-height entity-kw parsed]))))))]
+          (use-effect
+            (fn []
+              (set-temp-height effective-height-str)
+              js/undefined)
+            [effective-height-str])
           ($ :div {:id "table-height-control"
                    :class "flex items-center gap-2 p-1 rounded-md"}
             ($ :span {:class "text-sm font-medium"} "Table Height:")
@@ -382,15 +412,11 @@
                                     (let [new-value (.. e -target -value)]
                                       (set-temp-height new-value)))
                        :on-blur (fn [e]
-                                  (let [new-value (.. e -target -value)]
-                                    (when (and new-value (not= new-value (str current-height)))
-                                      (rf/dispatch [::settings-events/update-table-height entity-kw (js/parseInt new-value)]))))
+                                  (commit-height! (.. e -target -value)))
                        :on-key-down (fn [e]
                                       (when (= (.-key e) "Enter")
-                                        (let [new-value (.. e -target -value)]
-                                          (when (and new-value (not= new-value (str current-height)))
-                                            (rf/dispatch [::settings-events/update-table-height entity-kw (js/parseInt new-value)])
-                                            (.blur (.-target e))))))})))
+                                        (commit-height! (.. e -target -value))
+                                        (.blur (.-target e))))})))
 
         ;; Rows per page control - moved from pagination component
         (when (and per-page on-per-page-change rows-per-page-options)

@@ -223,6 +223,8 @@
         ;; Mutable refs for ResizeObserver debounce
         skip-first-ref (use-ref true)
         timer-ref (use-ref nil)
+        [measured-table-height, set-measured-table-height!] (use-state (when (and table-height (pos? table-height))
+                                                                         table-height))
 
         ;; State management for inline filter
         [active-inline-filter, set-active-inline-filter] (use-state nil)
@@ -348,31 +350,94 @@
         js/undefined)
       [on-add-success use-modal-forms? add-modal-open? has-custom-add-form? form-success? form-submitted? entity-kw])
 
-    ;; ResizeObserver: persist table height when user drags the CSS resize handle.
+    ;; Keep a live pixel measurement of the rendered shell height so the settings
+    ;; panel can reflect the actual table height, even while the table is still
+    ;; using the default auto-sized shell height.
+    (use-effect
+      (fn []
+        (let [frame-id (js/requestAnimationFrame
+                         (fn []
+                           (when-let [el @shell-ref]
+                             (let [h (js/Math.round (.-height (.getBoundingClientRect el)))]
+                               (when (pos? h)
+                                 (set-measured-table-height!
+                                   (fn [current]
+                                     (if (= current h) current h))))))))]
+          (fn []
+            (js/cancelAnimationFrame frame-id))))
+      [entity-name table-height])
+
+    ;; Fallback polling for native CSS resize-handle changes. Some browser flows
+    ;; expose the changed inline pixel height without reliably triggering observer
+    ;; callbacks, so keep the live value synced here and persist only explicit px
+    ;; heights (never the default auto-sized shell height).
+    (use-effect
+      (fn []
+        (let [interval-id (js/setInterval
+                            (fn []
+                              (when-let [el @shell-ref]
+                                (let [h (js/Math.round (.-height (.getBoundingClientRect el)))
+                                      raw-style-height (some-> el .-style .-height)]
+                                  (when (pos? h)
+                                    (set-measured-table-height!
+                                      (fn [current]
+                                        (if (= current h) current h)))
+                                    (when (and (string? raw-style-height)
+                                            (.endsWith raw-style-height "px")
+                                            (not= table-height h))
+                                      (rf/dispatch [::settings-events/update-table-height entity-kw h]))))))
+                            250)]
+          (fn []
+            (js/clearInterval interval-id))))
+      [entity-kw entity-name table-height])
+
+    ;; Track live shell height and persist manual CSS resize changes.
     (use-effect
       (fn []
         (reset! skip-first-ref true)
         (let [el @shell-ref
-              observer (when el
-                         (js/ResizeObserver.
-                           (fn [entries]
-                             (if @skip-first-ref
-                               (reset! skip-first-ref false)
-                               (let [entry (aget entries 0)
-                                     h (js/Math.round (.. entry -contentRect -height))]
+              measure-height (fn [node]
+                               (when node
+                                 (js/Math.round (.-height (.getBoundingClientRect node)))))
+              sync-height! (fn [h persist?]
+                             (when (pos? h)
+                               (set-measured-table-height!
+                                 (fn [current]
+                                   (if (= current h) current h)))
+                               (when persist?
                                  (when @timer-ref
                                    (js/clearTimeout @timer-ref))
                                  (reset! timer-ref
                                    (js/setTimeout
                                      #(rf/dispatch [::settings-events/update-table-height entity-kw h])
-                                     300)))))))]
+                                     300)))))
+              observer (when el
+                         (js/ResizeObserver.
+                           (fn [entries]
+                             (let [entry (aget entries 0)
+                                   h (measure-height (.-target entry))]
+                               (if @skip-first-ref
+                                 (do
+                                   (sync-height! h false)
+                                   (reset! skip-first-ref false))
+                                 (sync-height! h true))))))
+              style-observer (when el
+                               (js/MutationObserver.
+                                 (fn [_mutations _observer]
+                                   (when-let [h (measure-height el)]
+                                     (sync-height! h true)))))]
           (when (and observer el)
             (.observe observer el))
+          (when (and style-observer el)
+            (.observe style-observer el #js {:attributes true
+                                             :attributeFilter #js ["style"]}))
           (fn []
             (when @timer-ref
               (js/clearTimeout @timer-ref))
             (when observer
-              (.disconnect observer)))))
+              (.disconnect observer))
+            (when style-observer
+              (.disconnect style-observer)))))
       [entity-kw entity-name])
 
     ;; Handle events/actions via extracted handler module.
@@ -610,6 +675,7 @@
                                       (id-utils/extract-entity-id item))
                            :entity-name entity-name
                            :entity-spec entity-spec
+                           :measured-table-height measured-table-height
                            :show-highlights? show-highlights?
                            :render-row render-row-fn
                            :render-row-expansion (:render-row-expansion props)
