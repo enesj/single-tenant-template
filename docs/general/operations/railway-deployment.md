@@ -82,7 +82,7 @@ Migrations run **automatically on every deploy** via Railway's `preDeployCommand
 java -cp /app/app.jar clojure.main -m app.migrate
 ```
 
-The standalone migration runner (`src/app/migrate.clj`) reads `DATABASE_URL`, applies all pending migrations using `automigrate.core/migrate`, then exits. If migrations fail, the deploy is aborted and the previous revision stays live.
+The standalone migration runner (`src/app/migrate.clj`) reads `DATABASE_URL`, applies all pending migrations through the non-deprecated automigrate execution APIs, and exits non-zero if anything fails. Railway aborts the deploy and keeps the previous revision live.
 
 No manual intervention is needed. Committed migration files under `resources/db/migrations/` are applied automatically on the next deploy.
 
