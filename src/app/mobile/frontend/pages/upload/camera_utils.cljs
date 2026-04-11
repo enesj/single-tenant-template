@@ -175,8 +175,8 @@
   (contains? (supported-fill-light-modes capabilities) "flash"))
 
 (defn default-flash-enabled?
-  [flash-available?]
-  (boolean flash-available?))
+  [_flash-available?]
+  true)
 
 (defn try-capture-with-flash! [track video-el on-success on-error]
   (let [fallback! #(capture-current-frame! video-el on-success on-error)

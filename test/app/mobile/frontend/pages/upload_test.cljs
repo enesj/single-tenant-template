@@ -28,11 +28,11 @@
     (is (false? (sut/flash-supported? #js {:fillLightMode #js ["off"]})))
     (is (false? (sut/flash-supported? #js {})))))
 
-(deftest default-flash-enabled-follows-availability
-  (testing "camera capture starts with flash enabled whenever the browser reports flash support"
+(deftest default-flash-enabled-keeps-flash-on-by-default
+  (testing "camera capture starts with flash enabled regardless of capability detection so users can opt out manually"
     (is (true? (sut/default-flash-enabled? true)))
-    (is (false? (sut/default-flash-enabled? false)))
-    (is (false? (sut/default-flash-enabled? nil)))))
+    (is (true? (sut/default-flash-enabled? false)))
+    (is (true? (sut/default-flash-enabled? nil)))))
 
 (deftest native-camera-capture-only-falls-back-when-live-preview-is-unavailable
   (testing "flash attempts stay in the custom UI and native capture is reserved for camera fallback"

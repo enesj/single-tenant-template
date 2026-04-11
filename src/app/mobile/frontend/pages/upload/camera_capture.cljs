@@ -87,7 +87,7 @@
         [torch-available? set-torch-available!] (use-state false)
         [torch-enabled? set-torch-enabled!] (use-state false)
         [flash-available? set-flash-available!] (use-state false)
-        [flash-enabled? set-flash-enabled!] (use-state false)
+        [flash-enabled? set-flash-enabled!] (use-state (cu/default-flash-enabled? nil))
         [native-fallback? set-native-fallback!] (use-state false)
         [device-flash-native-mode? set-device-flash-native-mode!] (use-state false)
         [camera-hardware-zoom set-camera-hardware-zoom!] (use-state 1.0)
@@ -185,7 +185,7 @@
                                                 (set-torch-available! false)
                                                 (set-torch-enabled! false)
                                                 (set-flash-available! false)
-                                                (set-flash-enabled! false)
+                                                (set-flash-enabled! (cu/default-flash-enabled? nil))
                                                 (show-camera-error! (camera-error-message err))))))
                                   (do
                                     (set-camera-starting! false)
@@ -196,7 +196,7 @@
                                     (set-torch-available! false)
                                     (set-torch-enabled! false)
                                     (set-flash-available! false)
-                                    (set-flash-enabled! false)
+                                    (set-flash-enabled! (cu/default-flash-enabled? nil))
                                     (show-camera-error! :mobile/camera-unavailable))))
         trigger-native-camera! (fn []
                                  (when-let [el @native-camera-ref]
@@ -404,7 +404,7 @@
                           (set-torch-available! false)
                           (set-torch-enabled! false)
                           (set-flash-available! false)
-                          (set-flash-enabled! false)
+                          (set-flash-enabled! (cu/default-flash-enabled? nil))
                           (set-camera-error! (camera-error-message err))
                           (set-camera-error-dismissed! false)))))
             (fn []
@@ -423,7 +423,7 @@
             (set-camera-hardware-zoom! 1.0)
             (set-camera-hardware-zoom-range! nil)
             (set-flash-available! false)
-            (set-flash-enabled! false)
+            (set-flash-enabled! (cu/default-flash-enabled? nil))
             (set-torch-available! false)
             (set-torch-enabled! false)
             (set-camera-error! :mobile/camera-unavailable)
@@ -644,6 +644,12 @@
                             :on-click save-and-exit!
                             :class "flex w-full items-center justify-center rounded-2xl bg-amber-400/85 px-4 py-3 text-sm font-semibold text-black transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-50"}
                   (t :mobile/use-and-exit))
+                ($ :button {:id "btn-camera-cancel-mobile"
+                            :type "button"
+                            :disabled loading?
+                            :on-click return-to-upload!
+                            :class "flex w-full items-center justify-center rounded-2xl border border-white/15 bg-white/8 px-4 py-3 text-sm font-medium text-white/85 transition hover:bg-white/12 disabled:cursor-not-allowed disabled:opacity-50"}
+                  (t :common/cancel "Cancel"))
                 ($ :button {:id "btn-camera-retake-mobile"
                             :type "button"
                             :disabled loading?
