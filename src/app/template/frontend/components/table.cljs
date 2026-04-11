@@ -349,6 +349,7 @@
                                                :entity-spec entity-spec
                                                :compact? true
                                                :measured-table-height measured-table-height
+                                               :measured-table-width measured-table-width
                                                ;; Pass hardcoded settings from view-options.edn
                                                ;; These controls will be hidden in the settings panel
                                                :hardcoded-display-settings hardcoded-settings

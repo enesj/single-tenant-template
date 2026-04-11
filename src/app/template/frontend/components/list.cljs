@@ -223,6 +223,8 @@
         ;; Mutable refs for ResizeObserver debounce
         skip-first-ref (use-ref true)
         timer-ref (use-ref nil)
+        [measured-table-width, set-measured-table-width!] (use-state (when (and table-width (pos? table-width))
+                                                                       table-width))
         [measured-table-height, set-measured-table-height!] (use-state (when (and table-height (pos? table-height))
                                                                          table-height))
 
@@ -350,34 +352,51 @@
         js/undefined)
       [on-add-success use-modal-forms? add-modal-open? has-custom-add-form? form-success? form-submitted? entity-kw])
 
-    ;; Keep a live pixel measurement of the rendered shell height so the settings
-    ;; panel can reflect the actual table height, even while the table is still
-    ;; using the default auto-sized shell height.
+    ;; Keep live pixel measurements of the rendered shell so the settings panel
+    ;; can reflect the actual table width/height, even while stored prefs are
+    ;; still unset or represent only max constraints.
     (use-effect
       (fn []
         (let [frame-id (js/requestAnimationFrame
                          (fn []
                            (when-let [el @shell-ref]
-                             (let [h (js/Math.round (.-height (.getBoundingClientRect el)))]
+                             (let [rect (.getBoundingClientRect el)
+                                   w (js/Math.round (.-width rect))
+                                   h (js/Math.round (.-height rect))]
+                               (when (pos? w)
+                                 (set-measured-table-width!
+                                   (fn [current]
+                                     (if (= current w) current w))))
                                (when (pos? h)
                                  (set-measured-table-height!
                                    (fn [current]
                                      (if (= current h) current h))))))))]
           (fn []
             (js/cancelAnimationFrame frame-id))))
-      [entity-name table-height])
+      [entity-name table-width table-height])
 
     ;; Fallback polling for native CSS resize-handle changes. Some browser flows
-    ;; expose the changed inline pixel height without reliably triggering observer
-    ;; callbacks, so keep the live value synced here and persist only explicit px
-    ;; heights (never the default auto-sized shell height).
+    ;; expose changed inline pixel sizes without reliably triggering observer
+    ;; callbacks, so keep the live values synced here and persist only explicit px
+    ;; sizes (never the default auto-sized shell dimensions).
     (use-effect
       (fn []
         (let [interval-id (js/setInterval
                             (fn []
                               (when-let [el @shell-ref]
-                                (let [h (js/Math.round (.-height (.getBoundingClientRect el)))
+                                (let [rect (.getBoundingClientRect el)
+                                      w (js/Math.round (.-width rect))
+                                      h (js/Math.round (.-height rect))
+                                      raw-style-width (some-> el .-style .-width)
                                       raw-style-height (some-> el .-style .-height)]
+                                  (when (pos? w)
+                                    (set-measured-table-width!
+                                      (fn [current]
+                                        (if (= current w) current w)))
+                                    (when (and (string? raw-style-width)
+                                            (.endsWith raw-style-width "px")
+                                            (not= table-width w))
+                                      (rf/dispatch [::settings-events/update-table-width entity-kw w])))
                                   (when (pos? h)
                                     (set-measured-table-height!
                                       (fn [current]
@@ -389,16 +408,18 @@
                             250)]
           (fn []
             (js/clearInterval interval-id))))
-      [entity-kw entity-name table-height])
+      [entity-kw entity-name table-width table-height])
 
-    ;; Track live shell height and persist manual CSS resize changes.
+    ;; Track live shell dimensions. Height persists directly here because the
+    ;; existing UX already treats shell-height changes as explicit user intent,
+    ;; while width persistence is handled by the px-style polling path above.
     (use-effect
       (fn []
         (reset! skip-first-ref true)
         (let [el @shell-ref
-              measure-height (fn [node]
-                               (when node
-                                 (js/Math.round (.-height (.getBoundingClientRect node)))))
+              measure-rect (fn [node]
+                             (when node
+                               (.getBoundingClientRect node)))
               sync-height! (fn [h persist?]
                              (when (pos? h)
                                (set-measured-table-height!
@@ -411,11 +432,19 @@
                                    (js/setTimeout
                                      #(rf/dispatch [::settings-events/update-table-height entity-kw h])
                                      300)))))
+              sync-width! (fn [w]
+                            (when (pos? w)
+                              (set-measured-table-width!
+                                (fn [current]
+                                  (if (= current w) current w)))))
               observer (when el
                          (js/ResizeObserver.
                            (fn [entries]
                              (let [entry (aget entries 0)
-                                   h (measure-height (.-target entry))]
+                                   rect (measure-rect (.-target entry))
+                                   w (when rect (js/Math.round (.-width rect)))
+                                   h (when rect (js/Math.round (.-height rect)))]
+                               (sync-width! w)
                                (if @skip-first-ref
                                  (do
                                    (sync-height! h false)
@@ -424,8 +453,9 @@
               style-observer (when el
                                (js/MutationObserver.
                                  (fn [_mutations _observer]
-                                   (when-let [h (measure-height el)]
-                                     (sync-height! h true)))))]
+                                   (when-let [rect (measure-rect el)]
+                                     (sync-width! (js/Math.round (.-width rect)))
+                                     (sync-height! (js/Math.round (.-height rect)) true)))))]
           (when (and observer el)
             (.observe observer el))
           (when (and style-observer el)
@@ -665,7 +695,7 @@
                                                "min(70vh, calc(100vh - 12rem))")
                                      :min-height "150px"
                                      :max-height "calc(100vh - 6rem)"
-                                     :resize "vertical"}}
+                                     :resize "both"}}
                       ($ :div {:id (str "table-scroll-viewport-" (kw/ensure-name entity-name))
                                :class "min-h-0 flex-1 overflow-auto"}
                         ($ table
@@ -676,6 +706,7 @@
                            :entity-name entity-name
                            :entity-spec entity-spec
                            :measured-table-height measured-table-height
+                           :measured-table-width measured-table-width
                            :show-highlights? show-highlights?
                            :render-row render-row-fn
                            :render-row-expansion (:render-row-expansion props)
