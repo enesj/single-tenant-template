@@ -5,6 +5,7 @@
     [app.template.frontend.components.settings.list-view-settings :refer [list-view-settings-panel]]
     [app.template.frontend.events.list.settings :as settings-events]
     [app.template.frontend.subs.ui :as ui-subs]
+    [app.template.frontend.ui.z-scale :as z]
     [uix.core :as uix :refer [$ defui]]
     [uix.dom]
     [uix.re-frame :refer [use-subscribe]]))
@@ -63,19 +64,24 @@
                               (.addEventListener js/document "mousemove" handle-mouse-move)
                               (.addEventListener js/document "mouseup" handle-mouse-up)))
 
+        ;; <th> z-indices are LOCAL to the sticky <thead>'s stacking context,
+        ;; so the absolute number doesn't compete globally — it just orders
+        ;; siblings inside the header row. Sticky header columns sit above
+        ;; non-sticky ones in case of any horizontal overlap.
         header-style (when is-header?
                        {:position "sticky"
                         :top 0
-                        :z-index (if sticky?
-                                   (max 22000 (or sticky-z-index 22000))
-                                   20000)})
+                        :z-index (if sticky? z/local-high z/local-low)})
 
+        ;; Sticky <td> body cells, by contrast, compete in the document's
+        ;; root stacking context — their z-index must come from the global
+        ;; scale and stay below modal-backdrop.
         sticky-style (when sticky?
                        (merge
                          {:position "sticky"
                           :z-index (cond
-                                     is-header? (max 22000 (or sticky-z-index 22000))
-                                     :else (or sticky-z-index 20))
+                                     is-header? z/local-high
+                                     :else (or sticky-z-index z/table-sticky-body))
                           :overflow "visible"}
                          (case sticky-position
                            :left {:left 0}
@@ -178,9 +184,12 @@
           (let [sticky-info (get sticky-columns index)
                 sticky? (boolean sticky-info)
                 sticky-position (when sticky? (:position sticky-info))
+                ;; Right-side body cells get a higher z-index than the
+                ;; left-side sticky cells so the actions column always
+                ;; visually wins where they overlap at row ends.
                 sticky-z-index (when sticky?
                                  (cond
-                                   (and (not is-header?) (= sticky-position :right)) 15000
+                                   (and (not is-header?) (= sticky-position :right)) z/table-sticky-actions
                                    :else (:z-index sticky-info)))]
             ;; Always use resizable-cell to maintain consistent hook ordering
             ($ resizable-cell
@@ -212,8 +221,12 @@
    :show-highlights? {:type :boolean :required false}
    :pagination {:type :any :required false}})
 
-(def sticky-thead-class
-  "sticky top-0 z-[19000] bg-base-100")
+(def sticky-thead-props
+  "Props for the sticky `<thead>` wrapper. Uses inline `:style` for the
+  z-index because Tailwind v4's JIT scans literal class names in source —
+  building `z-[X]` from a constant via `str` would not produce any CSS."
+  {:class "sticky top-0 bg-base-100"
+   :style {:z-index z/table-sticky-header}})
 
 (def settings-row-cell-class
   "px-2 py-1 bg-base-200")
@@ -261,16 +274,21 @@
                                       :else nil))
                                   header-cells)))
 
-        ;; Configure sticky columns (first and last columns)
+        ;; Configure sticky columns (first and last columns).
+        ;; The :z-index here is the *body cell* value passed through to
+        ;; resizable-cell. Header cells ignore it (they use the local
+        ;; thead-stacking-context value via header-style/sticky-style),
+        ;; and right-side body cells get overridden to table-sticky-actions
+        ;; in the row component below.
         sticky-columns (let [header-count (count header-cells)]
                          (vec
                            (map-indexed
                              (fn [idx _]
                                (cond
                                  ;; First column (select) sticks to left
-                                 (= idx 0) {:position :left :z-index 200}
-                                 ;; Last column (actions) sticks to right; body rows bump z-index further
-                                 (= idx (- header-count 1)) {:position :right :z-index 300}
+                                 (= idx 0) {:position :left :z-index z/table-sticky-body}
+                                 ;; Last column (actions) sticks to right
+                                 (= idx (- header-count 1)) {:position :right :z-index z/table-sticky-body}
                                  ;; Other columns are not sticky
                                  :else nil))
                              header-cells)))
@@ -295,7 +313,7 @@
                  :style {:table-layout "fixed"
                          :border-spacing "0"
                          :min-width "800px"}}
-        ($ :thead {:class sticky-thead-class}
+        ($ :thead sticky-thead-props
           ($ row
             {:key "header"
              :cells header-cells

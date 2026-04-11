@@ -463,7 +463,6 @@
        :resizable? true
        :initial-position {:y 24}
        :width "960px"
-       :z-index 120
        :backdrop-opacity 20
        :class "max-w-[95vw] max-h-[85vh] h-[85vh] flex flex-col"
        :header header

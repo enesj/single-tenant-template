@@ -8,6 +8,7 @@
      :refer [chip-styles type-button-styles]]
     [app.domain.frontend.expenses.components.manual-expense-form.smart-input.helpers
      :refer [entity-type-label]]
+    [app.template.frontend.ui.z-scale :as z]
     [clojure.string :as str]
     ["react-dom" :as react-dom]
     [uix.core :refer [$ defui use-effect use-ref use-state]]))
@@ -52,7 +53,7 @@
           ($ :div {:class (str "bg-white rounded-2xl shadow-2xl border border-base-200 "
                             "max-h-[600px] overflow-y-auto")
                    :style {:position "fixed"
-                           :z-index 99999
+                           :z-index z/modal-portal-child
                            :top (str (:top pos) "px")
                            :left (str (:left pos) "px")
                            :width (str (:width pos) "px")}

@@ -4,6 +4,7 @@
     [app.template.frontend.components.button :refer [button]]
     [app.template.frontend.components.draggable :refer [use-draggable]]
     [app.template.frontend.components.icons :refer [cancel-icon]]
+    [app.template.frontend.ui.z-scale :as z]
     [re-frame.core :refer [dispatch]]
     [uix.core :refer [$ defui use-effect]]))
 
@@ -57,7 +58,7 @@
            header-class
            children]
     :or {draggable? false
-         z-index 9999}}]
+         z-index z/modal-backdrop}}]
 
   (let [base-id (when (string? id)
                   (if (.endsWith id "-modal")

@@ -1,6 +1,7 @@
 (ns app.template.frontend.components.dropdown.core
   "Core dropdown components"
   (:require
+    [app.template.frontend.ui.z-scale :as z]
     [uix.core :refer [$ defui] :as uix]
     ["react-dom" :as react-dom]))
 
@@ -77,7 +78,7 @@
                                                            (and rendered-dropdown (.contains rendered-dropdown target)))
                                         inside-trigger? (and trigger-node (.contains trigger-node target))
                                         menuitem-el (when (and target (.-closest target))
-                                                     (.closest target "[role='menuitem']"))]
+                                                      (.closest target "[role='menuitem']"))]
                                     (when (and inside-dropdown? (not inside-trigger?) menuitem-el)
                                       (js/setTimeout #(toggle-dropdown! false) 0)))))
 
@@ -246,13 +247,13 @@
                    :ref (fn [el] (reset! dropdown-ref el))
                    :class (str "bg-base-200 rounded-box shadow-xl border border-base-300 p-3 "
                             (or dropdown-class ""))
-                   :style {:position "fixed" :z-index 1000}}
+                   :style {:position "fixed" :z-index z/dropdown-inline}}
             children))
 
         ;; Simple positioning using fixed positioning (alternative to portal)
         :portal
-        ($ :div {:class (str "inline-block z-[9999] " (or class ""))
-                 :style {:z-index 9999}}
+        ($ :div {:class (str "inline-block " (or class ""))
+                 :style {:z-index z/dropdown-inline}}
           ;; Trigger toggles open and positions content
           ($ :div {:id trigger-id
                    :onClick (fn [e]
@@ -280,7 +281,7 @@
                 (let [have-position? (and drag-enabled?
                                        (number? (:left drag-state))
                                        (number? (:top drag-state)))
-                      base-style {:position "fixed" :z-index 20000}
+                      base-style {:position "fixed" :z-index z/dropdown-portal}
                       portal-style (cond-> base-style
                                      drag-enabled? (assoc :left (str (or (:left drag-state) 0) "px")
                                                      :top (str (or (:top drag-state) 0) "px")
@@ -306,8 +307,8 @@
 
         ;; Auto positioning with CSS (default)
         :auto
-        ($ :div {:class (str "relative inline-block z-[9999] " (or class ""))
-                 :style {:z-index 9999}}
+        ($ :div {:class (str "relative inline-block " (or class ""))
+                 :style {:z-index z/dropdown-inline}}
           ;; Trigger button
           ($ :div {:id trigger-id :onClick handle-toggle} trigger)
 
@@ -315,10 +316,10 @@
           (when is-open?
             ($ :div {:id dropdown-id
                      :ref (fn [el] (reset! dropdown-ref el))
-                     :class (str "absolute right-0 z-[9999] mt-2 origin-top-right rounded-md "
+                     :class (str "absolute right-0 mt-2 origin-top-right rounded-md "
                               "bg-base-200 shadow-lg ring-1 ring-black ring-opacity-5 "
                               "focus:outline-none w-56 " (or dropdown-class ""))
-                     :style {:z-index 9999}
+                     :style {:z-index z/dropdown-inline}
                      :role "menu"
                      :aria-orientation "vertical"
                      :aria-labelledby trigger-id}

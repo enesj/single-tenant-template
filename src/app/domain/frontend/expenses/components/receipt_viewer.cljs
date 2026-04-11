@@ -75,6 +75,7 @@
         zoom-step 0.25
         [pan set-pan!] (use-state {:x 0 :y 0})
         [drag set-drag!] (use-state nil)
+        [rotation set-rotation!] (use-state 0)
         dragging? (some? drag)
         [preview set-preview!] (use-state nil)
         [loading? set-loading!] (use-state false)
