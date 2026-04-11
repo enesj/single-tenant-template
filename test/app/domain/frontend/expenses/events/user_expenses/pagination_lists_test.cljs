@@ -89,6 +89,31 @@
         (finally
           (rf/reg-fx :dispatch rf/dispatch))))))
 
+(deftest suppliers-refresh-list-flattens-display-name-and-created-at-filters
+  (testing "suppliers refresh serializes display-name and created-at filters for the API"
+    (sup/reset-db!)
+    (swap! rf-db/app-db assoc-in (paths/list-per-page :suppliers) 15)
+    (swap! rf-db/app-db assoc-in (paths/list-current-page :suppliers) 2)
+    (swap! rf-db/app-db assoc-in (paths/list-filters :suppliers)
+      {:display-name "Konzum"
+       :created-at {:from (js/Date. "2026-03-01T00:00:00.000Z")
+                    :to (js/Date. "2026-03-02T23:59:59.999Z")}})
+    (let [dispatches (atom [])]
+      (rf/reg-fx :dispatch (fn [event]
+                             (swap! dispatches conj event)))
+      (try
+        (rf/dispatch-sync [:user-expenses/refresh-suppliers-list])
+        (let [[event-id params] (first @dispatches)]
+          (is (= :user-expenses/fetch-suppliers event-id))
+          (is (= {:limit 15
+                  :offset 15
+                  :display-name "Konzum"
+                  :created-at-from "2026-03-01T00:00:00.000Z"
+                  :created-at-to "2026-03-02T23:59:59.999Z"}
+                (select-keys params [:limit :offset :display-name :created-at-from :created-at-to]))))
+        (finally
+          (rf/reg-fx :dispatch rf/dispatch))))))
+
 (deftest receipts-refresh-list-forwards-status-filter
   (testing "refresh wrapper forwards template status filter and show-purged flag to fetch params"
     (sup/reset-db!)
@@ -341,6 +366,30 @@
         (finally
           (rf/reg-fx :dispatch rf/dispatch))))))
 
+(deftest unmapped-aliases-refresh-list-flattens-text-and-number-range-filters
+  (testing "unmapped aliases refresh serializes raw-label and occurrence-count filters"
+    (sup/reset-db!)
+    (swap! rf-db/app-db assoc-in (paths/list-per-page :unmapped-aliases) 25)
+    (swap! rf-db/app-db assoc-in (paths/list-current-page :unmapped-aliases) 2)
+    (swap! rf-db/app-db assoc-in (paths/list-filters :unmapped-aliases)
+      {:raw-label "jogurt"
+       :occurrence-count {:min 2 :max 9}})
+    (let [dispatches (atom [])]
+      (rf/reg-fx :dispatch (fn [event]
+                             (swap! dispatches conj event)))
+      (try
+        (rf/dispatch-sync [:user-expenses/refresh-unmapped-aliases-list])
+        (let [[event-id params] (first @dispatches)]
+          (is (= :user-expenses/fetch-unmapped-aliases event-id))
+          (is (= {:limit 25
+                  :offset 25
+                  :raw-label "jogurt"
+                  :occurrence-count-min 2
+                  :occurrence-count-max 9}
+                (select-keys params [:limit :offset :raw-label :occurrence-count-min :occurrence-count-max]))))
+        (finally
+          (rf/reg-fx :dispatch rf/dispatch))))))
+
 (deftest unmapped-items-loaded-stores-server-total-items
   (testing "unmapped success stores server total with fallback to returned item count"
     (sup/reset-db!)
@@ -389,6 +438,56 @@
               :per-page 20}
             pagination)))))
 
+(deftest categories-refresh-list-flattens-name-and-created-at-filters
+  (testing "categories refresh serializes name and created-at filters for the API"
+    (sup/reset-db!)
+    (swap! rf-db/app-db assoc-in (paths/list-per-page :categories) 30)
+    (swap! rf-db/app-db assoc-in (paths/list-current-page :categories) 2)
+    (swap! rf-db/app-db assoc-in (paths/list-filters :categories)
+      {:name "Household"
+       :created-at {:from (js/Date. "2026-03-10T00:00:00.000Z")
+                    :to (js/Date. "2026-03-11T23:59:59.999Z")}})
+    (let [dispatches (atom [])]
+      (rf/reg-fx :dispatch (fn [event]
+                             (swap! dispatches conj event)))
+      (try
+        (rf/dispatch-sync [:user-expenses/refresh-categories-list])
+        (let [[event-id params] (first @dispatches)]
+          (is (= :user-expenses/fetch-categories event-id))
+          (is (= {:limit 30
+                  :offset 30
+                  :name "Household"
+                  :created-at-from "2026-03-10T00:00:00.000Z"
+                  :created-at-to "2026-03-11T23:59:59.999Z"}
+                (select-keys params [:limit :offset :name :created-at-from :created-at-to]))))
+        (finally
+          (rf/reg-fx :dispatch rf/dispatch))))))
+
+(deftest subcategories-refresh-list-flattens-name-and-created-at-filters
+  (testing "subcategories refresh serializes name and created-at filters for the API"
+    (sup/reset-db!)
+    (swap! rf-db/app-db assoc-in (paths/list-per-page :subcategories) 30)
+    (swap! rf-db/app-db assoc-in (paths/list-current-page :subcategories) 2)
+    (swap! rf-db/app-db assoc-in (paths/list-filters :subcategories)
+      {:name "Frozen"
+       :created-at {:from (js/Date. "2026-03-08T00:00:00.000Z")
+                    :to (js/Date. "2026-03-09T23:59:59.999Z")}})
+    (let [dispatches (atom [])]
+      (rf/reg-fx :dispatch (fn [event]
+                             (swap! dispatches conj event)))
+      (try
+        (rf/dispatch-sync [:user-expenses/refresh-subcategories-list])
+        (let [[event-id params] (first @dispatches)]
+          (is (= :user-expenses/fetch-subcategories event-id))
+          (is (= {:limit 30
+                  :offset 30
+                  :name "Frozen"
+                  :created-at-from "2026-03-08T00:00:00.000Z"
+                  :created-at-to "2026-03-09T23:59:59.999Z"}
+                (select-keys params [:limit :offset :name :created-at-from :created-at-to]))))
+        (finally
+          (rf/reg-fx :dispatch rf/dispatch))))))
+
 (deftest cities-refresh-list-uses-template-pagination-state
   (testing "cities refresh wrapper derives limit/offset from template list state"
     (sup/reset-db!)
@@ -403,6 +502,56 @@
           (is (= :user-expenses/fetch-cities event-id))
           (is (= {:limit 30 :offset 90}
                 (select-keys params [:limit :offset]))))
+        (finally
+          (rf/reg-fx :dispatch rf/dispatch))))))
+
+(deftest cities-refresh-list-flattens-name-and-created-at-filters
+  (testing "cities refresh serializes name and created-at filters for the API"
+    (sup/reset-db!)
+    (swap! rf-db/app-db assoc-in (paths/list-per-page :cities) 30)
+    (swap! rf-db/app-db assoc-in (paths/list-current-page :cities) 2)
+    (swap! rf-db/app-db assoc-in (paths/list-filters :cities)
+      {:name "Sarajevo"
+       :created-at {:from (js/Date. "2026-03-12T00:00:00.000Z")
+                    :to (js/Date. "2026-03-13T23:59:59.999Z")}})
+    (let [dispatches (atom [])]
+      (rf/reg-fx :dispatch (fn [event]
+                             (swap! dispatches conj event)))
+      (try
+        (rf/dispatch-sync [:user-expenses/refresh-cities-list])
+        (let [[event-id params] (first @dispatches)]
+          (is (= :user-expenses/fetch-cities event-id))
+          (is (= {:limit 30
+                  :offset 30
+                  :name "Sarajevo"
+                  :created-at-from "2026-03-12T00:00:00.000Z"
+                  :created-at-to "2026-03-13T23:59:59.999Z"}
+                (select-keys params [:limit :offset :name :created-at-from :created-at-to]))))
+        (finally
+          (rf/reg-fx :dispatch rf/dispatch))))))
+
+(deftest manufacturers-refresh-list-flattens-display-name-and-created-at-filters
+  (testing "manufacturers refresh serializes display-name and created-at filters for the API"
+    (sup/reset-db!)
+    (swap! rf-db/app-db assoc-in (paths/list-per-page :manufacturers) 30)
+    (swap! rf-db/app-db assoc-in (paths/list-current-page :manufacturers) 2)
+    (swap! rf-db/app-db assoc-in (paths/list-filters :manufacturers)
+      {:display-name "Argeta"
+       :created-at {:from (js/Date. "2026-03-16T00:00:00.000Z")
+                    :to (js/Date. "2026-03-17T23:59:59.999Z")}})
+    (let [dispatches (atom [])]
+      (rf/reg-fx :dispatch (fn [event]
+                             (swap! dispatches conj event)))
+      (try
+        (rf/dispatch-sync [:user-expenses/refresh-manufacturers-list])
+        (let [[event-id params] (first @dispatches)]
+          (is (= :user-expenses/fetch-manufacturers event-id))
+          (is (= {:limit 30
+                  :offset 30
+                  :display-name "Argeta"
+                  :created-at-from "2026-03-16T00:00:00.000Z"
+                  :created-at-to "2026-03-17T23:59:59.999Z"}
+                (select-keys params [:limit :offset :display-name :created-at-from :created-at-to]))))
         (finally
           (rf/reg-fx :dispatch rf/dispatch))))))
 
@@ -521,6 +670,43 @@
         (finally
           (rf/reg-fx :dispatch rf/dispatch))))))
 
+(deftest expenses-refresh-list-flattens-select-text-and-range-filters
+  (testing "expenses refresh unwraps select filters and expands date/number ranges"
+    (sup/reset-db!)
+    (swap! rf-db/app-db assoc-in (paths/list-per-page :expenses) 25)
+    (swap! rf-db/app-db assoc-in (paths/list-current-page :expenses) 2)
+    (swap! rf-db/app-db assoc-in (paths/list-filters :expenses)
+      {:currency [{:value "BAM" :label "BAM"}]
+       :supplier-display-name "  Konzum  "
+       :created-at {:from (js/Date. "2026-03-14T00:00:00.000Z")
+                    :to (js/Date. "2026-03-15T23:59:59.999Z")}
+       :total-amount {:min 10 :max 25}})
+    (let [dispatches (atom [])]
+      (rf/reg-fx :dispatch (fn [event]
+                             (swap! dispatches conj event)))
+      (try
+        (rf/dispatch-sync [:user-expenses/refresh-expenses-list])
+        (let [[event-id params] (first @dispatches)]
+          (is (= :user-expenses/fetch-expenses event-id))
+          (is (= {:limit 25
+                  :offset 25
+                  :currency "BAM"
+                  :supplier-display-name "Konzum"
+                  :created-at-from "2026-03-14T00:00:00.000Z"
+                  :created-at-to "2026-03-15T23:59:59.999Z"
+                  :total-amount-min 10
+                  :total-amount-max 25}
+                (select-keys params [:limit
+                                     :offset
+                                     :currency
+                                     :supplier-display-name
+                                     :created-at-from
+                                     :created-at-to
+                                     :total-amount-min
+                                     :total-amount-max]))))
+        (finally
+          (rf/reg-fx :dispatch rf/dispatch))))))
+
 (deftest fetch-expenses-success-stores-server-date-highlights
   (testing "expenses fetch success persists returned date highlight metadata"
     (sup/reset-db!)
@@ -551,6 +737,31 @@
                   :highlight-date-field "created-at"
                   :highlight-timezone "UTC"}
                 (select-keys params [:limit :offset :highlight-date-field :highlight-timezone]))))
+        (finally
+          (rf/reg-fx :dispatch rf/dispatch))))))
+
+(deftest stores-refresh-list-flattens-name-and-created-at-filters
+  (testing "stores refresh serializes name and created-at filters for the API"
+    (sup/reset-db!)
+    (swap! rf-db/app-db assoc-in (paths/list-per-page :stores) 40)
+    (swap! rf-db/app-db assoc-in (paths/list-current-page :stores) 2)
+    (swap! rf-db/app-db assoc-in (paths/list-filters :stores)
+      {:display-name "Mega Market"
+       :created-at {:from (js/Date. "2026-03-05T00:00:00.000Z")
+                    :to (js/Date. "2026-03-06T23:59:59.999Z")}})
+    (let [dispatches (atom [])]
+      (rf/reg-fx :dispatch (fn [event]
+                             (swap! dispatches conj event)))
+      (try
+        (rf/dispatch-sync [:user-expenses/refresh-stores-list])
+        (let [[event-id params] (first @dispatches)]
+          (is (= :user-expenses/fetch-stores event-id))
+          (is (= {:limit 40
+                  :offset 40
+                  :display-name "Mega Market"
+                  :created-at-from "2026-03-05T00:00:00.000Z"
+                  :created-at-to "2026-03-06T23:59:59.999Z"}
+                (select-keys params [:limit :offset :display-name :created-at-from :created-at-to]))))
         (finally
           (rf/reg-fx :dispatch rf/dispatch))))))
 

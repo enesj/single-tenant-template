@@ -12,7 +12,7 @@
     [app.template.frontend.api.http :as http]
     [app.template.frontend.db.db :refer [common-interceptors]]
     [app.template.frontend.db.paths :as paths]
-    [clojure.string :as str]
+    [app.template.frontend.events.list.filter-serialization :as filter-serialization]
     [re-frame.core :as rf]))
 
 (defn- begin-entity-load
@@ -26,82 +26,6 @@
   (-> db
     (assoc-in (paths/entity-loading? entity-type) false)
     (assoc-in (paths/entity-error entity-type) (when error (http/extract-error-message error)))))
-
-(defn- normalize-filter-value
-  [value]
-  (cond
-    ;; Date range or number range maps — preserve as-is
-    (and (map? value)
-      (or (contains? value :from) (contains? value :to)
-        (contains? value :min) (contains? value :max)))
-    value
-
-    ;; Other maps — unwrap {:value ...} wrapper
-    (map? value) (or (normalize-filter-value (:value value))
-                   (normalize-filter-value (get value "value")))
-    (keyword? value) (name value)
-    (string? value) (some-> value str/trim not-empty)
-    (vector? value) (let [items (->> value
-                                  (map normalize-filter-value)
-                                  (remove nil?)
-                                  vec)]
-                      (when (seq items)
-                        items))
-    (sequential? value) (let [items (->> value
-                                      (map normalize-filter-value)
-                                      (remove nil?)
-                                      vec)]
-                          (when (seq items)
-                            items))
-    :else value))
-
-(defn- normalize-filter-params
-  [filters]
-  (reduce-kv
-    (fn [acc k v]
-      (let [normalized (normalize-filter-value v)]
-        (if (nil? normalized)
-          acc
-          (assoc acc k normalized))))
-    {}
-    (or filters {})))
-
-(defn- date->iso-str
-  "Convert a js/Date or string to an ISO 8601 string for the API."
-  [v]
-  (cond
-    (instance? js/Date v) (.toISOString v)
-    (string? v) v
-    :else (str v)))
-
-(defn- flatten-filter-params
-  "Expand date-range and number-range filter values into flat query params.
-
-  {:created-at {:from <Date> :to <Date>}} → {:created-at-from \"2026-03-01T...\" :created-at-to \"2026-03-29T...\"}
-  {:total-amount {:min 10 :max 100}}      → {:total-amount-min 10 :total-amount-max 100}
-
-  String and other simple values pass through unchanged."
-  [filters]
-  (reduce-kv
-    (fn [acc k v]
-      (let [field (name k)]
-        (cond
-          ;; Date range
-          (and (map? v) (or (contains? v :from) (contains? v :to)))
-          (cond-> acc
-            (:from v) (assoc (keyword (str field "-from")) (date->iso-str (:from v)))
-            (:to v) (assoc (keyword (str field "-to")) (date->iso-str (:to v))))
-
-          ;; Number range
-          (and (map? v) (or (contains? v :min) (contains? v :max)))
-          (cond-> acc
-            (:min v) (assoc (keyword (str field "-min")) (:min v))
-            (:max v) (assoc (keyword (str field "-max")) (:max v)))
-
-          ;; Simple value — keep as-is
-          :else (assoc acc k v))))
-    {}
-    (or filters {})))
 
 (defn- current-expenses-page-params
   "Build request params for the current list UI state.
@@ -118,9 +42,8 @@
                     (when (contains? #{:asc :desc "asc" "desc"} direction)
                       (name (keyword direction))))
         order-field (when-let [f (:field sort-config)] (name f))
-        filters (-> (get-in db (paths/list-filters entity-key))
-                  normalize-filter-params
-                  flatten-filter-params)]
+        filters (filter-serialization/flatten-ui-filters
+                  (or (get-in db (paths/list-filters entity-key)) {}))]
     (cond-> (merge {:limit per-page
                     :offset (* (max 0 (dec current-page)) per-page)}
               filters)

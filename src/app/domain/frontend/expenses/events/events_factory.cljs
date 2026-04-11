@@ -7,10 +7,9 @@
   (:require
     [ajax.core :as ajax]
     [app.admin.frontend.utils.http :as admin-http]
-    [app.shared.model-naming :as model-naming]
     [app.shared.pagination :as pagination]
     [app.template.frontend.db.paths :as paths]
-    [clojure.string :as str]
+    [app.template.frontend.events.list.filter-serialization :as filter-serialization]
     [day8.re-frame.http-fx]
     [re-frame.core :as rf]
     [taoensso.timbre :as log]))
@@ -144,88 +143,14 @@
               fetch-limit (:fetch-limit params)
               fetch-offset (or (:fetch-offset params) 0)
               fetch-mode? (some? fetch-limit)
-              ;; In server mode, forward filters to the backend.
-              ;; Text filters use filter-key-map for field→param mapping.
-              ;; Date/number range filters expand by shape regardless of config.
+              ;; In server mode, forward list filters to the backend.
+              ;; Range filters keep their UI field name; scalar/select filters use
+              ;; filter-key-map to resolve the backend query-param name.
               server-mode? (= :server (get-in db (paths/list-pagination-mode entity-key)))
               db-filters (when (and server-mode? (not fetch-mode?))
-                           (let [raw-filters (get-in db (paths/list-filters entity-key) {})]
-                             (when (seq raw-filters)
-                               (reduce-kv
-                                 (fn [acc field-id filter-value]
-                                   (let [app-key (model-naming/ensure-app-keyword field-id)
-                                         field-name (name app-key)]
-                                     (cond
-                                       ;; Date range → <field>-from / <field>-to ISO strings
-                                       (and (map? filter-value)
-                                         (or (contains? filter-value :from)
-                                           (contains? filter-value :to)))
-                                       (let [->str (fn [v]
-                                                     (cond
-                                                       (instance? js/Date v) (.toISOString v)
-                                                       (some? v) (str v)
-                                                       :else nil))]
-                                         (cond-> acc
-                                           (:from filter-value)
-                                           (assoc (keyword (str field-name "-from")) (->str (:from filter-value)))
-                                           (:to filter-value)
-                                           (assoc (keyword (str field-name "-to")) (->str (:to filter-value)))))
-
-                                       ;; Number range → <field>-min / <field>-max
-                                       (and (map? filter-value)
-                                         (or (contains? filter-value :min)
-                                           (contains? filter-value :max)))
-                                       (cond-> acc
-                                         (:min filter-value)
-                                         (assoc (keyword (str field-name "-min")) (:min filter-value))
-                                         (:max filter-value)
-                                         (assoc (keyword (str field-name "-max")) (:max filter-value)))
-
-                                       ;; Single select — {:value "..." :label "..."} wrapper
-                                       ;; from template.frontend.events.list.filters/::apply-filter
-                                       (and (map? filter-value) (contains? filter-value :value))
-                                       (let [backend-param (when (seq filter-key-map)
-                                                             (or (get filter-key-map field-id)
-                                                               (get filter-key-map app-key)))
-                                             raw (:value filter-value)
-                                             v (cond
-                                                 (keyword? raw) (name raw)
-                                                 (some? raw) (str raw)
-                                                 :else nil)]
-                                         (if (and backend-param v (not= "" v))
-                                           (assoc acc backend-param v)
-                                           acc))
-
-                                       ;; Multi-select — vector of values or {:value :label} maps
-                                       (and (vector? filter-value)
-                                         (seq filter-value)
-                                         (every? #(or (map? %) (string? %) (keyword? %)) filter-value))
-                                       (let [backend-param (when (seq filter-key-map)
-                                                             (or (get filter-key-map field-id)
-                                                               (get filter-key-map app-key)))
-                                             values (->> filter-value
-                                                      (map #(cond
-                                                              (map? %) (:value %)
-                                                              (keyword? %) (name %)
-                                                              :else %))
-                                                      (remove nil?)
-                                                      (map str))]
-                                         (if (and backend-param (seq values))
-                                           (assoc acc backend-param (str/join "," values))
-                                           acc))
-
-                                       ;; Text filter — use filter-key-map if available
-                                       (and (string? filter-value) (seq filter-value))
-                                       (let [backend-param (when (seq filter-key-map)
-                                                             (or (get filter-key-map field-id)
-                                                               (get filter-key-map app-key)))]
-                                         (if backend-param
-                                           (assoc acc backend-param filter-value)
-                                           acc))
-
-                                       :else acc)))
-                                 {}
-                                 raw-filters))))
+                           (filter-serialization/serialize-server-filters
+                             (get-in db (paths/list-filters entity-key) {})
+                             filter-key-map))
               params (cond-> params
                        (seq db-filters) (as-> p (merge db-filters p)))
               params* (cond-> params

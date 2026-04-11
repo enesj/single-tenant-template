@@ -128,6 +128,7 @@
     (with-redefs [receipt-queries/list-receipts-page
                   (fn [_db opts]
                     (is (= {:status "uploaded"
+                            :show-purged? false
                             :limit 25
                             :offset 50
                             :order-dir :asc
@@ -151,6 +152,75 @@
         (is (= 192 (:total body)))
         (is (= 7 (:purged-total body)))
         (is (= 1 (count (:receipts body))))))))
+
+(deftest list-receipts-handler-forwards-text-date-status-and-show-purged-filters
+  (let [handler (receipts-routes/list-receipts-handler :db)
+        purchased-at-from (java.time.Instant/parse "2026-03-01T10:15:30Z")
+        created-at-from (java.time.Instant/parse "2026-04-01T00:00:00Z")
+        created-at-to (java.time.Instant/parse "2026-04-30T00:00:00Z")
+        updated-at-to (java.time.Instant/parse "2026-04-11T23:59:59Z")]
+    (with-redefs [receipt-queries/list-receipts-page
+                  (fn [_db opts]
+                    (is (= {:status ["uploaded" "review_required"]
+                            :show-purged? true
+                            :limit 25
+                            :offset 50
+                            :order-dir :asc
+                            :order-by "status"
+                            :original-filename "IMG_3885"
+                            :supplier-guess "SAMON"
+                            :created-by-name "Jane Admin"
+                            :purchased-at-guess-from purchased-at-from
+                            :created-at-from created-at-from
+                            :created-at-to created-at-to
+                            :updated-at-to updated-at-to}
+                          opts))
+                    {:rows []
+                     :total 0
+                     :purged-total 4})]
+      (let [response (handler {:query-params {"status" "uploaded,review_required"
+                                              "show-purged" "true"
+                                              "limit" "25"
+                                              "offset" "50"
+                                              "order-dir" "asc"
+                                              "order-by" "status"
+                                              "original-filename" "IMG_3885"
+                                              "supplier-guess" "SAMON"
+                                              "created-by-name" "Jane Admin"
+                                              "purchased-at-guess-from" "2026-03-01T10:15:30Z"
+                                              "created-at-from" "2026-04-01"
+                                              "created-at-to" "2026-04-30"
+                                              "updated-at-to" "2026-04-11T23:59:59Z"}})
+            body (json/parse-string (if (string? (:body response))
+                                      (:body response)
+                                      (slurp (:body response)))
+                   true)]
+        (is (= 200 (:status response)))
+        (is (= true (:success body)))
+        (is (= 4 (:purged-total body)))))))
+
+(deftest list-receipts-handler-defaults-to-desc-order-dir
+  (let [handler (receipts-routes/list-receipts-handler :db)]
+    (with-redefs [receipt-queries/list-receipts-page
+                  (fn [_db opts]
+                    (is (= {:status nil
+                            :show-purged? false
+                            :limit 50
+                            :offset 0
+                            :order-dir :desc
+                            :order-by nil}
+                          opts))
+                    {:rows []
+                     :total 0
+                     :purged-total 0})]
+      (let [response (handler {:query-params {}})
+            body (json/parse-string (if (string? (:body response))
+                                      (:body response)
+                                      (slurp (:body response)))
+                   true)]
+        (is (= 200 (:status response)))
+        (is (= true (:success body)))
+        (is (= 0 (:purged-total body)))))))
 
 (deftest admin-receipts-routes-no-longer-require-impersonation
   (testing "admin receipts routes expose child handlers directly without root impersonation middleware"

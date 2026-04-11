@@ -8,6 +8,7 @@
     [app.template.frontend.api.http :as http]
     [app.template.frontend.db.db :refer [common-interceptors]]
     [app.template.frontend.db.paths :as paths]
+    [app.template.frontend.events.list.filter-serialization :as filter-serialization]
 
     [app.template.frontend.shared.bridges.crud :as crud-bridges]
     [clojure.string :as str]
@@ -65,94 +66,6 @@
       :else
       (->status status-filter))))
 
-(defn- date->iso-str
-  [value]
-  (cond
-    (instance? js/Date value) (.toISOString value)
-    (string? value) value
-    :else (str value)))
-
-(defn- normalize-filter-value
-  [value]
-  (cond
-    (and (map? value)
-      (or (contains? value :from)
-        (contains? value :to)
-        (contains? value "from")
-        (contains? value "to")
-        (contains? value :min)
-        (contains? value :max)
-        (contains? value "min")
-        (contains? value "max")))
-    value
-
-    (map? value)
-    (or (some-> (get value :value) normalize-filter-value)
-      (some-> (get value "value") normalize-filter-value))
-
-    (keyword? value) (name value)
-    (string? value) (some-> value str/trim not-empty)
-
-    (vector? value)
-    (let [items (->> value
-                  (map normalize-filter-value)
-                  (remove nil?)
-                  vec)]
-      (when (seq items)
-        (if (= 1 (count items))
-          (first items)
-          items)))
-
-    (sequential? value)
-    (let [items (->> value
-                  (map normalize-filter-value)
-                  (remove nil?)
-                  vec)]
-      (when (seq items)
-        (if (= 1 (count items))
-          (first items)
-          items)))
-
-    :else value))
-
-(defn- flatten-ui-filters
-  [filters]
-  (reduce-kv
-    (fn [acc k v]
-      (let [normalized (normalize-filter-value v)
-            field-key (keyword (name k))
-            field-name (name field-key)
-            range-from (when (map? normalized)
-                         (or (get normalized :from)
-                           (get normalized "from")))
-            range-to (when (map? normalized)
-                       (or (get normalized :to)
-                         (get normalized "to")))
-            range-min (when (map? normalized)
-                        (or (get normalized :min)
-                          (get normalized "min")))
-            range-max (when (map? normalized)
-                        (or (get normalized :max)
-                          (get normalized "max")))]
-        (cond
-          (nil? normalized)
-          acc
-
-          (or (some? range-from) (some? range-to))
-          (cond-> acc
-            (some? range-from) (assoc (keyword (str field-name "-from")) (date->iso-str range-from))
-            (some? range-to) (assoc (keyword (str field-name "-to")) (date->iso-str range-to)))
-
-          (or (some? range-min) (some? range-max))
-          (cond-> acc
-            (some? range-min) (assoc (keyword (str field-name "-min")) range-min)
-            (some? range-max) (assoc (keyword (str field-name "-max")) range-max))
-
-          :else
-          (assoc acc field-key normalized))))
-    {}
-    (or filters {})))
-
 (defn- current-receipts-page-params
   ([db]
    (current-receipts-page-params db {:include-status? true}))
@@ -165,7 +78,7 @@
          status-filter (or (:status active-filters) (get active-filters "status"))
          status (normalize-status-filter status-filter)
          show-purged? (true? (get-in db (conj base-path :show-purged?)))
-         text-filters (flatten-ui-filters (dissoc active-filters :status "status"))
+         text-filters (filter-serialization/flatten-ui-filters (dissoc active-filters :status "status"))
          sort-config (or (get-in db (paths/list-sort-config entity-key)) {})
          order-dir (let [direction (:direction sort-config)]
                      (when (contains? #{:asc :desc "asc" "desc"} direction)
