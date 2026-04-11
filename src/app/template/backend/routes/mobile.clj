@@ -5,16 +5,40 @@
     [clojure.string :as str]
     [ring.middleware.anti-forgery :refer [*anti-forgery-token*]]))
 
+(defn mobile-bundle-present?
+  []
+  (boolean (io/resource "public/js/mobile/app.js")))
+
+(defn- mobile-uri->desktop-uri
+  [uri]
+  (let [desktop-uri (str/replace-first (or uri "") #"^/m" "")]
+    (if (str/blank? desktop-uri)
+      "/"
+      desktop-uri)))
+
+(defn- redirect-to-desktop-page
+  [{:keys [uri query-string]}]
+  (let [location (cond-> (mobile-uri->desktop-uri uri)
+                   (seq query-string)
+                   (str "?" query-string))]
+    {:status 302
+     :headers {"Location" location
+               "Cache-Control" "no-cache, no-store"}
+     :body ""}))
+
 (defn render-mobile-page
-  "Serve the mobile SPA HTML with CSRF token injected."
-  [_]
-  (let [html-content (slurp (io/resource "public/mobile-index.html"))
-        csrf-token (when (bound? #'*anti-forgery-token*)
-                     *anti-forgery-token*)
-        html-with-csrf (str/replace html-content "{{csrf-token}}" (or csrf-token ""))]
-    {:status 200
-     :headers {"Content-Type" "text/html"}
-     :body html-with-csrf}))
+  "Serve the mobile SPA HTML with CSRF token injected. Falls back to the
+   desktop route if the mobile bundle is not deployed."
+  [request]
+  (if (mobile-bundle-present?)
+    (let [html-content (slurp (io/resource "public/mobile-index.html"))
+          csrf-token (when (bound? #'*anti-forgery-token*)
+                       *anti-forgery-token*)
+          html-with-csrf (str/replace html-content "{{csrf-token}}" (or csrf-token ""))]
+      {:status 200
+       :headers {"Content-Type" "text/html"}
+       :body html-with-csrf})
+    (redirect-to-desktop-page request)))
 
 (def mobile-spa-routes
   "Backend SPA fallback routes for the mobile frontend.
