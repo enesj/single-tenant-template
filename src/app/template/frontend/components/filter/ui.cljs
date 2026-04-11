@@ -5,6 +5,7 @@
     [app.template.frontend.components.filter.hooks :as filter-hooks]
     [app.template.frontend.components.filter.utils :as filter-utils]
     [app.template.frontend.events.list.filters :as filter-events]
+    [app.template.frontend.ui.z-scale :as z]
     [re-frame.core :as rf]
     [uix.core :refer [$ defui use-effect use-ref use-state]]
     [uix.re-frame :as uix.re-frame]))
@@ -249,8 +250,10 @@
 
         ;; Dropdown content
         (when dropdown-open?
-          ($ :div {:class "absolute z-10 mt-1 w-full bg-white border border-gray-300 rounded-md shadow-lg"
-                   :style {:max-height "250px" :overflow-y "auto"}}
+          ($ :div {:class "absolute mt-1 w-full bg-white border border-gray-300 rounded-md shadow-lg"
+                   :style {:max-height "250px"
+                           :overflow-y "auto"
+                           :z-index z/dropdown-inline}}
             ;; Select/clear all controls
             ($ filter-components/dropdown-controls
               {:on-select-all handle-select-all})

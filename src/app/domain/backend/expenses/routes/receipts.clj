@@ -102,16 +102,34 @@
       (some? lines-total) (assoc :lines-total-amount-guess lines-total)
       (some? total-equals-lines?) (assoc :total-guess-equals-lines-total-guess? total-equals-lines?))))
 
+(def ^:private receipt-text-filter-keys
+  [:original-filename :supplier-guess :created-by-name])
+
+(def ^:private receipt-date-range-fields
+  [:purchased-at-guess :created-at :updated-at])
+
 (defn list-receipts-handler [db]
   (utils/with-error-handling
     (fn [request]
       (let [qp (:query-params request)
-            status (parse-status-param (:status qp))
-            opts {:status status
-                  :limit (utils/parse-int-param qp :limit 50)
-                  :offset (utils/parse-int-param qp :offset 0)
-                  :order-dir (keyword (or (:order-dir qp) "desc"))
-                  :order-by (or (:order-by qp) (get qp "order-by"))}
+            get-qp (fn [k] (or (get qp k) (get qp (name k))))
+            status (parse-status-param (get-qp :status))
+            text-filters (reduce (fn [acc k]
+                                   (if-let [v (get-qp k)]
+                                     (assoc acc k v)
+                                     acc))
+                           {}
+                           receipt-text-filter-keys)
+            date-filters (utils/extract-date-range-params qp receipt-date-range-fields)
+            show-purged? (boolean (utils/parse-boolean-param qp :show-purged))
+            opts (merge {:status status
+                         :show-purged? show-purged?
+                         :limit (utils/parse-int-param qp :limit 50)
+                         :offset (utils/parse-int-param qp :offset 0)
+                         :order-dir (keyword (or (get-qp :order-dir) "desc"))
+                         :order-by (get-qp :order-by)}
+                   text-filters
+                   date-filters)
             {:keys [rows total purged-total]} (receipt-queries/list-receipts-page db opts)]
         (utils/success-response {:receipts (to-app rows)
                                  :total total

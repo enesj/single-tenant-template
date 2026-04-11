@@ -64,7 +64,11 @@
    :base-path [:admin :expenses :receipts]
    :api-endpoint "/admin/api/expenses/receipts"
    :detail-response-key :receipt
-   :has-forms? false})
+   :has-forms? false
+   :server-filter-keys {:original-filename :original-filename
+                        :supplier-guess    :supplier-guess
+                        :created-by-name   :created-by-name
+                        :status            :status}})
 
 (def expenses-config
   {:entity-key :expenses

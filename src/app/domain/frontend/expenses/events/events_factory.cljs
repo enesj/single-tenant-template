@@ -10,6 +10,7 @@
     [app.shared.model-naming :as model-naming]
     [app.shared.pagination :as pagination]
     [app.template.frontend.db.paths :as paths]
+    [clojure.string :as str]
     [day8.re-frame.http-fx]
     [re-frame.core :as rf]
     [taoensso.timbre :as log]))
@@ -179,6 +180,39 @@
                                          (assoc (keyword (str field-name "-min")) (:min filter-value))
                                          (:max filter-value)
                                          (assoc (keyword (str field-name "-max")) (:max filter-value)))
+
+                                       ;; Single select — {:value "..." :label "..."} wrapper
+                                       ;; from template.frontend.events.list.filters/::apply-filter
+                                       (and (map? filter-value) (contains? filter-value :value))
+                                       (let [backend-param (when (seq filter-key-map)
+                                                             (or (get filter-key-map field-id)
+                                                               (get filter-key-map app-key)))
+                                             raw (:value filter-value)
+                                             v (cond
+                                                 (keyword? raw) (name raw)
+                                                 (some? raw) (str raw)
+                                                 :else nil)]
+                                         (if (and backend-param v (not= "" v))
+                                           (assoc acc backend-param v)
+                                           acc))
+
+                                       ;; Multi-select — vector of values or {:value :label} maps
+                                       (and (vector? filter-value)
+                                         (seq filter-value)
+                                         (every? #(or (map? %) (string? %) (keyword? %)) filter-value))
+                                       (let [backend-param (when (seq filter-key-map)
+                                                             (or (get filter-key-map field-id)
+                                                               (get filter-key-map app-key)))
+                                             values (->> filter-value
+                                                      (map #(cond
+                                                              (map? %) (:value %)
+                                                              (keyword? %) (name %)
+                                                              :else %))
+                                                      (remove nil?)
+                                                      (map str))]
+                                         (if (and backend-param (seq values))
+                                           (assoc acc backend-param (str/join "," values))
+                                           acc))
 
                                        ;; Text filter — use filter-key-map if available
                                        (and (string? filter-value) (seq filter-value))
