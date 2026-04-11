@@ -28,11 +28,11 @@
     (is (false? (sut/flash-supported? #js {:fillLightMode #js ["off"]})))
     (is (false? (sut/flash-supported? #js {})))))
 
-(deftest device-flash-mode-prefers-native-camera-when-live-flash-is-unavailable
-  (testing "unsupported flash can stay in a device-camera loop for repeated receipts"
-    (is (true? (sut/device-flash-mode? false true)))
+(deftest native-camera-capture-only-falls-back-when-live-preview-is-unavailable
+  (testing "flash attempts stay in the custom UI and native capture is reserved for camera fallback"
+    (is (false? (sut/device-flash-mode? false true)))
     (is (false? (sut/device-flash-mode? true true)))
-    (is (true? (sut/native-camera-capture? false false true)))
+    (is (false? (sut/native-camera-capture? false false true)))
     (is (true? (sut/native-camera-capture? true false false)))
     (is (false? (sut/native-camera-capture? false true false)))))
 
@@ -58,11 +58,11 @@
 
 (deftest camera-error-message-covers-common-failures
   (testing "maps browser camera errors to friendly fallback guidance"
-    (is (= "Camera access was blocked. You can still use the device camera instead."
+    (is (= :mobile/camera-err-not-allowed
           (sut/camera-error-message (fake-error "NotAllowedError"))))
-    (is (= "No rear camera was found on this device."
+    (is (= :mobile/camera-err-not-found
           (sut/camera-error-message (fake-error "NotFoundError"))))
-    (is (= "Couldn't start the in-app camera. You can still use the device camera instead."
+    (is (= :mobile/camera-err-default
           (sut/camera-error-message (fake-error "SomethingElse"))))))
 
 (deftest bounded-capture-dimensions-keeps-images-small

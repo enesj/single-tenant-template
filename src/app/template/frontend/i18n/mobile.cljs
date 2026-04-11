@@ -147,7 +147,7 @@
     :mobile/camera-err-default "Pokretanje kamere neuspješno. Možete koristiti kameru uređaja."
     :mobile/camera-unavailable "Pregled kamere nije dostupan. Snimanje koristi kameru uređaja."
     :mobile/torch-unavailable  "Kontrola lampe nije dostupna na ovom uređaju/pretraživaču."
-    :mobile/flash-native-hint  "Snimanje će otvoriti iPhone kameru za korištenje kontrola blica."
+    :mobile/flash-native-hint  "Pokušat ćemo okinuti web fotografiju s blicom, ali neki iPhone/Safari pregledi mogu zanemariti blic. Ako je račun i dalje taman, uključite lampu ili koristite kameru uređaja."
     :mobile/preview-not-ready  "Pregled kamere nije spreman. Pokušajte ponovo za sekundu."
     :mobile/capture-failed     "Snimanje fotografije neuspješno."
 
@@ -312,7 +312,7 @@
     :mobile/camera-err-default "Couldn't start the in-app camera. You can still use the device camera instead."
     :mobile/camera-unavailable "Live camera preview is unavailable here. Capture will use the device camera instead."
     :mobile/torch-unavailable  "Torch control is not available on this device/browser."
-    :mobile/flash-native-hint  "Capture will open the iPhone camera so you can use its flash controls there."
+    :mobile/flash-native-hint  "We'll try taking a web photo with flash here, but some iPhone/Safari builds may ignore it. If the receipt is still dark, switch on the torch or use the device camera."
     :mobile/preview-not-ready  "The camera preview is not ready yet. Try again in a second."
     :mobile/capture-failed     "Couldn't capture a photo from the live camera."
 
