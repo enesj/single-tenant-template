@@ -195,19 +195,27 @@
                                                 ;; Dispatch the filter toggle helper
                                                 (toggle-field-filtering! entity-kw field-id)))}))))))))))
 
-(defn displayed-table-height
-  "Prefer the live measured table height and fall back to an explicit stored height."
-  [measured-height persisted-height]
+(defn displayed-table-dimension
+  "Prefer the live measured table dimension and fall back to an explicit stored value."
+  [measured-value persisted-value]
   (cond
-    (and (number? measured-height) (pos? measured-height)) measured-height
-    (and (number? persisted-height) (pos? persisted-height)) persisted-height
+    (and (number? measured-value) (pos? measured-value)) measured-value
+    (and (number? persisted-value) (pos? persisted-value)) persisted-value
     :else nil))
+
+(defn displayed-table-width
+  [measured-width persisted-width]
+  (displayed-table-dimension measured-width persisted-width))
+
+(defn displayed-table-height
+  [measured-height persisted-height]
+  (displayed-table-dimension measured-height persisted-height))
 
 (defui list-view-settings-panel
   "Controls for table display options"
   [{:keys [entity-name _show-timestamps? _show-edit? _show-delete? _show-highlights? _show-select? _show-filtering?
            global-settings? current-entity-name compact? entity-spec hardcoded-display-settings
-           per-page on-per-page-change rows-per-page-options measured-table-height]}]
+           per-page on-per-page-change rows-per-page-options measured-table-height measured-table-width]}]
 
   (let [;; Normalize entity name to keyword consistently
         entity-kw (if (keyword? entity-name) entity-name (keyword entity-name))
@@ -347,12 +355,24 @@
 
         ;; Table width control
         (let [current-width (use-subscribe [::settings-events/table-width entity-kw])
-              [temp-width, set-temp-width] (use-state (str current-width))]
+              effective-width (displayed-table-width measured-table-width current-width)
+              effective-width-str (if effective-width (str effective-width) "")
+              [temp-width, set-temp-width] (use-state effective-width-str)
+              commit-width! (fn [raw-value]
+                              (let [new-value (some-> raw-value str str/trim)]
+                                (cond
+                                  (str/blank? new-value)
+                                  (set-temp-width effective-width-str)
+
+                                  (not= new-value effective-width-str)
+                                  (let [parsed (js/parseInt new-value 10)]
+                                    (when (not (js/isNaN parsed))
+                                      (rf/dispatch (column-config/update-table-width-event entity-kw parsed)))))))]
           (use-effect
             (fn []
-              (set-temp-width (str current-width))
+              (set-temp-width effective-width-str)
               js/undefined)
-            [current-width])
+            [effective-width-str])
           ($ :div {:id "table-width-control"
                    :class "flex items-center gap-2 p-1 rounded-md"}
             ($ :span {:class "text-sm font-medium"} "Table Width:")
@@ -367,15 +387,11 @@
                                     (let [new-value (.. e -target -value)]
                                       (set-temp-width new-value)))
                        :on-blur (fn [e]
-                                  (let [new-value (.. e -target -value)]
-                                    (when (and new-value (not= new-value (str current-width)))
-                                      (rf/dispatch (column-config/update-table-width-event entity-kw (js/parseInt new-value))))))
+                                  (commit-width! (.. e -target -value)))
                        :on-key-down (fn [e]
                                       (when (= (.-key e) "Enter")
-                                        (let [new-value (.. e -target -value)]
-                                          (when (and new-value (not= new-value (str current-width)))
-                                            (rf/dispatch (column-config/update-table-width-event entity-kw (js/parseInt new-value)))
-                                            (.blur (.-target e))))))})))
+                                        (commit-width! (.. e -target -value))
+                                        (.blur (.-target e))))})))
 
         ;; Table height control
         (let [current-height (use-subscribe [::settings-events/table-height entity-kw])

@@ -176,7 +176,16 @@
                                         (set-zoom! 1.0)
                                         (set-pan! {:x 0 :y 0})
                                         (set-drag! nil))}
-                  "Reset")))
+                  "Reset")
+                ($ :button {:id (str "btn-rotate-receipt-preview-" rid-str)
+                            :type "button"
+                            :title (str "Rotate 90° (" rotation "°)")
+                            :class "ds-btn ds-btn-ghost ds-btn-xs"
+                            :on-click (fn [e]
+                                        (.preventDefault e)
+                                        (.stopPropagation e)
+                                        (set-rotation! (mod (+ rotation 90) 360)))}
+                  "↻")))
             ($ :a {:id (str "link-open-receipt-" rid-str)
                    :href (or preview-url download-url)
                    :target "_blank"
@@ -226,8 +235,9 @@
                                   preview-height-class
                                   " overflow-hidden select-none flex items-start justify-center "
                                   cursor-class)
-              img-style (when zoomed?
-                          #js {:transform (str "translate(" x "px, " y "px) scale(" zoom ")")
+              transformed? (or zoomed? (not (zero? rotation)))
+              img-style (when transformed?
+                          #js {:transform (str "translate(" x "px, " y "px) scale(" zoom ") rotate(" rotation "deg)")
                                :transformOrigin "50% 50%"
                                :willChange "transform"})]
           ($ :div {:id (str "receipt-preview-img-container-" rid-str)
