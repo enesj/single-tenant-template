@@ -3,44 +3,28 @@
   (:require
     [app.domain.frontend.expenses.admin.adapters.sync :as expenses-sync]
     [app.domain.frontend.expenses.events.user-expenses.endpoints :as endpoints]
+    [app.domain.frontend.expenses.events.user-expenses.list-support :as list-support]
     [app.domain.frontend.expenses.events.user-expenses.xhrio :as x]
     [app.template.frontend.api.http :as http]
     [app.shared.pagination :as pagination]
     [app.template.frontend.db.db :refer [common-interceptors]]
     [app.template.frontend.db.paths :as paths]
-    [app.template.frontend.events.list.filter-serialization :as filter-serialization]
     [clojure.string :as str]
     [re-frame.core :as rf]
     [taoensso.timbre :as log]))
-
-(defn- current-list-page-params
-  [db entity-key default-limit]
-  (let [per-page (paths/resolved-list-per-page db entity-key default-limit)
-        current-page (paths/resolved-list-current-page db entity-key)
-        sort-config (or (get-in db [:ui :lists entity-key :sort]) {})
-        order-dir (let [direction (:direction sort-config)]
-                    (when (contains? #{:asc :desc "asc" "desc"} direction)
-                      (name (keyword direction))))
-        order-field (when-let [f (:field sort-config)] (name f))
-        filters (filter-serialization/flatten-ui-filters (or (get-in db [:ui :lists entity-key :filters]) {}))]
-    (cond-> (merge {:limit per-page
-                    :offset (* (max 0 (dec current-page)) per-page)}
-              filters)
-      (some? order-dir) (assoc :order-dir order-dir)
-      (some? order-field) (assoc :order-by order-field))))
 
 (rf/reg-event-fx
   :user-expenses/refresh-suppliers-list
   common-interceptors
   (fn [{:keys [db]} _]
-    {:dispatch [:user-expenses/fetch-suppliers (current-list-page-params db :suppliers pagination/default-page-size)]}))
+    {:dispatch [:user-expenses/fetch-suppliers (list-support/build-list-request-params db :suppliers pagination/default-page-size)]}))
 
 (rf/reg-event-fx
   :user-expenses/refresh-payers-list
   common-interceptors
   (fn [{:keys [db]} _]
     (let [params (if (= :server (get-in db (paths/list-pagination-mode :payers)))
-                   (current-list-page-params db :payers 200)
+                   (list-support/build-list-request-params db :payers 200)
                    {:limit 200 :offset 0})]
       {:dispatch [:user-expenses/fetch-payers params]})))
 
@@ -49,7 +33,7 @@
   common-interceptors
   (fn [{:keys [db]} _]
     (let [params (if (= :server (get-in db (paths/list-pagination-mode :payer-types)))
-                   (current-list-page-params db :payer-types 200)
+                   (list-support/build-list-request-params db :payer-types 200)
                    {:limit 200 :offset 0})]
       {:dispatch [:user-expenses/fetch-payer-types params]})))
 
@@ -62,9 +46,7 @@
   common-interceptors
   (fn [{:keys [db]} [params]]
     (let [params* (if (map? params) params {})]
-      {:db (-> db
-             (assoc-in [:user-expenses :suppliers :loading?] true)
-             (assoc-in [:user-expenses :suppliers :error] nil))
+      {:db (list-support/begin-loading db [:user-expenses :suppliers :loading?] [:user-expenses :suppliers :error])
        :http-xhrio (x/xhrio db
                      {:method :get
                       :uri endpoints/suppliers-endpoint
@@ -82,8 +64,7 @@
       {:db (-> db
              (assoc-in [:user-expenses :suppliers :data] suppliers)
              (assoc-in [:user-expenses :suppliers :items] suppliers)
-             (assoc-in [:user-expenses :suppliers :loading?] false)
-             (assoc-in [:user-expenses :suppliers :error] nil)
+             (list-support/finish-loading [:user-expenses :suppliers :loading?] [:user-expenses :suppliers :error] nil)
              (assoc-in (paths/list-total-items :suppliers) total))
        :dispatch [::expenses-sync/sync-suppliers suppliers]})))
 
@@ -92,9 +73,7 @@
   common-interceptors
   (fn [db [error]]
     (log/warn "Failed to fetch suppliers" {:error error})
-    (-> db
-      (assoc-in [:user-expenses :suppliers :loading?] false)
-      (assoc-in [:user-expenses :suppliers :error] (http/extract-error-message error)))))
+    (list-support/finish-loading db [:user-expenses :suppliers :loading?] [:user-expenses :suppliers :error] error)))
 
 ;; ---------------------------------------------------------------------------
 ;; Payers
@@ -104,9 +83,7 @@
   :user-expenses/fetch-payers
   common-interceptors
   (fn [{:keys [db]} [params]]
-    {:db (-> db
-           (assoc-in [:user-expenses :payers :loading?] true)
-           (assoc-in [:user-expenses :payers :error] nil))
+    {:db (list-support/begin-loading db [:user-expenses :payers :loading?] [:user-expenses :payers :error])
      :http-xhrio (x/xhrio db
                    {:method :get
                     :uri endpoints/payers-endpoint
@@ -125,8 +102,7 @@
       {:db (cond-> (-> db
                      (assoc-in [:user-expenses :payers :data] payers)
                      (assoc-in [:user-expenses :payers :items] payers)
-                     (assoc-in [:user-expenses :payers :loading?] false)
-                     (assoc-in [:user-expenses :payers :error] nil)
+                     (list-support/finish-loading [:user-expenses :payers :loading?] [:user-expenses :payers :error] nil)
                      (assoc-in (paths/list-total-items :payers) total))
              user-payer-id (assoc-in [:user-expenses :payers :user-payer-id] user-payer-id))
        :dispatch [::expenses-sync/sync-payers payers]})))
@@ -136,9 +112,7 @@
   common-interceptors
   (fn [db [error]]
     (log/warn "Failed to fetch payers" {:error error})
-    (-> db
-      (assoc-in [:user-expenses :payers :loading?] false)
-      (assoc-in [:user-expenses :payers :error] (http/extract-error-message error)))))
+    (list-support/finish-loading db [:user-expenses :payers :loading?] [:user-expenses :payers :error] error)))
 
 ;; ---------------------------------------------------------------------------
 ;; Payer Types
@@ -148,9 +122,7 @@
   :user-expenses/fetch-payer-types
   common-interceptors
   (fn [{:keys [db]} [params]]
-    {:db (-> db
-           (assoc-in [:user-expenses :payer-types :loading?] true)
-           (assoc-in [:user-expenses :payer-types :error] nil))
+    {:db (list-support/begin-loading db [:user-expenses :payer-types :loading?] [:user-expenses :payer-types :error])
      :http-xhrio (x/xhrio db
                    {:method :get
                     :uri endpoints/payer-types-endpoint
@@ -168,8 +140,7 @@
       {:db (-> db
              (assoc-in [:user-expenses :payer-types :data] payer-types)
              (assoc-in [:user-expenses :payer-types :items] payer-types)
-             (assoc-in [:user-expenses :payer-types :loading?] false)
-             (assoc-in [:user-expenses :payer-types :error] nil)
+             (list-support/finish-loading [:user-expenses :payer-types :loading?] [:user-expenses :payer-types :error] nil)
              (assoc-in (paths/list-total-items :payer-types) total))
        :dispatch [::expenses-sync/sync-payer-types payer-types]})))
 
@@ -178,9 +149,7 @@
   common-interceptors
   (fn [db [error]]
     (log/warn "Failed to fetch payer types" {:error error})
-    (-> db
-      (assoc-in [:user-expenses :payer-types :loading?] false)
-      (assoc-in [:user-expenses :payer-types :error] (http/extract-error-message error)))))
+    (list-support/finish-loading db [:user-expenses :payer-types :loading?] [:user-expenses :payer-types :error] error)))
 
 ;; ---------------------------------------------------------------------------
 ;; Upload (image handling)

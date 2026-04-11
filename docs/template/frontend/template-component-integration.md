@@ -95,6 +95,8 @@ Canonical paths/events:
 Admin load events should derive request pagination from template list state and
 send `:limit`/`:offset` params to backend endpoints.
 
+Domain-owned pages can add a local helper layer on top of this contract when several page events share the same request/response shape. The Expenses user stack does this in `app.domain.frontend.expenses.events.user-expenses.list-support`, while still leaving bespoke flows (for example receipts/recent and extra-cache lookups) outside the helper.
+
 ### `button`
 
 Location: `src/app/template/frontend/components/button.cljs`

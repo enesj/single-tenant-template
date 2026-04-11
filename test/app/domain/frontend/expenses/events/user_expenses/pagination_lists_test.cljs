@@ -390,6 +390,23 @@
         (finally
           (rf/reg-fx :dispatch rf/dispatch))))))
 
+(deftest fetch-unmapped-aliases-success-stores-server-total-items
+  (testing "unmapped aliases fetch success persists server totals with row-count fallback"
+    (sup/reset-db!)
+    (rf/dispatch-sync
+      [:user-expenses/fetch-unmapped-aliases-success
+       {:data [{:id "ua-1"}
+               {:id "ua-2"}]
+        :total 64}])
+    (is (= 64 (get-in @rf-db/app-db (paths/list-total-items :unmapped-aliases))))
+
+    (rf/dispatch-sync
+      [:user-expenses/fetch-unmapped-aliases-success
+       {:data [{:id "ua-1"}
+               {:id "ua-2"}
+               {:id "ua-3"}]}])
+    (is (= 3 (get-in @rf-db/app-db (paths/list-total-items :unmapped-aliases))))))
+
 (deftest unmapped-items-loaded-stores-server-total-items
   (testing "unmapped success stores server total with fallback to returned item count"
     (sup/reset-db!)
@@ -788,3 +805,225 @@
         :date-highlights {:uploaded-at ["2026-03-08"]}}])
     (is (= {:uploaded-at ["2026-03-08"]}
           (get-in @rf-db/app-db (conj (paths/list-ui-state :receipts) :date-highlights))))))
+
+(deftest payers-refresh-list-uses-fixed-params-unless-server-mode
+  (testing "payers refresh ignores list UI state outside server mode"
+    (sup/reset-db!)
+    (swap! rf-db/app-db assoc-in (paths/list-per-page :payers) 15)
+    (swap! rf-db/app-db assoc-in (paths/list-current-page :payers) 3)
+    (swap! rf-db/app-db assoc-in (paths/list-filters :payers) {:label "  Main payer  "})
+    (rf/dispatch-sync [::list-ui-state-events/set-sort-field :payers :label])
+    (let [dispatches (atom [])]
+      (rf/reg-fx :dispatch (fn [event]
+                             (swap! dispatches conj event)))
+      (try
+        (rf/dispatch-sync [:user-expenses/refresh-payers-list])
+        (let [[event-id params] (first @dispatches)]
+          (is (= :user-expenses/fetch-payers event-id))
+          (is (= {:limit 200 :offset 0}
+                params)))
+        (finally
+          (rf/reg-fx :dispatch rf/dispatch)))))
+
+  (testing "payers refresh derives pagination, filters, and sort in server mode"
+    (sup/reset-db!)
+    (swap! rf-db/app-db assoc-in (paths/list-per-page :payers) 15)
+    (swap! rf-db/app-db assoc-in (paths/list-filters :payers) {:label "  Main payer  "})
+    (rf/dispatch-sync [::list-ui-state-events/set-pagination-mode :payers :server])
+    (rf/dispatch-sync [::list-ui-state-events/set-sort-field :payers :label])
+    (swap! rf-db/app-db assoc-in (paths/list-current-page :payers) 3)
+    (let [dispatches (atom [])]
+      (rf/reg-fx :dispatch (fn [event]
+                             (swap! dispatches conj event)))
+      (try
+        (rf/dispatch-sync [:user-expenses/refresh-payers-list])
+        (let [[event-id params] (first @dispatches)]
+          (is (= :user-expenses/fetch-payers event-id))
+          (is (= {:limit 15
+                  :offset 30
+                  :label "Main payer"
+                  :order-by "label"
+                  :order-dir "asc"}
+                (select-keys params [:limit :offset :label :order-by :order-dir]))))
+        (finally
+          (rf/reg-fx :dispatch rf/dispatch))))))
+
+(deftest payer-types-refresh-list-uses-fixed-params-unless-server-mode
+  (testing "payer types refresh ignores list UI state outside server mode"
+    (sup/reset-db!)
+    (swap! rf-db/app-db assoc-in (paths/list-per-page :payer-types) 12)
+    (swap! rf-db/app-db assoc-in (paths/list-current-page :payer-types) 4)
+    (swap! rf-db/app-db assoc-in (paths/list-filters :payer-types) {:label "  Business  "})
+    (rf/dispatch-sync [::list-ui-state-events/set-sort-field :payer-types :label])
+    (let [dispatches (atom [])]
+      (rf/reg-fx :dispatch (fn [event]
+                             (swap! dispatches conj event)))
+      (try
+        (rf/dispatch-sync [:user-expenses/refresh-payer-types-list])
+        (let [[event-id params] (first @dispatches)]
+          (is (= :user-expenses/fetch-payer-types event-id))
+          (is (= {:limit 200 :offset 0}
+                params)))
+        (finally
+          (rf/reg-fx :dispatch rf/dispatch)))))
+
+  (testing "payer types refresh derives pagination, filters, and sort in server mode"
+    (sup/reset-db!)
+    (swap! rf-db/app-db assoc-in (paths/list-per-page :payer-types) 12)
+    (swap! rf-db/app-db assoc-in (paths/list-filters :payer-types) {:label "  Business  "})
+    (rf/dispatch-sync [::list-ui-state-events/set-pagination-mode :payer-types :server])
+    (rf/dispatch-sync [::list-ui-state-events/set-sort-field :payer-types :label])
+    (swap! rf-db/app-db assoc-in (paths/list-current-page :payer-types) 4)
+    (let [dispatches (atom [])]
+      (rf/reg-fx :dispatch (fn [event]
+                             (swap! dispatches conj event)))
+      (try
+        (rf/dispatch-sync [:user-expenses/refresh-payer-types-list])
+        (let [[event-id params] (first @dispatches)]
+          (is (= :user-expenses/fetch-payer-types event-id))
+          (is (= {:limit 12
+                  :offset 36
+                  :label "Business"
+                  :order-by "label"
+                  :order-dir "asc"}
+                (select-keys params [:limit :offset :label :order-by :order-dir]))))
+        (finally
+          (rf/reg-fx :dispatch rf/dispatch))))))
+
+(deftest fetch-payers-success-stores-user-payer-id-and-local-items
+  (testing "payers fetch success stores local items, total fallback, and user payer id"
+    (sup/reset-db!)
+    (swap! rf-db/app-db assoc-in [:user-expenses :payers :loading?] true)
+    (rf/dispatch-sync
+      [:user-expenses/fetch-payers-success
+       {:data [{:id "payer-1"}
+               {:id "payer-2"}]
+        :user_payer_id 42}])
+    (is (= [{:id "payer-1"}
+            {:id "payer-2"}]
+          (get-in @rf-db/app-db [:user-expenses :payers :items])))
+    (is (= [{:id "payer-1"}
+            {:id "payer-2"}]
+          (get-in @rf-db/app-db [:user-expenses :payers :data])))
+    (is (= 2 (get-in @rf-db/app-db (paths/list-total-items :payers))))
+    (is (= "42" (get-in @rf-db/app-db [:user-expenses :payers :user-payer-id])))
+    (is (false? (get-in @rf-db/app-db [:user-expenses :payers :loading?])))
+    (is (nil? (get-in @rf-db/app-db [:user-expenses :payers :error])))))
+
+(deftest articles-refresh-list-flattens-canonical-name-and-created-at-filters
+  (testing "articles refresh serializes canonical-name and created-at filters for the API"
+    (sup/reset-db!)
+    (swap! rf-db/app-db assoc-in (paths/list-per-page :articles) 40)
+    (swap! rf-db/app-db assoc-in (paths/list-current-page :articles) 2)
+    (swap! rf-db/app-db assoc-in (paths/list-filters :articles)
+      {:canonical-name "  Jogurt  "
+       :created-at {:from (js/Date. "2026-04-01T00:00:00.000Z")
+                    :to (js/Date. "2026-04-02T23:59:59.999Z")}})
+    (let [dispatches (atom [])]
+      (rf/reg-fx :dispatch (fn [event]
+                             (swap! dispatches conj event)))
+      (try
+        (rf/dispatch-sync [:user-expenses/refresh-articles-list])
+        (let [[event-id params] (first @dispatches)]
+          (is (= :user-expenses/fetch-articles event-id))
+          (is (= {:limit 40
+                  :offset 40
+                  :canonical-name "Jogurt"
+                  :created-at-from "2026-04-01T00:00:00.000Z"
+                  :created-at-to "2026-04-02T23:59:59.999Z"}
+                (select-keys params [:limit :offset :canonical-name :created-at-from :created-at-to]))))
+        (finally
+          (rf/reg-fx :dispatch rf/dispatch))))))
+
+(deftest article-aliases-refresh-list-flattens-raw-label-and-created-at-filters
+  (testing "article aliases refresh serializes raw-label and created-at filters for the API"
+    (sup/reset-db!)
+    (swap! rf-db/app-db assoc-in (paths/list-per-page :article-aliases) 40)
+    (swap! rf-db/app-db assoc-in (paths/list-current-page :article-aliases) 3)
+    (swap! rf-db/app-db assoc-in (paths/list-filters :article-aliases)
+      {:raw-label "  jogurt  "
+       :created-at {:from (js/Date. "2026-04-03T00:00:00.000Z")
+                    :to (js/Date. "2026-04-04T23:59:59.999Z")}})
+    (let [dispatches (atom [])]
+      (rf/reg-fx :dispatch (fn [event]
+                             (swap! dispatches conj event)))
+      (try
+        (rf/dispatch-sync [:user-expenses/refresh-article-aliases-list])
+        (let [[event-id params] (first @dispatches)]
+          (is (= :user-expenses/fetch-article-aliases event-id))
+          (is (= {:limit 40
+                  :offset 80
+                  :raw-label "jogurt"
+                  :created-at-from "2026-04-03T00:00:00.000Z"
+                  :created-at-to "2026-04-04T23:59:59.999Z"}
+                (select-keys params [:limit :offset :raw-label :created-at-from :created-at-to]))))
+        (finally
+          (rf/reg-fx :dispatch rf/dispatch))))))
+
+(deftest supplier-aliases-refresh-list-flattens-raw-label-and-created-at-filters
+  (testing "supplier aliases refresh serializes raw-label and created-at filters for the API"
+    (sup/reset-db!)
+    (swap! rf-db/app-db assoc-in (paths/list-per-page :supplier-aliases) 40)
+    (swap! rf-db/app-db assoc-in (paths/list-current-page :supplier-aliases) 2)
+    (swap! rf-db/app-db assoc-in (paths/list-filters :supplier-aliases)
+      {:raw-label "  Konzum Sarajevo  "
+       :created-at {:from (js/Date. "2026-04-05T00:00:00.000Z")
+                    :to (js/Date. "2026-04-06T23:59:59.999Z")}})
+    (let [dispatches (atom [])]
+      (rf/reg-fx :dispatch (fn [event]
+                             (swap! dispatches conj event)))
+      (try
+        (rf/dispatch-sync [:user-expenses/refresh-supplier-aliases-list])
+        (let [[event-id params] (first @dispatches)]
+          (is (= :user-expenses/fetch-supplier-aliases event-id))
+          (is (= {:limit 40
+                  :offset 40
+                  :raw-label "Konzum Sarajevo"
+                  :created-at-from "2026-04-05T00:00:00.000Z"
+                  :created-at-to "2026-04-06T23:59:59.999Z"}
+                (select-keys params [:limit :offset :raw-label :created-at-from :created-at-to]))))
+        (finally
+          (rf/reg-fx :dispatch rf/dispatch))))))
+
+(deftest store-aliases-refresh-list-flattens-raw-label-and-created-at-filters
+  (testing "store aliases refresh serializes raw-label and created-at filters for the API"
+    (sup/reset-db!)
+    (swap! rf-db/app-db assoc-in (paths/list-per-page :store-aliases) 50)
+    (swap! rf-db/app-db assoc-in (paths/list-current-page :store-aliases) 2)
+    (swap! rf-db/app-db assoc-in (paths/list-filters :store-aliases)
+      {:raw-label "  Mega Market  "
+       :created-at {:from (js/Date. "2026-04-07T00:00:00.000Z")
+                    :to (js/Date. "2026-04-08T23:59:59.999Z")}})
+    (let [dispatches (atom [])]
+      (rf/reg-fx :dispatch (fn [event]
+                             (swap! dispatches conj event)))
+      (try
+        (rf/dispatch-sync [:user-expenses/refresh-store-aliases-list])
+        (let [[event-id params] (first @dispatches)]
+          (is (= :user-expenses/fetch-store-aliases event-id))
+          (is (= {:limit 50
+                  :offset 50
+                  :raw-label "Mega Market"
+                  :created-at-from "2026-04-07T00:00:00.000Z"
+                  :created-at-to "2026-04-08T23:59:59.999Z"}
+                (select-keys params [:limit :offset :raw-label :created-at-from :created-at-to]))))
+        (finally
+          (rf/reg-fx :dispatch rf/dispatch))))))
+
+(deftest fetch-expense-categories-success-stores-local-items-and-date-highlights
+  (testing "expense categories fetch success preserves local items cache and date highlights"
+    (sup/reset-db!)
+    (swap! rf-db/app-db assoc-in [:user-expenses :expense-categories :loading?] true)
+    (rf/dispatch-sync
+      [:user-expenses/fetch-expense-categories-success
+       {:data [{:id "ec-1"}
+               {:id "ec-2"}]
+        :date-highlights {:created-at ["2026-04-09"]}}])
+    (is (= [{:id "ec-1"}
+            {:id "ec-2"}]
+          (get-in @rf-db/app-db [:user-expenses :expense-categories :items])))
+    (is (= 2 (get-in @rf-db/app-db (paths/list-total-items :expense-categories))))
+    (is (= {:created-at ["2026-04-09"]}
+          (get-in @rf-db/app-db (conj (paths/list-ui-state :expense-categories) :date-highlights))))
+    (is (false? (get-in @rf-db/app-db [:user-expenses :expense-categories :loading?])))
+    (is (nil? (get-in @rf-db/app-db [:user-expenses :expense-categories :error])))))

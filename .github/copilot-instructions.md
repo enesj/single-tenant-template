@@ -56,6 +56,7 @@
   - Use stable tie-breakers (e.g. primary key `:asc`) for deterministic pagination.
 - Generic CRUD: `/api/v1/entities/*` is deny-by-default allowlisted; domain entities usually need domain APIs + a CRUD bridge (see `docs/template/backend/generic-entity-crud.md`).
 - Frontend entity specs: `src/app/template/frontend/db/entity_specs.cljs` normalizes keys; wrong columns often = snake↔kebab mismatch.
+- User-expenses list events: prefer `src/app/domain/frontend/expenses/events/user_expenses/list_support.cljs` for shared request-param builders, loading/error state, and the narrow entity-backed fetch/success helpers. Keep `lookups.cljs`, `expense_categories.cljs`, `recent.cljs`, and `receipts/list.cljs` bespoke unless their contracts genuinely match that helper boundary.
 - Re-frame: `re-frame/trim-v` is in `app.template.frontend.db.interceptors/common-interceptors`; handlers should destructure like `[params]` (not `[_ params]`).
 - JSON: convert PG-specific objects before encoding (see `app.shared.type-conversion` usage in services).
 

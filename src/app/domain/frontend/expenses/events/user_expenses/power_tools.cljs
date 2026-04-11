@@ -7,68 +7,39 @@
 
     [app.domain.frontend.expenses.admin.adapters.sync :as expenses-sync]
     [app.domain.frontend.expenses.events.user-expenses.endpoints :as endpoints]
+    [app.domain.frontend.expenses.events.user-expenses.list-support :as list-support]
     [app.domain.frontend.expenses.events.user-expenses.xhrio :as x]
     [app.template.frontend.api.http :as http]
     [app.template.frontend.db.db :refer [common-interceptors]]
-    [app.template.frontend.db.paths :as paths]
-    [app.template.frontend.events.list.filter-serialization :as filter-serialization]
     [app.template.frontend.shared.crud.success :as crud-success]
     [re-frame.core :as rf]))
-
-(defn- begin-entity-load
-  [db entity-type]
-  (-> db
-    (assoc-in (paths/entity-loading? entity-type) true)
-    (assoc-in (paths/entity-error entity-type) nil)))
-
-(defn- finish-entity-load
-  [db entity-type error]
-  (-> db
-    (assoc-in (paths/entity-loading? entity-type) false)
-    (assoc-in (paths/entity-error entity-type) (when error (http/extract-error-message error)))))
-
-(defn- current-list-page-params
-  [db entity-key default-limit]
-  (let [per-page (paths/resolved-list-per-page db entity-key default-limit)
-        current-page (paths/resolved-list-current-page db entity-key)
-        sort-config (or (get-in db [:ui :lists entity-key :sort]) {})
-        order-dir (let [direction (:direction sort-config)]
-                    (when (contains? #{:asc :desc "asc" "desc"} direction)
-                      (name (keyword direction))))
-        order-field (when-let [f (:field sort-config)] (name f))
-        filters (filter-serialization/flatten-ui-filters (or (get-in db [:ui :lists entity-key :filters]) {}))]
-    (cond-> (merge {:limit per-page
-                    :offset (* (max 0 (dec current-page)) per-page)}
-              filters)
-      (some? order-dir) (assoc :order-dir order-dir)
-      (some? order-field) (assoc :order-by order-field))))
 
 (rf/reg-event-fx
   :user-expenses/refresh-articles-list
   common-interceptors
   (fn [{:keys [db]} [opts]]
-    {:dispatch [:user-expenses/fetch-articles (merge (current-list-page-params db :articles 200)
+    {:dispatch [:user-expenses/fetch-articles (merge (list-support/build-list-request-params db :articles 200)
                                                 (when (map? opts) opts))]}))
 
 (rf/reg-event-fx
   :user-expenses/refresh-expense-items-list
   common-interceptors
   (fn [{:keys [db]} [opts]]
-    {:dispatch [:user-expenses/fetch-expense-items (merge (current-list-page-params db :expense-items 200)
+    {:dispatch [:user-expenses/fetch-expense-items (merge (list-support/build-list-request-params db :expense-items 200)
                                                      (when (map? opts) opts))]}))
 
 (rf/reg-event-fx
   :user-expenses/refresh-article-aliases-list
   common-interceptors
   (fn [{:keys [db]} [opts]]
-    {:dispatch [:user-expenses/fetch-article-aliases (merge (current-list-page-params db :article-aliases 200)
+    {:dispatch [:user-expenses/fetch-article-aliases (merge (list-support/build-list-request-params db :article-aliases 200)
                                                        (when (map? opts) opts))]}))
 
 (rf/reg-event-fx
   :user-expenses/refresh-supplier-aliases-list
   common-interceptors
   (fn [{:keys [db]} [opts]]
-    {:dispatch [:user-expenses/fetch-supplier-aliases (merge (current-list-page-params db :supplier-aliases 200)
+    {:dispatch [:user-expenses/fetch-supplier-aliases (merge (list-support/build-list-request-params db :supplier-aliases 200)
                                                         (when (map? opts) opts))]}))
 
 ;; ---------------------------------------------------------------------------
@@ -79,34 +50,25 @@
   :user-expenses/fetch-articles
   common-interceptors
   (fn [{:keys [db]} [params]]
-    (let [request-params (merge {:limit 200 :offset 0} (when (map? params) params))]
-      {:db (begin-entity-load db :articles)
-       :http-xhrio (x/xhrio db
-                     {:method :get
-                      :uri endpoints/articles-endpoint
-
-                      :params request-params
-                      :on-success [:user-expenses/fetch-articles-success]
-                      :on-failure [:user-expenses/fetch-articles-failure]})})))
+    (list-support/entity-list-fetch-fx db
+      {:entity-key :articles
+       :default-request-params {:limit 200 :offset 0}
+       :params params
+       :uri endpoints/articles-endpoint
+       :on-success [:user-expenses/fetch-articles-success]
+       :on-failure [:user-expenses/fetch-articles-failure]})))
 
 (rf/reg-event-fx
   :user-expenses/fetch-articles-success
   common-interceptors
   (fn [{:keys [db]} [response]]
-    (let [articles (vec (or (:data response) []))
-          total (or (:total response) (count articles))
-          date-highlights (:date-highlights response)]
-      {:db (cond-> (-> (finish-entity-load db :articles nil)
-                     (assoc-in (paths/list-total-items :articles) total))
-             (map? date-highlights)
-             (assoc-in (conj (paths/list-ui-state :articles) :date-highlights) date-highlights))
-       :dispatch [::expenses-sync/sync-articles articles]})))
+    (list-support/entity-list-success-fx db :articles response ::expenses-sync/sync-articles)))
 
 (rf/reg-event-db
   :user-expenses/fetch-articles-failure
   common-interceptors
   (fn [db [error]]
-    (finish-entity-load db :articles error)))
+    (list-support/finish-entity-load db :articles error)))
 
 (rf/reg-event-fx
   :user-expenses/create-article-modal
@@ -219,34 +181,25 @@
   :user-expenses/fetch-expense-items
   common-interceptors
   (fn [{:keys [db]} [params]]
-    (let [request-params (merge {:limit 200 :offset 0} (when (map? params) params))]
-      {:db (begin-entity-load db :expense-items)
-       :http-xhrio (x/xhrio db
-                     {:method :get
-                      :uri endpoints/expense-items-endpoint
-
-                      :params request-params
-                      :on-success [:user-expenses/fetch-expense-items-success]
-                      :on-failure [:user-expenses/fetch-expense-items-failure]})})))
+    (list-support/entity-list-fetch-fx db
+      {:entity-key :expense-items
+       :default-request-params {:limit 200 :offset 0}
+       :params params
+       :uri endpoints/expense-items-endpoint
+       :on-success [:user-expenses/fetch-expense-items-success]
+       :on-failure [:user-expenses/fetch-expense-items-failure]})))
 
 (rf/reg-event-fx
   :user-expenses/fetch-expense-items-success
   common-interceptors
   (fn [{:keys [db]} [response]]
-    (let [items (vec (or (:data response) []))
-          total (or (:total response) (count items))
-          date-highlights (:date-highlights response)]
-      {:db (cond-> (-> (finish-entity-load db :expense-items nil)
-                     (assoc-in (paths/list-total-items :expense-items) total))
-             (map? date-highlights)
-             (assoc-in (conj (paths/list-ui-state :expense-items) :date-highlights) date-highlights))
-       :dispatch [::expenses-sync/sync-expense-items items]})))
+    (list-support/entity-list-success-fx db :expense-items response ::expenses-sync/sync-expense-items)))
 
 (rf/reg-event-db
   :user-expenses/fetch-expense-items-failure
   common-interceptors
   (fn [db [error]]
-    (finish-entity-load db :expense-items error)))
+    (list-support/finish-entity-load db :expense-items error)))
 
 (rf/reg-event-fx
   :user-expenses/update-expense-item-modal
@@ -323,34 +276,25 @@
   :user-expenses/fetch-article-aliases
   common-interceptors
   (fn [{:keys [db]} [params]]
-    (let [request-params (merge {:limit 200 :offset 0} (when (map? params) params))]
-      {:db (begin-entity-load db :article-aliases)
-       :http-xhrio (x/xhrio db
-                     {:method :get
-                      :uri endpoints/article-aliases-endpoint
-
-                      :params request-params
-                      :on-success [:user-expenses/fetch-article-aliases-success]
-                      :on-failure [:user-expenses/fetch-article-aliases-failure]})})))
+    (list-support/entity-list-fetch-fx db
+      {:entity-key :article-aliases
+       :default-request-params {:limit 200 :offset 0}
+       :params params
+       :uri endpoints/article-aliases-endpoint
+       :on-success [:user-expenses/fetch-article-aliases-success]
+       :on-failure [:user-expenses/fetch-article-aliases-failure]})))
 
 (rf/reg-event-fx
   :user-expenses/fetch-article-aliases-success
   common-interceptors
   (fn [{:keys [db]} [response]]
-    (let [aliases (vec (or (:data response) []))
-          total (or (:total response) (count aliases))
-          date-highlights (:date-highlights response)]
-      {:db (cond-> (-> (finish-entity-load db :article-aliases nil)
-                     (assoc-in (paths/list-total-items :article-aliases) total))
-             (map? date-highlights)
-             (assoc-in (conj (paths/list-ui-state :article-aliases) :date-highlights) date-highlights))
-       :dispatch [::expenses-sync/sync-article-aliases aliases]})))
+    (list-support/entity-list-success-fx db :article-aliases response ::expenses-sync/sync-article-aliases)))
 
 (rf/reg-event-db
   :user-expenses/fetch-article-aliases-failure
   common-interceptors
   (fn [db [error]]
-    (finish-entity-load db :article-aliases error)))
+    (list-support/finish-entity-load db :article-aliases error)))
 
 (rf/reg-event-fx
   :user-expenses/update-article-alias-modal
@@ -434,34 +378,25 @@
   :user-expenses/fetch-supplier-aliases
   common-interceptors
   (fn [{:keys [db]} [params]]
-    (let [request-params (merge {:limit 200 :offset 0} (when (map? params) params))]
-      {:db (begin-entity-load db :supplier-aliases)
-       :http-xhrio (x/xhrio db
-                     {:method :get
-                      :uri endpoints/supplier-aliases-endpoint
-
-                      :params request-params
-                      :on-success [:user-expenses/fetch-supplier-aliases-success]
-                      :on-failure [:user-expenses/fetch-supplier-aliases-failure]})})))
+    (list-support/entity-list-fetch-fx db
+      {:entity-key :supplier-aliases
+       :default-request-params {:limit 200 :offset 0}
+       :params params
+       :uri endpoints/supplier-aliases-endpoint
+       :on-success [:user-expenses/fetch-supplier-aliases-success]
+       :on-failure [:user-expenses/fetch-supplier-aliases-failure]})))
 
 (rf/reg-event-fx
   :user-expenses/fetch-supplier-aliases-success
   common-interceptors
   (fn [{:keys [db]} [response]]
-    (let [aliases (vec (or (:data response) []))
-          total (or (:total response) (count aliases))
-          date-highlights (:date-highlights response)]
-      {:db (cond-> (-> (finish-entity-load db :supplier-aliases nil)
-                     (assoc-in (paths/list-total-items :supplier-aliases) total))
-             (map? date-highlights)
-             (assoc-in (conj (paths/list-ui-state :supplier-aliases) :date-highlights) date-highlights))
-       :dispatch [::expenses-sync/sync-supplier-aliases aliases]})))
+    (list-support/entity-list-success-fx db :supplier-aliases response ::expenses-sync/sync-supplier-aliases)))
 
 (rf/reg-event-db
   :user-expenses/fetch-supplier-aliases-failure
   common-interceptors
   (fn [db [error]]
-    (finish-entity-load db :supplier-aliases error)))
+    (list-support/finish-entity-load db :supplier-aliases error)))
 
 (rf/reg-event-fx
   :user-expenses/update-supplier-alias-modal

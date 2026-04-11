@@ -182,24 +182,24 @@ rule ServerFilteringDelegatesToEntityRefresh {
     ensures: ServerFilterRefetch(list)
 }
 
-rule ReferenceDataRefreshIgnoresPagination {
-    -- When a reference-data list refresh is triggered (e.g. after CRUD),
-    -- the handler fetches the full dataset with a fixed high limit (200–500)
-    -- and offset 0, ignoring the page-based params used in server mode.
-    -- The handler reads pagination_mode from db to decide which path to take.
+rule ClientModeRefreshRequestIsPageOwned {
+    -- Client-mode canonical pages keep ownership of their refresh request shape.
+    -- They are not required to ignore current list state just because the list
+    -- happens to paginate/filter locally after fetch.
     when: RefreshListTriggered(list)
     requires: list.pagination_mode = client
 
-    ensures: FetchWithFixedLimit(list)
+    ensures: ClientModeRefreshRequestBuilt(list)
 
     @guidance
-        -- Each refresh-*-list handler (categories, cities, etc.) branches:
-        --   if (= :server (get-in db (paths/list-pagination-mode entity-key)))
-        --     → use current-list-page-params (server paging)
-        --   else
-        --     → {:limit N :offset 0} (client bulk fetch)
-        -- This preserves backward compatibility: if a page is ever switched
-        -- back to server mode, the handler works without changes.
+        -- In the user-expenses stack, categories/cities/manufacturers/
+        -- subcategories/expense-categories and the canonical power-list pages
+        -- derive refresh params from current template list state even when their
+        -- page still behaves as a client-mode list-view after fetch.
+        -- Historical fixed-bulk-fetch behavior remains page-specific: lookup lists
+        -- such as payers/payer-types may still use {:limit N :offset 0} outside
+        -- server mode, then switch to list-state params if explicitly configured
+        -- for server pagination.
 }
 
 deferred NormalizeAndStoreFilter
@@ -207,7 +207,7 @@ deferred RemoveFilter
 deferred ClearAllFilters
 deferred ClientRowsFiltered
 deferred ServerFilterRefetch
-deferred FetchWithFixedLimit
+deferred ClientModeRefreshRequestBuilt    -- see: src/app/domain/frontend/expenses/events/user_expenses/list_support.cljs and entity-specific refresh handlers
 
 surface CanonicalListFilterControls {
     facing viewer: User

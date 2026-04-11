@@ -129,6 +129,32 @@ surface FrontendCrudBridgeAndSuccessBoundary {
         DRY here standardizes success/failure semantics while still permitting domain/admin-specific bridge overrides.
 }
 
+surface DomainLocalListEventSupportBoundary {
+    provides:
+        BuildDomainListRequestParams(namespace, entity_type)
+        BeginDomainListLoading(namespace, entity_type)
+        FinishDomainListLoading(namespace, entity_type, error)
+        BuildEntityListFetchEffect(namespace, entity_type, params)
+        BuildEntityListSuccessEffect(namespace, entity_type, response)
+
+    guarantee:
+        Domain-owned list stacks may extract a local helper namespace for request-param
+        derivation, loading/error state, and narrow entity-backed fetch/success effects
+        without coupling that reuse to global admin event factories.
+
+    guarantee:
+        Shared list-effect helpers stay intentionally narrow: they apply only where rows
+        come from `:data`, totals fall back to row count, optional highlight metadata is
+        stored uniformly, and the success path needs one sync dispatch plus standard list
+        metadata writes.
+
+    guidance:
+        User-expenses list events now use this boundary via a local helper namespace.
+        Bespoke flows such as receipts, recent pages, lookup lists with extra local state,
+        and entity families that maintain additional caches remain outside the narrow helper
+        until their contracts genuinely match.
+}
+
 surface BackendGenericCrudReuseBoundary {
     context boundary: BackendGenericCrudTemplate
 

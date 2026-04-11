@@ -68,6 +68,8 @@ User-facing pages reuse the template `list-view` component plus domain events/su
 
 When the same user pages are rendered inside the admin shell, requests switch to `/admin/api/expenses/*` based on runtime context (see `app.domain.frontend.expenses.events.user-expenses.xhrio`).
 
+Within `src/app/domain/frontend/expenses/events/user_expenses/`, canonical list pages now share a local `list_support.cljs` helper for request-param derivation, loading/error state, and the narrow entity-backed fetch/success path. Bespoke flows such as receipts, recent, payers/payer-types, and expense-category local caches remain page-owned on purpose.
+
 #### List View Controls
 
 Each entity supports configurable list view controls:

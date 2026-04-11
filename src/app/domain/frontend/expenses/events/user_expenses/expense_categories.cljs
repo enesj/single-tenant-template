@@ -6,43 +6,14 @@
   (:require
     [app.domain.frontend.expenses.admin.adapters.sync :as expenses-sync]
     [app.domain.frontend.expenses.events.user-expenses.endpoints :as endpoints]
+    [app.domain.frontend.expenses.events.user-expenses.list-support :as list-support]
     [app.domain.frontend.expenses.events.user-expenses.xhrio :as x]
     [app.template.frontend.api.http :as http]
     [app.template.frontend.db.db :refer [common-interceptors]]
     [app.template.frontend.db.paths :as paths]
-    [app.template.frontend.events.list.filter-serialization :as filter-serialization]
     [app.template.frontend.shared.crud.success :as crud-success]
     [re-frame.core :as rf]
     [taoensso.timbre :as log]))
-
-(defn- begin-entity-load
-  [db entity-type]
-  (-> db
-    (assoc-in (paths/entity-loading? entity-type) true)
-    (assoc-in (paths/entity-error entity-type) nil)))
-
-(defn- finish-entity-load
-  [db entity-type error]
-  (-> db
-    (assoc-in (paths/entity-loading? entity-type) false)
-    (assoc-in (paths/entity-error entity-type) (when error (http/extract-error-message error)))))
-
-(defn- current-expense-categories-page-params
-  [db]
-  (let [entity-key :expense-categories
-        per-page (paths/resolved-list-per-page db entity-key 100)
-        current-page (paths/resolved-list-current-page db entity-key)
-        sort-config (or (get-in db [:ui :lists entity-key :sort]) {})
-        order-dir (let [direction (:direction sort-config)]
-                    (when (contains? #{:asc :desc "asc" "desc"} direction)
-                      (name (keyword direction))))
-        order-field (when-let [f (:field sort-config)] (name f))
-        filters (filter-serialization/flatten-ui-filters (or (get-in db [:ui :lists entity-key :filters]) {}))]
-    (cond-> (merge {:limit per-page
-                    :offset (* (max 0 (dec current-page)) per-page)}
-              filters)
-      (some? order-dir) (assoc :order-dir order-dir)
-      (some? order-field) (assoc :order-by order-field))))
 
 ;; ---------------------------------------------------------------------------
 ;; Expense Categories
@@ -52,7 +23,7 @@
   :user-expenses/refresh-expense-categories-list
   common-interceptors
   (fn [{:keys [db]} [opts]]
-    {:dispatch [:user-expenses/fetch-expense-categories (merge (current-expense-categories-page-params db)
+    {:dispatch [:user-expenses/fetch-expense-categories (merge (list-support/build-list-request-params db :expense-categories 100)
                                                           (when (map? opts) opts))]}))
 
 (rf/reg-event-fx
@@ -60,7 +31,10 @@
   common-interceptors
   (fn [{:keys [db]} [params]]
     (let [request-params (merge {:limit 100 :offset 0} (when (map? params) params))]
-      {:db (begin-entity-load db :expense-categories)
+      {:db (-> db
+             (list-support/begin-entity-load :expense-categories)
+             (list-support/begin-loading [:user-expenses :expense-categories :loading?]
+               [:user-expenses :expense-categories :error]))
        :http-xhrio (x/xhrio db
                      {:method :get
                       :uri endpoints/expense-categories-endpoint
@@ -76,11 +50,12 @@
           total (or (:total response) (count expense-categories))
           date-highlights (:date-highlights response)]
       {:db (cond-> (-> db
-                     (finish-entity-load :expense-categories nil)
+                     (list-support/finish-entity-load :expense-categories nil)
+                     (list-support/finish-loading [:user-expenses :expense-categories :loading?]
+                       [:user-expenses :expense-categories :error]
+                       nil)
                      (assoc-in (paths/list-total-items :expense-categories) total)
-                     (assoc-in [:user-expenses :expense-categories :items] expense-categories)
-                     (assoc-in [:user-expenses :expense-categories :loading?] false)
-                     (assoc-in [:user-expenses :expense-categories :error] nil))
+                     (assoc-in [:user-expenses :expense-categories :items] expense-categories))
              (map? date-highlights)
              (assoc-in (conj (paths/list-ui-state :expense-categories) :date-highlights) date-highlights))
        :dispatch [::expenses-sync/sync-expense-categories expense-categories]})))
@@ -90,9 +65,10 @@
   common-interceptors
   (fn [db [error]]
     (-> db
-      (finish-entity-load :expense-categories error)
-      (assoc-in [:user-expenses :expense-categories :loading?] false)
-      (assoc-in [:user-expenses :expense-categories :error] (http/extract-error-message error)))))
+      (list-support/finish-entity-load :expense-categories error)
+      (list-support/finish-loading [:user-expenses :expense-categories :loading?]
+        [:user-expenses :expense-categories :error]
+        error))))
 
 (rf/reg-event-fx
   :user-expenses/create-expense-category-modal
