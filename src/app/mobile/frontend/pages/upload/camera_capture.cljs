@@ -10,8 +10,7 @@
              format-camera-zoom-range-label media-devices-supported?
              min-preview-zoom max-preview-zoom clamp-number
              point-distance point-midpoint stop-stream!
-             torch-supported? try-capture-with-flash!
-             upload-file-from-blob]]
+             torch-supported? try-capture-with-flash!]]
     [app.template.frontend.i18n :refer [use-t]]
     [re-frame.core :as rf]
     [uix.core :refer [$ defui use-effect use-ref use-state]]
@@ -174,9 +173,8 @@
                                                  (detect-flash-support! track
                                                    (fn [flash?]
                                                      (set-flash-available! flash?)
-                                                     (when-not flash?
-                                                       (set-flash-enabled! false))))
-                                                 (set-camera-starting! false))))
+                                                     (set-flash-enabled! (cu/default-flash-enabled? flash?))
+                                                     (set-camera-starting! false))))))
                                       (.catch (fn [err]
                                                 (stop-live-stream!)
                                                 (set-camera-starting! false)
@@ -364,11 +362,10 @@
             (set-native-fallback! false)
             (set-camera-hardware-zoom! 1.0)
             (set-camera-hardware-zoom-range! nil)
-            (do
-              (reset! active-pointers-ref {})
-              (reset! gesture-ref nil)
-              (set-preview-zoom! 1.0)
-              (set-preview-pan! {:x 0 :y 0}))
+            (reset! active-pointers-ref {})
+            (reset! gesture-ref nil)
+            (set-preview-zoom! 1.0)
+            (set-preview-pan! {:x 0 :y 0})
             (-> (.getUserMedia media-devices camera-constraints)
               (.then (fn [stream]
                        (if @cancelled?
@@ -386,9 +383,9 @@
                              (detect-flash-support! track
                                (fn [flash?]
                                  (set-flash-available! flash?)
-                                 (set-flash-enabled! false)
-                                 (set-device-flash-native-mode! false)))
-                             (set-camera-starting! false)
+                                 (set-flash-enabled! (cu/default-flash-enabled? flash?))
+                                 (set-device-flash-native-mode! false)
+                                 (set-camera-starting! false)))
                              (set-capturing-photo! false))))))
               (.catch (fn [err]
                         (when-not @cancelled?

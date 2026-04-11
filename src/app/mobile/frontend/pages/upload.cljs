@@ -44,6 +44,8 @@
 (def apply-default-camera-zoom!      camera-utils/apply-default-camera-zoom!)
 (def supported-fill-light-modes      camera-utils/supported-fill-light-modes)
 (def flash-supported?                camera-utils/flash-supported?)
+
+(def default-flash-enabled? camera-utils/default-flash-enabled?)
 (def try-capture-with-flash!         camera-utils/try-capture-with-flash!)
 (def detect-flash-support!           camera-utils/detect-flash-support!)
 (def device-flash-mode?              camera-utils/device-flash-mode?)
