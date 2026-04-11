@@ -8,7 +8,8 @@
 
   Pass :version to override APP_VERSION env var:
     clj -T:build uber :version '\"1.2.3\"'"
-  (:require [clojure.tools.build.api :as b]))
+  (:require [clojure.java.io :as io]
+    [clojure.tools.build.api :as b]))
 
 (def ^:private class-dir "target/classes")
 
@@ -22,6 +23,33 @@
 (def ^:private basis
   (delay (b/create-basis {:project "deps.edn"})))
 
+(def ^:private frontend-output-dirs
+  ["resources/public/js/main"
+   "resources/public/js/admin"
+   "resources/public/js/mobile"])
+
+(def ^:private frontend-output-files
+  ["resources/public/js/main/app.js"
+   "resources/public/js/admin/app.js"
+   "resources/public/js/mobile/app.js"])
+
+(defn- delete-generated-frontend-bundles!
+  []
+  (doseq [path frontend-output-dirs]
+    (b/delete {:path path})))
+
+(defn- missing-frontend-artifacts
+  []
+  (->> frontend-output-files
+    (remove #(-> % io/file .exists))
+    vec))
+
+(defn- assert-frontend-artifacts!
+  []
+  (when-let [missing (seq (missing-frontend-artifacts))]
+    (throw (ex-info "Missing frontend build artifacts after shadow-cljs release."
+             {:missing missing}))))
+
 ;; ─── Tasks ────────────────────────────────────────────────────────────────────
 
 (defn clean
@@ -33,10 +61,13 @@
 (defn release-frontend
   "Build the ClojureScript frontend and CSS for production."
   [_]
+  (println "🧽 Removing previously generated frontend bundles...")
+  (delete-generated-frontend-bundles!)
   (println "🎨 Building CSS (postcss)...")
   (b/process {:command-args ["npm" "run" "postcss"]})
   (println "⚡ Building ClojureScript (shadow-cljs release app admin mobile)...")
-  (b/process {:command-args ["npx" "shadow-cljs" "release" "app" "admin" "mobile"]}))
+  (b/process {:command-args ["npx" "shadow-cljs" "release" "app" "admin" "mobile"]})
+  (assert-frontend-artifacts!))
 
 (defn uber
   "Full production build: clean → frontend → AOT backend → uberjar.

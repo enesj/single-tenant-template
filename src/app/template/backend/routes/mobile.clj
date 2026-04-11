@@ -16,11 +16,27 @@
       "/"
       desktop-uri)))
 
+(def ^:private mobile-fallback-query-param
+  "mobile-fallback=1")
+
+(defn- mobile-query-string->fallback
+  [query-string]
+  (let [query-string (or query-string "")]
+    (cond
+      (str/blank? query-string)
+      mobile-fallback-query-param
+
+      (str/includes? query-string mobile-fallback-query-param)
+      query-string
+
+      :else
+      (str query-string "&" mobile-fallback-query-param))))
+
 (defn- redirect-to-desktop-page
   [{:keys [uri query-string]}]
-  (let [location (cond-> (mobile-uri->desktop-uri uri)
-                   (seq query-string)
-                   (str "?" query-string))]
+  (let [location (str (mobile-uri->desktop-uri uri)
+                   "?"
+                   (mobile-query-string->fallback query-string))]
     {:status 302
      :headers {"Location" location
                "Cache-Control" "no-cache, no-store"}

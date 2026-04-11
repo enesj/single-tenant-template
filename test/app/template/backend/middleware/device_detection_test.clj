@@ -87,6 +87,11 @@
 
   (testing "phone GET to /js/main/app.js → passthrough (static asset)"
     (let [resp (wrapped (make-request "/js/main/app.js" iphone-ua))]
+      (is (= 200 (:status resp)))))
+
+  (testing "phone GET to a desktop route with mobile-fallback=1 → passthrough"
+    (let [resp (wrapped (assoc (make-request "/t/enes-jakic/receipts" iphone-ua)
+                          :query-string "mobile-fallback=1"))]
       (is (= 200 (:status resp))))))
 
 (deftest desktop-path->mobile-test

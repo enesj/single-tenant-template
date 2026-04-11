@@ -34,10 +34,16 @@
    "/oauth"   ; OAuth callbacks
    "/logout"])
 
+(defn- mobile-fallback-query-string?
+  [query-string]
+  (boolean (and query-string
+             (re-find #"(^|&)mobile-fallback=1(&|$)" query-string))))
+
 (defn- skip-redirect?
   "Returns true if this path should not be redirected to mobile."
-  [path]
+  [path query-string]
   (or (some #(str/starts-with? path %) skip-prefixes)
+    (mobile-fallback-query-string? query-string)
       ;; Don't redirect exact root paths that are OAuth or auth-related
     (= path "/verify-email")
     (= path "/email-verified")
@@ -70,10 +76,11 @@
   (fn [request]
     (let [ua (get-in request [:headers "user-agent"])
           path (:uri request)
+          query-string (:query-string request)
           method (:request-method request)]
       (if (and (= method :get)
             (phone-ua? ua)
-            (not (skip-redirect? path)))
+            (not (skip-redirect? path query-string)))
         {:status 302
          :headers {"Location" (desktop-path->mobile path)
                    "Cache-Control" "no-cache, no-store"}

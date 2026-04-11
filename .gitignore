@@ -60,7 +60,7 @@ tmp/
 -/
 /projectstmp/
 /test-screenshots/
-upload/
+/upload/
 slips/
 
 # API Credentials - never commit these

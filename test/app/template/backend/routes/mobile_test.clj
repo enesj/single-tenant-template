@@ -17,7 +17,7 @@
       (let [resp (mobile/render-mobile-page {:uri "/m/t/enes-jakic/receipts"
                                              :query-string "view=list"})]
         (is (= 302 (:status resp)))
-        (is (= "/t/enes-jakic/receipts?view=list"
+        (is (= "/t/enes-jakic/receipts?view=list&mobile-fallback=1"
               (get-in resp [:headers "Location"])))
         (is (= "no-cache, no-store" (get-in resp [:headers "Cache-Control"])))
         (is (= "" (:body resp)))))))
