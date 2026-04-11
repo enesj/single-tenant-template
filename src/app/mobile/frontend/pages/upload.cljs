@@ -4,10 +4,8 @@
   (:require
     [app.mobile.frontend.components.header :refer [mobile-header]]
     [app.mobile.frontend.pages.receipt-review :refer [pending-receipts-section]]
-    [app.mobile.frontend.pages.upload.camera-capture
-     :refer [camera-capture-page capture-button toast-banner]]
-    [app.mobile.frontend.pages.upload.camera-utils
-     :as camera-utils]
+    [app.mobile.frontend.pages.upload.camera-capture :as camera-capture]
+    [app.mobile.frontend.pages.upload.camera-utils :as camera-utils]
     ;; Side-effect require: event/sub registrations happen on load
     [app.mobile.frontend.pages.upload.events]
     [app.template.frontend.i18n :refer [use-t]]
@@ -21,6 +19,10 @@
 
 ;; camera-capture components (re-exported via :refer above)
 ;; camera-capture-page, capture-button, toast-banner
+
+(def camera-capture-page camera-capture/camera-capture-page)
+(def capture-button camera-capture/capture-button)
+(def toast-banner camera-capture/toast-banner)
 
 ;; camera-utils — pure functions used by tests
 (def camera-constraints              camera-utils/camera-constraints)
