@@ -33,6 +33,17 @@
       (is (= 50 (paths/resolved-list-per-page db :items 25)))
       (is (= 1 (paths/resolved-list-current-page db :items)))))
 
+  (testing "admin routes read admin-scoped persisted prefs before user-scoped ones"
+    (let [db {:current-route {:data {:name :admin/items}}
+              :ui {:entity-prefs {:items {:display {:per-page 50}}
+                                  :admin/items {:display {:per-page 25}}}
+                   :lists {:items {:per-page nil
+                                   :current-page nil
+                                   :pagination {:per-page nil
+                                                :current-page nil}}}}}]
+      (is (= 25 (paths/resolved-list-per-page db :items 10)))
+      (is (= 1 (paths/resolved-list-current-page db :items)))))
+
   (testing "explicit list state still wins over persisted browser prefs"
     (let [db {:ui {:entity-prefs {:items {:display {:per-page 50}}}
                    :lists {:items {:per-page 20
@@ -103,7 +114,17 @@
       (is (= 25 (get-in db (paths/list-per-page :items))) "Should persist parsed integer per-page")
       (is (= 25 (get-in pagination [:per-page])) "Should sync legacy :per-page location")
       (is (= 25 (get-in pagination [:pagination :per-page])) "Should sync pagination map")
+      (is (= 25 (get-in db [:ui :entity-prefs :items :display :per-page])) "Should persist user-route prefs under the entity key")
       (is (= 1 (get-in db (current-page-path :items))) "Setting per-page resets current page to 1"))
+
+    (testing "Admin routes persist per-page under the admin-scoped entity key"
+      (swap! rf-db/app-db assoc :current-route {:data {:name :admin/items}})
+      (rf/dispatch-sync [::ui-state-events/set-per-page :items 30])
+      (let [db @rf-db/app-db]
+        (is (= 30 (get-in db [:ui :entity-prefs :admin/items :display :per-page]))
+          "Admin per-page prefs should be isolated from user-route prefs")
+        (is (= 25 (get-in db [:ui :entity-prefs :items :display :per-page]))
+          "Existing user-route prefs should be preserved")))
 
     (testing "Server mode dispatches configured refresh event"
       (rf/dispatch-sync [::ui-state-events/set-pagination-mode :items :server])
@@ -202,6 +223,15 @@
       ;; toggle-entity-flag writes to new path [:ui :entity-prefs entity :display ...]
       (is (false? (get-in db [:ui :entity-prefs :items :display :show-edit?])) "Should toggle entity override from default true to false")
       (is (true? (get-in db [:ui :entity-prefs :items :display :show-select?])) "Should toggle entity override from default false to true"))
+
+    (testing "Admin routes isolate display toggles under the admin-scoped key"
+      (swap! rf-db/app-db assoc :current-route {:data {:name :admin/items}})
+      (rf/dispatch-sync [::ui-state-events/toggle-delete :items])
+      (let [db @rf-db/app-db]
+        (is (false? (get-in db [:ui :entity-prefs :admin/items :display :show-delete?]))
+          "Admin toggle should write under the admin-scoped prefs key")
+        (is (nil? (get-in db [:ui :entity-prefs :items :display :show-delete?]))
+          "User-route prefs should remain untouched")))
 
     (testing "Global toggles mutate ui root when entity nil"
       (rf/dispatch-sync [::ui-state-events/toggle-highlights nil])

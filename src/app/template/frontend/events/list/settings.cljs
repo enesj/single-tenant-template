@@ -26,18 +26,20 @@
 (rf/reg-sub
   ::filterable-fields
   (fn [db [_ entity-key]]
-    (let [entity-key (model-naming/ensure-app-keyword entity-key)]
-    ;; Read from new path first, fall back to legacy path
-      (or (get-in db (paths/entity-prefs-filters-fields entity-key))
+    (let [entity-key (model-naming/ensure-app-keyword entity-key)
+          prefs-key (paths/entity-prefs-key db entity-key)]
+      ;; Read from new path first, fall back to legacy path
+      (or (get-in db (paths/entity-prefs-filters-fields prefs-key))
         (get-in db (conj (paths/entity-display-settings entity-key) :filterable-fields))
         {}))))
 
 (rf/reg-sub
   ::table-width
   (fn [db [_ entity-key]]
-    (let [entity-key (model-naming/ensure-app-keyword entity-key)]
-    ;; Read from new path first, fall back to legacy path
-      (or (get-in db (paths/entity-prefs-columns-width entity-key))
+    (let [entity-key (model-naming/ensure-app-keyword entity-key)
+          prefs-key (paths/entity-prefs-key db entity-key)]
+      ;; Read from new path first, fall back to legacy path
+      (or (get-in db (paths/entity-prefs-columns-width prefs-key))
         (get-in db (conj (paths/entity-display-settings entity-key) :table-width))
         2800))))
 
@@ -45,11 +47,12 @@
   ::column-order
   (fn [db [_ entity-key]]
     (let [entity-key (model-naming/ensure-app-keyword entity-key)
+          prefs-key (paths/entity-prefs-key db entity-key)
           normalize (fn [k]
                       (model-naming/ensure-app-keyword (kw/ensure-name k)))
-          stored (get-in db (paths/entity-prefs-columns-order entity-key))
+          stored (get-in db (paths/entity-prefs-columns-order prefs-key))
           legacy (get-in db (conj (paths/entity-display-settings entity-key) :column-order))
-          visible-order (get-in db (paths/entity-prefs-columns-visible-order entity-key))]
+          visible-order (get-in db (paths/entity-prefs-columns-visible-order prefs-key))]
       (cond
         (seq stored) (->> stored (keep normalize) vec)
         (seq legacy) (->> legacy (keep normalize) vec)
@@ -62,15 +65,16 @@
   (fn [db [_ entity-name field-name]]
     (if (and entity-name field-name)
       (let [entity-key (model-naming/ensure-app-keyword entity-name)
+            prefs-key (paths/entity-prefs-key db entity-key)
             field-key (model-naming/ensure-app-keyword (kw/ensure-name field-name))
             ;; Read from new path first, fall back to legacy
-            current-map (or (get-in db (paths/entity-prefs-filters-fields entity-key))
+            current-map (or (get-in db (paths/entity-prefs-filters-fields prefs-key))
                           (get-in db (conj (paths/entity-display-settings entity-key) :filterable-fields))
                           {})
             current-setting (get current-map field-key true)
             updated-map (assoc current-map field-key (not current-setting))]
         ;; Write to new path only
-        (assoc-in db (paths/entity-prefs-filters-fields entity-key) updated-map))
+        (assoc-in db (paths/entity-prefs-filters-fields prefs-key) updated-map))
       db)))
 
 (rf/reg-event-db
@@ -79,6 +83,7 @@
   (fn [db [_ entity-name field-name]]
     (if (and entity-name field-name)
       (let [entity-key    (model-naming/ensure-app-keyword entity-name)
+            prefs-key     (paths/entity-prefs-key db entity-key)
             field-key     (model-naming/ensure-app-keyword (kw/ensure-name field-name))
             admin-route?  (paths/admin-route? db)
             entity-view-options (if admin-route?
@@ -95,7 +100,7 @@
             always-visible? (contains? (into #{} (keep model-naming/ensure-app-keyword (or (:always-visible table-config) [])))
                               field-key)
             ;; Read from new path first, fall back to legacy
-            current-map   (or (get-in db (paths/entity-prefs-columns-visible entity-key))
+            current-map   (or (get-in db (paths/entity-prefs-columns-visible prefs-key))
                             (get-in db (conj (paths/entity-display-settings entity-key) :visible-columns))
                             {})
             current-setting (get current-map field-key true)
@@ -103,7 +108,7 @@
         (if (or locked? always-visible?)
           db
           ;; Write to new path only
-          (assoc-in db (paths/entity-prefs-columns-visible entity-key) updated-map)))
+          (assoc-in db (paths/entity-prefs-columns-visible prefs-key) updated-map)))
       db)))
 
 (rf/reg-event-db
@@ -112,16 +117,18 @@
   (fn [db [_ entity-name width]]
     (if (and entity-name width)
       (let [entity-key (model-naming/ensure-app-keyword entity-name)
+            prefs-key (paths/entity-prefs-key db entity-key)
             width-num (if (string? width) (js/parseInt width) width)]
         ;; Write to new path only
-        (assoc-in db (paths/entity-prefs-columns-width entity-key) width-num))
+        (assoc-in db (paths/entity-prefs-columns-width prefs-key) width-num))
       db)))
 
 (rf/reg-sub
   ::table-height
   (fn [db [_ entity-key]]
-    (let [entity-key (model-naming/ensure-app-keyword entity-key)]
-      (get-in db (paths/entity-prefs-table-height entity-key)))))
+    (let [entity-key (model-naming/ensure-app-keyword entity-key)
+          prefs-key (paths/entity-prefs-key db entity-key)]
+      (get-in db (paths/entity-prefs-table-height prefs-key)))))
 
 (rf/reg-event-db
   ::update-table-height
@@ -129,8 +136,9 @@
   (fn [db [_ entity-name height]]
     (if (and entity-name height)
       (let [entity-key (model-naming/ensure-app-keyword entity-name)
+            prefs-key (paths/entity-prefs-key db entity-key)
             height-num (if (string? height) (js/parseInt height) height)]
-        (assoc-in db (paths/entity-prefs-table-height entity-key) height-num))
+        (assoc-in db (paths/entity-prefs-table-height prefs-key) height-num))
       db)))
 
 (rf/reg-event-db
@@ -139,8 +147,9 @@
   (fn [db [_ entity-name column-order]]
     (if entity-name
       (let [entity-key (model-naming/ensure-app-keyword entity-name)
+            prefs-key (paths/entity-prefs-key db entity-key)
             normalize (fn [k]
                         (model-naming/ensure-app-keyword (kw/ensure-name k)))
             normalized (->> (or column-order []) (keep normalize) vec)]
-        (assoc-in db (paths/entity-prefs-columns-order entity-key) normalized))
+        (assoc-in db (paths/entity-prefs-columns-order prefs-key) normalized))
       db)))

@@ -1,7 +1,6 @@
 (ns app.domain.backend.expenses.routes.receipts
   "Admin API routes for receipt ingestion and approval."
   (:require
-    [app.domain.backend.expenses.routes.middleware :as impersonation-mw]
     [app.domain.backend.expenses.services.receipts.approval :as receipt-approval]
     [app.domain.backend.expenses.services.receipts.image-preprocess :as image-preprocess]
     [app.domain.backend.expenses.services.receipts.queries :as receipt-queries]
@@ -113,8 +112,10 @@
                   :offset (utils/parse-int-param qp :offset 0)
                   :order-dir (keyword (or (:order-dir qp) "desc"))
                   :order-by (or (:order-by qp) (get qp "order-by"))}
-            results (receipt-queries/list-receipts db opts)]
-        (utils/success-response {:receipts (to-app results)})))
+            {:keys [rows total purged-total]} (receipt-queries/list-receipts-page db opts)]
+        (utils/success-response {:receipts (to-app rows)
+                                 :total total
+                                 :purged-total purged-total})))
     "Failed to list receipts"))
 
 (defn get-receipt-handler [db]
@@ -239,7 +240,6 @@
   "Admin receipts routes. Mounted under /admin/api/expenses/receipts."
   [db & [app-config]]
   ["/receipts"
-   {:middleware [(fn [handler] (impersonation-mw/wrap-require-impersonation handler))]}
    ["" {:get (list-receipts-handler db)}]
    ["/:id/download" {:get (download-receipt-handler db)}]
    ["/:id" {:get (get-receipt-handler db)

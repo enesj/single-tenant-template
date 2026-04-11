@@ -94,7 +94,8 @@
   [common-interceptors persistence/persist-entity-prefs]
   (fn [{:keys [db]} [entity-type per-page]]
     (if-let [entity-key (->entity-key entity-type)]
-      (let [parsed (cond
+      (let [prefs-key (paths/entity-prefs-key db entity-key)
+            parsed (cond
                      (number? per-page) per-page
                      (string? per-page) (js/parseInt per-page 10)
                      :else per-page)
@@ -104,7 +105,7 @@
                   (sync-current-page entity-key 1)
                   ;; Persist as a display preference so it survives refresh.
                   ;; This also makes it available to the unified resolver via [:ui :entity-prefs].
-                  (assoc-in (conj (paths/entity-prefs-display entity-key) :per-page) clamped)
+                  (assoc-in (conj (paths/entity-prefs-display prefs-key) :per-page) clamped)
                   ((fn [db**] (log/info "LIST SET-PER-PAGE →" (name entity-key) "to" clamped) db**)))
             refresh-dispatch (refresh-dispatch-for-server-mode db* entity-key)]
         (cond-> {:db db*}
@@ -187,8 +188,9 @@
   "Toggle an entity-specific display flag.
    Reads from new path first, falls back to legacy, writes to new path only."
   [db entity-key path default-value]
-  (let [;; New path: [:ui :entity-prefs <entity> :display <setting>]
-        new-path (into (paths/entity-prefs-display entity-key) path)
+  (let [prefs-key (paths/entity-prefs-key db entity-key)
+        ;; New path: [:ui :entity-prefs <entity> :display <setting>]
+        new-path (into (paths/entity-prefs-display prefs-key) path)
         ;; Legacy path: [:ui :entity-configs <entity> <setting>]
         legacy-path (into (paths/entity-display-settings entity-key) path)
         ;; Read from new path first
@@ -319,17 +321,18 @@
   [common-interceptors persistence/persist-entity-prefs]
   (fn [db [entity-type]]
     (if-let [entity-key (->entity-key entity-type)]
-      (let [legacy-path (paths/entity-display-settings entity-key)
+      (let [prefs-key (paths/entity-prefs-key db entity-key)
+            legacy-path (paths/entity-display-settings entity-key)
             legacy (get-in db legacy-path)
             db* (update-in db [:ui :entity-prefs]
                   (fn [prefs]
                     (let [prefs (or prefs {})
-                          current (get prefs entity-key)]
+                          current (get prefs prefs-key)]
                       (if (map? current)
                         (let [updated (dissoc current :display)]
                           (if (seq updated)
-                            (assoc prefs entity-key updated)
-                            (dissoc prefs entity-key)))
+                            (assoc prefs prefs-key updated)
+                            (dissoc prefs prefs-key)))
                         prefs))))]
         (if (map? legacy)
           (let [cleaned (apply dissoc legacy display-setting-keys)]

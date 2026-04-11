@@ -127,6 +127,25 @@
       (settings-io/write-form-fields! db payload)
       (is (= payload (settings-io/read-form-fields db))))))
 
+(deftest read-form-fields-sanitizes-legacy-duplicate-runtime-data
+  (let [db fixtures/*test-db*]
+    (clear-runtime-overrides! db)
+    (seed-runtime-config! db "admin" :form-fields
+      {:expenses {:edit-fields ["currency"
+                                "purchased_at"
+                                "purchased-at"
+                                "total-amount"
+                                "total_amount"]}
+       :article-aliases {:edit-fields ["raw_label"
+                                       "raw-label"
+                                       "unit"]}})
+    (is (= {:expenses {:edit-fields ["currency"
+                                     "purchased_at"
+                                     "total_amount"]}
+            :article-aliases {:edit-fields ["raw_label"
+                                            "unit"]}}
+          (settings-io/read-form-fields db)))))
+
 (deftest write-and-read-user-view-options
   (let [db fixtures/*test-db*]
     (clear-runtime-overrides! db)

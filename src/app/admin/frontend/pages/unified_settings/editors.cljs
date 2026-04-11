@@ -3,6 +3,7 @@
     [app.admin.frontend.components.settings-views.cards :as cards]
     [app.admin.frontend.components.tabs :as tabs]
     [app.admin.frontend.settings.definitions :as defs]
+    [app.shared.model-naming :as model-naming]
     [app.template.frontend.events.list.ui-state :as list-ui-events]
     [app.template.frontend.settings.resolver :as resolver]
     [app.template.frontend.subs.ui :as ui-subs]
@@ -37,29 +38,52 @@
   2. Model spec fields (from models.edn) as additional available options"
   [{:keys [entity-kw form-fields-config on-toggle on-reset]}]
   (let [entity-config (get form-fields-config entity-kw {})
-        create-fields (set (or (:create-fields entity-config) []))
-        edit-fields (set (or (:edit-fields entity-config) []))
-        field-config-keys (keys (or (:field-config entity-config) {}))
-        ;; Union of all fields referenced in form-fields config
-        config-field-set (into #{}
-                           (map (fn [x] (if (keyword? x) (name x) (str x))))
-                           (concat create-fields edit-fields field-config-keys))
+        normalize-field-id (fn [x]
+                             (some-> x model-naming/ensure-app-keyword))
+        field-id->storage (fn [field-id]
+                            (some-> field-id model-naming/app-keyword->db name))
+        normalize-field-list (fn [xs]
+                               (->> (or xs [])
+                                 (keep (fn [x]
+                                         (some-> x
+                                           normalize-field-id
+                                           field-id->storage)))
+                                 distinct
+                                 vec))
+        config-fields-raw (concat (:create-fields entity-config)
+                            (:edit-fields entity-config)
+                            (keys (or (:field-config entity-config) {})))
+        config-field-ids (->> config-fields-raw
+                           (keep normalize-field-id)
+                           distinct
+                           vec)
+        config-display-by-id (reduce
+                               (fn [acc raw]
+                                 (if-let [field-id (normalize-field-id raw)]
+                                   (assoc acc field-id (or (get acc field-id)
+                                                         (field-id->storage field-id)))
+                                   acc))
+                               {}
+                               config-fields-raw)
+        create-fields (set (keep normalize-field-id (or (:create-fields entity-config) [])))
+        edit-fields (set (keep normalize-field-id (or (:edit-fields entity-config) [])))
+        config-field-set (set config-field-ids)
         ;; Model spec fields as fallback universe (base model specs, not config-overridden)
         all-form-specs (use-subscribe [:form-entity-specs])
         form-specs (get all-form-specs entity-kw)
         model-field-ids (->> (or form-specs [])
-                          (keep (fn [f] (when (map? f) (let [id (:id f)]
-                                                         (if (keyword? id) (name id) (str id))))))
+                          (keep (fn [f]
+                                  (when (map? f)
+                                    (some-> (:id f) normalize-field-id))))
+                          distinct
                           vec)
         ;; Config fields first (preserving order), then model fields not yet in config
-        available-cols (let [config-ordered (distinct (concat
-                                                        (map #(if (keyword? %) (name %) (str %))
-                                                          (concat (:create-fields entity-config)
-                                                            (:edit-fields entity-config)
-                                                            field-config-keys))))]
-                         (into (vec config-ordered)
-                           (remove config-field-set)
-                           model-field-ids))]
+        available-field-ids (into (vec config-field-ids)
+                              (remove config-field-set)
+                              model-field-ids)
+        display-name-for (fn [field-id]
+                           (or (get config-display-by-id field-id)
+                             (field-id->storage field-id)))]
     ($ :div {:class "ds-card bg-base-100 shadow-md"}
       ($ :div {:class "ds-card-body p-4"}
         ($ :div {:class "flex items-center justify-between mb-4"}
@@ -75,17 +99,18 @@
           ($ :h4 {:class "text-sm font-semibold mb-2"} "Create Form Fields")
           ($ :p {:class "text-xs text-base-content/60 mb-2"}
             "Fields shown when creating a new record")
-          (if (seq available-cols)
+          (if (seq available-field-ids)
             ($ :div {:class "grid grid-cols-2 sm:grid-cols-3 gap-2"}
-              (for [col available-cols]
-                ($ :label {:key (str "create-" col)
+              (for [field-id available-field-ids
+                    :let [field-name (display-name-for field-id)]]
+                ($ :label {:key (str "create-" field-name)
                            :class "ds-tooltip ds-tooltip-top flex items-center gap-2 p-2 rounded-lg bg-base-200"
-                           :data-tip (str "Toggle whether “" col "” is shown in the Create form.")}
+                           :data-tip (str "Toggle whether “" field-name "” is shown in the Create form.")}
                   ($ :input {:type "checkbox"
                              :class "ds-checkbox ds-checkbox-sm"
-                             :checked (contains? create-fields col)
-                             :on-change #(on-toggle entity-kw :create-fields col)})
-                  ($ :span {:class "text-sm"} col))))
+                             :checked (contains? create-fields field-id)
+                             :on-change #(on-toggle entity-kw :create-fields field-id)})
+                  ($ :span {:class "text-sm"} field-name))))
             ($ :p {:class "text-sm text-base-content/60"} "No columns available")))
 
         ;; Edit Fields
@@ -93,17 +118,18 @@
           ($ :h4 {:class "text-sm font-semibold mb-2"} "Edit Form Fields")
           ($ :p {:class "text-xs text-base-content/60 mb-2"}
             "Fields shown when editing an existing record")
-          (if (seq available-cols)
+          (if (seq available-field-ids)
             ($ :div {:class "grid grid-cols-2 sm:grid-cols-3 gap-2"}
-              (for [col available-cols]
-                ($ :label {:key (str "edit-" col)
+              (for [field-id available-field-ids
+                    :let [field-name (display-name-for field-id)]]
+                ($ :label {:key (str "edit-" field-name)
                            :class "ds-tooltip ds-tooltip-top flex items-center gap-2 p-2 rounded-lg bg-base-200"
-                           :data-tip (str "Toggle whether “" col "” is shown in the Edit form.")}
+                           :data-tip (str "Toggle whether “" field-name "” is shown in the Edit form.")}
                   ($ :input {:type "checkbox"
                              :class "ds-checkbox ds-checkbox-sm"
-                             :checked (contains? edit-fields col)
-                             :on-change #(on-toggle entity-kw :edit-fields col)})
-                  ($ :span {:class "text-sm"} col))))
+                             :checked (contains? edit-fields field-id)
+                             :on-change #(on-toggle entity-kw :edit-fields field-id)})
+                  ($ :span {:class "text-sm"} field-name))))
             ($ :p {:class "text-sm text-base-content/60"} "No columns available")))))))
 
 (defui table-columns-editor

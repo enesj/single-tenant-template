@@ -187,7 +187,8 @@
 (defn read-form-fields
   "Read admin form-fields from the runtime store."
   [db]
-  (let [data (read-runtime-override db admin-scope :form-fields)]
+  (let [data (-> (read-runtime-override db admin-scope :form-fields)
+               form-fields-spec/sanitize-form-fields)]
     (warn-on-invalid "admin form-fields"
       (form-fields-spec/validate-form-fields-strict data))
     data))
@@ -258,7 +259,8 @@
 (defn read-user-form-fields
   "Read user-facing form-fields from the runtime store."
   [db]
-  (let [data (read-runtime-override db user-scope :form-fields)]
+  (let [data (-> (read-runtime-override db user-scope :form-fields)
+               form-fields-spec/sanitize-form-fields)]
     (warn-on-invalid "user form-fields"
       (form-fields-spec/validate-form-fields-strict data))
     data))

@@ -13,9 +13,11 @@
    :admin-domain-groups
    {:expenses
     {:title "Expenses Management"
-     :description "Manage articles, suppliers, and manufacturers"
+     :description "Manage receipts, expenses, and supporting catalog data"
      :icon "💰"
-     :entities #{:articles
+     :entities #{:expenses
+                 :receipts
+                 :articles
                  :article-aliases
                  :suppliers
                  :supplier-aliases

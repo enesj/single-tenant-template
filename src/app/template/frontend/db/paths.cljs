@@ -1,5 +1,6 @@
 (ns app.template.frontend.db.paths
-  (:require [clojure.string :as str]))
+  (:require [app.shared.model-naming :as model-naming]
+    [clojure.string :as str]))
 
 ;; Navigation & Routing
 (defn current-route
@@ -33,6 +34,19 @@
   "Returns [:ui :current-page] path vector for the current page in the UI state."
   []
   [:ui :current-page])
+
+(defn entity-prefs-key
+  "Returns the route-scoped entity key used for persisted UI preferences.
+
+  Admin routes store browser-local overrides under :admin/<entity> so admin
+  list settings do not bleed into the matching user-facing pages."
+  [db entity-name]
+  (when-let [entity-key (model-naming/ensure-app-keyword entity-name)]
+    (if (and (admin-route? db)
+          (not= "admin" (namespace entity-key))
+          (nil? (namespace entity-key)))
+      (keyword "admin" (name entity-key))
+      entity-key)))
 
 ;; Entity paths
 (defn entity-data
@@ -195,12 +209,13 @@
   4. Configured view-options per-page
   5. Provided fallback"
   [db entity-type fallback]
-  (or (parse-positive-int (get-in db (list-per-page entity-type)))
-    (parse-positive-int (get-in db (conj (list-ui-state entity-type) :per-page)))
-    (parse-positive-int (get-in db (conj (list-ui-state entity-type) :pagination :per-page)))
-    (parse-positive-int (get-in db (conj (entity-prefs-display entity-type) :per-page)))
-    (configured-view-options-per-page db entity-type)
-    fallback))
+  (let [prefs-key (entity-prefs-key db entity-type)]
+    (or (parse-positive-int (get-in db (list-per-page entity-type)))
+      (parse-positive-int (get-in db (conj (list-ui-state entity-type) :per-page)))
+      (parse-positive-int (get-in db (conj (list-ui-state entity-type) :pagination :per-page)))
+      (parse-positive-int (get-in db (conj (entity-prefs-display prefs-key) :per-page)))
+      (configured-view-options-per-page db entity-type)
+      fallback)))
 
 (defn resolved-list-current-page
   "Resolve an entity list's current page from canonical or legacy list UI state."

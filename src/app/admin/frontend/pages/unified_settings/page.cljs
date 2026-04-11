@@ -9,6 +9,7 @@
     [app.admin.frontend.pages.unified-settings.editors :as editors]
     [app.admin.frontend.pages.unified-settings.view-mode :as view-mode]
     [app.admin.frontend.settings.definitions :as defs]
+    [app.shared.model-naming :as model-naming]
     [clojure.set :as set]
     [clojure.string :as str]
     [re-frame.core :as rf]
@@ -42,6 +43,15 @@
         on-admin-action-gate-change (fn [entity-name action-key gate-id]
                                       (rf/dispatch [::admin-settings-events/set-action-gate-draft
                                                     entity-name action-key gate-id]))
+        normalize-form-field-id (fn [x]
+                                  (some-> x model-naming/ensure-app-keyword))
+        form-field->storage (fn [x]
+                              (some-> x normalize-form-field-id model-naming/app-keyword->db name))
+        normalize-form-field-list (fn [xs]
+                                    (->> (or xs [])
+                                      (keep form-field->storage)
+                                      distinct
+                                      vec))
         ;; User handlers
         on-user-change (fn [entity-kw setting-key new-state]
                          (rf/dispatch [::user-settings-events/set-display-setting-draft
@@ -96,13 +106,15 @@
                 {:entity-kw selected-entity
                  :form-fields-config form-fields-config
                  :on-toggle (fn [entity-kw field-type field-name]
-                              ;; Admin form-fields use immediate save via PATCH
+                              ;; Admin form-fields use immediate save via PATCH.
+                              ;; Normalize snake_case and kebab-case ids to one canonical field.
                               (let [current-config (get form-fields-config entity-kw {})
-                                    current-fields (set (or (get current-config field-type) []))
-                                    field-str (if (keyword? field-name) (name field-name) (str field-name))
-                                    new-fields (if (contains? current-fields field-str)
+                                    current-fields (normalize-form-field-list (get current-config field-type))
+                                    field-str (form-field->storage field-name)
+                                    current-field-set (set current-fields)
+                                    new-fields (if (contains? current-field-set field-str)
                                                  (vec (remove #{field-str} current-fields))
-                                                 (conj (vec current-fields) field-str))
+                                                 (conj current-fields field-str))
                                     new-config (assoc current-config field-type new-fields)]
                                 (rf/dispatch [::admin-settings-events/update-form-fields-entity
                                               entity-kw new-config])))})

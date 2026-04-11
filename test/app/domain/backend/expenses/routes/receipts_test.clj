@@ -5,6 +5,7 @@
     [app.domain.backend.expenses.services.receipts.queries :as receipt-queries]
     [app.domain.backend.expenses.services.receipts.storage :as receipt-storage]
     [app.domain.backend.expenses.services.suppliers :as suppliers]
+    [cheshire.core :as json]
     [clojure.test :refer [deftest is testing]]))
 
 (deftest lines-total-amount-guess-sums-line-totals
@@ -121,3 +122,43 @@
         (is (= 200 (:status resp)))
         (is (= "image/jpeg" (get-in resp [:headers "Content-Type"])))
         (is (= 4 (alength ^bytes (:body resp))))))))
+
+(deftest list-receipts-handler-includes-pagination-totals
+  (let [handler (receipts-routes/list-receipts-handler :db)]
+    (with-redefs [receipt-queries/list-receipts-page
+                  (fn [_db opts]
+                    (is (= {:status "uploaded"
+                            :limit 25
+                            :offset 50
+                            :order-dir :asc
+                            :order-by "created_at"}
+                          opts))
+                    {:rows [{:id (java.util.UUID/randomUUID)
+                             :original_filename "receipt-1.jpg"}]
+                     :total 192
+                     :purged-total 7})]
+      (let [response (handler {:query-params {:status "uploaded"
+                                              :limit "25"
+                                              :offset "50"
+                                              :order-dir "asc"
+                                              :order-by "created_at"}})
+            body (json/parse-string (if (string? (:body response))
+                                      (:body response)
+                                      (slurp (:body response)))
+                   true)]
+        (is (= 200 (:status response)))
+        (is (= true (:success body)))
+        (is (= 192 (:total body)))
+        (is (= 7 (:purged-total body)))
+        (is (= 1 (count (:receipts body))))))))
+
+(deftest admin-receipts-routes-no-longer-require-impersonation
+  (testing "admin receipts routes expose child handlers directly without root impersonation middleware"
+    (let [routes (receipts-routes/routes :db)
+          route-options (when (map? (second routes)) (second routes))
+          children (if route-options (nnext routes) (rest routes))]
+      (is (= "/receipts" (first routes)))
+      (is (nil? (:middleware route-options))
+        "Root admin receipts route should not define impersonation middleware")
+      (is (= #{"" "/:id/download" "/:id" "/:id/review" "/:id/approve"}
+            (set (map first children)))))))

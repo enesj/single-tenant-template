@@ -88,9 +88,11 @@
   On user routes, admin-scope locks are overlaid when available so that admin
   policy cascades to user-facing pages.
 
-  User preferences ([:ui :entity-prefs]) still apply to both."
+  Browser-local entity prefs are also route-scoped on admin pages to avoid
+  admin/user list settings bleeding into each other."
   [db entity-kw]
   (let [admin-route?          (paths/admin-route? db)
+        prefs-key             (paths/entity-prefs-key db entity-kw)
         settings-view-options (get-in db [:admin :settings :view-options entity-kw])
         config-view-options   (get-in db [:admin :config :view-options entity-kw])
         admin-view-options    (merge config-view-options settings-view-options)
@@ -107,7 +109,7 @@
                            {})
                          (or (get-in db [:domain :config :entities entity-kw]) {}))
 
-        user-prefs   (get-in db (paths/entity-prefs-display entity-kw))
+        user-prefs   (get-in db (paths/entity-prefs-display prefs-key))
         legacy-prefs (get-in db (paths/entity-display-settings entity-kw))]
     {:view-options  view-options
      :entity-config entity-config
@@ -177,8 +179,9 @@
   ::entity-display-prefs
   (fn [db [_ entity-name]]
     (if entity-name
-      (let [entity-kw (model-naming/ensure-app-keyword entity-name)]
-        (or (get-in db (paths/entity-prefs-display entity-kw)) {}))
+      (let [entity-kw (model-naming/ensure-app-keyword entity-name)
+            prefs-key (paths/entity-prefs-key db entity-kw)]
+        (or (get-in db (paths/entity-prefs-display prefs-key)) {}))
       {})))
 
 (rf/reg-sub
@@ -237,6 +240,7 @@
     ;; 5) Config defaults (admin or domain table-columns)
     (let [entity-kw    (model-naming/ensure-app-keyword entity-name)
           admin-route? (paths/admin-route? db)
+          prefs-key    (paths/entity-prefs-key db entity-kw)
           table-config (when entity-kw
                          (resolver/resolve-config-source
                            admin-route?
@@ -257,9 +261,9 @@
 
           ;; Per-user column prefs (map). Admin vector mode may store only an ordered vector.
           explicit-map (when entity-kw
-                         (normalize-col-map (get-in db (paths/entity-prefs-columns-visible entity-kw))))
+                         (normalize-col-map (get-in db (paths/entity-prefs-columns-visible prefs-key))))
           explicit-order (when entity-kw
-                           (->> (get-in db (paths/entity-prefs-columns-visible-order entity-kw))
+                           (->> (get-in db (paths/entity-prefs-columns-visible-order prefs-key))
                              (keep normalize-col)
                              vec))
           admin-visible-vector (when entity-kw

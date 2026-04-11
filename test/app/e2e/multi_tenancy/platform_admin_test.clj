@@ -1,9 +1,10 @@
 (ns app.e2e.multi-tenancy.platform-admin-test
   "E2E tests for platform admin operations (Manual §9).
 
-   Allium rules: AdminBlockedFromTenantData, ActivateImpersonation, DeactivateImpersonation,
+   Allium rules: ActivateImpersonation, DeactivateImpersonation,
                  CreateImpersonationGrant, RevokeImpersonationGrant
-   Covers: admin blocked from expenses, tenant management, impersonation flow, owner revoke, audit trail."
+   Covers: direct admin access to expenses, tenant management, impersonation flow,
+           owner revoke, audit trail."
   (:require
     [app.admin.backend.services.admin.auth :as admin-auth]
     [app.e2e.fixtures :as fixtures]
@@ -74,8 +75,8 @@
 ;; Test: Admin blocked from expense data without impersonation
 ;; ---------------------------------------------------------------------------
 
-(deftest admin-blocked-from-expenses
-  (testing "Platform admin cannot access tenant expense data without impersonation"
+(deftest admin-can-access-expense-data-without-impersonation
+  (testing "Platform admin can access admin expenses and receipts data without impersonation"
     (seed-admin!)
     ;; Register a user to create tenant data
     (h/api-register! h/user-a)
@@ -88,11 +89,14 @@
           (is (= 200 status) "Admin login should succeed")
           (is (some? token) "Admin should receive a token")
 
-          ;; Try to access expense-related admin APIs — should get 403
-          ;; The impersonation middleware is on /expenses/entries (the route-segment)
+          ;; Expenses and receipts are now available directly to platform admins.
           (when token
-            (let [{:keys [status]} (admin-api-get admin-ctx "/admin/api/expenses/entries" token)]
-              (is (= 403 status) "Admin should be blocked from expense data"))))
+            (let [{expense-status :status} (admin-api-get admin-ctx "/admin/api/expenses/entries" token)
+                  {receipt-status :status} (admin-api-get admin-ctx "/admin/api/expenses/receipts" token)]
+              (is (= 200 expense-status)
+                "Admin should be able to access expense data without impersonation")
+              (is (= 200 receipt-status)
+                "Admin should be able to access receipt data without impersonation"))))
         (finally
           (.close admin-ctx))))))
 
@@ -121,12 +125,12 @@
                   tenant-id (:id tenant)]
               (when tenant-id
                 (let [{:keys [status]} (admin-api-get admin-ctx
-                                              (str "/admin/api/tenants/" tenant-id) token)]
+                                         (str "/admin/api/tenants/" tenant-id) token)]
                   (is (= 200 status) "Admin can view tenant detail"))
 
                 ;; List tenant members
                 (let [{:keys [status]} (admin-api-get admin-ctx
-                                              (str "/admin/api/tenants/" tenant-id "/members") token)]
+                                         (str "/admin/api/tenants/" tenant-id "/members") token)]
                   (is (= 200 status) "Admin can view tenant members"))))))
         (finally
           (.close admin-ctx))))))

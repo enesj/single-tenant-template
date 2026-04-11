@@ -12,8 +12,10 @@
                                                     audit-icon
                                                     chart-bar
                                                     dashboard-icon
+                                                    expenses-icon
                                                     login-events-icon
                                                     logout-icon
+                                                    receipts-icon
                                                     search-icon
                                                     settings-icon
                                                     suppliers-icon
@@ -83,6 +85,16 @@
                          :href "/admin/search"
                          :icon ($ search-icon {:class "w-6 h-6"})
                          :active? (= route-name :admin-search)}
+                        {:id "admin-sidebar-expenses-expenses"
+                         :label "Expenses"
+                         :href "/admin/expenses"
+                         :icon ($ expenses-icon {:class "w-6 h-6"})
+                         :active? (= route-name :admin-expenses)}
+                        {:id "admin-sidebar-expenses-receipts"
+                         :label "Receipts"
+                         :href "/admin/receipts"
+                         :icon ($ receipts-icon {:class "w-6 h-6"})
+                         :active? (= route-name :admin-receipts)}
                         {:id "admin-sidebar-expenses-articles"
                          :label "Articles"
                          :href "/admin/articles"

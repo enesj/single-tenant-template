@@ -11,6 +11,7 @@
 (deftest toggle-column-visibility-persists-explicit-false
   (testing "Vector-config toggle writes an explicit true/false visibility map so hidden columns actually hide"
     (setup/reset-db!)
+    (swap! rf-db/app-db assoc :current-route {:data {:name :admin/admins}})
 
     ;; Minimal config for :admins entity.
     (swap! rf-db/app-db assoc-in
@@ -23,8 +24,8 @@
     ;; Hide :email.
     (rf/dispatch-sync [:app.admin.frontend.events.config/toggle-column-visibility :admins :email])
 
-    (let [visible-order (get-in @rf-db/app-db [:ui :entity-prefs :admins :columns :visible-order])
-          visible-map (get-in @rf-db/app-db [:ui :entity-prefs :admins :columns :visible])]
+    (let [visible-order (get-in @rf-db/app-db [:ui :entity-prefs :admin/admins :columns :visible-order])
+          visible-map (get-in @rf-db/app-db [:ui :entity-prefs :admin/admins :columns :visible])]
       (is (= [:id :role] visible-order)
         "Toggling a column off should remove it from :visible-order")
 

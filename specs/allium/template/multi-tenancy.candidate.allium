@@ -117,7 +117,9 @@ entity ImpersonationGrant {
 --     Full CRUD: global product catalog, global geographic, platform tables.
 --     Full CRUD: users records and tenant_memberships across all tenants (superpower).
 --     Full read: tenants.
---     Blocked: expenses, expense_items, receipts, payers, payer_types,
+--     Direct access: expenses and receipts across all tenants.
+--       Routine admin views keep user identity pseudonymous.
+--     Blocked: expense_items, payers, payer_types,
 --              tenant aliases — UNLESS impersonating a tenant user.
 --     Impersonation: logs in as existing tenant user with that user's permissions.
 --       Requires tenant owner approval (set in DB after out-of-band conversation).
@@ -890,8 +892,9 @@ surface PlatformTenantAdminView {
 
     guidance:
         Platform admins can view all tenants.
-        Tenant expense data (expenses, receipts, payers, payer_types, aliases)
-        requires impersonation with tenant owner approval.
+        Platform admins can access expenses and receipts directly.
+        Tenant expense reference data (expense_items, payers, payer_types, aliases)
+        still requires impersonation with tenant owner approval.
         Platform admins have superpower CRUD on users and tenant_memberships
         across all tenants (bypasses tenant rule chains).
 }

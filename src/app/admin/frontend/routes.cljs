@@ -6,6 +6,7 @@
     [app.admin.frontend.pages.backlog :as backlog]
     [app.admin.frontend.pages.domain.expenses.article-aliases :as article-aliases]
     [app.admin.frontend.pages.domain.expenses.duplicates :as duplicates]
+    [app.admin.frontend.pages.domain.expenses.expenses :as expenses]
     [app.admin.frontend.pages.audit :as audit]
     [app.admin.frontend.pages.domain.expenses.articles :as articles]
     [app.admin.frontend.pages.domain.expenses.global-settings :as global-settings]
@@ -17,6 +18,7 @@
     [app.admin.frontend.pages.login :as login]
     [app.admin.frontend.pages.login-events :as login-events]
     [app.admin.frontend.pages.domain.expenses.manufacturers :as manufacturers]
+    [app.admin.frontend.pages.domain.expenses.receipts :as receipts]
     [app.admin.frontend.pages.domain.expenses.reports :as reports]
     [app.admin.frontend.pages.reset-password :as reset-password]
     [app.admin.frontend.pages.search :as search]
@@ -181,6 +183,16 @@
           {:name :admin-search
            :view search/admin-search-page
            :controllers [(guarded-start [:admin/init-search])]}]
+
+         ["/expenses"
+          {:name :admin-expenses
+           :view expenses/admin-expenses-page
+           :controllers [(guarded-start nil)]}]
+
+         ["/receipts"
+          {:name :admin-receipts
+           :view receipts/admin-receipts-page
+           :controllers [(guarded-start nil)]}]
 
          ;; Audit Logs
          ["/audit"

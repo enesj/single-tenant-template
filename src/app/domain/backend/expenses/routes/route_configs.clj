@@ -177,9 +177,8 @@
    :default-order-by "created_at"
    :default-order-dir "desc"
    :required-fields []
-   :has-count? false
+   :has-count? true
    :has-search? false
-   :route-middleware [(fn [handler] (impersonation-mw/wrap-require-impersonation handler))]
    :filter-params {:from :string
                    :to :string
                    :supplier-id :uuid

@@ -317,7 +317,13 @@
     (are [entity-name expected] (= expected (paths/entity-display-settings entity-name))
       :expenses [:ui :entity-configs :expenses]
       :suppliers [:ui :entity-configs :suppliers]
-      :receipts [:ui :entity-configs :receipts])))
+      :receipts [:ui :entity-configs :receipts]))
+
+  (testing "entity-prefs-key scopes admin routes separately"
+    (is (= :expenses
+          (paths/entity-prefs-key {:current-route {:data {:name :expenses/list}}} :expenses)))
+    (is (= :admin/expenses
+          (paths/entity-prefs-key {:current-route {:data {:name :admin/expenses}}} :expenses)))))
 
 (deftest path-consistency-test
   (testing "All paths follow consistent naming convention"

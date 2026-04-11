@@ -433,6 +433,27 @@
     (->> (jdbc/execute! db (sql/format query) {:builder-fn rs/as-unqualified-lower-maps})
       (mapv email-privacy/routine-created-by-view))))
 
+(defn count-expenses
+  "Count expenses with the same filters as `list-expenses`.
+   opts: :from, :to, :supplier-id, :payer-id, :is-posted?, :tenant-id."
+  [db {:keys [from to supplier-id payer-id is-posted? tenant-id]}]
+  (let [from (try (parse-instant! :from from) (catch Exception _ nil))
+        to (try (parse-instant! :to to) (catch Exception _ nil))
+        base-where (cond-> [:and]
+                     tenant-id (conj [:= :tenant_id tenant-id])
+                     from (conj [:>= :purchased_at from])
+                     to (conj [:<= :purchased_at to])
+                     supplier-id (conj [:= :supplier_id supplier-id])
+                     payer-id (conj [:= :payer_id payer-id])
+                     (some? is-posted?) (conj [:= :is_posted (boolean is-posted?)]))
+        row (jdbc/execute-one!
+              db
+              (sql/format {:select [[[:count :*] :total]]
+                           :from [:expenses]
+                           :where base-where})
+              {:builder-fn rs/as-unqualified-lower-maps})]
+    {:total (long (or (:total row) 0))}))
+
 (defn- lookup-tenant-id
   [db table-name entity-id]
   (when entity-id

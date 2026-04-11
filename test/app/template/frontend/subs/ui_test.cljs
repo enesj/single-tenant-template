@@ -127,6 +127,21 @@
     (is (= {:a false :b true}
           @(rf/subscribe [::ui-subs/visible-columns :items])))))
 
+(deftest admin-routes-use-admin-scoped-column-prefs-test
+  (testing "admin routes ignore user-scoped column prefs for shared entities"
+    (reset-db!
+      {:current-route {:data {:name :admin/expenses}}
+       :admin {:config {:table-columns {:expenses {:available-columns [:purchased-at :notes]
+                                                   :default-visible-columns [:purchased-at :notes]}}
+                        :view-options {:expenses {}}}}
+       :ui {:entity-prefs {:expenses {:columns {:visible {:purchased-at false
+                                                          :notes true}}}
+                           :admin/expenses {:columns {:visible {:purchased-at true
+                                                                :notes false}}}}}})
+    (is (= {:purchased-at true
+            :notes false}
+          @(rf/subscribe [::ui-subs/visible-columns :expenses])))))
+
 (deftest visible-columns-always-visible-overrides-user-prefs-test
   (testing "visible-columns always-visible columns are enforced true"
     (reset-db!
@@ -185,6 +200,19 @@
       (is (= true (:show-edit? settings)))
       (is (= true (:show-delete? settings)))
       (is (= true (:show-batch-delete? settings))))))
+
+(deftest admin-routes-use-admin-scoped-display-prefs-test
+  (testing "admin routes ignore user-scoped display prefs for shared entities"
+    (reset-db!
+      {:current-route {:data {:name :admin/expenses}}
+       :admin {:config {:entities {:expenses {}}
+                        :view-options {:expenses {:display-defaults {:per-page 25}}}}}
+       :ui {:entity-prefs {:expenses {:display {:per-page 20}}
+                           :admin/expenses {:display {:per-page 50}}}}})
+    (let [settings @(rf/subscribe [::ui-subs/entity-display-settings :expenses])
+          prefs @(rf/subscribe [::ui-subs/entity-display-prefs :expenses])]
+      (is (= 50 (:per-page settings)))
+      (is (= {:per-page 50} prefs)))))
 
 (deftest filterable-fields-vector-config-test
   (testing "filterable-fields reads from app-db config"

@@ -348,6 +348,37 @@
       (let [listed (expenses/list-expenses db {:limit 100})]
         (is (empty? (filter #(= (:id exp) (:id %)) listed)))))))
 
+(deftest expenses-count-matches-list-filters
+  (when-let [db fixtures/*test-db*]
+    (let [supplier-a (:supplier (suppliers/find-or-create-supplier! db (str "Count Supplier A " (UUID/randomUUID)) {}))
+          supplier-b (:supplier (suppliers/find-or-create-supplier! db (str "Count Supplier B " (UUID/randomUUID)) {}))
+          payer (th/create-payer! db {:type "cash" :label "Cash"})
+          initial-total (:total (expenses/count-expenses db {}))
+          initial-supplier-a-total (:total (expenses/count-expenses db {:supplier-id (:id supplier-a)}))
+          initial-unposted-total (:total (expenses/count-expenses db {:is-posted? false}))
+          _ (expenses/create-expense! db
+              {:supplier_id (:id supplier-a)
+               :payer_id (:id payer)
+               :purchased_at (now)
+               :total_amount (bigdec "4.00")
+               :currency "BAM"
+               :is_posted true}
+              [{:raw_label "A" :line_total (bigdec "4.00")}])
+          _ (expenses/create-expense! db
+              {:supplier_id (:id supplier-b)
+               :payer_id (:id payer)
+               :purchased_at (now)
+               :total_amount (bigdec "6.00")
+               :currency "BAM"
+               :is_posted false}
+              [{:raw_label "B" :line_total (bigdec "6.00")}])]
+      (is (= (+ initial-total 2)
+            (:total (expenses/count-expenses db {}))))
+      (is (= (inc initial-supplier-a-total)
+            (:total (expenses/count-expenses db {:supplier-id (:id supplier-a)}))))
+      (is (= (inc initial-unposted-total)
+            (:total (expenses/count-expenses db {:is-posted? false})))))))
+
 (deftest expenses-delete-cascades-expense-items
   (when-let [db fixtures/*test-db*]
     (let [supplier (:supplier (suppliers/find-or-create-supplier! db (str "DeleteExpenseItems Supplier " (UUID/randomUUID)) {}))

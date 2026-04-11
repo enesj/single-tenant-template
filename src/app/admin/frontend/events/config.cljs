@@ -44,6 +44,7 @@
     (let [normalize (fn [v]
                       (model-naming/ensure-app-keyword (kw/ensure-name v)))
           entity-key (model-naming/ensure-app-keyword entity-name)
+          prefs-key (paths/entity-prefs-key db entity-key)
           policy-locks (merge
                          (get-in db [:admin :config :view-options entity-key :column-locks])
                          (get-in db [:admin :settings :view-options entity-key :column-locks]))
@@ -106,8 +107,8 @@
           {:db (-> db
                  (assoc-in [:admin :config :table-columns entity-key :visible-columns] normalized-visible)
                    ;; Also store in unified prefs for persistence
-                 (assoc-in (paths/entity-prefs-columns-visible-order entity-key) normalized-visible)
-                 (assoc-in (paths/entity-prefs-columns-visible entity-key) visibility-map))})))))
+                 (assoc-in (paths/entity-prefs-columns-visible-order prefs-key) normalized-visible)
+                 (assoc-in (paths/entity-prefs-columns-visible prefs-key) visibility-map))})))))
 
 ;; Reorder columns
 
@@ -119,8 +120,9 @@
       (let [normalize (fn [v]
                         (model-naming/ensure-app-keyword (kw/ensure-name v)))
             entity-key (model-naming/ensure-app-keyword entity-name)
+            prefs-key (paths/entity-prefs-key db entity-key)
             normalized (->> (or column-order []) (keep normalize) vec)]
-        (assoc-in db (paths/entity-prefs-columns-order entity-key) normalized))
+        (assoc-in db (paths/entity-prefs-columns-order prefs-key) normalized))
       db)))
 
 ;; Reset to default columns
