@@ -227,13 +227,19 @@
         (let [zoomed? (> zoom 1.0)
               img-src (or preview-url preview-download-url download-url)
               {:keys [x y]} pan
+              ;; At 90°/270° the image's rotated bounding box is wider/taller than the
+              ;; original element box; top-aligning would clip half of it above the
+              ;; container. Center-align only in those steps so non-rotated layouts
+              ;; still show the top of tall receipts first.
+              quarter-turned? (contains? #{90 270} rotation)
+              align-class (if quarter-turned? "items-center" "items-start")
               cursor-class (cond
                              (not zoomed?) ""
                              dragging? "cursor-grabbing"
                              :else "cursor-grab")
               container-classes (str "w-full bg-base-200 rounded-lg "
                                   preview-height-class
-                                  " overflow-hidden select-none flex items-start justify-center "
+                                  " overflow-hidden select-none flex " align-class " justify-center "
                                   cursor-class)
               transformed? (or zoomed? (not (zero? rotation)))
               img-style (when transformed?
@@ -278,7 +284,7 @@
                      :src img-src
                      :alt (or original-filename "Receipt image")
                      :draggable false
-                     :class "w-full h-full object-contain object-top"
+                     :class "max-w-full max-h-full object-contain"
                      :style img-style})))
 
         pdfish?
