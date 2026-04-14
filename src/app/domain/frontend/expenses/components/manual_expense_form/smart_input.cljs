@@ -33,6 +33,12 @@
     [uix.re-frame :refer [use-subscribe]]))
 
 ;; ─────────────────────────────────────────────
+;; Well-known "unknown" entity IDs (seeded in DB)
+;; ─────────────────────────────────────────────
+(def ^:private unknown-supplier-id "00000000-0000-0000-0000-000000000001")
+(def ^:private unknown-store-id    "00000000-0000-0000-0000-000000000002")
+
+;; ─────────────────────────────────────────────
 ;; Main component
 ;; ─────────────────────────────────────────────
 
@@ -84,7 +90,7 @@
         [currency set-currency!] (use-state "BAM")
         [purchased-at set-purchased-at!] (use-state (current-datetime-local))
         [payer-id set-payer-id!] (use-state nil)
-        [notes set-notes!] (use-state "")
+        [notes _set-notes!] (use-state "")
         [default-category-preselect-enabled? set-default-category-preselect-enabled!] (use-state true)
         [error set-error!] (use-state nil)
         [ready? set-ready!] (use-state false)
@@ -492,6 +498,33 @@
                                               :notes notes}))))
                             (set-error! (:error validation)))))
 
+        ;; Quick finish: save with unknown supplier/store when user skips store selection
+        handle-finish-quick
+        (fn []
+          (let [;; Inject unknown supplier + store when not already set
+                ctx (cond-> (or context {})
+                      (not (:supplier context))
+                      (assoc :supplier {:id unknown-supplier-id
+                                        :label "Nepoznat dobavljač"})
+                      (not (:store context))
+                      (assoc :store {:id unknown-store-id
+                                     :label "Nepoznata trgovina"}))
+                validation (validate-form t
+                             {:items items
+                              :context ctx
+                              :payer-id payer-id})]
+            (if (:ok? validation)
+              (do (set-error! nil)
+                (when (fn? on-submit)
+                  (on-submit (prepare-submit-values
+                               {:items items
+                                :context ctx
+                                :currency currency
+                                :purchased-at purchased-at
+                                :payer-id payer-id
+                                :notes notes}))))
+              (set-error! (:error validation)))))
+
         ;; Pre-compute submit disabled for context phase
         submit-disabled? (not (:ok? (validate-form t
                                       {:items items
@@ -667,17 +700,14 @@
              :context-suggestions context-suggestions
              :filtered-combos filtered-combos
              :on-apply-combination apply-combination!
-             :available-search-types available-search-types
              :items-total items-total
              :currency currency
              :currency-options currency-options
              :payers payers
              :payer-id payer-id
              :purchased-at purchased-at
-             :notes notes
              :submitting? submitting?
-             :on-submit on-submit
-             :on-cancel on-cancel
+             :on-finish-quick handle-finish-quick
              :suppliers suppliers
              :stores phase-two-stores
              :expense-categories expense-categories
@@ -694,8 +724,22 @@
              :on-set-payer-id set-payer-id!
              :on-set-purchased-at set-purchased-at!
              :on-set-currency set-currency!
-             :on-set-notes set-notes!
-             :on-set-error set-error!
-             :on-cancel-type-picker #(set-type-picker-text! nil)
-             :on-handle-submit handle-submit
-             :submit-disabled? submit-disabled?}))))))
+             :on-cancel-type-picker #(set-type-picker-text! nil)}))
+
+        ;; ── Sticky footer ──────────────────────────────────────
+        (when (= phase :context)
+          ($ :div {:class (str "sticky bottom-0 bg-white/95 backdrop-blur-sm "
+                            "border-t border-base-200 pt-3 pb-3 -mx-6 px-6 "
+                            "flex justify-end gap-3")}
+            (when on-cancel
+              ($ :button {:id "btn-cancel-smart-expense"
+                          :type "button"
+                          :class "ds-btn ds-btn-lg text-lg"
+                          :disabled submitting?
+                          :on-click (fn [e] (.preventDefault e) (on-cancel))}
+                (t :smart-expense/cancel)))
+            ($ :button {:id "btn-save-smart-expense"
+                        :type "submit"
+                        :class "ds-btn ds-btn-primary ds-btn-lg text-lg px-8"
+                        :disabled (or submitting? submit-disabled?)}
+              (if submitting? (t :smart-expense/saving) (t :smart-expense/save)))))))))

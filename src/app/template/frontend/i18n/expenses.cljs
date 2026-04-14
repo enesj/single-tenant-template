@@ -118,7 +118,7 @@
     :smart-expense/or-connector       " ili "
     :smart-expense/frequently-together "Često dodavano zajedno"
     :smart-expense/pick-prefix        ""
-    :smart-expense/pick-payer         "Platitelj"
+    :smart-expense/pick-payer         "Platio"
     :smart-expense/item-count         (fn [n] (str n (case n 1 " stavka" (2 3 4) " stavke" " stavki")))
     :smart-expense/hint-article-mode  "Pritisnite Enter na prazno za dodavanje dobavljača/trgovine/kategorije"
     :smart-expense/hint-has-items     "Pritisnite Enter na prazno za nastavak ili nastavite dodavati kontekst/stavke"
@@ -127,8 +127,11 @@
     :smart-expense/back-to-items      "\u2190 Nazad na stavke"
     :smart-expense/items-summary      (fn [n] (str "Stavke (" n ")"))
     :smart-expense/or-search-suffix   (fn [types] (str "Ili pretražite " types "..."))
+    :smart-expense/finish-quick       "Završi"
+    :smart-expense/add-store          "Dodaj trgovinu"
+    :smart-expense/finish-quick-hint  "Sprema se bez trgovine/dobavljača"
     ;; Form fields
-    :smart-expense/payer-label        "Platitelj"
+    :smart-expense/payer-label        "Platio"
     :smart-expense/payer-select-ph    "Odaberite platitelja..."
     :smart-expense/date-label         "Datum"
     :smart-expense/currency-label     "Valuta"
@@ -440,7 +443,7 @@
     :smart-expense/or-connector       " or "
     :smart-expense/frequently-together "Frequently added together"
     :smart-expense/pick-prefix        ""
-    :smart-expense/pick-payer         "Payer"
+    :smart-expense/pick-payer         "Paid by"
     :smart-expense/item-count         (fn [n] (str n " item" (when (not= n 1) "s")))
     :smart-expense/hint-article-mode  "Press Enter on empty to add supplier/store/category"
     :smart-expense/hint-has-items     "Press Enter on empty to continue or keep adding context/items"
@@ -448,7 +451,10 @@
     :smart-expense/back-to-items      "\u2190 Back to items"
     :smart-expense/items-summary      (fn [n] (str "Items (" n ")"))
     :smart-expense/or-search-suffix   (fn [types] (str "Or search " types "..."))
-    :smart-expense/payer-label        "Payer"
+    :smart-expense/finish-quick       "Finish"
+    :smart-expense/add-store          "Add store"
+    :smart-expense/finish-quick-hint  "Saves without store/supplier"
+    :smart-expense/payer-label        "Paid by"
     :smart-expense/payer-select-ph    "Select payer..."
     :smart-expense/date-label         "Date"
     :smart-expense/currency-label     "Currency"

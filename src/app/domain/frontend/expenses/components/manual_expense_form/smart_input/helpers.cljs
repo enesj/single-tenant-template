@@ -84,15 +84,12 @@
     ""))
 
 (defn validate-form
-  [t {:keys [items context payer-id]}]
+  [t {:keys [items _context payer-id]}]
   (let [prepared (prepare-submit-items items)
         total (reduce + 0 (map :line_total prepared))]
     (cond
       (empty? prepared)
       {:ok? false :error (t :smart-expense/err-no-items)}
-
-      (empty? context)
-      {:ok? false :error (t :smart-expense/err-no-context)}
 
       (str/blank? (str payer-id))
       {:ok? false :error (t :smart-expense/err-no-payer)}
