@@ -1,6 +1,7 @@
 (ns app.domain.backend.expenses.routes.receipts
   "Admin API routes for receipt ingestion and approval."
   (:require
+    [app.domain.backend.expenses.services.expenses :as expenses]
     [app.domain.backend.expenses.services.receipts.approval :as receipt-approval]
     [app.domain.backend.expenses.services.receipts.image-preprocess :as image-preprocess]
     [app.domain.backend.expenses.services.receipts.queries :as receipt-queries]
@@ -10,7 +11,8 @@
     [app.template.backend.routes.admin.utils :as utils]
     [app.shared.adapters.database :as shared-db]
     [clojure.string :as str]
-    [ring.util.response :as response]))
+    [ring.util.response :as response]
+    [taoensso.timbre :as log]))
 
 (def ^:private to-app shared-db/to-app)
 
@@ -102,6 +104,23 @@
       (some? lines-total) (assoc :lines-total-amount-guess lines-total)
       (some? total-equals-lines?) (assoc :total-guess-equals-lines-total-guess? total-equals-lines?))))
 
+(defn- enrich-with-linked-expense
+  "When a receipt is posted and has a linked expense, attach the expense
+  (with items) under :linked-expense so the frontend can pre-fill the edit form."
+  [db receipt-app]
+  (if (and (= "posted" (:status receipt-app))
+        (some? (or (:expense-id receipt-app) (:expense_id receipt-app))))
+    (let [expense-id (or (:expense-id receipt-app) (:expense_id receipt-app))]
+      (try
+        (if-let [expense (expenses/get-expense-with-items db expense-id)]
+          (assoc receipt-app :linked-expense (to-app expense))
+          receipt-app)
+        (catch Exception e
+          (log/warn e "Failed to enrich posted receipt with linked expense"
+            {:receipt-id (:id receipt-app) :expense-id expense-id})
+          receipt-app)))
+    receipt-app))
+
 (def ^:private receipt-text-filter-keys
   [:original-filename :supplier-guess :created-by-name])
 
@@ -152,8 +171,10 @@
                 download-url (when (receipt-storage/resolve-local-receipt-file (:storage-key receipt*))
                                (str "/admin/api/expenses/receipts/" id "/download"))]
             (utils/success-response
-              {:receipt (cond-> receipt*
-                          download-url (assoc :download-url download-url))}))
+              {:receipt (enrich-with-linked-expense
+                          db
+                          (cond-> receipt*
+                            download-url (assoc :download-url download-url)))}))
           (utils/error-response "Receipt not found" :status 404))
         (utils/error-response "Invalid id" :status 400)))
     "Failed to fetch receipt"))
@@ -254,6 +275,18 @@
           (utils/error-response "Invalid id" :status 400))))
     "Failed to save receipt review"))
 
+(defn update-posted-handler [db]
+  (utils/with-error-handling
+    (fn [request]
+      (let [body (:body request)]
+        (if-let [id (utils/parse-uuid-custom (get-in request [:path-params :id]))]
+          (let [{:keys [expense receipt]}
+                (receipt-approval/update-posted-receipt! db id body)]
+            (utils/success-response {:expense (to-app expense)
+                                     :receipt (to-app receipt)}))
+          (utils/error-response "Invalid id" :status 400))))
+    "Failed to update posted receipt"))
+
 (defn routes
   "Admin receipts routes. Mounted under /admin/api/expenses/receipts."
   [db & [app-config]]
@@ -263,4 +296,5 @@
    ["/:id" {:get (get-receipt-handler db)
             :delete (delete-receipt-handler db)}]
    ["/:id/review" {:post (save-review-handler db)}]
-   ["/:id/approve" {:post (approve-and-post-handler db)}]])
+   ["/:id/approve" {:post (approve-and-post-handler db)}]
+   ["/:id/update-posted" {:post (update-posted-handler db)}]])

@@ -647,6 +647,19 @@
 
          (get-expense-with-items tx expense-id))))))
 
+(defn- ensure-direct-expense-edit-allowed!
+  "Reject direct edits for receipt-linked expenses unless the caller explicitly opts in.
+
+  Receipt-linked expenses must be changed through receipt editing so the expense
+  row, receipt metadata, and receipt status stay in sync."
+  [{:keys [id receipt_id]} {:keys [allow-linked-expense-update?]}]
+  (when (and receipt_id (not allow-linked-expense-update?))
+    (throw (ex-info "Only manually entered expenses can be edited directly. Edit the linked receipt instead."
+             {:status 409
+              :field :receipt_id
+              :expense-id id
+              :receipt-id receipt_id}))))
+
 (defn update-expense!
   "Update an expense and optionally upsert its items.
 
@@ -659,9 +672,14 @@
   Auto-linking from aliases is applied only for newly inserted items (existing
   items are not retroactively auto-linked unless the alias is explicitly changed).
 
+  Receipt-linked expenses (`:receipt_id`) are read-only for direct expense edits
+  by default. Use `:allow-linked-expense-update?` only from receipt workflows
+  that keep the linked receipt in sync.
+
   Optional `tenant-id` scopes the update to a specific tenant."
-  ([db id body] (update-expense! db id body nil))
-  ([db id body tenant-id]
+  ([db id body] (update-expense! db id body nil nil))
+  ([db id body tenant-id] (update-expense! db id body tenant-id nil))
+  ([db id body tenant-id opts]
    (let [id* (parse-uuid! :id id)
          parsed-updates (-> body
                           (dissoc :items)
@@ -679,6 +697,7 @@
                                           :where where
                                           :limit 1})
                              {:builder-fn rs/as-unqualified-lower-maps})]
+         (ensure-direct-expense-edit-allowed! existing opts)
          (let [updates* (if (seq parsed-updates)
                           (let [base-updates (select-keys parsed-updates base-keys)]
                             (if (some #(contains? base-updates %) amount-keys)

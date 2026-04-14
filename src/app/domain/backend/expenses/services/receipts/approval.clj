@@ -59,8 +59,8 @@
                             str/trim
                             not-empty)
                 ocr-unit (some-> (or (:unit (get ocr-items idx))
-                                (:item_unit (get ocr-items idx))
-                                (:item-unit (get ocr-items idx)))
+                                   (:item_unit (get ocr-items idx))
+                                   (:item-unit (get ocr-items idx)))
                            str
                            str/trim
                            not-empty)]
@@ -205,13 +205,13 @@
                  {:status 409 :id receipt-id :current-status (:status receipt)})))
 
       (let [context    (queries/get-receipt-refine-context tx receipt-id)
-        store-id   (:store_id context)
-        tenant-id  (:tenant_id receipt)
-        ocr-items  (extract-ocr-items receipt)
-        ocr-prices (extract-ocr-item-prices ocr-items)
-        items      (-> (:items review-data)
-             (preserve-ocr-item-unit ocr-items)
-             (mark-price-modified ocr-prices))
+            store-id   (:store_id context)
+            tenant-id  (:tenant_id receipt)
+            ocr-items  (extract-ocr-items receipt)
+            ocr-prices (extract-ocr-item-prices ocr-items)
+            items      (-> (:items review-data)
+                         (preserve-ocr-item-unit ocr-items)
+                         (mark-price-modified ocr-prices))
             base       (cond-> {:receipt_id receipt-id
                                 :created_by (:user_id receipt)
                                 :currency   (or (:currency review-data) (:currency_guess receipt) "BAM")}
@@ -249,13 +249,13 @@
                  {:status 409 :id receipt-id :current-status (:status receipt)})))
 
       (let [context      (queries/get-receipt-refine-context tx receipt-id)
-        store-id     (:store_id context)
-        receipt-tid  (:tenant_id receipt)
-        ocr-items    (extract-ocr-items receipt)
-        ocr-prices   (extract-ocr-item-prices ocr-items)
-        items        (-> (:items review-data)
-               (preserve-ocr-item-unit ocr-items)
-               (mark-price-modified ocr-prices))
+            store-id     (:store_id context)
+            receipt-tid  (:tenant_id receipt)
+            ocr-items    (extract-ocr-items receipt)
+            ocr-prices   (extract-ocr-item-prices ocr-items)
+            items        (-> (:items review-data)
+                           (preserve-ocr-item-unit ocr-items)
+                           (mark-price-modified ocr-prices))
             base         (cond-> {:receipt_id receipt-id
                                   :user_id    user-id
                                   :created_by user-id
@@ -296,13 +296,13 @@
                  {:status 409 :id receipt-id :current-status (:status receipt)})))
 
       (let [context      (queries/get-receipt-refine-context tx receipt-id)
-        store-id     (:store_id context)
-        receipt-tid  (:tenant_id receipt)
-        ocr-items    (extract-ocr-items receipt)
-        ocr-prices   (extract-ocr-item-prices ocr-items)
-        items        (-> (:items review-data)
-               (preserve-ocr-item-unit ocr-items)
-               (mark-price-modified ocr-prices))
+            store-id     (:store_id context)
+            receipt-tid  (:tenant_id receipt)
+            ocr-items    (extract-ocr-items receipt)
+            ocr-prices   (extract-ocr-item-prices ocr-items)
+            items        (-> (:items review-data)
+                           (preserve-ocr-item-unit ocr-items)
+                           (mark-price-modified ocr-prices))
             base         (cond-> {:receipt_id receipt-id
                                   :user_id    user-id
                                   :created_by user-id
@@ -318,3 +318,92 @@
                            claim? (assoc :user_id user-id))]
         (status/update-status! tx receipt-id "posted" extra)
         expense))))
+
+;; ---------------------------------------------------------------------------
+;; Update posted receipt + linked expense
+;; ---------------------------------------------------------------------------
+
+(defn- update-receipt-metadata!
+  "Update receipt metadata columns to reflect edited review data."
+  [tx receipt review-data supplier supplier-alias-id]
+  (let [purchased-at* (parsing/parse-instant! :purchased_at (:purchased_at review-data))
+        currency* (parsing/normalize-currency! (:currency review-data))
+        total* (parsing/parse-money (:total_amount review-data))
+        items* (preserve-ocr-item-unit
+                 (or (:items review-data) [])
+                 (extract-ocr-items receipt))
+        supplier-guess (or (some-> supplier :display_name str/trim not-empty)
+                         (:supplier_guess review-data)
+                         (:supplier-guess review-data))]
+    (jdbc/execute-one!
+      tx
+      (sql/format
+        {:update :receipts
+         :set {:raw_extract_json (storage/jsonb-value
+                                   (reviewed-raw-extract-json receipt items* total*))
+               :supplier_guess supplier-guess
+               :supplier_alias_id supplier-alias-id
+               :currency_guess (when currency* [:cast currency* :currency])
+               :purchased_at_guess purchased-at*
+               :total_amount_guess total*}
+         :where [:= :id (:id receipt)]
+         :returning [:*]})
+      {:builder-fn rs/as-unqualified-lower-maps})))
+
+(defn update-posted-receipt!
+  "Update a posted receipt AND its linked expense in a single transaction.
+
+  Validates:
+  - Receipt exists and is in 'posted' status
+  - Receipt has a linked expense_id
+
+  Updates:
+  - Receipt metadata (supplier_guess, total_amount_guess, currency_guess, etc.)
+  - Linked expense (supplier_id, payer_id, purchased_at, total_amount, currency, notes, items)
+
+  Returns {:expense <updated-expense> :receipt <updated-receipt>}."
+  [db receipt-id review-data & {:keys [tenant-id]}]
+  (jdbc/with-transaction [tx db]
+    (let [receipt (queries/get-receipt tx receipt-id)
+          _ (when-not receipt
+              (throw (ex-info "Receipt not found" {:status 404 :id receipt-id})))
+          _ (when-not (= "posted" (:status receipt))
+              (throw (ex-info "Receipt is not in posted status"
+                       {:status 409 :id receipt-id :current-status (:status receipt)})))
+          expense-id (:expense_id receipt)
+          _ (when-not expense-id
+              (throw (ex-info "Posted receipt has no linked expense"
+                       {:status 409 :id receipt-id})))
+
+          ;; Resolve supplier
+          supplier-uuid (parsing/try-parse-uuid (:supplier_id review-data))
+          get-supplier (:get suppliers/service)
+          supplier (when supplier-uuid (get-supplier tx supplier-uuid))
+          supplier-guess (or (some-> supplier :display_name str/trim not-empty)
+                           (:supplier_guess review-data)
+                           (:supplier-guess review-data))
+          supplier-alias-id (try
+                              (when-not (str/blank? (some-> supplier-guess str))
+                                (:id (supplier-aliases/find-or-create-alias! tx supplier-guess)))
+                              (catch Exception e
+                                (log/warn e "Failed to find-or-create supplier alias during posted update"
+                                  {:receipt-id receipt-id :supplier-guess supplier-guess})
+                                nil))
+          _ (when (and supplier-alias-id supplier-uuid)
+              (try
+                (supplier-aliases/map-alias-to-supplier! tx supplier-alias-id supplier-uuid 100)
+                (catch Exception e
+                  (log/warn e "Failed to map alias to supplier during posted update"
+                    {:receipt-id receipt-id
+                     :supplier-alias-id supplier-alias-id
+                     :supplier-uuid supplier-uuid})
+                  nil)))
+
+          ;; Update receipt metadata
+          updated-receipt (update-receipt-metadata!
+                            tx receipt review-data supplier supplier-alias-id)
+
+          ;; Update linked expense (including items)
+          updated-expense (expenses/update-expense! tx expense-id review-data tenant-id {:allow-linked-expense-update? true})]
+      {:expense updated-expense
+       :receipt updated-receipt})))

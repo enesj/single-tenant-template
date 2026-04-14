@@ -115,7 +115,9 @@
                               :error (or (get-in response [:response :error])
                                        (str "Failed to fetch " entity-type))
                               :last-updated nil})}
-        unauthorized? (assoc :dispatch [:admin/auth-invalid])))))
+        unauthorized? (assoc :dispatch [(if (paths/admin-route? db)
+                                          :admin/auth-invalid
+                                          :user/auth-invalid)])))))
 
 ;;; -------------------------
 ;;; Entity Deletion

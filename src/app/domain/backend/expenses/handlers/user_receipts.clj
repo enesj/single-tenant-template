@@ -11,6 +11,7 @@
   (:require
     [app.domain.backend.expenses.integrations.ocr-provider :as ocr-provider]
     [app.domain.backend.expenses.handlers.user-expenses.helpers :as h]
+    [app.domain.backend.expenses.services.expenses :as expenses]
     [app.domain.backend.expenses.services.receipts.approval :as receipt-approval]
     [app.domain.backend.expenses.services.receipts.image-preprocess :as image-preprocess]
     [app.domain.backend.expenses.services.receipts.queries :as receipt-queries]
@@ -141,6 +142,23 @@
       (some? lines-total) (assoc :lines-total-amount-guess lines-total)
       (some? total-equals-lines?) (assoc :total-guess-equals-lines-total-guess? total-equals-lines?))))
 
+(defn- enrich-with-linked-expense
+  "When a receipt is posted and has a linked expense, attach the expense
+  (with items) under :linked-expense so the frontend can pre-fill the edit form."
+  [db receipt-app]
+  (if (and (= "posted" (:status receipt-app))
+        (some? (or (:expense-id receipt-app) (:expense_id receipt-app))))
+    (let [expense-id (or (:expense-id receipt-app) (:expense_id receipt-app))]
+      (try
+        (if-let [expense (expenses/get-expense-with-items db expense-id)]
+          (assoc receipt-app :linked-expense (to-app expense))
+          receipt-app)
+        (catch Exception e
+          (log/warn e "Failed to enrich posted receipt with linked expense"
+            {:receipt-id (:id receipt-app) :expense-id expense-id})
+          receipt-app)))
+    receipt-app))
+
 (defn- with-error-handling
   [handler-fn error-message]
   (fn [request]
@@ -237,7 +255,8 @@
                       download-url (when (receipt-storage/resolve-local-receipt-file (:storage-key receipt0))
                                      (str "/api/v1/expenses/receipts/" id "/download"))
                       receipt-app (cond-> (enrich-receipt-for-detail db receipt0)
-                                    download-url (assoc :download-url download-url))]
+                                    download-url (assoc :download-url download-url))
+                      receipt-app (enrich-with-linked-expense db receipt-app)]
                   (h/json-response {:data receipt-app} 200))
                 (h/json-response {:error "Receipt not found"} 404))
               (h/json-response {:error "Invalid id"} 400))))
@@ -450,6 +469,45 @@
               (h/json-response {:error "Invalid id"} 400))))
         (h/unauthorized-response)))
     "Failed to save receipt review"))
+
+(defn update-posted-receipt-handler
+  "POST /api/v1/expenses/receipts/:id/update-posted
+
+  Update a posted receipt and its linked expense in a single transaction.
+
+  Body: expense form payload (supplier_id, payer_id, purchased_at, total_amount, currency, notes, items)
+
+  Returns {:data {:expense ... :receipt ...}}"
+  [db]
+  (with-error-handling
+    (fn [request]
+      (if-let [user-id (h/get-user-id request)]
+        (if-let [forbidden (h/ensure-role request receipts-write-roles
+                             "Only members, admins, and owners can update posted receipts")]
+          forbidden
+          (let [tenant-id (h/get-tenant-id request)]
+            (if-let [id (try-parse-uuid (get-in request [:path-params :id]))]
+              (let [;; Verify access
+                    accessible? (if (h/tenant-elevated? request)
+                                  (some? (receipt-queries/get-receipt db id))
+                                  (some? (receipt-queries/get-user-receipt db user-id id tenant-id)))
+                    _ (when-not accessible?
+                        (throw (ex-info "Receipt not found" {:status 404 :id id})))
+                    body (h/read-body-params request)
+                    {:keys [expense receipt]}
+                    (receipt-approval/update-posted-receipt! db id body :tenant-id tenant-id)]
+                ;; Sticky default: update default payer if it changed
+                (try
+                  (user-settings/update-sticky-default-payer! db tenant-id user-id
+                    (or (:payer_id body) (:payer-id body)))
+                  (catch Exception e
+                    (log/warn e "Failed to update sticky default payer after posted receipt update")))
+                (h/json-response {:data {:expense (to-app expense)
+                                         :receipt (to-app receipt)}}
+                  200))
+              (h/json-response {:error "Invalid id"} 400))))
+        (h/unauthorized-response)))
+    "Failed to update posted receipt"))
 
 ;; ---------------------------------------------------------------------------
 ;; OCR Handlers (UI-triggered)

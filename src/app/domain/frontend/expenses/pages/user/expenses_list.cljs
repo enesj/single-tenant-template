@@ -9,8 +9,10 @@
   (:require
     [app.domain.frontend.expenses.components.user-expense-form :refer [user-expense-edit-form-modal]]
     [app.domain.frontend.expenses.events.expense-items :as expense-items-events]
+    app.domain.frontend.expenses.events.user-expenses.receipts
     [app.domain.frontend.expenses.pages.user.expense-new :refer [standard-expense-form]]
     [app.domain.frontend.expenses.pages.user.expense-detail :refer [expense-detail-page]]
+    [app.domain.frontend.expenses.pages.user.receipts-list :as receipts-list-page]
     [app.domain.frontend.expenses.subs.expense-items :as expense-items-subs]
     [app.template.frontend.components.button :refer [button]]
     [app.template.frontend.components.confirm-dialog :as confirm-dialog]
@@ -32,6 +34,15 @@
 ;; Modal form renderers
 ;; =============================================================================
 
+(defn- expense-receipt-id
+  [expense]
+  (or (:receipt-id expense)
+    (:receipt_id expense)))
+
+(defn- manual-expense?
+  [expense]
+  (nil? (expense-receipt-id expense)))
+
 (defn- render-add-form
   [{:keys [on-success on-cancel]}]
   ($ standard-expense-form
@@ -40,30 +51,51 @@
 
 (defn- render-edit-form
   [item {:keys [on-success on-cancel]}]
-  (let [expense-id (id-utils/extract-entity-id item)]
-    ;; IMPORTANT: do NOT pass list-row data as :initial-data.
-    ;;
-    ;; The list row is intentionally "summary" data and often does not include
-    ;; nested detail like :items. Fork forms do not re-initialize when initial
-    ;; values change, so the first open could render without line items.
-    ;;
-    ;; We let the modal fetch the full detail and mount the form once it is loaded.
-    ($ user-expense-edit-form-modal
-      {:expense-id expense-id
-       :initial-data nil
-       :on-success on-success
-       :on-cancel on-cancel})))
+  (let [expense-id (id-utils/extract-entity-id item)
+        receipt-id-str (some-> (expense-receipt-id item) str)]
+    (if receipt-id-str
+      ($ :div {:class "space-y-4 p-2"}
+        ($ :div {:class "ds-alert ds-alert-info"}
+          ($ :span "This expense was created from a receipt. Edit the linked receipt instead."))
+        ($ :div {:class "flex justify-end gap-2"}
+          (when on-cancel
+            ($ button {:id (str "btn-close-linked-expense-edit-" expense-id)
+                       :btn-type :ghost
+                       :on-click (fn [_]
+                                   (on-cancel))}
+              "Close"))
+          ($ button {:id (str "btn-open-linked-receipt-" receipt-id-str)
+                     :btn-type :primary
+                     :on-click (fn [_]
+                                 (when on-cancel
+                                   (on-cancel))
+                                 (rf/dispatch [:user-expenses/open-receipt-detail-modal receipt-id-str]))}
+            "Edit receipt")))
+      ;; IMPORTANT: do NOT pass list-row data as :initial-data.
+      ;;
+      ;; The list row is intentionally "summary" data and often does not include
+      ;; nested detail like :items. Fork forms do not re-initialize when initial
+      ;; values change, so the first open could render without line items.
+      ;;
+      ;; We let the modal fetch the full detail and mount the form once it is loaded.
+      ($ user-expense-edit-form-modal
+        {:expense-id expense-id
+         :initial-data nil
+         :on-success on-success
+         :on-cancel on-cancel}))))
 
 (defn- render-actions
   "Row action dropdown (admin-style) for user expenses.
 
    Supports an optional :on-view callback for opening a custom modal.
    Supports expand chevron when :on-toggle-expand is provided and item has items."
-  [t item {:keys [on-view on-toggle-expand expanded? power-user?]}]
+  [t item {:keys [on-view on-toggle-expand expanded? power-user? open-linked-receipt!]}]
   (let [expense-id (id-utils/extract-entity-id item)
+        receipt-id-str (some-> (expense-receipt-id item) str)
         item-count (or (:item-count item) (:item_count item) 0)
         show-expand? (and power-user? (pos? item-count))
         on-edit-click (:on-edit-click item)
+        manual? (manual-expense? item)
         show-edit? (not (false? (:show-edit? item)))
         show-delete? (not (false? (:show-delete? item)))
         item-data (dissoc item :show-edit? :show-delete? :edit-disabled? :delete-disabled? :on-edit-click)
@@ -84,18 +116,31 @@
             ($ chevron-right-icon))))
 
       (when show-edit?
-        ($ button
-          {:id (str "btn-edit-expenses-" expense-id)
-           :btn-type :primary
-           :shape "circle"
-           :disabled edit-disabled?
-           :on-click (fn [e]
-                       (.stopPropagation e)
-                       (when-not edit-disabled?
-                         (if on-edit-click
-                           (on-edit-click item-data)
-                           (rf/dispatch [:navigate-to (str "/expenses/" expense-id "?edit=true")]))))}
-          ($ edit-icon)))
+        (if manual?
+          ($ button
+            {:id (str "btn-edit-expenses-" expense-id)
+             :btn-type :primary
+             :shape "circle"
+             :disabled edit-disabled?
+             :on-click (fn [e]
+                         (.stopPropagation e)
+                         (when-not edit-disabled?
+                           (if on-edit-click
+                             (on-edit-click item-data)
+                             (rf/dispatch [:navigate-to (str "/expenses/" expense-id "?edit=true")]))))}
+            ($ edit-icon))
+          ($ button
+            {:id (str "btn-edit-receipt-for-expense-" expense-id)
+             :btn-type :primary
+             :shape "circle"
+             :title "Edit linked receipt"
+             :disabled edit-disabled?
+             :on-click (fn [e]
+                         (.stopPropagation e)
+                         (when-not edit-disabled?
+                           (when (and open-linked-receipt! receipt-id-str)
+                             (open-linked-receipt! receipt-id-str))))}
+            ($ edit-icon))))
 
       (when show-delete?
         ($ button
@@ -196,7 +241,12 @@
                                 (disj ids expense-id)
                                 (conj ids expense-id))))
                           (rf/dispatch [::expense-items-events/fetch-items-for-expense expense-id]))
-                        [])]
+                        [])
+        open-linked-receipt! (use-callback
+                               (fn [receipt-id]
+                                 (when-let [receipt-id* (some-> receipt-id str)]
+                                   (rf/dispatch [:user-expenses/open-receipt-detail-modal receipt-id*])))
+                               [])]
 
     ;; Initial load + list-view wiring for server pagination/sorting
     (use-effect
@@ -241,7 +291,8 @@
                                  {:on-view #(set-viewing-id! (id-utils/extract-entity-id %))
                                   :on-toggle-expand toggle-expand
                                   :expanded? (contains? expanded-ids expense-id)
-                                  :power-user? power-user?})))
+                                  :power-user? power-user?
+                                  :open-linked-receipt! open-linked-receipt!})))
            :render-row-expansion (when power-user?
                                    (fn [item]
                                      (let [expense-id (id-utils/extract-entity-id item)
@@ -265,4 +316,6 @@
              :close-button-id (str "btn-close-expense-details-" viewing-id)
              :on-close #(set-viewing-id! nil)}
             ($ expense-detail-page {:expense-id viewing-id
-                                    :in-modal? true})))))))
+                                    :in-modal? true}))))
+
+      ($ receipts-list-page/receipt-detail-modal))))

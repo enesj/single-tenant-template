@@ -109,11 +109,17 @@
                         (if (:ok? validation-result)
                           (do
                             (set-validation-error! nil)
-                            (rf/dispatch
-                              [:user-expenses/approve-receipt
-                               receipt-id
-                               (norm/prepare-expense-submit-values values)
-                               on-expense-saved]))
+                            (if posted?
+                              (rf/dispatch
+                                [:user-expenses/update-posted-receipt
+                                 receipt-id
+                                 (norm/prepare-expense-submit-values values)
+                                 on-expense-saved])
+                              (rf/dispatch
+                                [:user-expenses/approve-receipt
+                                 receipt-id
+                                 (norm/prepare-expense-submit-values values)
+                                 on-expense-saved])))
                           (set-validation-error! (:error validation-result)))))
 
          :render-fn
@@ -143,29 +149,38 @@
                                            (.preventDefault e)
                                            (when (fn? on-cancel) (on-cancel)))}
                      "Cancel"))
-                 ($ :button {:id (str "btn-save-receipt-" rid-str)
-                             :type "button"
-                             :class "ds-btn ds-btn-outline"
-                             :disabled (or posted? submitting? (not can-save-receipt?))
-                             :on-click (fn [e]
-                                         (.preventDefault e)
-                                         (.stopPropagation e)
-                                         (let [validation-result (norm/validate-receipt-review-values values)]
-                                           (if (:ok? validation-result)
-                                             (do
-                                               (set-validation-error! nil)
-                                               (rf/dispatch
-                                                 [:user-expenses/save-receipt-review
-                                                  receipt-id
-                                                  (norm/prepare-expense-submit-values values)
-                                                  on-review-saved]))
-                                             (set-validation-error! (:error validation-result)))))}
-                   "Save receipt")
-                 ($ :button {:id (str "btn-save-expense-" rid-str)
-                             :type "submit"
-                             :class "ds-btn ds-btn-primary"
-                             :disabled (or posted? submitting? (not expense-valid-now?))}
-                   "Save expense"))
+                 (if posted?
+                   ;; Posted receipt: single Update button
+                   ($ :button {:id (str "btn-update-posted-" rid-str)
+                               :type "submit"
+                               :class "ds-btn ds-btn-primary"
+                               :disabled (or submitting? (not expense-valid-now?))}
+                     "Update")
+                   ;; Unposted receipt: Save receipt + Save expense
+                   ($ :<>
+                     ($ :button {:id (str "btn-save-receipt-" rid-str)
+                                 :type "button"
+                                 :class "ds-btn ds-btn-outline"
+                                 :disabled (or submitting? (not can-save-receipt?))
+                                 :on-click (fn [e]
+                                             (.preventDefault e)
+                                             (.stopPropagation e)
+                                             (let [validation-result (norm/validate-receipt-review-values values)]
+                                               (if (:ok? validation-result)
+                                                 (do
+                                                   (set-validation-error! nil)
+                                                   (rf/dispatch
+                                                     [:user-expenses/save-receipt-review
+                                                      receipt-id
+                                                      (norm/prepare-expense-submit-values values)
+                                                      on-review-saved]))
+                                                 (set-validation-error! (:error validation-result)))))}
+                       "Save receipt")
+                     ($ :button {:id (str "btn-save-expense-" rid-str)
+                                 :type "submit"
+                                 :class "ds-btn ds-btn-primary"
+                                 :disabled (or submitting? (not expense-valid-now?))}
+                       "Save expense"))))
 
                ;; Line items section for split layout (rendered after buttons, full width)
                (when split-layout?

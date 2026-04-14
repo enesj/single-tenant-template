@@ -208,6 +208,7 @@
  :expense_categories {:fields [[:id :uuid {:primary-key true}]
                                [:tenant_id :uuid {:foreign-key :tenants/id :null false :on-delete :cascade}]
                                [:name [:varchar 255] {:null false}]
+                               [:exclude_from_reports :boolean {:null false :default false}]
                                [:created_at :timestamptz {:default [:now]}]
                                [:updated_at :timestamptz {:default [:now]}]]
                       :indexes [[:idx_expense_categories_tenant_name :btree {:fields [:tenant_id :name] :unique true}]]}

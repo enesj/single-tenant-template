@@ -114,7 +114,8 @@
 
    :expense-payer-types
    {:name :expense-payer-types
-    :view :expense-payer-types}
+    :view :expense-payer-types
+    :controllers (controllers/user-guarded-start :page/init-expense-payer-types)}
 
    :expense-article-aliases
    {:name :expense-article-aliases

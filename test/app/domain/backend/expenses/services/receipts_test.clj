@@ -137,9 +137,9 @@
                     db
                     receipt-id
                     {:raw_extract_json {:extraction {:items [{:raw_label "JAGODA SVJEZA"
-                                                             :qty 0.750M
-                                                             :unit "kg"
-                                                             :line_total 5.25M}]}}})
+                                                              :qty 0.750M
+                                                              :unit "kg"
+                                                              :line_total 5.25M}]}}})
           updated (receipt-approval/save-review!
                     db
                     receipt-id
@@ -151,3 +151,45 @@
                               :qty 0.750M
                               :line_total 5.25M}]})]
       (is (= "kg" (get-in (parse-jsonish (:raw_extract_json updated)) [:extraction :items 0 :unit]))))))
+
+(deftest update-posted-receipt-keeps-linked-expense-updates-working
+  (testing "posted receipt editing can still update the linked expense"
+    (let [db fixtures/*test-db*
+          user (th/ensure-test-user! db)
+          {:keys [tenant-id]} (th/ensure-test-tenant! db user)
+          create-supplier! (:create! suppliers/service)
+          original-supplier (create-supplier! db {:display_name (str "Posted Receipt Supplier " (UUID/randomUUID))})
+          updated-supplier (create-supplier! db {:display_name (str "Updated Posted Receipt Supplier " (UUID/randomUUID))})
+          payer (th/create-payer! db {:type "cash" :label "Cash"})
+          receipt-id (UUID/randomUUID)
+          _receipt (insert-receipt! db {:id receipt-id
+                                        :status "extracted"
+                                        :total-amount-guess "10.00"
+                                        :tenant-id tenant-id})
+          review {:supplier_id (:id original-supplier)
+                  :payer_id (:id payer)
+                  :purchased_at "2026-01-07T12:34"
+                  :total_amount "10.00"
+                  :currency "BAM"
+                  :items [{:raw_label "Line 1"
+                           :line_total "10.00"}]}
+          created-expense (receipt-approval/approve-and-post! db receipt-id review)
+          {:keys [expense receipt]} (receipt-approval/update-posted-receipt!
+                                      db
+                                      receipt-id
+                                      {:supplier_id (:id updated-supplier)
+                                       :payer_id (:id payer)
+                                       :purchased_at "2026-01-08T09:45"
+                                       :total_amount "12.00"
+                                       :currency "BAM"
+                                       :notes "Updated through receipt"
+                                       :items [{:raw_label "Line 1"
+                                                :line_total "12.00"}]}
+                                      :tenant-id tenant-id)]
+      (is (= (:id created-expense) (:id expense)))
+      (is (= receipt-id (:receipt_id expense)))
+      (is (= (:id updated-supplier) (:supplier_id expense)))
+      (is (= "Updated through receipt" (:notes expense)))
+      (is (= 12.00M (:total_amount expense)))
+      (is (= (:id expense) (:expense_id receipt)))
+      (is (= "posted" (str (:status receipt)))))))

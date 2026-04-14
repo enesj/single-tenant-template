@@ -15,7 +15,7 @@
     [uix.core :refer [$ defui use-effect use-memo use-state]]
     [uix.re-frame :refer [use-subscribe]]
 
-		;; Side-effect requires: register admin lookup events and shared entity subs.
+    ;; Side-effect requires: register admin lookup events and shared entity subs.
     [app.domain.frontend.expenses.events.expense-categories :as expense-categories-events]
     [app.domain.frontend.expenses.events.payers :as payers-events]
     [app.domain.frontend.expenses.events.suppliers :as suppliers-events]
@@ -102,18 +102,25 @@
                         (if (:ok? validation-result)
                           (do
                             (set-validation-error! nil)
-                            (rf/dispatch
-                              [:admin/approve-receipt
-                               receipt-id
-                               (norm/prepare-expense-submit-values values)
-                               on-success]))
+                            (if posted?
+                              (rf/dispatch
+                                [:admin/update-posted-receipt
+                                 receipt-id
+                                 (norm/prepare-expense-submit-values values)
+                                 on-success])
+                              (rf/dispatch
+                                [:admin/approve-receipt
+                                 receipt-id
+                                 (norm/prepare-expense-submit-values values)
+                                 on-success])))
                           (set-validation-error! (:error validation-result)))))
 
          :render-fn
          (fn [{:keys [form-id handle-submit submitting? values] :as form-props}]
            (let [expense-valid-now? (:ok? (norm/validate-expense-values values))
                  receipt-valid-now? (:ok? (norm/validate-receipt-review-values values))
-                 can-save-receipt? (and receipt-valid-now? (norm/receipt-review-changed? form-initial-values values))]
+                 can-save-receipt? (and receipt-valid-now?
+                                     (norm/receipt-review-changed? form-initial-values values))]
              ($ :form {:id form-id
                        :on-submit handle-submit}
                ($ form-fields
@@ -132,31 +139,39 @@
                                :disabled submitting?
                                :on-click (fn [e]
                                            (.preventDefault e)
-                                           (when (fn? on-cancel) (on-cancel)))}
+                                           (when (fn? on-cancel)
+                                             (on-cancel)))}
                      "Cancel"))
-                 ($ :button {:id (str "btn-save-admin-receipt-" rid-str)
-                             :type "button"
-                             :class "ds-btn ds-btn-outline"
-                             :disabled (or posted? submitting? (not can-save-receipt?))
-                             :on-click (fn [e]
-                                         (.preventDefault e)
-                                         (.stopPropagation e)
-                                         (let [validation-result (norm/validate-receipt-review-values values)]
-                                           (if (:ok? validation-result)
-                                             (do
-                                               (set-validation-error! nil)
-                                               (rf/dispatch
-                                                 [:admin/save-receipt-review
-                                                  receipt-id
-                                                  (norm/prepare-expense-submit-values values)
-                                                  on-review-saved]))
-                                             (set-validation-error! (:error validation-result)))))}
-                   "Save receipt")
-                 ($ :button {:id (str "btn-save-admin-expense-" rid-str)
-                             :type "submit"
-                             :class "ds-btn ds-btn-primary"
-                             :disabled (or posted? submitting? (not expense-valid-now?))}
-                   "Save expense"))
+                 (if posted?
+                   ($ :button {:id (str "btn-update-admin-posted-receipt-" rid-str)
+                               :type "submit"
+                               :class "ds-btn ds-btn-primary"
+                               :disabled (or submitting? (not expense-valid-now?))}
+                     "Update")
+                   ($ :<>
+                     ($ :button {:id (str "btn-save-admin-receipt-" rid-str)
+                                 :type "button"
+                                 :class "ds-btn ds-btn-outline"
+                                 :disabled (or submitting? (not can-save-receipt?))
+                                 :on-click (fn [e]
+                                             (.preventDefault e)
+                                             (.stopPropagation e)
+                                             (let [validation-result (norm/validate-receipt-review-values values)]
+                                               (if (:ok? validation-result)
+                                                 (do
+                                                   (set-validation-error! nil)
+                                                   (rf/dispatch
+                                                     [:admin/save-receipt-review
+                                                      receipt-id
+                                                      (norm/prepare-expense-submit-values values)
+                                                      on-review-saved]))
+                                                 (set-validation-error! (:error validation-result)))))}
+                       "Save receipt")
+                     ($ :button {:id (str "btn-save-admin-expense-" rid-str)
+                                 :type "submit"
+                                 :class "ds-btn ds-btn-primary"
+                                 :disabled (or submitting? (not expense-valid-now?))}
+                       "Save expense"))))
 
                (when split-layout?
                  ($ :div {:class "mt-6 -mx-4 px-4 pt-4 border-t border-base-300"}
@@ -177,12 +192,17 @@
         expense-categories (or (use-subscribe [:app.template.frontend.subs.entity/entities :expense-categories]) [])
         [requested? set-requested!] (use-state false)
         [prepared-initial-data set-prepared-initial-data!] (use-state nil)
+        posted? (= "posted" (:status receipt))
+        linked-expense (:linked-expense receipt)
         receipt-initial-data (use-memo
                                #(cond
                                   initial-data initial-data
-                                  receipt (norm/normalize-receipt-data receipt)
+                                  (and posted? (map? linked-expense))
+                                  (norm/normalize-initial-data linked-expense)
+                                  receipt
+                                  (norm/normalize-receipt-data receipt)
                                   :else nil)
-                               [initial-data receipt])
+                               [initial-data receipt posted? linked-expense])
         merged-initial-data (use-memo
                               #(merge {:purchased_at (current-datetime-local)
                                        :items [(new-line-item)]}

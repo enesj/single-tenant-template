@@ -641,12 +641,27 @@
                {:id "ec-3"}]
         :total 123}])
     (is (= 123 (get-in @rf-db/app-db (paths/list-total-items :expense-categories))))
-
     (rf/dispatch-sync
       [:user-expenses/fetch-expense-categories-success
        {:data [{:id "ec-1"}
                {:id "ec-2"}]}])
     (is (= 2 (get-in @rf-db/app-db (paths/list-total-items :expense-categories))))))
+
+(deftest expense-category-update-normalizes-mixed-checkbox-keys
+  (testing "expense category updates send a single snake_case checkbox param to the API"
+    (sup/reset-db!)
+    (rf/dispatch-sync [:user-expenses/update-expense-category-modal
+                       "cat-1"
+                       {:name "Travel"
+                        :exclude_from_reports false
+                        :exclude-from-reports true}
+                       nil])
+    (let [req (sup/last-http-request)]
+      (is (= :put (sup/req-method req)))
+      (is (= "/api/v1/expenses/expense-categories/cat-1" (sup/req-uri req)))
+      (is (= {:name "Travel"
+              :exclude_from_reports true}
+            (sup/req-params req))))))
 
 (deftest fetch-recent-success-normalizes-recent-items-for-rows-override
   (testing "fetch-recent-success stores kebab-case aliases needed by list rows-override"

@@ -123,6 +123,7 @@
     :options ["stores" "display_name"]},
    :confidence {:type "number", :step 1}}},
  :expense-categories
- {:create-fields ["name"],
-  :edit-fields ["name"],
-  :field-config {:name {:type "text", :label "Name"}}}}
+ {:create-fields ["name" "exclude_from_reports"],
+  :edit-fields ["name" "exclude_from_reports"],
+  :field-config {:name {:type "text", :label "Name"},
+                 :exclude_from_reports {:type "checkbox", :label "Exclude from reports"}}}}

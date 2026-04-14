@@ -54,7 +54,7 @@
        ["/change-password"
         {:name :change-password
          :view :change-password
-         :controllers (controllers/make-simple-controller :page/init-change-password)}]
+         :controllers (controllers/user-guarded-start :page/init-change-password)}]
 
        ["/about"
         {:name :about
@@ -78,7 +78,7 @@
        ["/tenant-select"
         {:name :tenant-select
          :view :tenant-select
-         :controllers (controllers/make-simple-controller :page/init-tenant-select)}]
+         :controllers (controllers/user-guarded-start :page/init-tenant-select)}]
 
        ["/tenant/members"
         {:name :tenant-members

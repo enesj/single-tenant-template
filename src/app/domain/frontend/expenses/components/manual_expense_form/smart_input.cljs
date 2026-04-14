@@ -22,6 +22,7 @@
              validate-form]]
     [app.domain.frontend.expenses.components.manual-expense-form.smart-input.items-phase
      :refer [items-phase-view]]
+    [app.domain.frontend.expenses.events.supplier-stores :as supplier-stores-events]
     [app.domain.frontend.expenses.ui.currencies :as currency-ui]
     [app.template.frontend.i18n :refer [use-t]]
     app.domain.frontend.expenses.events.user-expenses.quick-add-search
@@ -115,6 +116,20 @@
         search-results (when dropdown-open?
                          (search/merge-search-results local-search-results filtered-quick-search-results 10))
         selected-supplier-id (some-> context :supplier :id)
+        selected-supplier-id-str (some-> selected-supplier-id str)
+        ;; Per-supplier full store pool — populated lazily by
+        ;; ::supplier-stores-events/fetch-stores-for-supplier when a
+        ;; supplier becomes selected (see use-effect below). The local
+        ;; `stores` subscription is tenant-scoped to stores the user has
+        ;; already bought from, so we need this expanded pool to surface
+        ;; every branch of the chosen supplier in phase 2 quick picks.
+        supplier-stores-pool (or (use-subscribe [:user-expenses/supplier-stores-pool
+                                                 selected-supplier-id-str])
+                               [])
+        phase-two-stores (if (and selected-supplier-id-str
+                               (seq supplier-stores-pool))
+                           supplier-stores-pool
+                           stores)
         related-context (current-related-context context)
         related-matches? (and related-context
                            (= (:entity-type quick-add-related) (:entity-type related-context))
@@ -443,6 +458,17 @@
         js/undefined)
       [available-search-types related-context (count available-search-types)])
 
+    ;; Lazily fetch the *full* store catalogue for the selected supplier
+    ;; (cached per-supplier) so phase 2 quick picks can show every branch,
+    ;; not just the tenant-scoped subset returned by the standard list.
+    (use-effect
+      (fn []
+        (when selected-supplier-id-str
+          (rf/dispatch [::supplier-stores-events/fetch-stores-for-supplier
+                        selected-supplier-id-str]))
+        js/undefined)
+      [selected-supplier-id-str])
+
     ;; Close dropdown on outside click
     (use-effect
       (fn []
@@ -534,7 +560,7 @@
              :on-submit on-submit
              :on-cancel on-cancel
              :suppliers suppliers
-             :stores stores
+             :stores phase-two-stores
              :expense-categories expense-categories
              :articles articles
              ;; handlers

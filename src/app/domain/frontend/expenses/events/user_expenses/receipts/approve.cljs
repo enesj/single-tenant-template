@@ -287,3 +287,58 @@
       (assoc-in [:user-expenses :form :error] (http/extract-error-message error))
       (assoc-in (conj base-path :action-loading?) false)
       (assoc-in (conj base-path :error) (http/extract-error-message error)))))
+
+;; ---------------------------------------------------------------------------
+;; Update posted receipt + linked expense
+;; ---------------------------------------------------------------------------
+
+(rf/reg-event-fx
+  :user-expenses/update-posted-receipt
+  common-interceptors
+  (fn [{:keys [db]} [receipt-id form-data on-success]]
+    {:db (-> db
+           (assoc-in [:user-expenses :form :loading?] true)
+           (assoc-in [:user-expenses :form :error] nil)
+           (assoc-in (conj base-path :action-loading?) true)
+           (assoc-in (conj base-path :error) nil))
+     :http-xhrio (x/xhrio db
+                   {:method :post
+                    :uri (str endpoints/receipts-endpoint "/" receipt-id "/update-posted")
+                    :params form-data
+                    :on-success [:user-expenses/update-posted-receipt-success receipt-id on-success]
+                    :on-failure [:user-expenses/update-posted-receipt-failure]})}))
+
+(rf/reg-event-fx
+  :user-expenses/update-posted-receipt-success
+  common-interceptors
+  (fn [{:keys [db]} [receipt-id on-success response]]
+    (let [expense (get-in response [:data :expense])
+          receipt (get-in response [:data :receipt])
+          fx (cond-> []
+               on-success (conj [:dispatch-later {:ms 100}
+                                 :dispatch [:user-expenses/call-modal-callback on-success]]))]
+      (cond-> {:db (-> db
+                     (assoc-in [:user-expenses :form :loading?] false)
+                     (assoc-in [:user-expenses :form :error] nil)
+                     (assoc-in (conj base-path :action-loading?) false)
+                     (assoc-in (conj base-path :error) nil)
+                     (cond-> receipt
+                       (assoc-in (conj base-path :by-id receipt-id) receipt)))
+               :dispatch-n [[:user-expenses/fetch-recent {:limit 25 :offset 0}]
+                            [:user-expenses/refresh-receipts-list]
+                            [:user-expenses/fetch-receipt receipt-id]
+                            [:user-expenses/close-receipt-detail-modal]]
+               :fx fx}
+        expense
+        (assoc :dispatch [::expenses-sync/upsert-expenses [expense]])))))
+
+(rf/reg-event-db
+  :user-expenses/update-posted-receipt-failure
+  common-interceptors
+  (fn [db [error]]
+    (log/warn "Failed to update posted receipt" {:error error})
+    (-> db
+      (assoc-in [:user-expenses :form :loading?] false)
+      (assoc-in [:user-expenses :form :error] (http/extract-error-message error))
+      (assoc-in (conj base-path :action-loading?) false)
+      (assoc-in (conj base-path :error) (http/extract-error-message error)))))

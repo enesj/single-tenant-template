@@ -70,9 +70,20 @@
   [user-id {:keys [tenant-id from to currency supplier-id payer-id expense-category-id]}]
   (let [supplier-clause (id-filter-clause :e.supplier_id supplier-id)
         payer-clause (id-filter-clause :e.payer_id payer-id)
-        expense-category-clause (id-filter-clause :e.expense_category_id expense-category-id)]
+        expense-category-clause (id-filter-clause :e.expense_category_id expense-category-id)
+        ;; Drop expenses whose category is flagged `exclude_from_reports=true`.
+        ;; NOT EXISTS is null-safe: expenses with no category still pass.
+        exclude-flagged-category-clause
+        [:not
+         [:exists
+          {:select [[[:inline 1]]]
+           :from [[:expense_categories :ec_excl]]
+           :where [:and
+                   [:= :ec_excl.id :e.expense_category_id]
+                   [:= :ec_excl.exclude_from_reports true]]}]]]
     (cond-> [:and
-             [:= :e.is_posted true]]
+             [:= :e.is_posted true]
+             exclude-flagged-category-clause]
       user-id (conj [:= :e.user_id user-id])
       tenant-id (conj [:= :e.tenant_id tenant-id])
       from (conj [:>= :e.purchased_at from])

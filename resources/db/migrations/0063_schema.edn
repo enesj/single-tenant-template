@@ -1,0 +1,4 @@
+({:action :add-column,
+  :field-name :exclude-from-reports,
+  :model-name :expense_categories,
+  :options {:null false, :default false, :type :boolean}})

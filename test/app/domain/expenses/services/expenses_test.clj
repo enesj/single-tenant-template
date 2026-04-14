@@ -16,6 +16,19 @@
 
 (defn- now [] (java.time.Instant/now))
 
+(defn- insert-receipt!
+  [db {:keys [id status tenant-id]}]
+  (let [file-hash (subs (.replace (str (UUID/randomUUID) (UUID/randomUUID)) "-" "") 0 64)]
+    (jdbc/execute-one!
+      db
+      ["insert into receipts (id, storage_key, file_hash, status, tenant_id)
+        values (?, ?, ?, ?::receipt_status, ?)"
+       id
+       (str "test/" id ".png")
+       file-hash
+       status
+       tenant-id])))
+
 (defn- insert-rate!
   [db {:keys [currency-code rate-date rate is-fallback]}]
   (jdbc/execute-one!
@@ -347,6 +360,35 @@
       (expenses/delete-expense! db (:id exp))
       (let [listed (expenses/list-expenses db {:limit 100})]
         (is (empty? (filter #(= (:id exp) (:id %)) listed)))))))
+
+(deftest receipt-linked-expenses-cannot-be-edited-directly
+  (when-let [db fixtures/*test-db*]
+    (let [user (th/ensure-test-user! db)
+          {:keys [tenant-id]} (th/ensure-test-tenant! db user)
+          supplier (:supplier (suppliers/find-or-create-supplier! db (str "Receipt Linked Supplier " (UUID/randomUUID)) {}))
+          payer (th/create-payer! db {:type "cash" :label "Cash"})
+          receipt-id (UUID/randomUUID)
+          _receipt (insert-receipt! db {:id receipt-id
+                                        :status "posted"
+                                        :tenant-id tenant-id})
+          expense (expenses/create-expense! db
+                    {:tenant_id tenant-id
+                     :receipt_id receipt-id
+                     :supplier_id (:id supplier)
+                     :payer_id (:id payer)
+                     :purchased_at (now)
+                     :total_amount (bigdec "5.00")
+                     :currency "BAM"}
+                    [{:raw_label "Item"
+                      :line_total (bigdec "5.00")}])]
+      (try
+        (expenses/update-expense! db (:id expense) {:notes "updated directly"})
+        (is false "Expected direct edit of receipt-linked expense to be rejected")
+        (catch clojure.lang.ExceptionInfo e
+          (is (= 409 (:status (ex-data e))))
+          (is (= :receipt_id (:field (ex-data e))))
+          (is (= receipt-id (:receipt-id (ex-data e))))
+          (is (= (:id expense) (:expense-id (ex-data e)))))))))
 
 (deftest expenses-count-matches-list-filters
   (when-let [db fixtures/*test-db*]

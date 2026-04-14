@@ -36,9 +36,17 @@
         payers-loading? (boolean (use-subscribe [:user-expenses/payers-loading?]))
         [requested? set-requested!] (use-state false)
         [prepared-initial-data set-prepared-initial-data!] (use-state nil)
+        posted? (= "posted" (:status receipt))
+        linked-expense (:linked-expense receipt)
         receipt-initial-data (use-memo
-                               #(when receipt (norm/normalize-receipt-data receipt))
-                               [receipt])
+                               (fn []
+                                 (when receipt
+                                   (if (and posted? (map? linked-expense))
+                                     ;; Posted receipt: pre-fill from the linked expense
+                                     (norm/normalize-initial-data linked-expense)
+                                     ;; Normal receipt: pre-fill from OCR data
+                                     (norm/normalize-receipt-data receipt))))
+                               [receipt posted? linked-expense])
         merged-initial-data (use-memo
                               #(merge {:purchased_at (current-datetime-local)
                                        :items [(new-line-item)]}
@@ -79,7 +87,7 @@
          :on-submit (fn [form-data]
                       (rf/dispatch [:user-expenses/create-expense-modal form-data on-success]))})
 
-      ;; Receipt approval
+      ;; Receipt approval (or posted receipt editing)
       (if (nil? prepared-initial-data)
         ($ :div {:class "flex justify-center p-6"}
           ($ :span {:class "ds-loading ds-loading-spinner ds-loading-md text-primary"}))

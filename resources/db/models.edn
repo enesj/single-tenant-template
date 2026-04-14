@@ -639,6 +639,7 @@
     :uuid
     {:foreign-key :tenants/id, :null false, :on-delete :cascade}]
    [:name [:varchar 255] {:null false}]
+   [:exclude_from_reports :boolean {:null false, :default false}]
    [:created_at :timestamptz {:default [:now]}]
    [:updated_at :timestamptz {:default [:now]}]],
   :indexes

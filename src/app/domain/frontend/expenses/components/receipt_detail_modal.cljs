@@ -409,7 +409,8 @@
                   ($ :span {:class "text-sm"} "Preview panel is hidden")
                   ($ :span {:class "text-xs text-primary/70 font-medium"} "Click to show")))
               ($ :div {:class "flex items-center justify-between gap-2"}
-                ($ :h2 {:class "text-base font-semibold"} "Approve & Post")
+                ($ :h2 {:class "text-base font-semibold"}
+                  (if (= "posted" status) "Edit Receipt" "Approve & Post"))
                 (when action-loading?
                   ($ :span {:class "text-xs text-base-content/60"} "Working...")))
 

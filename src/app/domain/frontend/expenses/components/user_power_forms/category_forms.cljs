@@ -71,7 +71,11 @@
     :type :text
     :label "Name"
     :required true
-    :placeholder "e.g. Utilities"}])
+    :placeholder "e.g. Utilities"}
+   {:id :exclude-from-reports
+    :type :checkbox
+    :label "Exclude from reports"
+    :required false}])
 
 (defui user-expense-category-add-form-modal
   [{:keys [on-success on-cancel]}]
@@ -97,8 +101,12 @@
         dynamic-spec (use-subscribe [:form-entity-specs/by-name :expense-categories true])
         item (normalization/convert-db-keys->app-keys item)
         expense-category-id (id-utils/extract-entity-id item)
+        ;; Accept either kebab-case (post-normalization) or snake_case (raw).
+        exclude-from-reports? (boolean (or (:exclude-from-reports item)
+                                         (:exclude_from_reports item)))
         initial-values (-> {}
                          (assoc :name (or (:name item) ""))
+                         (assoc :exclude-from-reports exclude-from-reports?)
                          (assoc :id (or (:id item) "")))]
     ($ :div {:class "space-y-4"}
       (when form-error

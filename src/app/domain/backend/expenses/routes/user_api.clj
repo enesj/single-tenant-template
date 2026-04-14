@@ -164,6 +164,7 @@
     {:get {:handler (user-receipts/get-receipt-handler db)}}]
    ["/receipts/:id/approve" {:post {:handler (user-receipts/approve-receipt-handler db)}}]
    ["/receipts/:id/review" {:post {:handler (user-receipts/save-receipt-review-handler db)}}]
+   ["/receipts/:id/update-posted" {:post {:handler (user-receipts/update-posted-receipt-handler db)}}]
    ["/receipts/:id/ocr" {:post {:handler (user-receipts/ocr-single-receipt-handler db app-config)}}]
 
    ;; Manufacturers (admin/owner only)

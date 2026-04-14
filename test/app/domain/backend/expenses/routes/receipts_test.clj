@@ -1,6 +1,7 @@
 (ns app.domain.backend.expenses.routes.receipts-test
   (:require
     [app.domain.backend.expenses.routes.receipts :as receipts-routes]
+    [app.domain.backend.expenses.services.expenses :as expenses]
     [app.domain.backend.expenses.services.receipts.image-preprocess :as image-preprocess]
     [app.domain.backend.expenses.services.receipts.queries :as receipt-queries]
     [app.domain.backend.expenses.services.receipts.storage :as receipt-storage]
@@ -62,6 +63,37 @@
         (is (nil? (:supplier-guess-supplier enriched)))
         (is (= 10M (:lines-total-amount-guess enriched)))
         (is (false? (:total-guess-equals-lines-total-guess? enriched)))))))
+
+(deftest get-receipt-handler-includes-linked-expense-for-posted-receipts
+  (let [receipt-id (java.util.UUID/randomUUID)
+        expense-id (java.util.UUID/randomUUID)
+        handler (receipts-routes/get-receipt-handler :db)]
+    (with-redefs [receipt-queries/get-receipt
+                  (fn [_db rid]
+                    (is (= receipt-id rid))
+                    {:id rid
+                     :status "posted"
+                     :expense_id expense-id
+                     :original_filename "receipt.jpg"
+                     :content_type "image/jpeg"})
+
+                  receipt-storage/resolve-local-receipt-file
+                  (fn [_storage-key]
+                    nil)
+
+                  expenses/get-expense-with-items
+                  (fn [_db eid]
+                    (is (= expense-id eid))
+                    {:id eid
+                     :receipt_id receipt-id
+                     :items []})]
+      (let [response (handler {:path-params {:id (str receipt-id)}})
+            body (json/parse-string (:body response) true)]
+        (is (= 200 (:status response)))
+        (is (= true (:success body)))
+        (is (= (str receipt-id) (get-in body [:receipt :id])))
+        (is (= (str expense-id) (get-in body [:receipt :linked-expense :id])))
+        (is (= [] (get-in body [:receipt :linked-expense :items])))))))
 
 (deftest download-receipt-handler-converts-heic-to-jpeg-when-requested
   (let [id (java.util.UUID/randomUUID)
@@ -230,5 +262,5 @@
       (is (= "/receipts" (first routes)))
       (is (nil? (:middleware route-options))
         "Root admin receipts route should not define impersonation middleware")
-      (is (= #{"" "/:id/download" "/:id" "/:id/review" "/:id/approve"}
+      (is (= #{"" "/:id/download" "/:id" "/:id/review" "/:id/approve" "/:id/update-posted"}
             (set (map first children)))))))

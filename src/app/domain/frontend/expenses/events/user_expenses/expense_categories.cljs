@@ -8,6 +8,8 @@
     [app.domain.frontend.expenses.events.user-expenses.endpoints :as endpoints]
     [app.domain.frontend.expenses.events.user-expenses.list-support :as list-support]
     [app.domain.frontend.expenses.events.user-expenses.xhrio :as x]
+    [app.shared.adapters.normalization :as normalization]
+    [app.shared.model-naming :as model-naming]
     [app.template.frontend.api.http :as http]
     [app.template.frontend.db.db :refer [common-interceptors]]
     [app.template.frontend.db.paths :as paths]
@@ -18,6 +20,30 @@
 ;; ---------------------------------------------------------------------------
 ;; Expense Categories
 ;; ---------------------------------------------------------------------------
+
+(defn- prepare-expense-category-payload
+  "Normalize expense-category form values to the API's snake_case payload.
+
+  The dynamic form specs use app/kebab-case keys, while older callers and
+  fallback specs may still produce snake_case keys. When both styles are
+  present, prefer the app-style checkbox value that reflects the user's latest
+  interaction."
+  [form-data]
+  (let [form-data (or form-data {})
+        has-exclude? (or (contains? form-data :exclude-from-reports)
+                       (contains? form-data :exclude_from_reports))
+        exclude? (cond
+                   (contains? form-data :exclude-from-reports)
+                   (boolean (:exclude-from-reports form-data))
+
+                   (contains? form-data :exclude_from_reports)
+                   (boolean (:exclude_from_reports form-data))
+
+                   :else false)
+        app-form-data (cond-> (normalization/convert-db-keys->app-keys form-data)
+                        has-exclude?
+                        (assoc :exclude-from-reports exclude?))]
+    (model-naming/app-map-keys->db app-form-data)))
 
 (rf/reg-event-fx
   :user-expenses/refresh-expense-categories-list
@@ -80,7 +106,7 @@
      :http-xhrio (x/xhrio db
                    {:method :post
                     :uri endpoints/expense-categories-endpoint
-                    :params (or form-data {})
+                    :params (prepare-expense-category-payload form-data)
                     :on-success [:user-expenses/create-expense-category-modal-success on-success]
                     :on-failure [:user-expenses/create-expense-category-modal-failure]})}))
 
@@ -121,7 +147,7 @@
        :http-xhrio (x/xhrio db
                      {:method :put
                       :uri (str endpoints/expense-categories-endpoint "/" expense-category-id-str)
-                      :params (or form-data {})
+                      :params (prepare-expense-category-payload form-data)
                       :on-success [:user-expenses/update-expense-category-modal-success expense-category-id-str on-success]
                       :on-failure [:user-expenses/update-expense-category-modal-failure]})})))
 

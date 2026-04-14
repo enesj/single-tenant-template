@@ -4,7 +4,7 @@
     [app.domain.backend.expenses.handlers.user-expenses.helpers :as h]
     [app.domain.backend.expenses.services.expense-categories :as expense-categories]
     [cheshire.core :as json]
-    [clojure.test :refer [deftest is testing]])
+    [clojure.test :refer [deftest is]])
   (:import
     [java.util UUID]))
 
@@ -104,7 +104,8 @@
                             {:name "Utilities"}))]
         (is (= 201 (:status resp)))
         (is (= {:name "Utilities"
-                :tenant_id tenant-id}
+          :exclude_from_reports false
+          :tenant_id tenant-id}
               @seen-payload))
         (is (= tenant-id (get-in resp [:body :data :tenant-id])))))))
 
@@ -131,6 +132,34 @@
                 :opts {:tenant-id tenant-id}}
               @seen-args))
         (is (= "Travel" (get-in resp [:body :data :name])))))))
+
+          (deftest update-expense-category-prefers-kebab-case-flag-when-both-keys-are-present
+            (let [tenant-id (UUID/randomUUID)
+              expense-category-id (UUID/randomUUID)
+              seen-args (atom nil)]
+              (with-redefs [expense-categories/service
+                {:update! (fn [_db id updates opts]
+                    (reset! seen-args {:id id :updates updates :opts opts})
+                    {:id id
+                     :tenant_id tenant-id
+                     :name (:name updates)
+                     :exclude_from_reports (:exclude_from_reports updates)})}
+                h/json-response (fn [body & [status]] {:status (or status 200)
+                               :body body})]
+            (let [handler (user-expense-categories/update-expense-category-handler db)
+              resp (handler (assoc (request :put (str "/api/v1/expenses/expense-categories/" expense-category-id)
+                         (admin-session tenant-id)
+                         {:name "Travel"
+                      :exclude_from_reports false
+                      :exclude-from-reports true})
+                      :path-params {:id (str expense-category-id)}))]
+              (is (= 200 (:status resp)))
+              (is (= {:id expense-category-id
+                  :updates {:name "Travel"
+                    :exclude_from_reports true}
+                  :opts {:tenant-id tenant-id}}
+                @seen-args))
+              (is (= true (get-in resp [:body :data :exclude-from-reports])))))))
 
 (deftest batch-delete-expense-categories-uses-current-tenant-scope
   (let [tenant-id (UUID/randomUUID)

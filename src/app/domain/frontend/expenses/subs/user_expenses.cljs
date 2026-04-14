@@ -389,3 +389,13 @@
     (get-in db [:user-expenses :context-suggestions]
       {:loading? false :suppliers [] :stores [] :categories []})))
 
+;; Per-supplier store pool — populated by
+;; `app.domain.frontend.expenses.events.supplier-stores/fetch-stores-for-supplier`.
+;; Used in the manual expense form to surface every store of the selected
+;; supplier (not just stores the tenant has previously bought from).
+(rf/reg-sub
+  :user-expenses/supplier-stores-pool
+  (fn [db [_ supplier-id]]
+    (when supplier-id
+      (get-in db [:supplier-stores :by-supplier supplier-id :stores]))))
+

@@ -29,6 +29,23 @@
           .toInstant)
         (catch Exception _ nil)))))
 
+(defn- has-exclude-from-reports?
+  [body]
+  (or (contains? body :exclude-from-reports)
+    (contains? body :exclude_from_reports)))
+
+(defn- exclude-from-reports-value
+  "Prefer the canonical app-style kebab-case key when both payload styles are present."
+  [body]
+  (cond
+    (contains? body :exclude-from-reports)
+    (boolean (:exclude-from-reports body))
+
+    (contains? body :exclude_from_reports)
+    (boolean (:exclude_from_reports body))
+
+    :else false))
+
 (defn list-expense-categories-handler
   [db]
   (fn [request]
@@ -82,7 +99,9 @@
         (try
           (let [body (h/read-body-params request)
                 tenant-id (h/get-tenant-id request)
-                payload (cond-> {:name (:name body)}
+                exclude? (exclude-from-reports-value body)
+                payload (cond-> {:name (:name body)
+                                 :exclude_from_reports exclude?}
                           tenant-id (assoc :tenant_id tenant-id))
                 expense-category (h/to-app ((:create! expense-categories/service) db payload))]
             (h/json-response {:data expense-category} 201))
@@ -106,7 +125,12 @@
             (try
               (let [body (h/read-body-params request)
                     tenant-id (h/get-tenant-id request)
-                    updates (select-keys body [:name])
+                    ;; Accept both snake_case (external JSON) and app-style
+                    ;; kebab-case (internal callers / dynamic forms). A missing
+                    ;; key must not clobber an existing value.
+                    updates (cond-> (select-keys body [:name])
+                              (has-exclude-from-reports? body)
+                              (assoc :exclude_from_reports (exclude-from-reports-value body)))
                     updated (some-> ((:update! expense-categories/service) db expense-category-id updates
                                                                            (cond-> {}
                                                                              tenant-id (assoc :tenant-id tenant-id)))

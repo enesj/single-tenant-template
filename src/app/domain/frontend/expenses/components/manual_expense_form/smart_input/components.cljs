@@ -186,29 +186,72 @@
 
 (defn phase-two-quick-pick-groups
   [missing-types context-suggestions suppliers stores expense-categories articles selected-supplier-id]
-  (let [local-groups-by-type (->> (build-quick-pick-groups missing-types
+  (let [limit (if (= 1 (count missing-types)) 10 5)
+        local-groups-by-type (->> (build-quick-pick-groups missing-types
                                     suppliers
                                     stores
                                     expense-categories
                                     articles
                                     selected-supplier-id)
                                (map (juxt :entity-type identity))
-                               (into {}))]
+                               (into {}))
+        store-matches-supplier? (fn [s]
+                                  (or (nil? selected-supplier-id)
+                                    (= (str selected-supplier-id)
+                                      (str (or (:supplier-id s) (:supplier_id s))))))
+        wrap-store (fn [s]
+                     {:id (:id s)
+                      :label (or (:label s) (:display-name s) (:display_name s) "")
+                      :entity-type :store
+                      :entity s})
+        dedupe-by-id (fn [items]
+                       (let [seen (volatile! #{})]
+                         (->> items
+                           (keep (fn [item]
+                                   (let [id (:id item)]
+                                     (when-not (contains? @seen id)
+                                       (vswap! seen conj id)
+                                       item))))
+                           vec)))]
     (->> missing-types
       (keep (fn [entity-type]
-              (let [suggested (case entity-type
-                                :supplier (:suppliers context-suggestions)
-                                :store (:stores context-suggestions)
-                                :category (:categories context-suggestions)
-                                [])]
-                (or (when (seq suggested)
-                      {:entity-type entity-type
-                       :items (mapv (fn [suggestion]
-                                      {:id (:id suggestion)
-                                       :label (:label suggestion)
-                                       :entity-type entity-type
-                                       :entity suggestion})
-                                suggested)})
+              (let [raw-suggested (case entity-type
+                                    :supplier (:suppliers context-suggestions)
+                                    :store (:stores context-suggestions)
+                                    :category (:categories context-suggestions)
+                                    [])]
+                (cond
+                  ;; Stores: merge history-ranked picks with the full
+                  ;; supplier-filtered pool. History rows appear first
+                  ;; (so the user sees frequent picks at a glance) and the
+                  ;; remaining supplier stores fill the rest of the slots.
+                  (= entity-type :store)
+                  (let [history-items (->> raw-suggested
+                                        (filter store-matches-supplier?)
+                                        (mapv wrap-store))
+                        pool-items (->> stores
+                                     (filter store-matches-supplier?)
+                                     (mapv wrap-store))
+                        merged (->> (concat history-items pool-items)
+                                 dedupe-by-id
+                                 (take limit)
+                                 vec)]
+                    (when (seq merged)
+                      {:entity-type :store :items merged}))
+
+                  ;; Other types keep the existing precedence: history
+                  ;; suggestions win when present, otherwise fall back
+                  ;; to the local quick picks.
+                  (seq raw-suggested)
+                  {:entity-type entity-type
+                   :items (mapv (fn [suggestion]
+                                  {:id (:id suggestion)
+                                   :label (:label suggestion)
+                                   :entity-type entity-type
+                                   :entity suggestion})
+                            raw-suggested)}
+
+                  :else
                   (get local-groups-by-type entity-type)))))
       vec)))
 

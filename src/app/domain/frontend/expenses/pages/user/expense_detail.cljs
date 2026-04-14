@@ -42,6 +42,15 @@
 ;; Components
 ;; ========================================================================
 
+(defn- expense-receipt-id
+  [expense]
+  (or (:receipt-id expense)
+    (:receipt_id expense)))
+
+(defn- manual-expense?
+  [expense]
+  (nil? (expense-receipt-id expense)))
+
 (defui info-card [{:keys [label value icon]}]
   ($ :div {:class "bg-base-200 rounded-lg p-4"}
     ($ :div {:class "flex items-start gap-3"}
@@ -150,6 +159,8 @@
           rate-fetched rate-fetched-at
           purchased purchased-at
           created created-at
+          linked-receipt-id (some-> (expense-receipt-id expense) str)
+          direct-editable? (and expense (manual-expense? expense))
           posted? (true? is-posted)
           show-conversion? (and (some? currency)
                              (not= "BAM" currency)
@@ -169,7 +180,7 @@
                   ($ :h1 {:class "text-xl sm:text-2xl font-bold"}
                     (or supplier-name "Expense Detail")))
                 ($ :div {:class "flex gap-2"}
-                  (when (and expense (not posted?) can-write?)
+                  (when (and expense (not posted?) can-write? direct-editable?)
                     ($ button {:btn-type :outline
                                :id "btn-edit-expense"
                                :on-click #(rf/dispatch [:navigate-to (str "/expenses/" expense-id "?edit=true")])}
@@ -206,6 +217,10 @@
                   ($ :span {:class "text-sm text-base-content/60"}
                     (str (t :expense-detail/created) " " (format-short-date created)))))
 
+              (when linked-receipt-id
+                ($ :div {:class "ds-alert ds-alert-info"}
+                  ($ :span "This expense was created from a receipt. Edit the receipt to change the extracted expense data.")))
+
               ;; Info cards
               ($ :div {:class "grid grid-cols-2 md:grid-cols-4 gap-4"}
                 ($ info-card {:label (t :expense-detail/label-supplier) :value supplier-name :icon "🏪"})
@@ -238,13 +253,19 @@
               ;; Actions - only show for member+ (can-write?)
               (when can-write?
                 ($ :div {:class "flex gap-2 justify-end pt-4 border-t"}
+                  (when linked-receipt-id
+                    ($ button {:btn-type :outline
+                               :size :sm
+                               :id (str "btn-edit-linked-receipt-" linked-receipt-id)
+                               :on-click #(rf/dispatch [:navigate-to (str "/receipts/" linked-receipt-id)])}
+                      "Edit receipt"))
                   (when (not posted?)
                     ($ button {:btn-type :error
                                :size :sm
                                :id "btn-delete-expense"
                                :on-click #(rf/dispatch [:user-expenses/delete-expense expense-id])}
                       (t :expense-detail/btn-delete)))
-                  (when (not posted?)
+                  (when (and (not posted?) direct-editable?)
                     ($ button {:btn-type :primary
                                :size :sm
                                :id "btn-post-expense"
