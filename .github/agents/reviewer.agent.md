@@ -1,7 +1,7 @@
 ---
 name: Reviewer
 description: Reviews session code changes for Allium spec alignment and ensures documentation is updated when behavior changes.
-model: GPT-5.3-Codex (copilot)
+model: GPT-5.4 (copilot)
 tools: ['vscode', 'execute', 'read', 'agent', 'edit', 'search', 'web', 'vscode/memory', 'todo', 'clojure-mcp/*', 'postgres/*']
 ---
 

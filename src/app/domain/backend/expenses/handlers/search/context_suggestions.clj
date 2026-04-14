@@ -10,13 +10,16 @@
     [taoensso.timbre :as log]))
 
 (defn- context-suggestions-suppliers
-  "Suppliers historically associated with the given articles, ranked by frequency."
+  "Suppliers historically associated with the given articles, ranked by
+   article coverage then by expense frequency. Only suppliers where ALL
+   queried articles have been purchased are returned."
   [db article-ids tenant-id limit]
   (jdbc/execute!
     db
     (sql/format
       {:select [[:s.id :id]
                 [:s.display_name :label]
+                [[:count [:distinct :aa.article_id]] :article_coverage]
                 [[:count [:distinct :e.id]] :frequency]]
        :from [[:expenses :e]]
        :join [[:expense_items :ei] [:= :ei.expense_id :e.id]
@@ -27,12 +30,15 @@
                [:in :aa.article_id article-ids]
                [:is-not :e.supplier_id nil]]
        :group-by [:s.id :s.display_name]
-       :order-by [[:frequency :desc] [:s.display_name :asc]]
+       :having [:= [:count [:distinct :aa.article_id]] (count article-ids)]
+       :order-by [[:article_coverage :desc] [:frequency :desc] [:s.display_name :asc]]
        :limit limit})
     {:builder-fn rs/as-unqualified-lower-maps}))
 
 (defn- context-suggestions-stores
-  "Stores historically associated with the given articles, ranked by frequency."
+  "Stores historically associated with the given articles, ranked by
+   article coverage then by expense frequency. Only stores where ALL
+   queried articles have been purchased are returned."
   [db article-ids tenant-id limit]
   (jdbc/execute!
     db
@@ -41,6 +47,7 @@
                 [:st.display_name :label]
                 [:st.supplier_id :supplier_id]
                 [:sup.display_name :supplier_display_name]
+                [[:count [:distinct :aa.article_id]] :article_coverage]
                 [[:count [:distinct :e.id]] :frequency]]
        :from [[:expenses :e]]
        :join [[:expense_items :ei] [:= :ei.expense_id :e.id]
@@ -52,18 +59,22 @@
                [:in :aa.article_id article-ids]
                [:is-not :e.store_id nil]]
        :group-by [:st.id :st.display_name :st.supplier_id :sup.display_name]
-       :order-by [[:frequency :desc] [:st.display_name :asc]]
+       :having [:= [:count [:distinct :aa.article_id]] (count article-ids)]
+       :order-by [[:article_coverage :desc] [:frequency :desc] [:st.display_name :asc]]
        :limit limit})
     {:builder-fn rs/as-unqualified-lower-maps}))
 
 (defn- context-suggestions-categories
-  "Expense categories historically associated with the given articles, ranked by frequency."
+  "Expense categories historically associated with the given articles, ranked by
+   article coverage then by expense frequency. Only categories where ALL
+   queried articles have been purchased are returned."
   [db article-ids tenant-id limit]
   (jdbc/execute!
     db
     (sql/format
       {:select [[:ec.id :id]
                 [:ec.name :label]
+                [[:count [:distinct :aa.article_id]] :article_coverage]
                 [[:count [:distinct :e.id]] :frequency]]
        :from [[:expenses :e]]
        :join [[:expense_items :ei] [:= :ei.expense_id :e.id]
@@ -74,7 +85,8 @@
                [:in :aa.article_id article-ids]
                [:is-not :e.expense_category_id nil]]
        :group-by [:ec.id :ec.name]
-       :order-by [[:frequency :desc] [:ec.name :asc]]
+       :having [:= [:count [:distinct :aa.article_id]] (count article-ids)]
+       :order-by [[:article_coverage :desc] [:frequency :desc] [:ec.name :asc]]
        :limit limit})
     {:builder-fn rs/as-unqualified-lower-maps}))
 

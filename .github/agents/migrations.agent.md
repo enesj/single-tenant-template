@@ -1,7 +1,7 @@
 ---
 name: Migrations
 description: Owns database schema evolution via the repo’s automigrate + simple-repl workflow.
-model: GPT-5.3-Codex (copilot)
+model: GPT-5.4 (copilot)
 tools: ['vscode', 'execute', 'read', 'agent', 'edit', 'search', 'web', 'vscode/memory', 'todo', 'clojure-mcp/*', 'postgres/*', 'Railway/*']
 ---
 

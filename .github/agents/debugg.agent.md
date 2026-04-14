@@ -1,7 +1,7 @@
 ---
 name: Debugg
 description: Performs evidence-first troubleshooting triage for reported app issues before implementation handoff.
-model: GPT-5.3-Codex (copilot)
+model: GPT-5.4 (copilot)
 tools: ['vscode', 'execute', 'read', 'agent', 'edit', 'search', 'web', 'vscode/memory', 'todo', 'clojure-mcp/*', 'postgres/*', 'chrome-devtools/*', 'Railway/*']
 ---
 

@@ -1,7 +1,7 @@
 ---
 name: ChangeSettings
 description: Applies settings changes through the real admin/user settings UI using chrome-devtools — no code modifications.
-model: GPT-5.3-Codex (copilot)
+model: GPT-5.4 (copilot)
 tools: ['vscode', 'execute', 'read', 'agent', 'search', 'chrome-devtools/*']
 ---
 

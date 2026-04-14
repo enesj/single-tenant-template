@@ -1,7 +1,7 @@
 ---
 name: SettingsTesting
 description: Runs real-UI verification of admin and user settings, records results against plan tasks, and restores temporary changes.
-model: GPT-5.3-Codex (copilot)
+model: GPT-5.4 (copilot)
 tools: ['vscode', 'execute', 'read', 'agent', 'edit', 'search', 'todo', 'chrome-devtools/*', 'clojure-mcp/*', 'postgres/*']
 ---
 
