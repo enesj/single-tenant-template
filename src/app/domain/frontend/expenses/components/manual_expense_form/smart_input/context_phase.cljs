@@ -7,8 +7,11 @@
     [app.domain.frontend.expenses.components.manual-expense-form.smart-input.components
      :refer [autocomplete-dropdown entity-chip phase-two-quick-pick-groups
              quick-picks type-picker]]
+    [app.domain.frontend.expenses.components.manual-expense-form.smart-input.constants
+     :refer [supplier-color-palette]]
     [app.domain.frontend.expenses.components.manual-expense-form.smart-input.helpers
-     :refer [colorize-quick-pick-groups entity-type-label]]
+     :refer [build-quick-pick-supplier-color-map colorize-quick-pick-groups
+             entity-type-label]]
     [clojure.string :as str]
     [uix.core :refer [$ defui]]))
 
@@ -23,7 +26,7 @@
            search-results quick-search-loading? context-suggestions
            items-total currency currency-options
            payers payer-id purchased-at notes submitting?
-           on-cancel supplier-color-map
+           on-cancel
            suppliers stores expense-categories articles
            ;; handlers
            on-input-change on-input-keydown on-select-result
@@ -35,7 +38,7 @@
 
     ;; Back to items link
     ($ :button {:type "button"
-                :class "text-sm text-primary hover:text-primary/80 transition-colors"
+                :class "text-base text-primary hover:text-primary/80 transition-colors"
                 :on-click (fn [e] (.preventDefault e)
                             (on-set-phase :items)
                             (on-focus-input))}
@@ -44,16 +47,16 @@
     ;; Items summary
     ($ :div {:class "bg-base-100 rounded-2xl border border-base-200 p-4"}
       ($ :div {:class "flex items-center justify-between mb-3"}
-        ($ :span {:class "font-semibold text-base"}
+        ($ :span {:class "font-semibold text-lg"}
           (t :smart-expense/items-summary (count items)))
-        ($ :span {:class "text-lg font-bold"}
+        ($ :span {:class "text-xl font-bold"}
           (format-decimal items-total) " " currency))
       ($ :div {:class "space-y-1.5"}
         (for [item items]
           (let [q (or (safe-parse-number (:qty item)) 1)
                 p (or (safe-parse-number (:unit-price item)) 0)]
             ($ :div {:key (:id item)
-                     :class "flex items-center gap-2 text-sm text-base-content/70"}
+                     :class "flex items-center gap-2 text-base text-base-content/70"}
               ($ :span "📦")
               ($ :span {:class "flex-1 truncate"} (:label item))
               ($ :span {:class "font-mono"}
@@ -86,8 +89,11 @@
                                         expense-categories
                                         articles
                                         selected-supplier-id))
+              quick-pick-supplier-color-map (build-quick-pick-supplier-color-map
+                                              raw-quick-pick-groups
+                                              supplier-color-palette)
               quick-pick-groups (some-> raw-quick-pick-groups
-                                  (colorize-quick-pick-groups supplier-color-map))
+                                  (colorize-quick-pick-groups quick-pick-supplier-color-map))
               filtered-results (filterv
                                  (fn [r]
                                    (let [et (keyword (or (:entity-type r) (:entity_type r)))]
@@ -99,7 +105,7 @@
                 (for [{:keys [entity-type items]} quick-pick-groups]
                   ($ :div {:key (name entity-type)
                            :class "space-y-2"}
-                    ($ :p {:class "text-sm text-base-content/50"}
+                    ($ :p {:class "text-base text-base-content/50"}
                       (str (t :smart-expense/pick-prefix) (entity-type-label t entity-type)))
                     ($ quick-picks
                       {:entity-type entity-type
@@ -112,7 +118,7 @@
                          :id "smart-expense-context-input"
                          :type "text"
                          :auto-focus (not single-missing?)
-                         :class (str "w-full text-lg p-4 rounded-xl border-2 border-base-300 "
+                         :class (str "w-full text-xl p-4 rounded-xl border-2 border-base-300 "
                                   "focus:border-primary focus:outline-none focus:shadow-lg "
                                   "focus:shadow-primary/10 "
                                   "transition-all bg-white placeholder:text-base-content/30")
@@ -150,13 +156,13 @@
     ;; Pick Payer chips
     (when (and (str/blank? (str payer-id)) (seq payers))
       ($ :div {:class "space-y-2"}
-        ($ :p {:class "text-sm text-base-content/50"} (t :smart-expense/pick-payer))
+        ($ :p {:class "text-base text-base-content/50"} (t :smart-expense/pick-payer))
         ($ :div {:class "flex flex-wrap gap-2"}
           (for [p (take 5 payers)]
             ($ :button {:key (str "payer-" (:id p))
                         :type "button"
                         :class (str "inline-flex items-center gap-2 px-4 py-2.5 rounded-full "
-                                 "text-base font-medium border cursor-pointer "
+                                 "text-lg font-medium border cursor-pointer "
                                  "transition-all hover:shadow-md hover:scale-[1.02] "
                                  "bg-sky-50 hover:bg-sky-100 text-sky-800 border-sky-200")
                         :on-click (fn [e] (.preventDefault e) (.stopPropagation e)
@@ -168,9 +174,9 @@
     ($ :div {:class "grid grid-cols-1 sm:grid-cols-3 gap-4"}
       ;; Payer
       ($ :div
-        ($ :label {:class "text-base text-base-content/50 mb-1.5 block"} (t :smart-expense/payer-label))
+        ($ :label {:class "text-lg text-base-content/50 mb-1.5 block"} (t :smart-expense/payer-label))
         ($ :select {:id "smart-expense-payer"
-                    :class (str "w-full text-lg p-4 h-14 rounded-xl border-2 "
+                    :class (str "w-full text-xl p-4 h-14 rounded-xl border-2 "
                              "border-base-300 bg-white focus:border-primary cursor-pointer")
                     :value (or payer-id "")
                     :on-change (fn [e] (on-set-payer-id (.. e -target -value)))}
@@ -182,17 +188,17 @@
                   (str " (" pt ")")))))))
       ;; Date
       ($ :div
-        ($ :label {:class "text-base text-base-content/50 mb-1.5 block"} (t :smart-expense/date-label))
+        ($ :label {:class "text-lg text-base-content/50 mb-1.5 block"} (t :smart-expense/date-label))
         ($ :input {:id "smart-expense-date"
                    :type "datetime-local"
-                   :class (str "w-full text-lg p-4 h-14 rounded-xl border-2 "
+                   :class (str "w-full text-xl p-4 h-14 rounded-xl border-2 "
                             "border-base-300 bg-white focus:border-primary")
                    :value purchased-at
                    :on-change (fn [e] (on-set-purchased-at (.. e -target -value)))}))
       ;; Currency
       ($ :div
-        ($ :label {:class "text-base text-base-content/50 mb-1.5 block"} (t :smart-expense/currency-label))
-        ($ :select {:class (str "w-full text-lg p-4 h-14 rounded-xl border-2 border-base-300 "
+        ($ :label {:class "text-lg text-base-content/50 mb-1.5 block"} (t :smart-expense/currency-label))
+        ($ :select {:class (str "w-full text-xl p-4 h-14 rounded-xl border-2 border-base-300 "
                              "bg-white focus:border-primary cursor-pointer")
                     :value currency
                     :on-change (fn [e] (on-set-currency (.. e -target -value)))}
@@ -201,9 +207,9 @@
 
     ;; Notes
     ($ :div
-      ($ :label {:class "text-base text-base-content/50 mb-1.5 block"} (t :smart-expense/notes-label))
+      ($ :label {:class "text-lg text-base-content/50 mb-1.5 block"} (t :smart-expense/notes-label))
       ($ :textarea {:id "smart-expense-notes"
-                    :class (str "w-full text-lg p-4 rounded-xl border-2 "
+                    :class (str "w-full text-xl p-4 rounded-xl border-2 "
                              "border-base-300 bg-white focus:border-primary resize-none")
                     :rows 2
                     :placeholder (t :smart-expense/notes-ph)
@@ -215,12 +221,12 @@
       (when on-cancel
         ($ :button {:id "btn-cancel-smart-expense"
                     :type "button"
-                    :class "ds-btn ds-btn-lg text-lg"
+                    :class "ds-btn ds-btn-lg text-xl"
                     :disabled submitting?
                     :on-click (fn [e] (.preventDefault e) (on-cancel))}
           (t :smart-expense/cancel)))
       ($ :button {:id "btn-save-smart-expense"
                   :type "submit"
-                  :class "ds-btn ds-btn-primary ds-btn-lg text-lg px-10"
+                  :class "ds-btn ds-btn-primary ds-btn-lg text-xl px-10"
                   :disabled (or submitting? submit-disabled?)}
         (if submitting? (t :smart-expense/saving) (t :smart-expense/save))))))

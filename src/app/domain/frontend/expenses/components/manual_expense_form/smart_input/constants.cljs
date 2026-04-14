@@ -11,25 +11,39 @@
 ;; supplier chip with a lighter shade in the same hue for its store chips,
 ;; so the user can visually link a store to its supplier at a glance.
 ;;
+;; Two axes of distinction:
+;;   1. HUE — links a supplier to its own stores (same color family).
+;;      Early slots intentionally jump across warm / cool / neutral families
+;;      so the first visible suppliers do not collapse into lookalike greens.
+;;   2. BORDER TREATMENT — every slot uses the same calm solid 3px border,
+;;      which reads more cleanly than mixed dashed/dotted/double patterns
+;;      when the user is scanning many chips at once.
+;;   3. BORDER ACCENT — each supplier/store pair shares a contrasting border
+;;      hue (blue → indigo, rose → fuchsia, etc.), with suppliers using the
+;;      darker shade and their stores using a slightly lighter companion.
+;;
+;; `border-[3px]` keeps the outline visible without changing chip sizing,
+;; while still letting the border color do the differentiation work.
+;;
 ;; Tailwind only picks up class names that appear as literal strings in
 ;; source, so every variant is spelled out below — do not interpolate.
 (def supplier-color-palette
-  [{:supplier "bg-blue-200 text-blue-900 border-blue-400"
-    :store    "bg-blue-50 text-blue-800 border-blue-300"}
-   {:supplier "bg-emerald-200 text-emerald-900 border-emerald-400"
-    :store    "bg-emerald-50 text-emerald-800 border-emerald-300"}
-   {:supplier "bg-amber-200 text-amber-900 border-amber-400"
-    :store    "bg-amber-50 text-amber-800 border-amber-300"}
-   {:supplier "bg-rose-200 text-rose-900 border-rose-400"
-    :store    "bg-rose-50 text-rose-800 border-rose-300"}
-   {:supplier "bg-violet-200 text-violet-900 border-violet-400"
-    :store    "bg-violet-50 text-violet-800 border-violet-300"}
-   {:supplier "bg-cyan-200 text-cyan-900 border-cyan-400"
-    :store    "bg-cyan-50 text-cyan-800 border-cyan-300"}
-   {:supplier "bg-orange-200 text-orange-900 border-orange-400"
-    :store    "bg-orange-50 text-orange-800 border-orange-300"}
-   {:supplier "bg-teal-200 text-teal-900 border-teal-400"
-    :store    "bg-teal-50 text-teal-800 border-teal-300"}])
+  [{:supplier "bg-orange-200 text-orange-950 border-[3px] border-solid border-stone-700"
+    :store    "bg-orange-50 text-orange-900 border-[3px] border-solid border-stone-500"}
+   {:supplier "bg-blue-200 text-blue-900 border-[3px] border-solid border-indigo-700"
+    :store    "bg-blue-50 text-blue-800 border-[3px] border-solid border-indigo-500"}
+   {:supplier "bg-rose-200 text-rose-900 border-[3px] border-solid border-red-700"
+    :store    "bg-rose-50 text-rose-800 border-[3px] border-solid border-red-500"}
+   {:supplier "bg-amber-200 text-amber-900 border-[3px] border-solid border-orange-700"
+    :store    "bg-amber-50 text-amber-800 border-[3px] border-solid border-orange-500"}
+   {:supplier "bg-slate-200 text-slate-900 border-[3px] border-solid border-cyan-700"
+    :store    "bg-slate-50 text-slate-800 border-[3px] border-solid border-cyan-500"}
+   {:supplier "bg-cyan-200 text-cyan-900 border-[3px] border-solid border-sky-700"
+    :store    "bg-cyan-50 text-cyan-800 border-[3px] border-solid border-sky-500"}
+   {:supplier "bg-lime-200 text-lime-900 border-[3px] border-solid border-green-700"
+    :store    "bg-lime-50 text-lime-800 border-[3px] border-solid border-green-500"}
+   {:supplier "bg-violet-200 text-violet-900 border-[3px] border-solid border-purple-700"
+    :store    "bg-violet-50 text-violet-800 border-[3px] border-solid border-purple-500"}])
 
 (def type-button-styles
   {:supplier "bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200"

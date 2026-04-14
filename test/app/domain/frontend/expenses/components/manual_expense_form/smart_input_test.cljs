@@ -1,8 +1,10 @@
 (ns app.domain.frontend.expenses.components.manual-expense-form.smart-input-test
   (:require
     [app.domain.frontend.expenses.components.manual-expense-form.smart-input.components :as smart-input-components]
+    [app.domain.frontend.expenses.components.manual-expense-form.smart-input.constants :as smart-input-constants]
     [app.domain.frontend.expenses.components.manual-expense-form.smart-input.helpers :as smart-input]
-    [cljs.test :refer [deftest is testing]]))
+    [cljs.test :refer [deftest is testing]]
+    [clojure.string :as str]))
 
 (deftest focused-search-types-drop-selected-context-types
   (testing "selected context types are removed from the search focus, while article remains"
@@ -86,6 +88,43 @@
         (is (= [nil]
               (mapv :chip-class (get-in colorized [2 :items]))))))))
 
+(deftest visible-quick-pick-color-map-prioritizes-displayed-suppliers
+  (let [palette [{:supplier "supplier-a" :store "store-a"}
+                 {:supplier "supplier-b" :store "store-b"}
+                 {:supplier "supplier-c" :store "store-c"}]
+        groups [{:entity-type :supplier
+                 :items [{:id "sup-9" :label "Visible Nine"}
+                         {:id "sup-3" :label "Visible Three"}]}
+                {:entity-type :store
+                 :items [{:id "store-7" :label "Branch Seven" :entity {:supplier_id "sup-7"}}]}]
+        supplier-color-map (smart-input/build-quick-pick-supplier-color-map groups palette)
+        colorized (smart-input/colorize-quick-pick-groups groups supplier-color-map)]
+    (testing "displayed suppliers get the first distinct palette slots regardless of hidden global ordering"
+      (is (= {"sup-9" {:supplier "supplier-a" :store "store-a"}
+              "sup-3" {:supplier "supplier-b" :store "store-b"}
+              "sup-7" {:supplier "supplier-c" :store "store-c"}}
+            supplier-color-map)))
+    (testing "visible supplier and store chips receive the visible-order palette classes"
+      (is (= ["supplier-a" "supplier-b"]
+            (mapv :chip-class (get-in colorized [0 :items]))))
+      (is (= ["store-c"]
+            (mapv :chip-class (get-in colorized [1 :items])))))))
+
+(deftest default-category-chip-to-preselect-runs-only-while-enabled
+  (let [expense-categories [{:id "cat-1" :name "Kućanstvo" :is-default true}
+                            {:id "cat-2" :name "Hrana"}]]
+    (testing "returns a normalized default chip before the user interacts"
+      (is (= {:id "cat-1" :label "Kućanstvo"}
+            (smart-input/default-category-chip-to-preselect expense-categories {} true nil))))
+    (testing "does not re-preselect after the chip was manually dismissed"
+      (is (nil? (smart-input/default-category-chip-to-preselect expense-categories {} false nil))))
+    (testing "does not override an already selected category"
+      (is (nil? (smart-input/default-category-chip-to-preselect
+                  expense-categories
+                  {}
+                  true
+                  {:id "cat-2" :label "Hrana"}))))))
+
 (deftest build-quick-pick-groups-uses-top-10-for-single-missing-type
   (testing "a single remaining entity type shows up to 10 local candidates"
     (let [stores (mapv (fn [n]
@@ -149,8 +188,9 @@
                    nil)]
       (is (= [:supplier :category] (mapv :entity-type groups)))
       (is (= ["sup-9"] (mapv :id (get-in groups [0 :items]))))
-      (is (= 5 (count (get-in groups [1 :items]))))
-      (is (= ["cat-0" "cat-1" "cat-2" "cat-3" "cat-4"]
+      (is (= 7 (count (get-in groups [1 :items])))
+        "categories are not capped — all local categories appear")
+      (is (= ["cat-0" "cat-1" "cat-2" "cat-3" "cat-4" "cat-5" "cat-6"]
             (mapv :id (get-in groups [1 :items])))))))
 
 (deftest phase-two-quick-pick-groups-filters-store-suggestions-by-selected-supplier
@@ -233,3 +273,48 @@
         "history items appear at the head")
       (is (= ["local-0" "local-1" "local-2" "local-3" "local-4" "local-5"] (subvec ids 4 10))
         "remaining slots are filled from the supplier-scoped local pool"))))
+
+(deftest supplier-color-palette-shares-border-language-within-slot
+  (let [class-tokens (fn [klass]
+                       (str/split klass #" "))
+        border-style-token (fn [klass]
+                             (some #{"border-solid" "border-dashed" "border-dotted" "border-double"}
+                               (class-tokens klass)))
+        background-family (fn [klass]
+                            (some (fn [token]
+                                    (second (re-matches #"bg-([a-z]+)-\d+" token)))
+                              (class-tokens klass)))
+        border-family (fn [klass]
+                        (some (fn [token]
+                                (second (re-matches #"border-([a-z]+)-\d+" token)))
+                          (class-tokens klass)))
+        supplier-classes (mapv :supplier smart-input-constants/supplier-color-palette)
+        store-classes (mapv :store smart-input-constants/supplier-color-palette)]
+    (testing "every supplier/store slot uses a solid border"
+      (doseq [klass (concat supplier-classes store-classes)]
+        (is (= "border-solid" (border-style-token klass))
+          (str "expected a solid border in: " klass))))
+    (testing "supplier chips are visually unique from one another"
+      (is (= (count supplier-classes)
+            (count (distinct supplier-classes)))
+        "each supplier slot should have a unique full class signature")
+      (is (= (count supplier-classes)
+            (count (distinct (map background-family supplier-classes))))
+        "each supplier slot should have a unique background family")
+      (is (= (count supplier-classes)
+            (count (distinct (map border-family supplier-classes))))
+        "each supplier slot should have a unique border family"))
+    (testing "supplier and store chips share the same border hue family per slot"
+      (doseq [{:keys [supplier store]} smart-input-constants/supplier-color-palette]
+        (is (= (border-family supplier)
+              (border-family store))
+          (str "expected matching border hues for slot: " supplier " | " store))))
+    (testing "border accents intentionally differ from the fill hue"
+      (doseq [klass (concat supplier-classes store-classes)]
+        (is (some? (background-family klass))
+          (str "expected background class in: " klass))
+        (is (some? (border-family klass))
+          (str "expected border color class in: " klass))
+        (is (not= (background-family klass)
+              (border-family klass))
+          (str "expected contrasting border hue in: " klass))))))

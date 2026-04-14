@@ -115,8 +115,8 @@
     :smart-expense/start-with-prefix  "Počnite: "
     :smart-expense/or-connector       " ili "
     :smart-expense/frequently-together "Često dodavano zajedno"
-    :smart-expense/pick-prefix        "Odaberi "
-    :smart-expense/pick-payer         "Odaberi platitelja"
+    :smart-expense/pick-prefix        ""
+    :smart-expense/pick-payer         "Platitelj"
     :smart-expense/item-count         (fn [n] (str n (case n 1 " stavka" (2 3 4) " stavke" " stavki")))
     :smart-expense/hint-article-mode  "Pritisnite Enter na prazno za dodavanje dobavljača/trgovine/kategorije"
     :smart-expense/hint-has-items     "Pritisnite Enter na prazno za nastavak ili nastavite dodavati kontekst/stavke"
@@ -435,8 +435,8 @@
     :smart-expense/start-with-prefix  "Start with: "
     :smart-expense/or-connector       " or "
     :smart-expense/frequently-together "Frequently added together"
-    :smart-expense/pick-prefix        "Pick "
-    :smart-expense/pick-payer         "Pick Payer"
+    :smart-expense/pick-prefix        ""
+    :smart-expense/pick-payer         "Payer"
     :smart-expense/item-count         (fn [n] (str n " item" (when (not= n 1) "s")))
     :smart-expense/hint-article-mode  "Press Enter on empty to add supplier/store/category"
     :smart-expense/hint-has-items     "Press Enter on empty to continue or keep adding context/items"

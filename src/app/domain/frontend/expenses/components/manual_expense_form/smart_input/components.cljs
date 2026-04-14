@@ -221,10 +221,12 @@
                                     :category (:categories context-suggestions)
                                     [])]
                 (cond
-                  ;; Stores: merge history-ranked picks with the full
-                  ;; supplier-filtered pool. History rows appear first
-                  ;; (so the user sees frequent picks at a glance) and the
-                  ;; remaining supplier stores fill the rest of the slots.
+                  ;; Stores: when a supplier is selected, filter to
+                  ;; that supplier's branches. Otherwise show the top
+                  ;; stores from the full local pool (user history
+                  ;; order), independent of which supplier they belong
+                  ;; to — context suggestions seed extra picks but the
+                  ;; pool dominates.
                   (= entity-type :store)
                   (let [history-items (->> raw-suggested
                                         (filter store-matches-supplier?)
@@ -232,12 +234,35 @@
                         pool-items (->> stores
                                      (filter store-matches-supplier?)
                                      (mapv wrap-store))
-                        merged (->> (concat history-items pool-items)
+                        ;; No supplier selected → pool first (top-used
+                        ;; stores dominate); supplier selected → history
+                        ;; suggestions first, then remaining branches.
+                        ordered (if selected-supplier-id
+                                  (concat history-items pool-items)
+                                  (concat pool-items history-items))
+                        merged (->> ordered
                                  dedupe-by-id
                                  (take limit)
                                  vec)]
                     (when (seq merged)
                       {:entity-type :store :items merged}))
+
+                  ;; Categories: merge suggestions with full local pool
+                  ;; so the user always sees all available categories,
+                  ;; not just the context-suggested subset.
+                  (= entity-type :category)
+                  (let [wrap-cat (fn [c]
+                                   {:id (:id c)
+                                    :label (or (:label c) (:name c) "")
+                                    :entity-type :category
+                                    :entity c})
+                        history-items (mapv wrap-cat raw-suggested)
+                        pool-items (mapv wrap-cat expense-categories)
+                        merged (->> (concat history-items pool-items)
+                                 dedupe-by-id
+                                 vec)]
+                    (when (seq merged)
+                      {:entity-type :category :items merged}))
 
                   ;; Other types keep the existing precedence: history
                   ;; suggestions win when present, otherwise fall back

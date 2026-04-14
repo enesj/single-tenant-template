@@ -17,10 +17,10 @@
     [app.domain.frontend.expenses.components.manual-expense-form.smart-input.context-phase
      :refer [context-phase-view]]
     [app.domain.frontend.expenses.components.manual-expense-form.smart-input.helpers
-     :refer [build-supplier-color-map colorize-quick-pick-groups
+     :refer [build-quick-pick-supplier-color-map colorize-quick-pick-groups
              compute-items-total current-related-context
-             expense-category-default-id focused-search-types payer-default-id
-             prepare-submit-values validate-form]]
+             default-category-chip-to-preselect focused-search-types
+             payer-default-id prepare-submit-values validate-form]]
     [app.domain.frontend.expenses.components.manual-expense-form.smart-input.items-phase
      :refer [items-phase-view]]
     [app.domain.frontend.expenses.events.supplier-stores :as supplier-stores-events]
@@ -84,6 +84,7 @@
         [purchased-at set-purchased-at!] (use-state (current-datetime-local))
         [payer-id set-payer-id!] (use-state nil)
         [notes set-notes!] (use-state "")
+        [default-category-preselect-enabled? set-default-category-preselect-enabled!] (use-state true)
         [error set-error!] (use-state nil)
         [ready? set-ready!] (use-state false)
         currency-options (currency-ui/enabled-currency-options profile)
@@ -124,7 +125,6 @@
                          (search/merge-search-results local-search-results filtered-quick-search-results 10))
         selected-supplier-id (some-> context :supplier :id)
         selected-supplier-id-str (some-> selected-supplier-id str)
-        supplier-color-map (build-supplier-color-map suppliers supplier-color-palette)
         ;; Per-supplier full store pool — populated lazily by
         ;; ::supplier-stores-events/fetch-stores-for-supplier when a
         ;; supplier becomes selected (see use-effect below). The local
@@ -149,17 +149,21 @@
                            (or (get-in quick-add-related [:related :articles]) articles)
                            articles)
         ;; Co-occurring article suggestions (article-mode) or normal quick picks
-        focused-quick-pick-groups (some-> (when (and (str/blank? input-text)
-                                                  (not article-mode?)
-                                                  (< (count available-search-types) 4))
-                                            (build-quick-pick-groups
-                                              available-search-types
-                                              suppliers
-                                              related-stores
-                                              expense-categories
-                                              related-articles
-                                              selected-supplier-id))
-                                    (colorize-quick-pick-groups supplier-color-map))
+        raw-focused-quick-pick-groups (when (and (str/blank? input-text)
+                                              (not article-mode?)
+                                              (< (count available-search-types) 4))
+                                        (build-quick-pick-groups
+                                          available-search-types
+                                          suppliers
+                                          related-stores
+                                          expense-categories
+                                          related-articles
+                                          selected-supplier-id))
+        focused-quick-pick-supplier-color-map (build-quick-pick-supplier-color-map
+                                                raw-focused-quick-pick-groups
+                                                supplier-color-palette)
+        focused-quick-pick-groups (some-> raw-focused-quick-pick-groups
+                                    (colorize-quick-pick-groups focused-quick-pick-supplier-color-map))
         cooccurring-pick-items (when (and article-mode?
                                        (str/blank? input-text)
                                        (seq cooccurring-articles))
@@ -253,6 +257,8 @@
                                  supplier-chip (assoc :supplier supplier-chip))
 
                                (assoc c entity-type base-chip)))))
+                       (when (= entity-type :category)
+                         (set-default-category-preselect-enabled! false))
                        (set-input-text! "")
                        (set-dropdown-open! false)
                        (set-highlight-idx! -1)
@@ -261,6 +267,8 @@
                        (focus-input!))
 
         remove-context! (fn [entity-type]
+                          (when (= entity-type :category)
+                            (set-default-category-preselect-enabled! false))
                           (set-context!
                             (fn [c]
                               (let [c* (dissoc c entity-type)
@@ -456,25 +464,22 @@
         js/undefined)
       [payers payers-loading? ready?])
 
-    ;; Preselect the effective default expense category without overriding a manual choice.
+    ;; Preselect the effective default expense category once, without
+    ;; re-opening it after the user explicitly closes or replaces it.
     (use-effect
       (fn []
-        (let [default-category-id (some-> (expense-category-default-id expense-categories profile-settings)
-                                    str
-                                    str/trim
-                                    not-empty)]
-          (when (and default-category-id
-                  (nil? selected-category))
-            (when-let [default-category (some (fn [category]
-                                                (when (= default-category-id (some-> (:id category) str))
-                                                  category))
-                                          expense-categories)]
-              (set-context! (fn [current-context]
-                              (if (:category current-context)
-                                current-context
-                                (assoc current-context :category default-category)))))))
+        (when-let [default-category-chip (default-category-chip-to-preselect
+                                           expense-categories
+                                           profile-settings
+                                           default-category-preselect-enabled?
+                                           selected-category)]
+          (set-context! (fn [current-context]
+                          (if (:category current-context)
+                            current-context
+                            (assoc current-context :category default-category-chip))))
+          (set-default-category-preselect-enabled! false))
         js/undefined)
-      [selected-category expense-categories profile-settings])
+      [selected-category expense-categories profile-settings default-category-preselect-enabled?])
 
     ;; Load related records for focused quick picks when context narrows the search.
     (use-effect
@@ -592,7 +597,6 @@
              :submitting? submitting?
              :on-submit on-submit
              :on-cancel on-cancel
-             :supplier-color-map supplier-color-map
              :suppliers suppliers
              :stores phase-two-stores
              :expense-categories expense-categories

@@ -17,6 +17,24 @@
             (:id category)))
     (or expense-categories [])))
 
+(defn default-category-chip-to-preselect
+  "Return the normalized default category chip to auto-preselect, or nil
+   when auto-preselection is disabled, a category is already selected, or
+   no default category exists."
+  [expense-categories profile-settings default-category-preselect-enabled? selected-category]
+  (let [default-category-id (some-> (expense-category-default-id expense-categories profile-settings)
+                              str
+                              str/trim
+                              not-empty)]
+    (when (and default-category-preselect-enabled?
+            (nil? selected-category)
+            default-category-id)
+      (some (fn [category]
+              (when (= default-category-id (some-> (:id category) str))
+                {:id (:id category)
+                 :label (or (:name category) "")}))
+        expense-categories))))
+
 (defn compute-items-total
   "Sum line totals for all items."
   [items]
@@ -144,6 +162,30 @@
     (get-in item [:entity :supplier_id])
     (:supplier-id item)
     (:supplier_id item)))
+
+(defn build-quick-pick-supplier-color-map
+  "Build `{supplier-id-string → palette-slot}` from the suppliers that are
+   actually visible in the current quick-pick groups. This keeps the
+   displayed supplier chips distinct even when the full supplier list is
+   longer than the palette and would otherwise wrap back onto the same
+   colors."
+  [groups palette]
+  (let [n (count palette)
+        supplier-ids (->> groups
+                       (mapcat (fn [{:keys [entity-type items]}]
+                                 (keep (fn [item]
+                                         (case entity-type
+                                           :supplier (some-> (:id item) str)
+                                           :store (some-> (store-supplier-id item) str)
+                                           nil))
+                                   items)))
+                       distinct)]
+    (if (or (zero? n) (empty? supplier-ids))
+      {}
+      (->> supplier-ids
+        (map-indexed (fn [i supplier-id]
+                       [supplier-id (nth palette (mod i n))]))
+        (into {})))))
 
 (defn colorize-quick-pick-groups
   "Inject a per-item `:chip-class` so supplier rows and the store rows
