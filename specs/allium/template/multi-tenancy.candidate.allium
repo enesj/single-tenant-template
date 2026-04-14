@@ -176,14 +176,21 @@ rule SeedTenantLookupData {
         for pt in default_payer_types:
             PayerType.created(tenant: tenant, name: pt.name)
         for ec in default_expense_categories:
-            ExpenseCategory.created(tenant: tenant, name: ec.name)
+            ExpenseCategory.created(
+                tenant: tenant,
+                name: ec.name,
+                is_default: ec.is_default
+            )
         TenantLookupDataSeeded(tenant: tenant)
 
-    guidance:
-        default_payer_types and default_expense_categories are seed templates
-        maintained by the platform. Example payer types: "Cash", "Credit Card",
-        "Debit Card", "Bank Transfer". Example categories: "Groceries", "Transport",
-        "Utilities", "Dining", "Healthcare".
+    @guidance
+        -- default_payer_types and default_expense_categories are seed templates
+        -- maintained by the platform. Example payer types: "Cash", "Credit Card",
+        -- "Debit Card", "Bank Transfer". Example categories: "Groceries", "Transport",
+        -- "Utilities", "Dining", "Healthcare".
+        -- Exactly one default_expense_categories template must have
+        -- is_default = true so every new tenant starts with a default
+        -- expense category immediately.
 }
 
 -- Chain from TenantProvisioned so session context is set AFTER the

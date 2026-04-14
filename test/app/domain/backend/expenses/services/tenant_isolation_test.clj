@@ -14,8 +14,7 @@
     [app.domain.backend.expenses.services.user-expense-settings :as settings]
     [app.domain.backend.expenses.services.user-expenses :as user-expenses]
     [app.domain.expenses.test-helpers :as th]
-    [clojure.test :refer [deftest is testing use-fixtures]]
-    [next.jdbc :as jdbc])
+    [clojure.test :refer [deftest is testing use-fixtures]])
   (:import
     [java.util UUID]))
 
@@ -118,20 +117,19 @@
           user-b (th/ensure-test-user! db {:email "settings-owner-b@shared.com"})
           {:keys [tenant-id] :as _tb} (th/ensure-test-tenant! db user-b)
           tenant-b-id tenant-id
-          category-id (UUID/randomUUID)
-          _ (jdbc/execute-one!
-              db
-              ["insert into expense_categories (id, tenant_id, name, created_at, updated_at) values (?, ?, ?, now(), now())"
-               category-id tenant-a-id (str "Tenant A category " category-id)])
+          payer-a (th/create-payer! db {:type "cash"
+                                        :label (str "Tenant A payer " (UUID/randomUUID))
+                                        :is_default false
+                                        :tenant_id tenant-a-id})
           ;; Save settings in tenant A
-          _saved (settings/update-user-default-category! db tenant-a-id user-id category-id)
+          _saved (settings/update-user-defaults! db tenant-a-id user-id {:default-payer-id (:id payer-a)})
           ;; Read settings from each tenant
           settings-a (settings/get-user-expense-settings db tenant-a-id user-id)
           settings-b (settings/get-user-expense-settings db tenant-b-id user-id)]
       (is (some? settings-a)
         "Settings should exist for user in tenant A")
-      (is (= category-id (:default-expense-category-id settings-a))
-        "Tenant A settings should keep its own default expense category")
+      (is (= (:id payer-a) (:default-payer-id settings-a))
+        "Tenant A settings should keep its own default payer")
       (is (nil? settings-b)
         "Tenant B should have no settings for this user"))))
 

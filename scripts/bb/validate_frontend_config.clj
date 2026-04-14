@@ -80,7 +80,7 @@
     (when (empty? bundles)
       (die! "No frontend config bundles found"))
     (let [bundles* (discovery/load-bundles bundles)
-          allowlist (when allowlist-path (discovery/read-edn-file allowlist-path))
+          allowlist (schema/load-allowlist allowlist-path)
           results (validation/validate-bundles bundles* schema-index allowlist)
           _ (doseq [res results]
               (print-result! (assoc res :label (result-label res))))

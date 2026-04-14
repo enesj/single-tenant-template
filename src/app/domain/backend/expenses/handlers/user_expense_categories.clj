@@ -144,6 +144,10 @@
             (try
               (let [body (h/read-body-params request)
                     tenant-id (h/get-tenant-id request)
+                    existing (some-> ((:get expense-categories/service) db expense-category-id
+                                      (cond-> {}
+                                        tenant-id (assoc :tenant-id tenant-id)))
+                               h/to-app)
                     ;; Accept both snake_case (external JSON) and app-style
                     ;; kebab-case (internal callers / dynamic forms). A missing
                     ;; key must not clobber an existing value.
@@ -158,7 +162,20 @@
                                                                              tenant-id (assoc :tenant-id tenant-id)))
                               h/to-app)]
                 (if updated
-                  (h/json-response {:data updated})
+                  (do
+                    (when (and (= "owner" (h/get-user-role request))
+                            (true? (:is-default existing))
+                            (not= (some-> (:name existing) str str/trim)
+                              (some-> (:name updated) str str/trim)))
+                      (try
+                        (let [complete-step! (requiring-resolve
+                                               'app.template.backend.services.onboarding.core/try-complete-step!)]
+                          (complete-step! db (h/get-user-id request) "owner" "rename_default_category"))
+                        (catch Exception e
+                          (log/debug "Onboarding rename_default_category completion skipped"
+                            {:expense-category-id (str expense-category-id)
+                             :error (.getMessage e)}))))
+                    (h/json-response {:data updated}))
                   (h/not-found-response "Expense category not found")))
               (catch clojure.lang.ExceptionInfo e
                 (log/warn "Validation error updating expense category" {:error (ex-message e)
@@ -200,6 +217,9 @@
                     delete-opts (cond-> {}
                                   tenant-id (assoc :tenant-id tenant-id))]
                 (h/json-response {:data (h/batch-delete-entities #(delete! db % delete-opts) ids)}))))
+          (catch clojure.lang.ExceptionInfo e
+            (let [status (or (:status (ex-data e)) 400)]
+              (h/json-response {:error (ex-message e)} status)))
           (catch Exception e
             (log/error e "Failed to batch delete expense categories" {:message (.getMessage e)})
             (h/json-response {:error "Failed to delete expense categories"} 500)))))))

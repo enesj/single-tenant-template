@@ -38,8 +38,8 @@
 ;; ---------------------------------------------------------------------------
 
 (deftest steps-for-role-test
-  (testing "owner gets 7 steps"
-    (is (= 7 (count (cfg/steps-for-role "owner")))))
+  (testing "owner gets 8 steps"
+    (is (= 8 (count (cfg/steps-for-role "owner")))))
 
   (testing "admin gets 3 steps"
     (is (= 3 (count (cfg/steps-for-role "admin")))))
@@ -74,7 +74,7 @@
       (is (= :created (onboarding/initialise-onboarding! db uid "owner")))
       (let [progress (onboarding/get-progress db uid "owner")]
         (is (some? progress))
-        (is (= 7 (count (:steps progress))))
+        (is (= 8 (count (:steps progress))))
         (is (every? #(= "pending" (:status %)) (:steps progress)))
         (is (false? (:dismissed progress)))))
 
@@ -145,7 +145,7 @@
 
     (testing "skips all remaining pending steps"
       (let [skipped-count (onboarding/skip-all-pending! db uid "owner")]
-        (is (= 6 skipped-count) "should skip 6 out of 7 (1 already completed)")))
+        (is (= 7 skipped-count) "should skip 7 out of 8 (1 already completed)")))
 
     (testing "no pending steps remain"
       (let [progress (onboarding/get-progress db uid "owner")]
@@ -187,7 +187,7 @@
         (is (:active? summary))
         (is (true? (:redirect-to-onboarding? summary)))
         (is (= 0 (:completed summary)))
-        (is (= 7 (:total summary)))
+        (is (= 8 (:total summary)))
         (is (false? (:dismissed summary)))))
 
     (testing "after one step: still active, redirect false"

@@ -33,6 +33,7 @@
     {:choices
      ["name_workspace"
       "setup_profile"
+      "rename_default_category"
       "configure_categories"
       "review_payer_types"
       "invite_members"
@@ -549,9 +550,6 @@
    [:default_payer_id
     :uuid
     {:foreign-key :payers/id, :on-delete :set-null}]
-   [:default_expense_category_id
-    :uuid
-    {:foreign-key :expense_categories/id, :on-delete :set-null}]
    [:receipt_ocr_provider :text {:null false, :default "mistral"}]
    [:created_at :timestamptz {:default [:now]}]
    [:updated_at :timestamptz {:default [:now]}]],

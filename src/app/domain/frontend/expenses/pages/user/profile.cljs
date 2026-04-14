@@ -23,14 +23,6 @@
     (when hint
       ($ :span {:class "text-xs text-base-content/60"} hint))))
 
-(defn- lookup-label [items id fallback]
-  (or
-    (some (fn [item]
-            (when (= (str (:id item)) (str id))
-              (or (:label item) (:name item))))
-      items)
-    fallback))
-
 (defui profile-page []
   (let [t (use-t)
         user (use-subscribe [:current-user])
@@ -45,35 +37,30 @@
         export-loading? (boolean (use-subscribe [:profile/export-loading?]))
         delete-loading? (boolean (use-subscribe [:profile/delete-loading?]))
         error (use-subscribe [:profile/error])
-        categories (or (use-subscribe [:user-expenses/expense-categories]) [])
         payers (or (use-subscribe [:user-expenses/payers]) [])
         profile-user (merge user (:user profile))
         settings (or (:settings profile) {})
         tenant-settings (:tenant-settings profile)
         default-payer-id (some-> (:default-payer-id settings) str)
-        current-category-id (some-> (:default-expense-category-id settings) str)
         current-workspace-name (or (:name tenant) (:tenants/name tenant) "")
         current-email-notifications (if (contains? (or tenant-settings {}) :email-notifications)
                                       (boolean (:email-notifications tenant-settings))
                                       true)
         [selected-payer-id set-selected-payer-id!] (use-state default-payer-id)
-        [default-category-id set-default-category-id!] (use-state current-category-id)
         [workspace-name set-workspace-name!] (use-state current-workspace-name)
         [email-notifications set-email-notifications!] (use-state current-email-notifications)
         [delete-confirmation set-delete-confirmation!] (use-state "")
-        defaults-dirty? (or (not= (or default-category-id "") (or current-category-id ""))
-                          (not= (or selected-payer-id "") (or default-payer-id "")))
+        defaults-dirty? (not= (or selected-payer-id "") (or default-payer-id ""))
         workspace-dirty? (not= (str/trim (or workspace-name ""))
                            (str/trim (or current-workspace-name "")))
         notifications-dirty? (not= email-notifications current-email-notifications)]
     (use-effect
       (fn []
         (set-selected-payer-id! default-payer-id)
-        (set-default-category-id! current-category-id)
         (set-workspace-name! current-workspace-name)
         (set-email-notifications! current-email-notifications)
         js/undefined)
-      [default-payer-id current-category-id current-workspace-name current-email-notifications])
+      [default-payer-id current-workspace-name current-email-notifications])
 
     ($ :div {:class "min-h-screen bg-base-100"}
       ($ :header {:class "bg-white border-b border-base-200"}
@@ -130,30 +117,13 @@
                       (or (:label payer) (:name payer)))))
                 ($ :p {:class "text-xs text-base-content/60 mt-2"}
                   (t :profile/default-payer-desc)))
-              ($ :div {:class "py-3"}
-                ($ :label {:class "block text-xs uppercase tracking-wide text-base-content/50 mb-2"
-                           :for "profile-default-category-select"}
-                  (t :profile/default-category-label))
-                ($ :select {:id "profile-default-category-select"
-                            :class "ds-select ds-select-bordered w-full max-w-xl"
-                            :value (or default-category-id "")
-                            :disabled (or loading? (not can-write?))
-                            :on-change #(let [value (.. % -target -value)]
-                                          (set-default-category-id! (when (seq value) value)))}
-                  ($ :option {:value ""} (t :profile/category-none))
-                  (for [category categories]
-                    ($ :option {:key (:id category) :value (:id category)}
-                      (:name category))))
-                ($ :p {:class "text-xs text-base-content/60 mt-2"}
-                  (t :profile/default-category-desc)))
               ($ :div {:class "flex justify-end pt-2"}
                 ($ button {:id "btn-profile-save-defaults"
                            :btn-type :primary
                            :loading saving?
                            :disabled (or (not can-write?) (not defaults-dirty?))
                            :on-click #(rf/dispatch [:profile/update-defaults
-                                                    {:default-expense-category-id default-category-id
-                                                     :default-payer-id selected-payer-id}])}
+                                                    {:default-payer-id selected-payer-id}])}
                   (t :profile/save-defaults))))
 
             (when power-user?

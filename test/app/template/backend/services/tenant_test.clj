@@ -86,10 +86,11 @@
 (deftest provision-tenant-test
   (let [db   fixtures/*test-db*
         user (create-test-user! db)
-        config {:tenant-defaults {:payer-types [{:label "Cash" :is-default true}
-                                                {:label "Card" :is-default false}]
-                                  :expense-categories [{:name "Groceries"}
-                                                       {:name "Transport"}]}}
+  config {:default-locale :en
+    :tenant-defaults {:payer-types [{:label "Cash" :is-default true}
+            {:label "Card" :is-default false}]
+          :expense-categories [{:name "Groceries"}
+                   {:name "Transport"}]}}
         result (tenant-svc/provision-tenant! db config user)]
 
     (testing "creates a tenant"
@@ -123,7 +124,50 @@
                    (sql/format {:select [:*]
                                 :from [:expense_categories]
                                 :where [:= :tenant_id tenant-id]}))]
-        (is (= 2 (count cats)))))))
+        (is (= 3 (count cats))))
+      (let [tenant-id (or (:id (:tenant result)) (:tenants/id (:tenant result)))
+            cats (jdbc/execute! db
+                   (sql/format {:select [:name :is_default]
+                                :from [:expense_categories]
+                                :where [:= :tenant_id tenant-id]
+                                :order-by [[:created_at :asc]]}))
+            default-cats (filter :expense_categories/is_default cats)]
+        (is (= 1 (count default-cats))))
+      (let [tenant-id (or (:id (:tenant result)) (:tenants/id (:tenant result)))
+            cats (jdbc/execute! db
+                   (sql/format {:select [:name :is_default]
+                                :from [:expense_categories]
+                                :where [:= :tenant_id tenant-id]
+                                :order-by [[:created_at :asc]]}))]
+        (is (= "Default" (:expense_categories/name (first cats))))
+        (is (true? (:expense_categories/is_default (first cats))))))))
+
+(deftest provision-tenant-seeds-default-category-when-config-empty
+  (let [db fixtures/*test-db*
+        user (create-test-user! db)
+        config {:default-locale :en
+                :tenant-defaults {:payer-types []
+                                  :expense-categories []}}
+        result (tenant-svc/provision-tenant! db config user)
+        tenant-id (or (:id (:tenant result)) (:tenants/id (:tenant result)))
+        cats (jdbc/execute! db
+               (sql/format {:select [:name :is_default]
+                            :from [:expense_categories]
+                            :where [:= :tenant_id tenant-id]}))]
+    (is (= 1 (count cats))))
+  (let [db fixtures/*test-db*
+        user (create-test-user! db)
+        config {:default-locale :en
+                :tenant-defaults {:payer-types []
+                                  :expense-categories []}}
+        result (tenant-svc/provision-tenant! db config user)
+        tenant-id (or (:id (:tenant result)) (:tenants/id (:tenant result)))
+        cat (first (jdbc/execute! db
+                     (sql/format {:select [:name :is_default]
+                                  :from [:expense_categories]
+                                  :where [:= :tenant_id tenant-id]})))]
+    (is (= "Default" (:expense_categories/name cat)))
+    (is (true? (:expense_categories/is_default cat)))))
 
 ;; ============================================================================
 ;; Membership Queries

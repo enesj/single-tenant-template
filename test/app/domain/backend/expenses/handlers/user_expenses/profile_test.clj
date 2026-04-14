@@ -8,8 +8,7 @@
     [app.domain.expenses.test-helpers :as th]
     [cheshire.core :as json]
     [clojure.test :refer [deftest is use-fixtures]]
-    [next.jdbc :as jdbc]
-    [next.jdbc.result-set :as rs])
+    )
   (:import
     [java.util UUID]))
 
@@ -23,14 +22,6 @@
     {:user user
      :user-id (:id user)
      :tenant-id tenant-id}))
-
-(defn- create-category!
-  [db tenant-id name]
-  (jdbc/execute-one!
-    db
-    ["insert into expense_categories (id, tenant_id, name, created_at, updated_at) values (?, ?, ?, now(), now()) returning *"
-     (UUID/randomUUID) tenant-id name]
-    {:builder-fn rs/as-unqualified-lower-maps}))
 
 (defn- req
   [{:keys [user tenant-id role body-params]}]
@@ -48,14 +39,12 @@
 (deftest get-profile-owner-includes-tenant-settings-and-effective-settings
   (when-let [db fixtures/*test-db*]
     (let [{:keys [user user-id tenant-id]} (create-test-context! db)
-          category (create-category! db tenant-id "Travel")
-          category-id (:id category)
+          persisted (user-settings/get-user-expense-settings db tenant-id user-id)
           _ (global-settings/update-global-settings! db {:default-currency "EUR"
                                                          :default-note "Team default note"
                                                          :auto-publish-after-upload true
                                                          :ai-receipt-enhancement true})
           _ (tenant-settings/update-tenant-settings! db tenant-id {:email-notifications false})
-          _ (user-settings/update-user-default-category! db tenant-id user-id category-id)
           handler (profile/get-profile-handler db)
           response (handler (req {:user user :tenant-id tenant-id :role "owner"}))
           body (parse-body response)
@@ -66,7 +55,8 @@
       (is (= "Team default note" (get-in data [:settings :default-note])))
       (is (= true (get-in data [:settings :auto-publish-after-upload])))
       (is (= true (get-in data [:settings :ai-receipt-enhancement])))
-      (is (= (str category-id) (str (get-in data [:settings :default-expense-category-id]))))
+      (is (= (str (:default-payer-id persisted)) (str (get-in data [:settings :default-payer-id]))))
+      (is (nil? (get-in data [:settings :default-expense-category-id])))
       (is (= false (get-in data [:tenant-settings :email-notifications])))
       (is (seq (:enabled-currencies data))))))
 
@@ -82,29 +72,32 @@
 (deftest update-profile-defaults-validates-and-persists
   (when-let [db fixtures/*test-db*]
     (let [{:keys [user user-id tenant-id]} (create-test-context! db)
-          category (create-category! db tenant-id "Office")
-          category-id (:id category)
+          payer (th/create-payer! db {:type "cash"
+                                      :label "Office payer"
+                                      :is_default false
+                                      :tenant_id tenant-id})
+          payer-id (:id payer)
           handler (profile/update-profile-defaults-handler db)
           invalid-response (handler (req {:user user
                                           :tenant-id tenant-id
                                           :role "member"
-                                          :body-params {:default-expense-category-id "not-a-uuid"}}))
+                                          :body-params {:default-payer-id "not-a-uuid"}}))
           valid-response (handler (req {:user user
                                         :tenant-id tenant-id
                                         :role "member"
-                                        :body-params {:default-expense-category-id (str category-id)}}))
+                                        :body-params {:default-payer-id (str payer-id)}}))
           cleared-response (handler (req {:user user
                                           :tenant-id tenant-id
                                           :role "member"
-                                          :body-params {:default-expense-category-id ""}}))
+                                          :body-params {:default-payer-id ""}}))
           invalid-body (parse-body invalid-response)
           valid-body (parse-body valid-response)
           cleared-body (parse-body cleared-response)
           persisted (user-settings/get-user-expense-settings db tenant-id user-id)]
       (is (= 400 (:status invalid-response)))
-      (is (= "default-expense-category-id must be a UUID or blank to clear" (:error invalid-body)))
+      (is (= "default-payer-id must be a UUID or blank to clear" (:error invalid-body)))
       (is (= 200 (:status valid-response)))
-      (is (= (str category-id) (str (get-in valid-body [:data :default-expense-category-id]))))
+      (is (= (str payer-id) (str (get-in valid-body [:data :default-payer-id]))))
       (is (= 200 (:status cleared-response)))
-      (is (nil? (get-in cleared-body [:data :default-expense-category-id])))
-      (is (nil? (:default-expense-category-id persisted))))))
+      (is (nil? (get-in cleared-body [:data :default-payer-id])))
+      (is (nil? (:default-payer-id persisted))))))

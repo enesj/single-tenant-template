@@ -101,6 +101,25 @@
      {:entities (set (map discovery/normalize-entity-id entities))
       :entity->fields entity->fields})))
 
+(def ^:private default-allowlist-path
+  "config/frontend-config-allowlist.edn")
+
+(defn load-allowlist
+  "Read an allowlist EDN file.
+
+  When `path` is nil, fall back to the repository default allowlist file if it
+  exists. Returns nil when no allowlist file is available."
+  ([] (load-allowlist nil))
+  ([path]
+   (cond
+     path
+     (discovery/read-edn-file path)
+
+     :else
+     (let [f (io/file default-allowlist-path)]
+       (when (.exists f)
+         (discovery/read-edn-file default-allowlist-path))))))
+
 (defn- normalize-allowlist-fields
   [fields]
   (->> fields
@@ -140,6 +159,16 @@
 
     :else
     (throw (ex-info "Allowlist must be a map or set" {:type (type allowlist)}))))
+
+(defn known-entity?
+  "Return true when `entity` is known either from the DB schema or the allowlist.
+
+  Allowlist-backed entities support frontend-only synthetic views that do not
+  map 1:1 to DB tables but still need schema-alignment validation."
+  [schema-index allowlist entity]
+  (let [entity* (discovery/normalize-entity-id entity)]
+    (or (contains? (:entities schema-index) entity*)
+      (contains? allowlist entity*))))
 
 (defn allowed-fields
   [{:keys [schema-index entity computed allowlist include-computed?]}]

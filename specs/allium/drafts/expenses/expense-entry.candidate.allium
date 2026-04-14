@@ -24,7 +24,8 @@
 --   - Currency management & exchange rate fetching (settings-hierarchy.candidate.allium)
 -- Dependencies:
 --   - settings-hierarchy.candidate.allium: GlobalSettings, EnabledCurrency, DailyExchangeRate
---   - payer-and-defaults.candidate.allium: UserExpenseDefaults (default_payer, default_expense_category)
+--   - payer-and-defaults.candidate.allium: UserExpenseDefaults.default_payer,
+--     tenant ExpenseCategory.is_default
 -- Note: No dedicated /expenses/new page — entry flow is a modal.
 --       A single Smart Input form serves both dashboard and list page.
 -- Supersedes:
@@ -760,13 +761,19 @@ surface SmartExpenseForm {
     @guarantee DefaultSelections
         -- Opening the form pre-selects:
         --   payer: from UserExpenseDefaults.default_payer (per-user, sticky)
-        --   expense_category: from UserExpenseDefaults.default_expense_category (per-user)
+        --   expense_category: from tenant ExpenseCategory where is_default = true
         --   notes: from GlobalSettings.default_note (global, admin-set)
         --   currency: from GlobalSettings.default_currency (global, admin-set)
         --   purchased_at: today
+        -- Expense category prefill is always non-null because tenant
+        -- provisioning seeds exactly one default expense category.
         -- Payer selection list shows only active payers (is_active = true).
         -- Currency dropdown shows all EnabledCurrency entries.
         -- (see payer-and-defaults.candidate.allium, settings-hierarchy.candidate.allium)
+
+    @guarantee CategoryFallbackAppliedAtSubmit
+        -- If SubmitSmartExpense reaches the backend without an expense category,
+        -- expense creation resolves the category using the tenant default.
 
     -- Search
     @guarantee SearchDebouncing

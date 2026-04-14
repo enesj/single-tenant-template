@@ -206,7 +206,7 @@
            [:created_at :timestamptz {:default [:now]}]
            [:updated_at :timestamptz {:default [:now]}]]
   :types [[:onboarding-step-kind :enum
-           {:choices ["name_workspace" "setup_profile" "configure_categories"
+           {:choices ["name_workspace" "setup_profile" "rename_default_category" "configure_categories"
                       "review_payer_types" "invite_members" "management_intro"
                       "upload_first_receipt" "browse_intro"]}]
           [:onboarding-step-status :enum

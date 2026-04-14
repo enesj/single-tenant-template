@@ -453,10 +453,17 @@ surface ReceiptUploadBoundary {
 
     @guarantee DefaultsPreFilled
         -- payer: pre-filled from UserExpenseDefaults.default_payer (per-user, sticky)
-        -- expense_category_id: from UserExpenseDefaults.default_expense_category (per-user)
+        -- expense_category_id: from tenant ExpenseCategory where is_default = true
         -- notes: from GlobalSettings.default_note (global, admin-set)
         -- The user may change any of these before submitting.
+        -- The resolution is always non-null because tenant provisioning
+        -- seeds exactly one default expense category.
         -- See payer-and-defaults.candidate.allium, settings-hierarchy.candidate.allium.
+
+    @guarantee MissingCategoryFallsBackToEffectiveDefault
+        -- If UploadReceipt is submitted without expense_category_id,
+        -- the created Receipt stores the same effective default used by
+        -- the prefill.
 }
 
 surface UserReceiptOperations {
@@ -485,6 +492,12 @@ surface UserReceiptOperations {
             when receipt.status in {extracted, review_required}
         DeleteReceipt(actor, receipt)
             when receipt.status != posted
+
+    @guarantee ApproveWithoutCategoryUsesEffectiveDefault
+        -- If ApproveReceipt is submitted without expense_category_id,
+        -- the created Expense resolves it to the tenant default category.
+        -- The resolution is always non-null because tenant provisioning
+        -- seeds exactly one default expense category.
 
     @guarantee CurrencyNotEditable
         -- Currency is not shown as an editable field in the receipt review/approval UI.

@@ -64,7 +64,7 @@
                                             :computed computed
                                             :allowlist allowlist
                                             :include-computed? true})]
-        (if-not (contains? (:entities schema-index) entity*)
+        (if-not (schema/known-entity? schema-index allowlist entity*)
           (update acc :unknown-entities conj entity)
           (let [unknown (into {}
                           (for [k table-columns-list-keys
@@ -107,7 +107,7 @@
                                             :computed {}
                                             :allowlist allowlist
                                             :include-computed? false})]
-        (if-not (contains? (:entities schema-index) entity*)
+        (if-not (schema/known-entity? schema-index allowlist entity*)
           (update acc :unknown-entities conj entity)
           (let [unknown (into {}
                           (for [k form-fields-list-keys
@@ -141,7 +141,7 @@
                                             :computed computed
                                             :allowlist allowlist
                                             :include-computed? true})]
-        (if-not (contains? (:entities schema-index) entity*)
+        (if-not (schema/known-entity? schema-index allowlist entity*)
           (update acc :unknown-entities conj entity)
           (let [unknown-defaults (unknown-values (keys (:column-defaults cfg)) allowed)
                 unknown-locks (unknown-values (keys (:column-locks cfg)) allowed)
@@ -158,10 +158,9 @@
     data))
 
 (defn- semantic-issues-entities
-  [data schema-index]
+  [data schema-index allowlist]
   (let [unknown (->> (keys data)
-                  (remove #(contains? (:entities schema-index)
-                             (discovery/normalize-entity-id %)))
+                  (remove #(schema/known-entity? schema-index allowlist %))
                   vec)]
     {:unknown-entities unknown
      :unknown-fields {}
@@ -189,7 +188,7 @@
                 :let [spec-result (spec-validate kind (:scope bundle) value)
                       semantic (if (:valid? spec-result)
                                  (case kind
-                                   :entities (semantic-issues-entities value schema-index)
+                       :entities (semantic-issues-entities value schema-index allowlist)
                                    :form-fields (semantic-issues-form-fields value schema-index allowlist)
                                    :table-columns (semantic-issues-table-columns value schema-index computed allowlist)
                                    :view-options (semantic-issues-view-options value schema-index computed allowlist)

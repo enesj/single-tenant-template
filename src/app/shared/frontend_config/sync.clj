@@ -70,7 +70,7 @@
                                             :computed computed
                                             :allowlist allowlist
                                             :include-computed? true})]
-        (if-not (contains? (:entities schema-index) entity*)
+        (if-not (schema/known-entity? schema-index allowlist entity*)
           (update acc :unknown-entities conj entity)
           (let [style (infer-id-style (mapcat #(get cfg % []) table-columns-list-keys))
                 removed (into {}
@@ -162,7 +162,7 @@
                                             :computed {}
                                             :allowlist allowlist
                                             :include-computed? false})]
-        (if-not (contains? (:entities schema-index) entity*)
+        (if-not (schema/known-entity? schema-index allowlist entity*)
           (update acc :unknown-entities conj entity)
           (let [removed (into {}
                           (for [k form-fields-list-keys
@@ -231,7 +231,7 @@
                                             :computed computed
                                             :allowlist allowlist
                                             :include-computed? true})]
-        (if-not (contains? (:entities schema-index) entity*)
+        (if-not (schema/known-entity? schema-index allowlist entity*)
           (update acc :unknown-entities conj entity)
           (let [unknown-defaults (unknown-values (keys (:column-defaults cfg)) allowed)
                 unknown-locks (unknown-values (keys (:column-locks cfg)) allowed)
@@ -261,10 +261,9 @@
     data))
 
 (defn- plan-entities
-  [data schema-index]
+  [data schema-index allowlist]
   (let [removed-entities (->> (keys data)
-                           (remove #(contains? (:entities schema-index)
-                                      (discovery/normalize-entity-id %)))
+                           (remove #(schema/known-entity? schema-index allowlist %))
                            vec)
         summary (into {}
                   (map (fn [entity]
@@ -285,7 +284,7 @@
               computed (validation/computed-fields-by-entity (:table-columns data))]
           (for [[kind value] data
                 :let [plan (case kind
-                             :entities (plan-entities value schema-index)
+                     :entities (plan-entities value schema-index allowlist)
                              :table-columns (plan-table-columns value schema-index computed allowlist)
                              :form-fields (plan-form-fields value schema-index allowlist)
                              :view-options (plan-view-options value schema-index computed allowlist)

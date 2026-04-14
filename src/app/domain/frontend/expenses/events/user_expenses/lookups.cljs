@@ -206,19 +206,14 @@
 
 (defn- ^:private default-expense-category-id
   [db]
-  (let [settings-id (some-> (get-in db [:user-expenses :settings :data :default-expense-category-id])
-                      str
-                      str/trim
-                      not-empty)
-        expense-categories (get-in db [:user-expenses :expense-categories :items])]
-    (or settings-id
-      (some->> (or expense-categories [])
-        (some (fn [category]
-                (when (expense-category-default? category)
-                  (:id category))))
-        str
-        str/trim
-        not-empty))))
+  (let [expense-categories (get-in db [:user-expenses :expense-categories :items])]
+    (some->> (or expense-categories [])
+      (some (fn [category]
+              (when (expense-category-default? category)
+                (:id category))))
+      str
+      str/trim
+      not-empty)))
 
 (rf/reg-event-fx
   :user-expenses/upload-receipt

@@ -4,6 +4,7 @@
 -- Scope: First-run onboarding experience for users entering a workspace
 -- Includes: Per-role step definitions, progress tracking, skip/dismiss,
 --           guided first upload, persistent checklist, completion model,
+--           owner rename step for the seeded default expense category,
 --           role-difference notices for subsequent workspaces
 -- Excludes:
 --   - Authentication flow (see authentication.allium)
@@ -39,6 +40,7 @@ external entity ExpenseCategory {
     id: String
     name: String
     tenant_id: String
+    is_default: Boolean
 }
 
 external entity PayerType {
@@ -57,6 +59,7 @@ enum MembershipRole { owner | admin | member | viewer }
 enum OnboardingStepKind {
     name_workspace
     | setup_profile
+    | rename_default_category
     | configure_categories
     | review_payer_types
     | invite_members
@@ -126,11 +129,12 @@ config {
     owner_steps: List<StepDefinition> = [
         StepDefinition(kind: name_workspace,       order: 1, title: "Imenujte radni prostor",         description: "Dajte svom radnom prostoru prepoznatljivo ime"),
         StepDefinition(kind: setup_profile,         order: 2, title: "Postavite profil",               description: "Dodajte svoje ime i postavke"),
-        StepDefinition(kind: configure_categories,  order: 3, title: "Konfigurisite kategorije",       description: "Pregledajte i prilagodite kategorije troskova"),
-        StepDefinition(kind: review_payer_types,    order: 4, title: "Pregledajte tipove platilaca",   description: "Potvrdite ili prilagodite ko placa troskove"),
-        StepDefinition(kind: invite_members,        order: 5, title: "Pozovite clanove tima",          description: "Dodajte kolege u radni prostor"),
-        StepDefinition(kind: management_intro,      order: 6, title: "Upoznajte upravljacke alate",   description: "Kratki pregled admin funkcija"),
-        StepDefinition(kind: upload_first_receipt,   order: 7, title: "Ucitajte prvi racun",            description: "Isprobajte unos racuna uz vodene upute")
+        StepDefinition(kind: rename_default_category, order: 3, title: "Preimenujte podrazumijevanu kategoriju", description: "Prilagodite naziv kategorije koja ce se koristiti kao podrazumijevana"),
+        StepDefinition(kind: configure_categories,  order: 4, title: "Konfigurisite kategorije",       description: "Pregledajte i prilagodite kategorije troskova"),
+        StepDefinition(kind: review_payer_types,    order: 5, title: "Pregledajte tipove platilaca",   description: "Potvrdite ili prilagodite ko placa troskove"),
+        StepDefinition(kind: invite_members,        order: 6, title: "Pozovite clanove tima",          description: "Dodajte kolege u radni prostor"),
+        StepDefinition(kind: management_intro,      order: 7, title: "Upoznajte upravljacke alate",   description: "Kratki pregled admin funkcija"),
+        StepDefinition(kind: upload_first_receipt,   order: 8, title: "Ucitajte prvi racun",            description: "Isprobajte unos racuna uz vodene upute")
     ]
 
     admin_steps: List<StepDefinition> = [
@@ -426,6 +430,28 @@ rule CompleteSetupProfile {
                 UserCompletesOnboardingStep(user: user, role: p.role, step_kind: setup_profile)
 }
 
+rule CompleteRenameDefaultCategory {
+    -- The owner renames the seeded tenant default expense category to a
+    -- workspace-appropriate label.
+
+    when: OwnerRenamesDefaultExpenseCategory(membership, category, new_name)
+
+    requires: membership.role = owner
+    requires: category.tenant_id = membership.tenant.id
+    requires: category.is_default
+    requires: length(new_name) > 0
+    requires: new_name != category.name
+
+    ensures: category.name = new_name
+    ensures: UserCompletesOnboardingStep(user: membership.user, role: membership.role, step_kind: rename_default_category)
+
+    @guidance
+        -- This step is owner-only because owners define the workspace's
+        -- baseline expense taxonomy. The seeded default category already
+        -- exists from tenant provisioning; onboarding asks the owner to
+        -- rename it rather than create it from scratch.
+}
+
 rule CompleteCategoryConfiguration {
     -- Acknowledging/reviewing the categories is sufficient.
     -- The user does not have to change anything.
@@ -576,6 +602,28 @@ surface OnboardingFlow {
         --   3. A "complete" / "next" action
         --   4. A "skip" action
         --   5. Progress indicator showing current step of total
+}
+
+surface RenameDefaultExpenseCategoryStep {
+    -- Owner-only onboarding step for renaming the seeded tenant default
+    -- expense category.
+
+    provides:
+        RenderRenameDefaultExpenseCategoryStep(membership, category: ExpenseCategory)
+        OwnerRenamesDefaultExpenseCategory(membership, category, new_name)
+
+    @guarantee OwnerSeesCurrentDefaultCategory
+        -- The step shows exactly the tenant's current default expense
+        -- category (ExpenseCategory where tenant_id = membership.tenant.id
+        -- and is_default = true) and asks the owner to rename it.
+
+    @guarantee RenameTargetsSeededDefault
+        -- The category being renamed is the one created during tenant
+        -- provisioning as the workspace's initial default category.
+
+    @guidance
+        -- This step should be phrased as a recommendation to personalize
+        -- the workspace, not as a technical requirement explanation.
 }
 
 surface OnboardingChecklist {

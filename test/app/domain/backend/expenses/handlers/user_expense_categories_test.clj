@@ -119,7 +119,12 @@
         expense-category-id (UUID/randomUUID)
         seen-args (atom nil)]
     (with-redefs [expense-categories/service
-                  {:update! (fn [_db id updates opts]
+      {:get (fn [_db id opts]
+        {:id id
+         :tenant_id (:tenant-id opts)
+         :name "Original"
+         :is_default false})
+       :update! (fn [_db id updates opts]
                               (reset! seen-args {:id id :updates updates :opts opts})
                               {:id id
                                :tenant_id tenant-id
@@ -143,7 +148,12 @@
         expense-category-id (UUID/randomUUID)
         seen-args (atom nil)]
     (with-redefs [expense-categories/service
-                  {:update! (fn [_db id updates opts]
+      {:get (fn [_db id opts]
+        {:id id
+         :tenant_id (:tenant-id opts)
+         :name "Original"
+         :is_default false})
+       :update! (fn [_db id updates opts]
                               (reset! seen-args {:id id :updates updates :opts opts})
                               {:id id
                                :tenant_id tenant-id
@@ -170,6 +180,23 @@
               @seen-args))
         (is (= true (get-in resp [:body :data :exclude-from-reports])))
         (is (= true (get-in resp [:body :data :is-default])))))))
+
+      (deftest batch-delete-expense-categories-surfaces-default-delete-errors
+        (let [tenant-id (UUID/randomUUID)
+          category-id (UUID/randomUUID)]
+          (with-redefs [expense-categories/service
+            {:delete! (fn [_db _id _opts]
+                (throw (ex-info "Default expense category cannot be deleted. Choose another default first."
+                     {:status 400})))}
+            h/json-response (fn [body & [status]] {:status (or status 200)
+                           :body body})]
+        (let [handler (user-expense-categories/batch-delete-expense-categories-handler db)
+          resp (handler (request :delete "/api/v1/expenses/expense-categories/batch"
+                  (admin-session tenant-id)
+                  {:ids [(str category-id)]}))]
+          (is (= 400 (:status resp)))
+          (is (= "Default expense category cannot be deleted. Choose another default first."
+            (get-in resp [:body :error])))))))
 
 (deftest batch-delete-expense-categories-uses-current-tenant-scope
   (let [tenant-id (UUID/randomUUID)

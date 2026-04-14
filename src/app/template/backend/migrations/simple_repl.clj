@@ -375,8 +375,9 @@
          {:status :skipped})
        (let [schema-index (fc-schema/models-index "resources/db/models.edn")
              bundles* (fc-discovery/load-bundles bundles)
-             results (fc-validation/validate-bundles bundles* schema-index nil)
-             patches (fc-sync/plan-sync bundles* schema-index nil)
+             allowlist (fc-schema/load-allowlist)
+             results (fc-validation/validate-bundles bundles* schema-index allowlist)
+             patches (fc-sync/plan-sync bundles* schema-index allowlist)
              invalid (filter (comp not :valid?) results)
              changes? (some :has-changes? patches)
              unknown-entities (->> patches (mapcat :unknown-entities) vec)]

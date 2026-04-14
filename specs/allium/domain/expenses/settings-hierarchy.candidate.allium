@@ -13,7 +13,7 @@
 --   - Currency model: receipts always BAM, manual expenses accept any enabled currency
 --   - Exchange rate capture at expense creation (automatic API lookup for non-BAM)
 --   - TenantSettings entity (owner-managed, per-tenant)
---   - Per-user expense defaults (payer, category) on user profile
+--   - Per-user expense default payer on user profile
 --   - Workspace name management by tenant owner
 --   - Tenant data management (export CSV, delete all) by tenant owner
 --   - User profile page (/profile) for all users
@@ -90,7 +90,6 @@ external entity UserExpenseDefaults {
     -- After this spec is applied, default_note is removed from this entity.
     user: User
     default_payer: Payer
-    default_expense_category: ExpenseCategory?
 }
 
 external entity Expense {
@@ -611,14 +610,15 @@ rule DeleteAllTenantExpenses {
 
 
 -- ═════════════════════════════════════════════
--- PER-USER DEFAULTS (on user profile)
+-- PER-USER DEFAULT PAYER (on user profile)
 -- ═════════════════════════════════════════════
 
--- Per-user default payer and default category are managed through
--- the UserExpenseDefaults entity (defined in payer-and-defaults.candidate.allium).
--- The rules UpdateDefaultPayerOnExpenseSubmit (sticky) and
--- UpdateDefaultExpenseCategory remain in that spec.
--- This spec defines the profile surface that exposes them.
+-- Per-user default payer is managed through the UserExpenseDefaults
+-- entity (defined in payer-and-defaults.candidate.allium).
+-- The sticky UpdateDefaultPayerOnExpenseSubmit rule remains in that spec.
+-- Tenant default expense category is managed separately on expense-category
+-- administration surfaces, not through the user profile.
+-- This spec defines the profile surface that exposes the payer default.
 
 
 -- ═════════════════════════════════════════════
@@ -699,7 +699,7 @@ surface AdminGlobalSettingsPanel {
 
 surface UserProfilePage {
     -- User profile page at /profile, available to all authenticated users.
-    -- Shows account info (read-only) and per-user expense defaults.
+    -- Shows account info (read-only) and the per-user default payer.
     facing user: TenantUser
 
     context membership: TenantMembership where user = user and status = active
@@ -709,23 +709,14 @@ surface UserProfilePage {
         user.email
         user.full_name
 
-        -- Per-user expense defaults
+        -- Per-user default payer
         UserExpenseDefaults where user = user
             |> default_payer
-            |> default_expense_category
 
         -- Available options for dropdowns
         for p in Payer where tenant_id = user.tenant_id and is_active = true:
             p.id
             p.label
-        for c in ExpenseCategory where tenant_id = user.tenant_id:
-            c.id
-            c.name
-
-    provides:
-        UserSetsDefaultExpenseCategory(user, category: ExpenseCategory?)
-            -- Defined in payer-and-defaults.candidate.allium.
-            -- User selects from tenant's expense categories or "None".
 
     related:
         OwnerProfileSection(membership.tenant)
@@ -841,7 +832,8 @@ surface ExpenseConversionDetail {
 
 -- resolved: Three-tier settings hierarchy: global (admin) → tenant (owner) → per-user.
 -- resolved: Global settings are uniform across all tenants — no per-tenant override.
--- resolved: Default payer and default category are per-user, shown on /profile.
+-- resolved: Default payer is per-user and shown on /profile.
+-- resolved: Default expense category is tenant-scoped and not user-configurable on /profile.
 -- resolved: Default note is a global setting, not per-user.
 -- resolved: Workspace name is editable by owner, slug remains immutable.
 -- resolved: Delete all expenses requires typed "DELETE" confirmation, owner only.

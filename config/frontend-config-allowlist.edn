@@ -1,0 +1,30 @@
+{:admins
+ ["email"
+    "admin-ref"
+    "email-masked"]
+
+ :audit-logs
+ ["admin-ref"
+    "admin-name"]
+
+ :unmapped-aliases
+ ["supplier_display_name"
+  "raw_label"
+  "raw_label_normalized"
+  "unit"
+  "occurrence_count"
+  "supplier_id"
+  "id"]
+
+ :tenant-members
+ ["member_name"
+  "member_email"
+  "member_role"
+  "membership_status"
+  "account_status"
+    "joined_on"]
+
+ :users
+ ["email"
+    "user-ref"
+    "email-masked"]}

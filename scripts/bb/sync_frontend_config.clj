@@ -114,7 +114,7 @@
     (when (empty? bundles)
       (die! "No frontend config bundles found"))
     (let [bundles* (discovery/load-bundles bundles)
-          allowlist (when allowlist-path (discovery/read-edn-file allowlist-path))
+          allowlist (schema/load-allowlist allowlist-path)
           patches (sync/plan-sync bundles* schema-index allowlist)
           changes? (some :has-changes? patches)
           errors? (some (comp seq :unknown-entities) patches)

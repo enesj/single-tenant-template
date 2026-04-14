@@ -1,14 +1,18 @@
 -- allium: 2
 -- payer-and-defaults.candidate.allium
 --
--- Scope: Payer types, per-user provisioned Payer, per-user expense defaults,
---        sticky default update on manual expense submit, and receipt upload
---        defaults (Option A: defaults pre-attached at upload time).
+-- Scope: Payer types, per-user provisioned Payer, per-user payer defaults,
+--        tenant-wide default expense category fallback, sticky default update
+--        on manual expense submit, and receipt upload defaults (Option A:
+--        defaults pre-attached at upload time).
 -- Includes:
 --   - PayerType entity + admin management (create, rename, delete)
 --   - System "user" PayerType — provisioned per-tenant, immutable
 --   - Auto-provisioned Payer on user join (email prefix label, "user" type)
---   - UserExpenseDefaults entity (default_payer, default_expense_category)
+--   - UserExpenseDefaults entity (default_payer only)
+--   - Tenant-wide default ExpenseCategory designation (exactly one per tenant)
+--   - Effective expense category default resolution:
+--       explicit category first, tenant default second
 --   - Sticky default: default_payer updates on any expense submit when payer changed
 --   - Receipt upload defaults: user confirms Payer/category/note at upload time;
 --     values stored on Receipt and pre-filled at approval
@@ -21,14 +25,20 @@
 --   - Manual expense entry form (expense-entry.candidate.allium)
 --   - Tenant provisioning lifecycle (multi-tenancy.candidate.allium)
 -- Changes required in companion specs:
+--   - multi-tenancy.candidate.allium:
+--       Tenant provisioning must seed exactly one default expense category
+--   - workspace-onboarding.candidate.allium:
+--       Owner onboarding should include a step to rename the seeded
+--       tenant default expense category
 --   - receipt-ocr.candidate.allium:
 --       Receipt entity: add expense_category_id: UUID? and notes: String?
---       UploadReceipt trigger: add expense_category? and notes? params
---       UploadReceiptNew rule: store expense_category_id and notes on Receipt
---       ApproveReceipt rule: accept expense_category? and notes?; pass to Expense.created()
+--       Upload/approve defaults: resolve expense_category_id from tenant
+--       default when omitted by the caller
 --   - expense-entry.candidate.allium:
 --       Payer external entity: remove is_default: Boolean (replaced by UserExpenseDefaults)
 --       SmartExpenseDraft: default payer comes from UserExpenseDefaults.default_payer
+--       Manual expense category prefill and submit fallback use the
+--       tenant default category
 
 
 -- ─────────────────────────────────────────────
@@ -65,6 +75,7 @@ external entity ExpenseCategory {
     id: UUID
     tenant_id: UUID
     name: String
+    is_default: Boolean
 }
 
 external entity Receipt {
@@ -100,12 +111,11 @@ entity Payer {
 }
 
 entity UserExpenseDefaults {
-    -- Per-user persistent defaults for expense creation.
+    -- Per-user persistent payer default for expense creation.
     -- Created alongside the user's provisioned Payer when they join a tenant.
     -- Note: default_note has been moved to GlobalSettings (settings-hierarchy.candidate.allium).
     user: User
     default_payer: Payer
-    default_expense_category: ExpenseCategory?
 }
 
 
@@ -121,8 +131,6 @@ invariant PayerTypeBelongsToTenant {
 invariant UserDefaultsBelongToSameTenant {
     for d in UserExpenseDefaults:
         d.default_payer.tenant_id = d.user.tenant_id
-        and (d.default_expense_category = null
-             or d.default_expense_category.tenant_id = d.user.tenant_id)
 }
 
 invariant SystemPayerTypePerTenantIsUnique {
@@ -136,6 +144,13 @@ invariant OneDefaultsRecordPerUser {
     -- Each user has exactly one UserExpenseDefaults record per tenant membership.
     for user in User:
         (UserExpenseDefaults where user = user) |> count <= 1
+}
+
+invariant TenantHasAtMostOneDefaultExpenseCategory {
+    -- Every tenant must have exactly one default expense category.
+    for tenant in Tenant:
+        (ExpenseCategory where tenant_id = tenant.id and is_default = true)
+            |> count = 1
 }
 
 
@@ -200,8 +215,7 @@ rule ProvisionUserPayer {
 
     ensures: UserExpenseDefaults.created(
         user: user,
-        default_payer: payer,
-        default_expense_category: null
+        default_payer: payer
     )
 
     @guidance
@@ -243,20 +257,41 @@ rule UpdateDefaultPayerOnExpenseSubmit {
 
 
 -- ═════════════════════════════════════════════
--- PER-USER DEFAULTS MANAGEMENT
+-- TENANT DEFAULT CATEGORY MANAGEMENT
 -- ═════════════════════════════════════════════
 
-rule UpdateDefaultExpenseCategory {
-    -- User changes their standing expense category default via settings.
-    when: UserSetsDefaultExpenseCategory(user: User, category: ExpenseCategory?)
+rule SetTenantDefaultExpenseCategory {
+    -- Admins and owners can mark exactly one expense category as the
+    -- tenant-wide fallback used whenever a flow omits an explicit category.
+    when: SetTenantDefaultExpenseCategory(admin: TenantAdmin, category: ExpenseCategory)
 
-    let defaults = UserExpenseDefaults where user = user
-    requires: defaults != null
+    requires: category.tenant_id = admin.tenant_id
 
-    if category != null:
-        requires: category.tenant_id = user.tenant_id
+    ensures:
+        for current in ExpenseCategory where tenant_id = admin.tenant_id
+            and id != category.id
+            and is_default = true:
+            current.is_default = false
 
-    ensures: defaults.default_expense_category = category
+    ensures: category.is_default = true
+}
+
+rule RejectDeleteDefaultExpenseCategory {
+    -- The active tenant default category cannot be deleted.
+    when: DeleteExpenseCategory(admin: TenantAdmin, category: ExpenseCategory)
+
+    requires: category.tenant_id = admin.tenant_id
+    requires: category.is_default
+
+    ensures: ExpenseCategoryDeletionRejected(
+        category: category,
+        reason: default_category_required
+    )
+
+    @guidance
+        -- The same protection applies to any archive/disable operation:
+        -- a category marked is_default must first be replaced by another
+        -- tenant category before it can leave the active set.
 }
 
 -- UpdateDefaultNote rule REMOVED.
@@ -419,7 +454,7 @@ surface ReceiptUploadDialog {
     exposes:
         UserExpenseDefaults where user = actor
             |> default_payer
-            |> default_expense_category
+        ExpenseCategory where tenant_id = actor.tenant_id and is_default = true
         GlobalSettings.first
             |> default_note
 
@@ -439,10 +474,16 @@ surface ReceiptUploadDialog {
     @guarantee DefaultsPrefilled
         -- When the dialog opens:
         --   payer: from UserExpenseDefaults.default_payer (per-user, sticky)
-        --   expense_category: from UserExpenseDefaults.default_expense_category (per-user, may be null)
+        --   expense_category: from tenant ExpenseCategory where is_default = true
         --   notes: from GlobalSettings.default_note (global, admin-set, may be null)
         -- The user may change any of these before uploading.
+        -- The prefill is always non-null because tenant provisioning seeds
+        -- exactly one default expense category.
         -- Payer is required: if no default exists the user must select one.
+
+    @guarantee CategoryFallbackAppliedAtUpload
+        -- If UploadReceipt is submitted without expense_category,
+        -- the stored receipt.expense_category_id uses the tenant default.
 
     @guarantee BatchUploadShareDefaults
         -- When multiple files are uploaded in a single session, all receipts

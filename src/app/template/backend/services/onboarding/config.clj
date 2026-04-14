@@ -8,11 +8,12 @@
 (def owner-steps
   [{:kind "name_workspace"       :order 1}
    {:kind "setup_profile"        :order 2}
-   {:kind "configure_categories" :order 3}
-   {:kind "review_payer_types"   :order 4}
-   {:kind "invite_members"       :order 5}
-   {:kind "management_intro"     :order 6}
-   {:kind "upload_first_receipt" :order 7}])
+  {:kind "rename_default_category" :order 3}
+  {:kind "configure_categories" :order 4}
+  {:kind "review_payer_types"   :order 5}
+  {:kind "invite_members"       :order 6}
+  {:kind "management_intro"     :order 7}
+  {:kind "upload_first_receipt" :order 8}])
 
 (def admin-steps
   [{:kind "setup_profile"        :order 1}

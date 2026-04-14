@@ -36,19 +36,14 @@
       (:isDefault category))))
 
 (defn- default-expense-category-id
-  [expense-categories settings]
-  (let [settings-id (some-> (:default-expense-category-id settings)
-                      str
-                      str/trim
-                      not-empty)]
-    (or settings-id
-      (some->> (or expense-categories [])
-        (some (fn [category]
-                (when (expense-category-default? category)
-                  (:id category))))
-        str
-        str/trim
-        not-empty))))
+  [expense-categories _settings]
+  (some->> (or expense-categories [])
+    (some (fn [category]
+            (when (expense-category-default? category)
+              (:id category))))
+    str
+    str/trim
+    not-empty))
 
 (defui user-expense-add-form-modal
   [{:keys [receipt-id receipt on-success on-review-saved on-cancel]}]

@@ -29,7 +29,8 @@
   "Create a tenant + owner membership for testing. Returns
   {:tenant <row> :membership <row> :tenant-id <uuid>}.
 
-  Skips seeding payer-types/expense-categories so tests control their own data."
+  Skips configured payer-types/custom expense-categories, but tenant
+  provisioning still creates the required default expense category."
   [db user]
   (let [result (tenant-svc/provision-tenant!
                  db

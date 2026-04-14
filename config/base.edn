@@ -206,11 +206,12 @@
  :tenant-defaults {:payer-types        [{:label {:en "Household" :bs "Kućanstvo"} :is-default true}
                                         {:label {:en "Other"     :bs "Ostalo"}    :is-default false}]
 
-                   :expense-categories [{:name {:en "Groceries"     :bs "Namirnice"}}
+                   :expense-categories [{:name {:en "Default"       :bs "Podrazumijevano"} :is-default true}
+                                        {:name {:en "Groceries"     :bs "Namirnice"}}
                                         {:name {:en "Transport"     :bs "Prijevoz"}}
                                         {:name {:en "Utilities"     :bs "Komunalije"}}
                                         {:name {:en "Dining"        :bs "Restorani"}}
                                         {:name {:en "Healthcare"    :bs "Zdravlje"}}
                                         {:name {:en "Entertainment" :bs "Zabava"}}
-                                        {:name {:en "Shopping"      :bs "Kupovina"} :is-default true}
+                                        {:name {:en "Shopping"      :bs "Kupovina"}}
                                         {:name {:en "Other"         :bs "Ostalo"}}]}}

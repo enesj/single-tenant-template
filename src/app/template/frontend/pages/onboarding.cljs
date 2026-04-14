@@ -5,7 +5,7 @@
     [app.template.frontend.events.onboarding :as onboarding]
     [app.template.frontend.i18n :refer [use-t]]
     [re-frame.core :as rf]
-    [uix.core :refer [$ defui use-state]]
+    [uix.core :refer [$ defui]]
     [uix.re-frame :refer [use-subscribe]]))
 
 ;; ============================================================================
@@ -15,6 +15,7 @@
 (def step-config
   {"name_workspace"       {:icon "building"    :color "primary"   :link "/tenant/members"}
    "setup_profile"        {:icon "user"        :color "secondary" :link "/profile"}
+  "rename_default_category" {:icon "tag"      :color "accent"    :link "/expense-categories"}
    "configure_categories" {:icon "tag"         :color "accent"    :link "/expense-categories"}
    "review_payer_types"   {:icon "credit-card" :color "accent"    :link "/payer-types"}
    "invite_members"       {:icon "user-plus"   :color "primary"   :link "/tenant/members"}
@@ -192,7 +193,6 @@
         completed (use-subscribe [:onboarding/completed-count])
         total (use-subscribe [:onboarding/total-count])
         all-done? (use-subscribe [:onboarding/all-done?])
-        role (use-subscribe [:user-role])
         tenant-name (use-subscribe [:tenant-name])
         step-loading-kind (:step-loading? step-loading?)]
 

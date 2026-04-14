@@ -87,6 +87,7 @@
     ;; Step titles
     :onboarding/step-name_workspace       "Imenujte radni prostor"
     :onboarding/step-setup_profile        "Postavite profil"
+    :onboarding/step-rename_default_category "Preimenujte podrazumijevanu kategoriju"
     :onboarding/step-configure_categories "Konfigurirajte kategorije"
     :onboarding/step-review_payer_types   "Pregledajte tipove platioca"
     :onboarding/step-invite_members       "Pozovite članove"
@@ -96,6 +97,7 @@
     ;; Step descriptions
     :onboarding/step-name_workspace-desc       "Dajte radnom prostoru ime koje ga opisuje"
     :onboarding/step-setup_profile-desc        "Dodajte svoje ime da vas tim prepozna"
+    :onboarding/step-rename_default_category-desc "Preimenujte početnu kategoriju koja se koristi kao podrazumijevana"
     :onboarding/step-configure_categories-desc "Prilagodite kategorije troškova"
     :onboarding/step-review_payer_types-desc   "Pregledajte i prilagodite tipove platioca"
     :onboarding/step-invite_members-desc       "Pozovite kolege u radni prostor"
@@ -232,6 +234,7 @@
     ;; Step titles
     :onboarding/step-name_workspace       "Name your workspace"
     :onboarding/step-setup_profile        "Set up your profile"
+    :onboarding/step-rename_default_category "Rename the default category"
     :onboarding/step-configure_categories "Configure categories"
     :onboarding/step-review_payer_types   "Review payer types"
     :onboarding/step-invite_members       "Invite members"
@@ -241,6 +244,7 @@
     ;; Step descriptions
     :onboarding/step-name_workspace-desc       "Give your workspace a descriptive name"
     :onboarding/step-setup_profile-desc        "Add your name so your team can recognise you"
+    :onboarding/step-rename_default_category-desc "Rename the seeded category that your workspace uses as the default"
     :onboarding/step-configure_categories-desc "Customise your expense categories"
     :onboarding/step-review_payer_types-desc   "Review and adjust payer types"
     :onboarding/step-invite_members-desc       "Invite colleagues to your workspace"

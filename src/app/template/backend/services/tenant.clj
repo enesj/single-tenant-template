@@ -87,6 +87,32 @@
       (str label-or-map))
     label-or-map))
 
+(def ^:private default-expense-category-template
+  {:name {:en "Default" :bs "Podrazumijevano"}
+   :is-default true})
+
+(defn- same-expense-category-name?
+  [locale category-a category-b]
+  (= (some-> (resolve-label (:name category-a) locale) str/trim str/lower-case)
+    (some-> (resolve-label (:name category-b) locale) str/trim str/lower-case)))
+
+(defn- normalize-expense-category-defaults
+  "Provision exactly one default expense category for every new tenant.
+
+   We always seed a dedicated placeholder default category so owner onboarding
+   can guide the workspace-specific rename without leaving the tenant in a
+   zero-default state."
+  [defaults locale]
+  (let [configured (vec (or (:expense-categories defaults) []))
+        default-category (or (some #(when (same-expense-category-name? locale % default-expense-category-template)
+                                      %)
+                              configured)
+                           default-expense-category-template)
+        remaining (remove #(same-expense-category-name? locale % default-category)
+                    configured)]
+    (vec (cons (assoc default-category :is-default true)
+           (map #(assoc % :is-default false) remaining)))))
+
 (defn provision-tenant!
   "Create a new tenant + owner membership + seed lookup tables, all inside a
    single transaction. Returns {:tenant <row> :membership <row>}."
@@ -99,7 +125,8 @@
         member-id (java.util.UUID/randomUUID)
         now (java.time.LocalDateTime/now)
         defaults (:tenant-defaults config)
-        locale (or (:default-locale config) :bs)]
+        locale (or (:default-locale config) :bs)
+        expense-category-defaults (normalize-expense-category-defaults defaults locale)]
     (jdbc/with-transaction [tx db]
       ;; 1) Create tenant
       (let [tenant (convert-pg-objects
@@ -189,7 +216,7 @@
         (onboarding/initialise-onboarding! tx (user-id user) "owner")
 
         ;; 6) Seed expense_categories
-        (doseq [cat (:expense-categories defaults)]
+        (doseq [cat expense-category-defaults]
           (jdbc/execute-one! tx
             (sql/format {:insert-into [:expense_categories]
                          :values [{:id (java.util.UUID/randomUUID)
@@ -206,7 +233,7 @@
            :user-ref (email-privacy/user-ref (user-id user))
            :email-masked (email-privacy/mask-email (user-email user))
            :payer-type-count (count (:payer-types defaults))
-           :expense-category-count (count (:expense-categories defaults))})
+            :expense-category-count (count expense-category-defaults)})
 
         {:tenant tenant :membership membership}))))
 

@@ -70,8 +70,6 @@
   (fn [{:keys [db]} [response]]
     (let [result (:data response)]
       {:db (-> db
-             (assoc-in (conj profile-path :data :settings :default-expense-category-id)
-               (:default-expense-category-id result))
              (assoc-in (conj profile-path :data :settings :default-payer-id)
                (:default-payer-id result))
              (set-loading defaults-action-path false)

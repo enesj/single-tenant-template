@@ -1,0 +1,39 @@
+({:action :drop-column,
+  :field-name :default-expense-category-id,
+  :model-name :user_expense_settings}
+ {:action :alter-type,
+  :type-name :onboarding-step-kind,
+  :model-name :onboarding_progress,
+  :options
+  {:choices
+   ["name_workspace"
+    "setup_profile"
+    "rename_default_category"
+    "configure_categories"
+    "review_payer_types"
+    "invite_members"
+    "management_intro"
+    "upload_first_receipt"
+    "browse_intro"],
+   :type :enum},
+  :changes
+  {:choices
+   {:from
+    ["name_workspace"
+     "setup_profile"
+     "configure_categories"
+     "review_payer_types"
+     "invite_members"
+     "management_intro"
+     "upload_first_receipt"
+     "browse_intro"],
+    :to
+    ["name_workspace"
+     "setup_profile"
+     "rename_default_category"
+     "configure_categories"
+     "review_payer_types"
+     "invite_members"
+     "management_intro"
+     "upload_first_receipt"
+     "browse_intro"]}}})
