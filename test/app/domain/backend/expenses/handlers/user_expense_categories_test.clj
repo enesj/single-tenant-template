@@ -95,19 +95,24 @@
                               (reset! seen-payload payload)
                               {:id (UUID/randomUUID)
                                :tenant_id (:tenant_id payload)
-                               :name (:name payload)})}
+                               :name (:name payload)
+                               :is_default (:is_default payload)})}
                   h/json-response (fn [body & [status]] {:status (or status 200)
                                                          :body body})]
       (let [handler (user-expense-categories/create-expense-category-handler db)
             resp (handler (request :post "/api/v1/expenses/expense-categories"
                             (admin-session tenant-id)
-                            {:name "Utilities"}))]
+                            {:name "Utilities"
+                             :is_default false
+                             :is-default true}))]
         (is (= 201 (:status resp)))
         (is (= {:name "Utilities"
-          :exclude_from_reports false
-          :tenant_id tenant-id}
+                :exclude_from_reports false
+                :is_default true
+                :tenant_id tenant-id}
               @seen-payload))
-        (is (= tenant-id (get-in resp [:body :data :tenant-id])))))))
+        (is (= tenant-id (get-in resp [:body :data :tenant-id])))
+        (is (true? (get-in resp [:body :data :is-default])))))))
 
 (deftest update-expense-category-uses-current-tenant-scope
   (let [tenant-id (UUID/randomUUID)
@@ -133,33 +138,38 @@
               @seen-args))
         (is (= "Travel" (get-in resp [:body :data :name])))))))
 
-          (deftest update-expense-category-prefers-kebab-case-flag-when-both-keys-are-present
-            (let [tenant-id (UUID/randomUUID)
-              expense-category-id (UUID/randomUUID)
-              seen-args (atom nil)]
-              (with-redefs [expense-categories/service
-                {:update! (fn [_db id updates opts]
-                    (reset! seen-args {:id id :updates updates :opts opts})
-                    {:id id
-                     :tenant_id tenant-id
-                     :name (:name updates)
-                     :exclude_from_reports (:exclude_from_reports updates)})}
-                h/json-response (fn [body & [status]] {:status (or status 200)
-                               :body body})]
-            (let [handler (user-expense-categories/update-expense-category-handler db)
-              resp (handler (assoc (request :put (str "/api/v1/expenses/expense-categories/" expense-category-id)
-                         (admin-session tenant-id)
-                         {:name "Travel"
-                      :exclude_from_reports false
-                      :exclude-from-reports true})
-                      :path-params {:id (str expense-category-id)}))]
-              (is (= 200 (:status resp)))
-              (is (= {:id expense-category-id
-                  :updates {:name "Travel"
-                    :exclude_from_reports true}
-                  :opts {:tenant-id tenant-id}}
-                @seen-args))
-              (is (= true (get-in resp [:body :data :exclude-from-reports])))))))
+(deftest update-expense-category-prefers-kebab-case-flag-when-both-keys-are-present
+  (let [tenant-id (UUID/randomUUID)
+        expense-category-id (UUID/randomUUID)
+        seen-args (atom nil)]
+    (with-redefs [expense-categories/service
+                  {:update! (fn [_db id updates opts]
+                              (reset! seen-args {:id id :updates updates :opts opts})
+                              {:id id
+                               :tenant_id tenant-id
+                               :name (:name updates)
+                               :exclude_from_reports (:exclude_from_reports updates)
+                               :is_default (:is_default updates)})}
+                  h/json-response (fn [body & [status]] {:status (or status 200)
+                                                         :body body})]
+      (let [handler (user-expense-categories/update-expense-category-handler db)
+            resp (handler (assoc (request :put (str "/api/v1/expenses/expense-categories/" expense-category-id)
+                                   (admin-session tenant-id)
+                                   {:name "Travel"
+                                    :exclude_from_reports false
+                                    :exclude-from-reports true
+                                    :is_default false
+                                    :is-default true})
+                            :path-params {:id (str expense-category-id)}))]
+        (is (= 200 (:status resp)))
+        (is (= {:id expense-category-id
+                :updates {:name "Travel"
+                          :exclude_from_reports true
+                          :is_default true}
+                :opts {:tenant-id tenant-id}}
+              @seen-args))
+        (is (= true (get-in resp [:body :data :exclude-from-reports])))
+        (is (= true (get-in resp [:body :data :is-default])))))))
 
 (deftest batch-delete-expense-categories-uses-current-tenant-scope
   (let [tenant-id (UUID/randomUUID)

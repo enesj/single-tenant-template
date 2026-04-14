@@ -10,6 +10,7 @@
   (:require
     [app.domain.backend.expenses.handlers.user-expenses.helpers :as h]
     [app.domain.backend.expenses.services.receipts.storage :as receipt-storage]
+    [app.domain.backend.expenses.services.user-expense-settings :as user-settings]
     [app.shared.adapters.database :as shared-db]
     [cheshire.core :as json]
     [clojure.java.io :as io]
@@ -160,7 +161,9 @@
           user-id (h/get-user-id request)
           tenant-id (h/get-tenant-id request)
           payer-id (parse-uuid-param :payer-id (:payer-id params))
-          expense-category-id (parse-uuid-param :expense-category-id (:expense-category-id params))
+          explicit-expense-category-id (parse-uuid-param :expense-category-id (:expense-category-id params))
+          expense-category-id (or explicit-expense-category-id
+                                (user-settings/effective-default-expense-category-id db tenant-id user-id))
           notes (some-> (:notes params) str str/trim not-empty)
           result (receipt-storage/upload-receipt! db (cond-> {:user_id user-id
                                                               :payer_id payer-id

@@ -647,6 +647,24 @@
                {:id "ec-2"}]}])
     (is (= 2 (get-in @rf-db/app-db (paths/list-total-items :expense-categories))))))
 
+(deftest expense-category-create-normalizes-mixed-checkbox-keys
+  (testing "expense category creates send a single snake_case checkbox param to the API"
+    (sup/reset-db!)
+    (rf/dispatch-sync [:user-expenses/create-expense-category-modal
+                       {:name "Travel"
+                        :exclude_from_reports false
+                        :exclude-from-reports true
+                        :is_default false
+                        :is-default true}
+                       nil])
+    (let [req (sup/last-http-request)]
+      (is (= :post (sup/req-method req)))
+      (is (= "/api/v1/expenses/expense-categories" (sup/req-uri req)))
+      (is (= {:name "Travel"
+              :exclude_from_reports true
+              :is_default true}
+            (sup/req-params req))))))
+
 (deftest expense-category-update-normalizes-mixed-checkbox-keys
   (testing "expense category updates send a single snake_case checkbox param to the API"
     (sup/reset-db!)
@@ -654,13 +672,16 @@
                        "cat-1"
                        {:name "Travel"
                         :exclude_from_reports false
-                        :exclude-from-reports true}
+                        :exclude-from-reports true
+                        :is_default false
+                        :is-default true}
                        nil])
     (let [req (sup/last-http-request)]
       (is (= :put (sup/req-method req)))
       (is (= "/api/v1/expenses/expense-categories/cat-1" (sup/req-uri req)))
       (is (= {:name "Travel"
-              :exclude_from_reports true}
+              :exclude_from_reports true
+              :is_default true}
             (sup/req-params req))))))
 
 (deftest fetch-recent-success-normalizes-recent-items-for-rows-override

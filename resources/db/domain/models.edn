@@ -209,9 +209,15 @@
                                [:tenant_id :uuid {:foreign-key :tenants/id :null false :on-delete :cascade}]
                                [:name [:varchar 255] {:null false}]
                                [:exclude_from_reports :boolean {:null false :default false}]
+                               [:is_default :boolean {:null false :default false}]
                                [:created_at :timestamptz {:default [:now]}]
                                [:updated_at :timestamptz {:default [:now]}]]
-                      :indexes [[:idx_expense_categories_tenant_name :btree {:fields [:tenant_id :name] :unique true}]]}
+                      :indexes [[:idx_expense_categories_tenant_name :btree {:fields [:tenant_id :name] :unique true}]
+                                [:uniq_expense_categories_tenant_default
+                                 :btree
+                                 {:fields [:tenant_id :is_default]
+                                  :unique true
+                                  :where [:= :is_default true]}]]}
 
  ;; ----------------------------------------------------------------------------
  ;; Expenses (posted entries with totals) — tenant-scoped

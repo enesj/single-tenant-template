@@ -19,8 +19,8 @@
     [app.domain.frontend.expenses.components.manual-expense-form.smart-input.helpers
      :refer [build-supplier-color-map colorize-quick-pick-groups
              compute-items-total current-related-context
-             focused-search-types payer-default-id prepare-submit-values
-             validate-form]]
+             expense-category-default-id focused-search-types payer-default-id
+             prepare-submit-values validate-form]]
     [app.domain.frontend.expenses.components.manual-expense-form.smart-input.items-phase
      :refer [items-phase-view]]
     [app.domain.frontend.expenses.events.supplier-stores :as supplier-stores-events]
@@ -53,6 +53,7 @@
         payers (or (use-subscribe [:user-expenses/payers]) [])
         payers-loading? (boolean (use-subscribe [:user-expenses/payers-loading?]))
         profile (or (use-subscribe [:profile/data]) {})
+        profile-settings (:settings profile)
 
         ;; Quick Add search (backend)
         quick-search-results (use-subscribe [:user-expenses/quick-add-search-results :all])
@@ -90,6 +91,7 @@
         input-ref (use-ref nil)
 
         ;; Search results: show immediate local matches while dedicated backend search loads.
+        selected-category (:category context)
         available-search-types (focused-search-types context article-mode?)
         ;; Build a price map from related articles (supplier/store related data)
         ;; so local search results can show prices even before the backend search responds.
@@ -453,6 +455,26 @@
           (set-payer-id! (some-> (payer-default-id payers) str)))
         js/undefined)
       [payers payers-loading? ready?])
+
+    ;; Preselect the effective default expense category without overriding a manual choice.
+    (use-effect
+      (fn []
+        (let [default-category-id (some-> (expense-category-default-id expense-categories profile-settings)
+                                    str
+                                    str/trim
+                                    not-empty)]
+          (when (and default-category-id
+                  (nil? selected-category))
+            (when-let [default-category (some (fn [category]
+                                                (when (= default-category-id (some-> (:id category) str))
+                                                  category))
+                                          expense-categories)]
+              (set-context! (fn [current-context]
+                              (if (:category current-context)
+                                current-context
+                                (assoc current-context :category default-category)))))))
+        js/undefined)
+      [selected-category expense-categories profile-settings])
 
     ;; Load related records for focused quick picks when context narrows the search.
     (use-effect

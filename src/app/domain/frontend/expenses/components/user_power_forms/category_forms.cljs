@@ -75,6 +75,10 @@
    {:id :exclude-from-reports
     :type :checkbox
     :label "Exclude from reports"
+    :required false}
+   {:id :is-default
+    :type :checkbox
+    :label "Default expense category"
     :required false}])
 
 (defui user-expense-category-add-form-modal
@@ -89,7 +93,8 @@
         {:entity-name "expense-categories"
          :entity-spec expense-category-form-spec
          :editing false
-         :initial-values {}
+         :initial-values {:exclude-from-reports false
+                          :is-default false}
          :on-cancel on-cancel
          :on-submit (fn [{:keys [values]}]
                       (rf/dispatch [:user-expenses/create-expense-category-modal values on-success]))
@@ -104,9 +109,12 @@
         ;; Accept either kebab-case (post-normalization) or snake_case (raw).
         exclude-from-reports? (boolean (or (:exclude-from-reports item)
                                          (:exclude_from_reports item)))
+        is-default? (boolean (or (:is-default item)
+                               (:is_default item)))
         initial-values (-> {}
                          (assoc :name (or (:name item) ""))
                          (assoc :exclude-from-reports exclude-from-reports?)
+                         (assoc :is-default is-default?)
                          (assoc :id (or (:id item) "")))]
     ($ :div {:class "space-y-4"}
       (when form-error

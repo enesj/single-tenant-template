@@ -33,6 +33,28 @@
                   (:id p)))))
       (:id (first payers)))))
 
+(defn- expense-category-default?
+  [category]
+  (boolean
+    (or (:is-default category)
+      (:isDefault category))))
+
+(defn- default-expense-category-id
+  [db]
+  (let [settings-id (some-> (get-in db [:user-expenses :settings :data :default-expense-category-id])
+                      str
+                      str/trim
+                      not-empty)
+        expense-categories (get-in db [:user-expenses :expense-categories :items])]
+    (or settings-id
+      (some->> (or expense-categories [])
+        (some (fn [category]
+                (when (expense-category-default? category)
+                  (:id category))))
+        str
+        str/trim
+        not-empty))))
+
 (defn- normalize-selected-receipt-ids
   [receipt-ids]
   (->> (or receipt-ids [])
@@ -46,7 +68,7 @@
   [db receipt]
   (let [default-payer (some-> (default-payer-id db) str str/trim not-empty)
         settings (get-in db [:user-expenses :settings :data])
-        default-category (some-> (:default-expense-category-id settings) str str/trim not-empty)
+        default-category (default-expense-category-id db)
         default-note (some-> (:default-note settings) str str/trim not-empty)
         normalized (norm/normalize-receipt-data receipt)
         payer-id (some-> (:payer_id normalized) str str/trim not-empty)

@@ -29,11 +29,36 @@
           payers)
       (:id (first payers)))))
 
+(defn- expense-category-default?
+  [category]
+  (boolean
+    (or (:is-default category)
+      (:isDefault category))))
+
+(defn- default-expense-category-id
+  [expense-categories settings]
+  (let [settings-id (some-> (:default-expense-category-id settings)
+                      str
+                      str/trim
+                      not-empty)]
+    (or settings-id
+      (some->> (or expense-categories [])
+        (some (fn [category]
+                (when (expense-category-default? category)
+                  (:id category))))
+        str
+        str/trim
+        not-empty))))
+
 (defui user-expense-add-form-modal
   [{:keys [receipt-id receipt on-success on-review-saved on-cancel]}]
   ;; All hooks must be called unconditionally (React Rules of Hooks).
   (let [payers (or (use-subscribe [:user-expenses/payers]) [])
         payers-loading? (boolean (use-subscribe [:user-expenses/payers-loading?]))
+        expense-categories (or (use-subscribe [:user-expenses/expense-categories]) [])
+        expense-categories-loading? (boolean (use-subscribe [:user-expenses/expense-categories-loading?]))
+        profile (or (use-subscribe [:profile/data]) {})
+        settings (:settings profile)
         [requested? set-requested!] (use-state false)
         [prepared-initial-data set-prepared-initial-data!] (use-state nil)
         posted? (= "posted" (:status receipt))
@@ -64,21 +89,35 @@
         js/undefined)
       [receipt-id])
 
-    ;; Lock in initial values once payers have loaded (receipt approval only).
+    ;; Lock in initial values once payers and expense categories have loaded (receipt approval only).
     (use-effect
       (fn []
         (when (and receipt-id
                 requested?
                 (nil? prepared-initial-data)
-                (or (seq payers) (not payers-loading?)))
+                (or (seq payers) (not payers-loading?))
+                (or (seq expense-categories) (not expense-categories-loading?)))
           (let [existing-payer-id (some-> (:payer_id merged-initial-data) str str/trim not-empty)
-                default-id (some-> (default-payer-id payers) str str/trim not-empty)
+                existing-category-id (some-> (:expense_category_id merged-initial-data) str str/trim not-empty)
+                default-payer-id* (some-> (default-payer-id payers) str str/trim not-empty)
+                default-category-id* (default-expense-category-id expense-categories settings)
                 prepared (cond-> merged-initial-data
-                           (and (nil? existing-payer-id) default-id)
-                           (assoc :payer_id default-id))]
+                           (and (nil? existing-payer-id) default-payer-id*)
+                           (assoc :payer_id default-payer-id*)
+
+                           (and (nil? existing-category-id) default-category-id*)
+                           (assoc :expense_category_id default-category-id*))]
             (set-prepared-initial-data! prepared)))
         js/undefined)
-      [receipt-id requested? prepared-initial-data payers payers-loading? merged-initial-data])
+      [receipt-id
+       requested?
+       prepared-initial-data
+       payers
+       payers-loading?
+       expense-categories
+       expense-categories-loading?
+       settings
+       merged-initial-data])
 
     (if-not receipt-id
       ;; Manual expense entry — adaptive form (handles its own loading)

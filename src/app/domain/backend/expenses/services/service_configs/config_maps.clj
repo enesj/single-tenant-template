@@ -267,15 +267,23 @@
    :tenant-scoped? true
    :required-fields [:name]
    :allowed-order-by {:name :name
+                      :is-default :is_default
                       :created-at :created_at
                       :updated-at :updated_at}
    :default-order-by :name
    :search-fields [:name]
    :before-insert (fn [data]
                     (-> data
-                      (assoc :id (UUID/randomUUID))))
+                      (assoc :id (UUID/randomUUID))
+                      (update :exclude_from_reports #(boolean %))
+                      (update :is_default #(boolean %))))
    :before-update (fn [_id updates]
-                    updates)
+                    (cond-> updates
+                      (contains? updates :exclude_from_reports)
+                      (update :exclude_from_reports boolean)
+
+                      (contains? updates :is_default)
+                      (update :is_default boolean)))
    :has-search? true
    :has-count? true})
 

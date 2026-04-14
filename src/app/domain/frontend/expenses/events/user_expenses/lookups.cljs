@@ -198,6 +198,28 @@
      :on-success [:user-expenses/ocr-receipt-success receipt-id]
      :on-failure [:user-expenses/ocr-receipt-failure receipt-id]}))
 
+(defn- ^:private expense-category-default?
+  [category]
+  (boolean
+    (or (:is-default category)
+      (:isDefault category))))
+
+(defn- ^:private default-expense-category-id
+  [db]
+  (let [settings-id (some-> (get-in db [:user-expenses :settings :data :default-expense-category-id])
+                      str
+                      str/trim
+                      not-empty)
+        expense-categories (get-in db [:user-expenses :expense-categories :items])]
+    (or settings-id
+      (some->> (or expense-categories [])
+        (some (fn [category]
+                (when (expense-category-default? category)
+                  (:id category))))
+        str
+        str/trim
+        not-empty))))
+
 (rf/reg-event-fx
   :user-expenses/upload-receipt
   common-interceptors
@@ -205,7 +227,7 @@
     (let [payer-id (get-in db [:user-expenses :upload :payer-id])
           settings (get-in db [:user-expenses :settings :data])
           category-id (or (get-in db [:user-expenses :upload :expense-category-id])
-                        (:default-expense-category-id settings))
+                        (default-expense-category-id db))
           notes (or (get-in db [:user-expenses :upload :notes])
                   (:default-note settings))
           form-data (form-data-with-file file payer-id category-id notes)]
@@ -299,7 +321,7 @@
           payer-id (get-in db [:user-expenses :upload :payer-id])
           settings (get-in db [:user-expenses :settings :data])
           category-id (or (get-in db [:user-expenses :upload :expense-category-id])
-                        (:default-expense-category-id settings))
+                        (default-expense-category-id db))
           notes (or (get-in db [:user-expenses :upload :notes])
                   (:default-note settings))]
       (if (pos? total)

@@ -10,6 +10,18 @@
   (or (some #(when (or (:is-default %) (:isDefault %)) (:id %)) payers)
     (:id (first payers))))
 
+(defn expense-category-default-id
+  [expense-categories settings]
+  (let [settings-id (some-> (:default-expense-category-id settings)
+                      str
+                      str/trim
+                      not-empty)]
+    (or settings-id
+      (some (fn [category]
+              (when (or (:is-default category) (:isDefault category))
+                (:id category)))
+        (or expense-categories [])))))
+
 (defn compute-items-total
   "Sum line totals for all items."
   [items]

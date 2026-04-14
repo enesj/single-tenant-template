@@ -3,9 +3,11 @@
 
    Reads source-controlled EDN defaults and seeds them into
    `frontend_runtime_configs` for channels that have no runtime row yet.
-   Idempotent — existing rows are never overwritten."
+   Idempotent for fresh rows, with targeted additive reconciliations for
+   known config migrations on existing rows."
   (:require
     [app.domain.backend.registry :as domain-registry]
+    [app.template.backend.routes.admin.settings-io :as settings-io]
     [app.shared.frontend-config.io :as frontend-config-io]
     [app.shared.frontend-config.template-user :as template-user]
     [app.shared.specs.entities :as entities-spec]
@@ -36,6 +38,10 @@
            :form-fields form-fields-spec/validate-form-fields-strict
            :table-columns table-columns-spec/validate-table-columns-strict}})
 
+(def ^:private expense-categories-entity :expense-categories)
+
+(declare admin-defaults user-defaults)
+
 ;; ---------------------------------------------------------------------------
 ;; Helpers
 ;; ---------------------------------------------------------------------------
@@ -51,6 +57,105 @@
               (or a {})
               (or b {})))]
     (reduce merge-entry {} ms)))
+
+(defn- insert-before
+  [xs target item]
+  (let [[before after] (split-with #(not= target %) xs)]
+    (vec (concat before [item] after))))
+
+(defn- merge-ordered-values
+  "Preserve current order while inserting missing defaults before their next
+   default neighbor when possible. This lets additive config backfills surface
+   new fields/columns without clobbering user-customized ordering."
+  [current defaults]
+  (let [defaults (vec (or defaults []))]
+    (reduce (fn [acc item]
+              (if (some #(= item %) acc)
+                acc
+                (let [remaining-defaults (rest (drop-while #(not= item %) defaults))
+                      next-existing (some (set acc) remaining-defaults)]
+                  (if next-existing
+                    (insert-before acc next-existing item)
+                    (conj (vec acc) item)))))
+      (vec (or current []))
+      defaults)))
+
+(defn- merge-missing-map-entries
+  [current defaults]
+  (merge (or defaults {}) (or current {})))
+
+(defn- reconcile-expense-category-form-fields
+  [current defaults]
+  (let [default-entity (get defaults expense-categories-entity)
+        current-entity (get current expense-categories-entity)]
+    (cond
+      (nil? default-entity) current
+      (nil? current-entity) (assoc (or current {}) expense-categories-entity default-entity)
+      :else
+      (assoc current expense-categories-entity
+        (-> current-entity
+          (update :create-fields merge-ordered-values (:create-fields default-entity))
+          (update :edit-fields merge-ordered-values (:edit-fields default-entity))
+          (update :field-config merge-missing-map-entries (:field-config default-entity)))))))
+
+(defn- reconcile-expense-category-table-columns
+  [current defaults]
+  (let [default-entity (get defaults expense-categories-entity)
+        current-entity (get current expense-categories-entity)]
+    (cond
+      (nil? default-entity) current
+      (nil? current-entity) (assoc (or current {}) expense-categories-entity default-entity)
+      :else
+      (assoc current expense-categories-entity
+        (-> current-entity
+          (update :available-columns merge-ordered-values (:available-columns default-entity))
+          (update :default-visible-columns merge-ordered-values (:default-visible-columns default-entity))
+          (update :filterable-columns merge-ordered-values (:filterable-columns default-entity))
+          (update :sortable-columns merge-ordered-values (:sortable-columns default-entity))
+          (update :always-visible merge-ordered-values (:always-visible default-entity))
+          (update :computed-fields merge-missing-map-entries (:computed-fields default-entity))
+          (update :column-config merge-missing-map-entries (:column-config default-entity))
+          (update :column-metadata merge-missing-map-entries (:column-metadata default-entity)))))))
+
+(defn- reconcile-runtime-config!
+  [db {:keys [scope config-key read-fn write-fn defaults merge-fn]}]
+  (let [current (or (read-fn db) {})
+        updated (merge-fn current defaults)]
+    (when (not= current updated)
+      (write-fn db updated)
+      (log/info "Bootstrap: reconciled runtime frontend config"
+        {:scope scope
+         :config-key config-key
+         :entity expense-categories-entity}))
+    updated))
+
+(defn- reconcile-expense-category-default-config!
+  [db]
+  (doseq [config [{:scope "admin"
+                   :config-key :form-fields
+                   :read-fn settings-io/read-form-fields
+                   :write-fn settings-io/write-form-fields!
+                   :defaults (admin-defaults :form-fields)
+                   :merge-fn reconcile-expense-category-form-fields}
+                  {:scope "admin"
+                   :config-key :table-columns
+                   :read-fn settings-io/read-table-columns
+                   :write-fn settings-io/write-table-columns!
+                   :defaults (admin-defaults :table-columns)
+                   :merge-fn reconcile-expense-category-table-columns}
+                  {:scope "user"
+                   :config-key :form-fields
+                   :read-fn settings-io/read-user-form-fields
+                   :write-fn settings-io/write-user-form-fields!
+                   :defaults (user-defaults :form-fields)
+                   :merge-fn reconcile-expense-category-form-fields}
+                  {:scope "user"
+                   :config-key :table-columns
+                   :read-fn settings-io/read-user-table-columns
+                   :write-fn settings-io/write-user-table-columns!
+                   :defaults (user-defaults :table-columns)
+                   :merge-fn reconcile-expense-category-table-columns}]]
+    (reconcile-runtime-config! db config)))
 
 (defn- read-edn-default!
   "Read a bootstrap EDN source. Invalid/unreadable/missing EDN aborts bootstrap.
@@ -174,7 +279,8 @@
   "Ensure all mutable frontend config channels have runtime rows.
 
    Reads source-controlled EDN defaults and seeds them into the DB for any
-   channel that does not yet have a row. Existing rows are never overwritten.
+   channel that does not yet have a row. Existing rows are preserved aside from
+   targeted additive backfills for known config migrations.
 
    Channels seeded:
      admin/view-options, admin/form-fields, admin/table-columns
@@ -197,6 +303,8 @@
     (seed-channel! db "user" :view-options (user-defaults :view-options))
     (seed-channel! db "user" :form-fields (user-defaults :form-fields))
     (seed-channel! db "user" :table-columns (user-defaults :table-columns))
+
+    (reconcile-expense-category-default-config! db)
 
     (log/info "Bootstrap: runtime frontend config check complete")
     :ok

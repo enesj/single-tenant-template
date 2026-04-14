@@ -1,0 +1,12 @@
+({:action :add-column,
+  :field-name :is-default,
+  :model-name :expense_categories,
+  :options {:null false, :default false, :type :boolean}}
+ {:action :create-index,
+  :index-name :uniq-expense-categories-tenant-default,
+  :model-name :expense_categories,
+  :options
+  {:fields [:tenant_id :is_default],
+   :unique true,
+   :where [:= :is_default true],
+   :type :btree}})

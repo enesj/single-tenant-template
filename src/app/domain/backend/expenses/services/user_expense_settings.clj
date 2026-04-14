@@ -7,6 +7,7 @@
    - default_expense_category_id
    - receipt_ocr_provider"
   (:require
+    [app.domain.backend.expenses.services.expense-categories :as expense-categories]
     [app.shared.adapters.database :as db-adapter]
     [honey.sql :as sql]
     [next.jdbc :as jdbc]
@@ -42,6 +43,29 @@
   "Merge persisted per-user settings over defaults."
   [persisted]
   (merge per-user-defaults (or persisted {})))
+
+(defn effective-default-expense-category-id
+  "Resolve the category id used as the effective default for a user.
+
+   Preference order:
+   1. user's persisted default_expense_category_id
+   2. tenant's default expense category
+   3. nil"
+  [db tenant-id user-id]
+  (let [tenant-id* (cond
+                     (instance? UUID tenant-id) tenant-id
+                     (string? tenant-id) (UUID/fromString tenant-id)
+                     :else tenant-id)
+        user-id* (cond
+                   (instance? UUID user-id) user-id
+                   (string? user-id) (UUID/fromString user-id)
+                   :else user-id)
+        persisted (when (and (instance? UUID tenant-id*)
+                          (instance? UUID user-id*))
+                    (get-user-expense-settings db tenant-id* user-id*))]
+    (or (:default-expense-category-id persisted)
+      (some-> (expense-categories/get-default-expense-category db tenant-id*)
+        :id))))
 
 (defn update-sticky-default-payer!
   "If the user's current default payer differs from `payer-id`, update it.

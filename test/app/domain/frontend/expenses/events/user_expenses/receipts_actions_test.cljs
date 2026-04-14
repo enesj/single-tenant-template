@@ -72,6 +72,25 @@
       (is (= :get (sup/req-method next-req)))
       (is (= "/api/v1/expenses/receipts/rec-2" (sup/req-uri next-req))))))
 
+(deftest post-selected-falls-back-to-tenant-default-expense-category
+  (testing "post-selected approval uses the tenant default expense category when user settings omit one"
+    (sup/reset-db!)
+    (swap! rf-db/app-db assoc-in [:user-expenses :settings :data :default-expense-category-id] nil)
+    (swap! rf-db/app-db assoc-in [:user-expenses :expense-categories :items]
+      [{:id "cat-default" :is-default true}
+       {:id "cat-other" :is-default false}])
+    (rf/dispatch-sync [:user-expenses/post-selected ["rec-1"]])
+    (rf/dispatch-sync [:user-expenses/post-selected-receipt-loaded
+                       "rec-1"
+                       []
+                       []
+                       []
+                       {:data (sup/valid-receipt "rec-1")}])
+    (let [approve-req (sup/last-http-request)]
+      (is (= :post (sup/req-method approve-req)))
+      (is (= "/api/v1/expenses/receipts/rec-1/approve" (sup/req-uri approve-req)))
+      (is (= "cat-default" (:expense_category_id (sup/req-params approve-req)))))))
+
 (deftest post-selected-validation-failure-is-reported
   (testing "invalid receipt data is reported and batch finishes safely"
     (sup/reset-db!)
@@ -104,6 +123,19 @@
         (is (= "r.jpg" (.-name uploaded)))
         (is (= "payer-1" payer-id))
         (is (not (true? (sup/req-format-content-type req))))))))
+
+(deftest upload-receipt-falls-back-to-tenant-default-expense-category
+  (testing "upload-receipt uses the tenant default expense category when no user default is set"
+    (sup/reset-db!)
+    (swap! rf-db/app-db assoc-in [:user-expenses :settings :data :default-expense-category-id] nil)
+    (swap! rf-db/app-db assoc-in [:user-expenses :expense-categories :items]
+      [{:id "cat-default" :is-default true}])
+    (let [file (js/File. #js ["abc"] "r.jpg" #js {:type "image/jpeg"})]
+      (rf/dispatch-sync [:user-expenses/upload-receipt file])
+      (let [req (sup/last-http-request)
+            body (sup/req-body req)]
+        (is (= :post (sup/req-method req)))
+        (is (= "cat-default" (.get body "expense_category_id")))))))
 
 (deftest upload-receipt-success-queues-ocr
   (testing "upload-receipt-success automatically triggers OCR"

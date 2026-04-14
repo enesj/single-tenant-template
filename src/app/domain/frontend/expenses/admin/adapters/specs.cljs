@@ -96,6 +96,7 @@
   {:id :expense-categories
    :fields [{:id :name :label "Name" :type :text}
             {:id :exclude-from-reports :label "Exclude from reports" :type :boolean}
+            {:id :is-default :label "Default?" :type :boolean}
             {:id :created-at :label "Created at" :type :datetime}
             {:id :updated-at :label "Updated at" :type :datetime}]})
 

@@ -195,6 +195,8 @@
                          :values [{:id (java.util.UUID/randomUUID)
                                    :tenant_id tenant-id
                                    :name (resolve-label (:name cat) locale)
+                                   :exclude_from_reports (boolean (:exclude-from-reports cat))
+                                   :is_default (boolean (:is-default cat))
                                    :created_at now
                                    :updated_at now}]})))
 

@@ -414,6 +414,12 @@
           (let [tenant-id (h/get-tenant-id request)]
             (if-let [id (try-parse-uuid (get-in request [:path-params :id]))]
               (let [body (h/read-body-params request)
+                    default-expense-category-id (when-not (or (:expense_category_id body)
+                                                            (:expense-category-id body))
+                                                  (user-settings/effective-default-expense-category-id db tenant-id user-id))
+                    body (cond-> body
+                           default-expense-category-id
+                           (assoc :expense_category_id default-expense-category-id))
                     expense (if (h/tenant-elevated? request)
                               (receipt-approval/approve-and-post-for-user-any! db user-id id body :tenant-id tenant-id)
                               (receipt-approval/approve-and-post-for-user! db user-id id body :tenant-id tenant-id))

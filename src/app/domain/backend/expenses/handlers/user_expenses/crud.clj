@@ -6,11 +6,12 @@
     [app.domain.backend.expenses.services.user-expenses :as user-expenses]
     [app.shared.model-naming :as model-naming]
     [cheshire.core :as json]
+    [clojure.string :as str]
     [taoensso.timbre :as log]))
 
 (defn- parse-decimal-param
   [raw]
-  (let [value (some-> raw str clojure.string/trim not-empty)]
+  (let [value (some-> raw str str/trim not-empty)]
     (when value
       (try
         (bigdec value)
@@ -127,7 +128,15 @@
         (let [tenant-id (h/get-tenant-id request)]
           (try
             (let [body (or (:body-params request) (json/parse-string (slurp (:body request)) true))
-                  expense-data (select-keys body [:supplier_id :store_id :payer_id :expense_category_id :article_id :purchased_at :total_amount :currency :notes :is_posted :receipt_id])
+                  default-expense-category-id (when-not (or (:expense_category_id body)
+                                                          (:expense-category-id body))
+                                                (user-settings/effective-default-expense-category-id db tenant-id user-id))
+                  expense-data (cond-> (select-keys body [:supplier_id :store_id :payer_id :expense_category_id :article_id :purchased_at :total_amount :currency :notes :is_posted :receipt_id])
+                                 (:expense-category-id body)
+                                 (assoc :expense_category_id (:expense-category-id body))
+
+                                 default-expense-category-id
+                                 (assoc :expense_category_id default-expense-category-id))
                   items (or (:items body) [])]
               (log/debug "Creating user expense" {:user-id user-id :tenant-id tenant-id :expense-data expense-data})
               (let [expense (user-expenses/create-user-expense! db tenant-id user-id expense-data items app-config)]

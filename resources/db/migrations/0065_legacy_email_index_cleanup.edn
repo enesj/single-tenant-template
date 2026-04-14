@@ -1,0 +1,12 @@
+({:action :drop-index
+  :index-name :idx-users-email
+  :model-name :users}
+ {:action :drop-index
+  :index-name :idx-admins-email
+  :model-name :admins}
+ {:action :drop-index
+  :index-name :idx-admin-invitations-email
+  :model-name :admin_invitations}
+ {:action :drop-index
+  :index-name :idx-tenant-invitations-email
+  :model-name :tenant_invitations})

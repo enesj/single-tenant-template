@@ -40,9 +40,22 @@
                    (boolean (:exclude_from_reports form-data))
 
                    :else false)
+        has-default? (or (contains? form-data :is-default)
+                       (contains? form-data :is_default))
+        is-default? (cond
+                      (contains? form-data :is-default)
+                      (boolean (:is-default form-data))
+
+                      (contains? form-data :is_default)
+                      (boolean (:is_default form-data))
+
+                      :else false)
         app-form-data (cond-> (normalization/convert-db-keys->app-keys form-data)
                         has-exclude?
-                        (assoc :exclude-from-reports exclude?))]
+                        (assoc :exclude-from-reports exclude?)
+
+                        has-default?
+                        (assoc :is-default is-default?))]
     (model-naming/app-map-keys->db app-form-data)))
 
 (rf/reg-event-fx

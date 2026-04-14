@@ -46,6 +46,23 @@
 
     :else false))
 
+(defn- has-is-default?
+  [body]
+  (or (contains? body :is-default)
+    (contains? body :is_default)))
+
+(defn- is-default-value
+  "Prefer the canonical app-style kebab-case key when both payload styles are present."
+  [body]
+  (cond
+    (contains? body :is-default)
+    (boolean (:is-default body))
+
+    (contains? body :is_default)
+    (boolean (:is_default body))
+
+    :else false))
+
 (defn list-expense-categories-handler
   [db]
   (fn [request]
@@ -100,8 +117,10 @@
           (let [body (h/read-body-params request)
                 tenant-id (h/get-tenant-id request)
                 exclude? (exclude-from-reports-value body)
+                is-default? (is-default-value body)
                 payload (cond-> {:name (:name body)
-                                 :exclude_from_reports exclude?}
+                                 :exclude_from_reports exclude?
+                                 :is_default is-default?}
                           tenant-id (assoc :tenant_id tenant-id))
                 expense-category (h/to-app ((:create! expense-categories/service) db payload))]
             (h/json-response {:data expense-category} 201))
@@ -130,7 +149,10 @@
                     ;; key must not clobber an existing value.
                     updates (cond-> (select-keys body [:name])
                               (has-exclude-from-reports? body)
-                              (assoc :exclude_from_reports (exclude-from-reports-value body)))
+                              (assoc :exclude_from_reports (exclude-from-reports-value body))
+
+                              (has-is-default? body)
+                              (assoc :is_default (is-default-value body)))
                     updated (some-> ((:update! expense-categories/service) db expense-category-id updates
                                                                            (cond-> {}
                                                                              tenant-id (assoc :tenant-id tenant-id)))
