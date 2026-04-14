@@ -61,3 +61,5 @@
 
 (def context-suggestions-endpoint (api/versioned-endpoint "/expenses/quick-add-context-suggestions"))
 
+(def expense-combinations-endpoint (api/versioned-endpoint "/expenses/quick-add-combinations"))
+

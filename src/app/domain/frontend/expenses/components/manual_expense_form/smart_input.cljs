@@ -61,6 +61,7 @@
         quick-add-related (use-subscribe [:user-expenses/quick-add-related])
         cooccurring-articles (use-subscribe [:user-expenses/cooccurring-articles])
         context-suggestions (use-subscribe [:user-expenses/context-suggestions])
+        expense-combinations (use-subscribe [:user-expenses/expense-combinations])
 
         ;; Core state
         [phase set-phase!] (use-state :items)       ;; :items or :context
@@ -179,6 +180,23 @@
         total-dropdown-count (+ (count (or search-results []))
                                (if (and (not (str/blank? input-text))
                                      (not (search/number-input? input-text))) 1 0))
+
+        ;; Filter expense combinations by already-selected context
+        ;; (category is excluded — combos are store+article patterns)
+        all-combos (get expense-combinations :combinations)
+        filtered-combos (when (seq all-combos)
+                          (let [sel-supplier (some-> context :supplier :id str)
+                                sel-store (some-> context :store :id str)
+                                item-article-ids (when (seq items)
+                                                   (set (map str (keep :article-id items))))]
+                            (cond->> all-combos
+                              sel-supplier (filter #(= sel-supplier (str (:supplier_id %))))
+                              sel-store (filter #(= sel-store (str (:store_id %))))
+                              item-article-ids (filter (fn [combo]
+                                                         (let [combo-article-ids (set (map (comp str :article_id) (:items combo)))]
+                                                           (every? combo-article-ids item-article-ids))))
+                              true seq
+                              true vec)))
 
         ;; Computed totals
         items-total (compute-items-total items)
@@ -331,6 +349,37 @@
                                   (do (set-dropdown-open! false)
                                     (rf/dispatch [:user-expenses/clear-quick-add-search :all])))))
 
+        apply-combination! (fn [combo]
+                             (let [combo-items (mapv (fn [item]
+                                                       {:id (str (random-uuid))
+                                                        :article-id (:article_id item)
+                                                        :label (or (:label item) "")
+                                                        :qty (if (:qty item) (format-decimal (:qty item)) "1")
+                                                        :unit-price (if (:unit_price item) (format-decimal (:unit_price item)) "")})
+                                                 (or (:items combo) []))
+                                   new-context (cond-> {}
+                                                 (:supplier_id combo)
+                                                 (assoc :supplier {:id (:supplier_id combo)
+                                                                   :label (:supplier_label combo)})
+                                                 (:store_id combo)
+                                                 (assoc :store {:id (:store_id combo)
+                                                                :label (:store_label combo)
+                                                                :supplier-id (:supplier_id combo)
+                                                                :supplier-display-name (:supplier_label combo)})
+                                                 (:category_id combo)
+                                                 (assoc :category {:id (:category_id combo)
+                                                                   :label (:category_label combo)}))]
+                               (set-items! combo-items)
+                               (set-context! new-context)
+                               (set-article-mode! (boolean (seq combo-items)))
+                               (set-default-category-preselect-enabled! false)
+                               (when (seq combo-items)
+                                 (let [all-article-ids (->> combo-items (keep :article-id) vec)]
+                                   (when (seq all-article-ids)
+                                     (rf/dispatch [:user-expenses/fetch-cooccurring-articles
+                                                   all-article-ids (:supplier_id combo)]))))
+                               (focus-input!)))
+
         handle-input-keydown (fn [e]
                                (let [key (.-key e)]
                                  (cond
@@ -431,6 +480,7 @@
         (rf/dispatch [:user-expenses/fetch-articles {:limit 200 :offset 0}])
         (rf/dispatch [:user-expenses/fetch-payers {:limit 100 :offset 0}])
         (rf/dispatch [:user-expenses/fetch-expense-categories {:limit 500 :offset 0}])
+        (rf/dispatch [:user-expenses/fetch-expense-combinations])
         (when-not (currency-ui/has-enabled-currencies? profile)
           (rf/dispatch [:profile/fetch]))
         ;; Cleanup quick add search on unmount
@@ -556,6 +606,7 @@
              :items-total items-total
              :currency currency
              :total-dropdown-count total-dropdown-count
+             :filtered-combos filtered-combos
              ;; handlers
              :on-input-change handle-input-change
              :on-input-keydown handle-input-keydown
@@ -568,6 +619,7 @@
              :on-focus-input focus-input!
              :on-cancel-type-picker #(set-type-picker-text! nil)
              :on-set-error set-error!
+             :on-apply-combination apply-combination!
              :focus-item-id focus-item-id
              :on-focus-handled #(set-focus-item-id! nil)}))
 
@@ -586,6 +638,8 @@
              :search-results search-results
              :quick-search-loading? quick-search-loading?
              :context-suggestions context-suggestions
+             :filtered-combos filtered-combos
+             :on-apply-combination apply-combination!
              :available-search-types available-search-types
              :items-total items-total
              :currency currency

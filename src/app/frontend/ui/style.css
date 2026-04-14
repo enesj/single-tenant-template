@@ -60,3 +60,13 @@
 .ds-filter-date-range-day-picker .has-data-day {
   border-radius: 0.375rem;
 }
+
+/* ── Marquee scroll animation for combination chips ────────────── */
+@keyframes marquee {
+  0% { transform: translateX(0%); }
+  100% { transform: translateX(-100%); }
+}
+
+@theme {
+  --animate-marquee: marquee var(--marquee-duration, 5s) linear infinite;
+}

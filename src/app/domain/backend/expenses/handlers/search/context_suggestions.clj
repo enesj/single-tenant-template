@@ -45,6 +45,7 @@
     (sql/format
       {:select [[:st.id :id]
                 [:st.display_name :label]
+                [:st.address :address]
                 [:st.supplier_id :supplier_id]
                 [:sup.display_name :supplier_display_name]
                 [[:count [:distinct :aa.article_id]] :article_coverage]
@@ -58,7 +59,7 @@
                [:= :e.tenant_id tenant-id]
                [:in :aa.article_id article-ids]
                [:is-not :e.store_id nil]]
-       :group-by [:st.id :st.display_name :st.supplier_id :sup.display_name]
+       :group-by [:st.id :st.display_name :st.address :st.supplier_id :sup.display_name]
        :having [:= [:count [:distinct :aa.article_id]] (count article-ids)]
        :order-by [[:article_coverage :desc] [:frequency :desc] [:st.display_name :asc]]
        :limit limit})

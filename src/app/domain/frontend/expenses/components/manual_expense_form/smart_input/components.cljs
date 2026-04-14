@@ -201,7 +201,8 @@
                                       (str (or (:supplier-id s) (:supplier_id s))))))
         wrap-store (fn [s]
                      {:id (:id s)
-                      :label (or (:label s) (:display-name s) (:display_name s) "")
+                      :label (or (:address s)
+                               (:label s) (:display-name s) (:display_name s) "")
                       :entity-type :store
                       :entity s})
         dedupe-by-id (fn [items]
@@ -279,6 +280,58 @@
                   :else
                   (get local-groups-by-type entity-type)))))
       vec)))
+
+(defui combination-chip
+  "A single expense combination chip showing supplier, store, count, and article names.
+   Articles scroll horizontally on hover when there are 3+ items."
+  [{:keys [combo on-apply]}]
+  (let [supplier (:supplier_label combo)
+        store-address (:store_address combo)
+        store (or store-address (:store_label combo))
+        items (:items combo)
+        item-count (count items)
+        store-short (if (> (count store) 20) (str (subs store 0 17) "...") store)
+        articles-text (str/join ", " (map :label items))
+        should-scroll? (>= item-count 3)]
+    ($ :button
+      {:type "button"
+       :class (str "group flex flex-col items-start gap-0.5 px-3 py-2 rounded-xl "
+                "border-2 border-base-300 bg-base-100 "
+                "hover:border-primary hover:bg-primary/5 "
+                "transition-all cursor-pointer text-left min-w-0 max-w-[280px]")
+       :on-click #(on-apply combo)}
+      ($ :div {:class "flex items-center gap-1.5 w-full"}
+        ($ :span {:class "text-sm font-semibold text-base-content truncate"}
+          supplier)
+        ($ :span {:class "text-xs text-base-content/40"} "\u00B7")
+        ($ :span {:class "text-xs text-base-content/60 truncate"}
+          store-short)
+        ($ :span {:class "text-xs text-base-content/40 ml-auto shrink-0"}
+          (str item-count)))
+      ($ :div {:class "w-full overflow-hidden"}
+        ($ :span {:class (str "text-xs text-base-content/40 whitespace-nowrap inline-block"
+                           (if should-scroll?
+                             " group-hover:animate-marquee"
+                             " truncate max-w-full"))
+                  :style (when should-scroll?
+                           #js {"--marquee-duration"
+                                (str (max 3 (/ (count articles-text) 10)) "s")})}
+          articles-text)))))
+
+(defui combination-picks
+  "Shows filtered expense combination quick-picks with a label."
+  [{:keys [t combos on-apply-combination]}]
+  (when (seq combos)
+    ($ :div {:class "space-y-2"}
+      ($ :p {:class "text-sm text-base-content/50"}
+        (t :smart-expense/recent-combinations))
+      ($ :div {:class "flex flex-wrap gap-2"}
+        (for [combo combos]
+          ($ combination-chip
+            {:key (str "combo-" (:supplier_id combo) "-" (:store_id combo)
+                    "-" (hash (map :article_id (:items combo))))
+             :combo combo
+             :on-apply on-apply-combination}))))))
 
 (defui quick-picks
   "Shows top N options as clickable chips when only one entity type is missing."

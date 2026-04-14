@@ -243,3 +243,40 @@
   (fn [db _]
     (assoc-in db (context-suggestions-path)
               {:loading? false :suppliers [] :stores [] :categories []})))
+
+;; ── Expense combinations (quick-fill templates) ─────────────────────
+
+(defn- combinations-path []
+  [:user-expenses :expense-combinations])
+
+(rf/reg-event-fx
+  :user-expenses/fetch-expense-combinations
+  common-interceptors
+  (fn [{:keys [db]} _]
+    {:db (assoc-in db (combinations-path) {:loading? true :combinations []})
+     :http-xhrio (http/api-request
+                   {:method :get
+                    :uri endpoints/expense-combinations-endpoint
+                    :params {:limit 10}
+                    :on-success [:user-expenses/expense-combinations-success]
+                    :on-failure [:user-expenses/expense-combinations-failure]})}))
+
+(rf/reg-event-db
+  :user-expenses/expense-combinations-success
+  common-interceptors
+  (fn [db [response]]
+    (assoc-in db (combinations-path)
+              {:loading? false
+               :combinations (vec (or (:combinations response) []))})))
+
+(rf/reg-event-db
+  :user-expenses/expense-combinations-failure
+  common-interceptors
+  (fn [db [error]]
+    (log/warn "Expense combinations fetch failed" {:error error})
+    (assoc-in db (combinations-path) {:loading? false :combinations []})))
+
+(rf/reg-sub
+  :user-expenses/expense-combinations
+  (fn [db _]
+    (get-in db (combinations-path))))

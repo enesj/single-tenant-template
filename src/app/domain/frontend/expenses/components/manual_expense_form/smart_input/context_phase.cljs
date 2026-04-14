@@ -5,7 +5,7 @@
     [app.domain.frontend.expenses.components.form-fields.helpers
      :refer [format-decimal safe-parse-number]]
     [app.domain.frontend.expenses.components.manual-expense-form.smart-input.components
-     :refer [autocomplete-dropdown entity-chip phase-two-quick-pick-groups
+     :refer [autocomplete-dropdown combination-picks entity-chip phase-two-quick-pick-groups
              quick-picks type-picker]]
     [app.domain.frontend.expenses.components.manual-expense-form.smart-input.constants
      :refer [supplier-color-palette]]
@@ -24,6 +24,7 @@
   [{:keys [t items context input-text input-ref
            dropdown-open? highlight-idx type-picker-text creating?
            search-results quick-search-loading? context-suggestions
+           filtered-combos on-apply-combination
            items-total currency currency-options
            payers payer-id purchased-at notes submitting?
            on-cancel
@@ -43,6 +44,12 @@
                             (on-set-phase :items)
                             (on-focus-input))}
       (t :smart-expense/back-to-items))
+
+    ;; Expense combination quick-picks (filtered by current context)
+    ($ combination-picks
+      {:t t
+       :combos filtered-combos
+       :on-apply-combination on-apply-combination})
 
     ;; Items summary
     ($ :div {:class "bg-base-100 rounded-2xl border border-base-200 p-4"}
