@@ -20,7 +20,7 @@
            search-results quick-search-loading? cooccurring-pick-items
            focused-quick-pick-groups available-search-types items-total
            currency total-dropdown-count focus-item-id
-           filtered-combos
+           filtered-combos top-manual-articles
            ;; handlers
            on-input-change on-input-keydown on-select-result
            on-create-inline on-type-pick on-remove-context
@@ -96,6 +96,19 @@
              :on-create on-create-inline
              :input-text (str/trim input-text)
              :anchor-ref input-ref})))
+
+      ;; Top articles from manual purchases (initial state, before article-mode)
+      (when (and (empty? items)
+              (not article-mode?)
+              (str/blank? input-text)
+              (seq top-manual-articles))
+        ($ :div {:class "space-y-2"}
+          ($ :p {:class "text-sm text-base-content/50"}
+            (t :smart-expense/top-articles))
+          ($ quick-picks
+            {:entity-type :article
+             :items top-manual-articles
+             :on-select on-select-result})))
 
       ;; Co-occurring article suggestions (article mode)
       (when (seq cooccurring-pick-items)

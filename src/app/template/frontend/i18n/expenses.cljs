@@ -108,6 +108,7 @@
     :smart-expense/title              "Novi trošak"
     :smart-expense/subtitle           "Počnite s dobavljačem, trgovinom, kategorijom ili artiklom"
     :smart-expense/recent-combinations "Nedavne kupovine"
+    :smart-expense/top-articles        "Često kupovani artikli"
     :smart-expense/searching          "Pretraživanje..."
     :smart-expense/create-prefix      "Kreiraj "
     :smart-expense/what-is            (fn [text] (str "Šta je " text "?"))
@@ -429,6 +430,7 @@
     :smart-expense/title              "New Expense"
     :smart-expense/subtitle           "Start with supplier, store, category, or article"
     :smart-expense/recent-combinations "Recent purchases"
+    :smart-expense/top-articles        "Frequently purchased articles"
     :smart-expense/searching          "Searching..."
     :smart-expense/create-prefix      "Create "
     :smart-expense/what-is            (fn [text] (str "What is " text "?"))

@@ -149,37 +149,6 @@
         related-articles (if related-matches?
                            (or (get-in quick-add-related [:related :articles]) articles)
                            articles)
-        ;; Co-occurring article suggestions (article-mode) or normal quick picks
-        raw-focused-quick-pick-groups (when (and (str/blank? input-text)
-                                              (not article-mode?)
-                                              (< (count available-search-types) 4))
-                                        (build-quick-pick-groups
-                                          available-search-types
-                                          suppliers
-                                          related-stores
-                                          expense-categories
-                                          related-articles
-                                          selected-supplier-id))
-        focused-quick-pick-supplier-color-map (build-quick-pick-supplier-color-map
-                                                raw-focused-quick-pick-groups
-                                                supplier-color-palette)
-        focused-quick-pick-groups (some-> raw-focused-quick-pick-groups
-                                    (colorize-quick-pick-groups focused-quick-pick-supplier-color-map))
-        cooccurring-pick-items (when (and article-mode?
-                                       (str/blank? input-text)
-                                       (seq cooccurring-articles))
-                                 (->> cooccurring-articles
-                                   (mapv (fn [a]
-                                           {:id (or (:id a) "")
-                                            :label (or (:label a) "")
-                                            :entity-type :article
-                                            :last-price (:last_price a)
-                                            :last-price-source (:last_price_source a)
-                                            :entity a}))))
-
-        total-dropdown-count (+ (count (or search-results []))
-                               (if (and (not (str/blank? input-text))
-                                     (not (search/number-input? input-text))) 1 0))
 
         ;; Filter expense combinations by already-selected context
         ;; (category is excluded — combos are store+article patterns)
@@ -197,6 +166,63 @@
                                                            (every? combo-article-ids item-article-ids))))
                               true seq
                               true vec)))
+
+        ;; Top articles from manual expense history (derived from combos).
+        ;; Each article is weighted by the sum of combo frequencies it appears in.
+        top-manual-articles (when (seq all-combos)
+                              (->> all-combos
+                                (mapcat (fn [combo]
+                                          (let [freq (or (:frequency combo) 1)]
+                                            (map #(assoc % :freq freq) (:items combo)))))
+                                (group-by (fn [item] (str (:article_id item))))
+                                (map (fn [[_aid items-for-article]]
+                                       (let [first-item (first items-for-article)
+                                             total-freq (reduce + 0 (map :freq items-for-article))]
+                                         {:id (:article_id first-item)
+                                          :label (:label first-item)
+                                          :entity-type :article
+                                          :last-price (:unit_price first-item)
+                                          :entity first-item
+                                          :total-freq total-freq})))
+                                (sort-by :total-freq >)
+                                (take 10)
+                                vec))
+
+        ;; Co-occurring article suggestions (article-mode) or normal quick picks
+        raw-focused-quick-pick-groups (when (and (str/blank? input-text)
+                                              (not article-mode?)
+                                              (< (count available-search-types) 4))
+                                        (build-quick-pick-groups
+                                          available-search-types
+                                          suppliers
+                                          related-stores
+                                          expense-categories
+                                          related-articles
+                                          selected-supplier-id))
+        focused-quick-pick-supplier-color-map (build-quick-pick-supplier-color-map
+                                                raw-focused-quick-pick-groups
+                                                supplier-color-palette)
+        focused-quick-pick-groups (cond-> (some-> raw-focused-quick-pick-groups
+                                           (colorize-quick-pick-groups focused-quick-pick-supplier-color-map))
+                                    ;; When top-manual-articles are shown,
+                                    ;; drop the supplier group to avoid clutter.
+                                    (seq top-manual-articles)
+                                    (->> (remove #(= :supplier (:entity-type %))) seq vec))
+        cooccurring-pick-items (when (and article-mode?
+                                       (str/blank? input-text)
+                                       (seq cooccurring-articles))
+                                 (->> cooccurring-articles
+                                   (mapv (fn [a]
+                                           {:id (or (:id a) "")
+                                            :label (or (:label a) "")
+                                            :entity-type :article
+                                            :last-price (:last_price a)
+                                            :last-price-source (:last_price_source a)
+                                            :entity a}))))
+
+        total-dropdown-count (+ (count (or search-results []))
+                               (if (and (not (str/blank? input-text))
+                                     (not (search/number-input? input-text))) 1 0))
 
         ;; Computed totals
         items-total (compute-items-total items)
@@ -607,6 +633,7 @@
              :currency currency
              :total-dropdown-count total-dropdown-count
              :filtered-combos filtered-combos
+             :top-manual-articles top-manual-articles
              ;; handlers
              :on-input-change handle-input-change
              :on-input-keydown handle-input-keydown
