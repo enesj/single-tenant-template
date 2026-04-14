@@ -259,6 +259,33 @@
                    :alias_action alias-action
                    :source (or source :resolved)})))))))))
 
+(defn- supplier-display-name-for-store-resolution
+  [db supplier-id fallback-name]
+  (or (try
+        (some-> (when supplier-id
+                  ((:get suppliers/service) db supplier-id))
+          :display_name
+          str
+          str/trim
+          not-empty)
+        (catch Exception _
+          nil))
+    (some-> fallback-name str str/trim not-empty)))
+
+(defn- resolve-store-from-current-supplier
+  [db supplier-id merchant supplier-display-name alias-row alias-id opts]
+  (try
+    (stores/resolve-store-from-merchant db supplier-id merchant
+      (cond-> (assoc opts :supplier-display-name supplier-display-name)
+        (map? alias-row)
+        (assoc :store-alias-raw-label (:raw_label alias-row)
+          :store-alias-normalized (:raw_label_normalized alias-row))))
+    (catch Exception e
+      (log/warn e "Failed to resolve/create store from merchant; alias preserved"
+        {:supplier-id supplier-id
+         :store-alias-id alias-id})
+      nil)))
+
 (defn resolve-store-and-alias
   [db supplier-id extraction opts]
   (let [merchant (:merchant extraction)
@@ -266,72 +293,101 @@
         address (some-> merchant :address str str/trim not-empty)
         store-name (some-> merchant :store_name str str/trim not-empty)
         supplier-name (some-> merchant :name str str/trim not-empty)
+        supplier-display-name (supplier-display-name-for-store-resolution db supplier-id supplier-name)
         store-alias-guess (or raw-address address store-name)
         store-guess (or store-name address)]
-    (if (or (nil? supplier-id) (not (seq store-alias-guess)))
+    (if (nil? supplier-id)
       {:store-id nil
        :store-alias-id nil
        :store-guess store-guess
        :alias_action nil
        :source :unknown}
-      (let [alias-row (store-aliases/find-or-create-alias! db store-alias-guess)
-            alias-id (:id alias-row)
-            alias-action (alias-action alias-row)
-            mapped-store-id (:store_id alias-row)]
-        (if mapped-store-id
-          (do
-            (try
-              (when (or (seq store-name) (seq address))
-                (let [mapped-store (stores/get-store db mapped-store-id)
-                      existing-display (some-> mapped-store :display_name str str/trim not-empty)
-                      effective-store-name (or store-name address)
-                      looks-like-supplier-name? (and (seq supplier-name)
-                                                  (seq existing-display)
-                                                  (= (str/lower-case existing-display)
-                                                    (str/lower-case supplier-name)))
-                      looks-like-address? (and (seq address)
-                                            (seq existing-display)
-                                            (= (str/lower-case existing-display)
-                                              (str/lower-case address)))
-                      should-promote-store-name? (or (not (seq existing-display))
-                                                   looks-like-supplier-name?
-                                                   looks-like-address?)
-                      promoted-store-display (if (and (seq supplier-name)
-                                                   (seq address)
-                                                   (or (nil? store-name)
-                                                     (= (str/lower-case effective-store-name)
-                                                       (str/lower-case address))))
-                                               (str/join " " [(str/trim supplier-name) (str/trim address)])
-                                               store-name)]
-                  (when should-promote-store-name?
-                    (stores/update-store! db mapped-store-id
-                      (cond-> {:display_name promoted-store-display}
-                        (seq address) (assoc :address address))
-                      opts))))
-              (catch Exception e
-                (log/warn e "Failed to promote mapped store display_name from merchant.store_name"
-                  {:store-id mapped-store-id
-                   :store-alias-id alias-id})))
-            {:store-id mapped-store-id
-             :store-alias-id alias-id
-             :store-guess store-guess
-             :alias_action alias-action
-             :source :alias})
-          (let [{:keys [store-id store-alias-label]}
-                (try
-                  (stores/resolve-store-from-merchant db supplier-id merchant
-                    (assoc opts
-                      :store-alias-raw-label (:raw_label alias-row)
-                      :store-alias-normalized (:raw_label_normalized alias-row)))
-                  (catch Exception e
-                    (log/warn e "Failed to resolve/create store from merchant; alias preserved"
-                      {:supplier-id supplier-id
-                       :store-alias-id alias-id})
-                    nil))]
-            (when (and alias-id store-id)
-              (store-aliases/map-alias-to-store-if-unmapped! db alias-id store-id 25))
-            {:store-id store-id
-             :store-alias-id alias-id
-             :store-guess (or store-name store-alias-label store-guess)
-             :alias_action alias-action
-             :source :resolved}))))))
+      (if-not (seq store-alias-guess)
+        (let [{:keys [store-id store-alias-label]}
+              (resolve-store-from-current-supplier db supplier-id merchant supplier-display-name nil nil opts)]
+          {:store-id store-id
+           :store-alias-id nil
+           :store-guess (when store-id
+                          (or store-name store-alias-label store-guess supplier-display-name))
+           :alias_action nil
+           :source (if store-id :supplier_only :unknown)})
+        (let [alias-row (store-aliases/find-or-create-alias! db store-alias-guess)
+              alias-id (:id alias-row)
+              alias-action (alias-action alias-row)
+              mapped-store-id (:store_id alias-row)
+              mapped-store (when mapped-store-id
+                             (try
+                               (stores/get-store db mapped-store-id)
+                               (catch Exception e
+                                 (log/warn e "Failed to load mapped store during alias resolution"
+                                   {:store-id mapped-store-id
+                                    :store-alias-id alias-id})
+                                 nil)))
+              mapped-store-supplier-id (:supplier_id mapped-store)
+              mapped-store-mismatch? (and mapped-store-id
+                                       mapped-store-supplier-id
+                                       (not= supplier-id mapped-store-supplier-id))]
+          (cond
+            mapped-store-mismatch?
+            (let [{:keys [store-id store-alias-label]}
+                  (resolve-store-from-current-supplier db supplier-id merchant supplier-display-name alias-row alias-id opts)]
+              (log/info "Ignoring mapped store alias because it belongs to a different supplier"
+                {:supplier-id supplier-id
+                 :store-alias-id alias-id
+                 :mapped-store-id mapped-store-id
+                 :mapped-store-supplier-id mapped-store-supplier-id})
+              {:store-id store-id
+               :store-alias-id nil
+               :store-guess (or store-name store-alias-label store-guess)
+               :alias_action alias-action
+               :source (if store-id :resolved :unknown)})
+
+            mapped-store-id
+            (do
+              (try
+                (when (or (seq store-name) (seq address))
+                  (let [existing-display (some-> mapped-store :display_name str str/trim not-empty)
+                        effective-store-name (or store-name address)
+                        looks-like-supplier-name? (and (seq supplier-name)
+                                                    (seq existing-display)
+                                                    (= (str/lower-case existing-display)
+                                                      (str/lower-case supplier-name)))
+                        looks-like-address? (and (seq address)
+                                              (seq existing-display)
+                                              (= (str/lower-case existing-display)
+                                                (str/lower-case address)))
+                        should-promote-store-name? (or (not (seq existing-display))
+                                                     looks-like-supplier-name?
+                                                     looks-like-address?)
+                        promoted-store-display (if (and (seq supplier-name)
+                                                     (seq address)
+                                                     (or (nil? store-name)
+                                                       (= (str/lower-case effective-store-name)
+                                                         (str/lower-case address))))
+                                                 (str/join " " [(str/trim supplier-name) (str/trim address)])
+                                                 store-name)]
+                    (when should-promote-store-name?
+                      (stores/update-store! db mapped-store-id
+                        (cond-> {:display_name promoted-store-display}
+                          (seq address) (assoc :address address))
+                        opts))))
+                (catch Exception e
+                  (log/warn e "Failed to promote mapped store display_name from merchant.store_name"
+                    {:store-id mapped-store-id
+                     :store-alias-id alias-id})))
+              {:store-id mapped-store-id
+               :store-alias-id alias-id
+               :store-guess store-guess
+               :alias_action alias-action
+               :source :alias})
+
+            :else
+            (let [{:keys [store-id store-alias-label]}
+                  (resolve-store-from-current-supplier db supplier-id merchant supplier-display-name alias-row alias-id opts)]
+              (when (and alias-id store-id)
+                (store-aliases/map-alias-to-store-if-unmapped! db alias-id store-id 25))
+              {:store-id store-id
+               :store-alias-id alias-id
+               :store-guess (or store-name store-alias-label store-guess)
+               :alias_action alias-action
+               :source (if store-id :resolved :unknown)})))))))

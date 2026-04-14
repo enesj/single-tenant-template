@@ -5,6 +5,7 @@
     [app.domain.backend.expenses.services.articles :as articles]
     [app.domain.backend.expenses.services.receipts.queries :as receipt-queries]
     [app.domain.backend.expenses.services.receipts.status :as receipt-status]
+    [app.domain.backend.expenses.services.stores :as stores]
     [app.domain.backend.expenses.workers.receipt-ocr.common :as common]
     [app.domain.backend.expenses.workers.receipt-ocr.extraction.hybrid-items :as hybrid-items]
     [app.domain.backend.expenses.workers.receipt-ocr.extraction.item-aliases :as item-aliases]
@@ -42,6 +43,37 @@
    (shape/lines-total-mismatch? items total-amount))
   ([items total-amount provider-confidence]
    (shape/lines-total-mismatch? items total-amount provider-confidence)))
+
+(defn- store-evidence-present?
+  [extraction store-guess]
+  (let [merchant (:merchant extraction)
+        raw-address (some-> merchant :raw_address str str/trim not-empty)
+        address (some-> merchant :address str str/trim not-empty)
+        store-name (some-> merchant :store_name str str/trim not-empty)
+        store-guess* (some-> store-guess str str/trim not-empty)]
+    (boolean (or raw-address address store-name store-guess*))))
+
+(defn- store-supplier-mismatch?
+  [db supplier-id store-id]
+  (when (and supplier-id store-id)
+    (let [store (try
+                  (stores/get-store db store-id)
+                  (catch Exception e
+                    (log/warn e "Failed to load resolved store while checking OCR supplier/store consistency"
+                      {:supplier-id supplier-id
+                       :store-id store-id})
+                    nil))
+          store-supplier-id (:supplier_id store)]
+      (boolean (and store-supplier-id
+                 (not= supplier-id store-supplier-id))))))
+
+(defn- store-resolution-review-required?
+  [db extraction supplier-id store-id store-guess]
+  (let [store-evidence? (store-evidence-present? extraction store-guess)]
+    (boolean
+      (and store-evidence?
+        (or (nil? store-id)
+          (store-supplier-mismatch? db supplier-id store-id))))))
 
 ^{:clj-kondo/ignore [:unused-private-var]
   :clojure-lsp/ignore [:unused-private-var]}
@@ -239,6 +271,12 @@
                :source :unknown})))
         store-source (:source store-res)
         store-alias-action (:alias_action store-res)
+        store-review-required? (store-resolution-review-required?
+                                 db
+                                 extraction
+                                 supplier-id
+                                 store-id
+                                 store-guess)
         provider-name (or (some-> (:provider extract-result) str str/trim not-empty)
                         "mistral")
         suspicious-item-aliases (suspicious-item-alias-candidates (:items extraction))
@@ -258,10 +296,18 @@
                :reconciliation-changed? changed?
                :reconciliation-changes changes
                :post-processing post-processing}))
+        _ (when store-review-required?
+            (log/info "Receipt extraction requires review because store evidence did not resolve consistently"
+              {:receipt-id receipt-id
+               :supplier-id supplier-id
+               :store-id store-id
+               :store-guess store-guess
+               :store-source store-source}))
         status (if (and valid-shape?
                      guesses
                      (not (review-required? guesses))
-                     (not undefined-supplier?))
+                     (not undefined-supplier?)
+                     (not store-review-required?))
                  "extracted"
                  "review_required")
         provider-confidence (:provider_confidence extraction)
@@ -327,14 +373,14 @@
       db
       receipt-id
       (merge {:raw_extract_json raw-extract-json
-              :parsed_markdown markdown-content}
+              :parsed_markdown markdown-content
+              :supplier_alias_id supplier-alias-id
+              :store_guess store-guess
+              :store_alias_id store-alias-id}
         (select-keys guesses [:supplier_guess
                               :total_amount_guess
                               :currency_guess
-                              :purchased_at_guess])
-        (when supplier-alias-id {:supplier_alias_id supplier-alias-id})
-        (when store-guess {:store_guess store-guess})
-        (when store-alias-id {:store_alias_id store-alias-id})))
+                              :purchased_at_guess])))
     (receipt-status/update-status! db receipt-id db-status {:error_message nil :error_details nil})
     (log/info "Receipt extraction alias metrics"
       {:receipt-id receipt-id

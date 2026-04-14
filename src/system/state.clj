@@ -12,6 +12,8 @@
 
 (defonce instance (atom (future ::never-run)))
 (defonce state    (atom nil))
+
+(defonce lifecycle-lock (Object.))
 (defonce postcss-watcher  (atom nil))
 (defonce backend-watcher (atom nil))
 

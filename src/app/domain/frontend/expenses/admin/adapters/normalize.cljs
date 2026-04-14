@@ -140,6 +140,7 @@
                   :normalized_key [:normalized-key]
                   :address [:address]
                   :created_at [:created-at]
+                  :updated_at [:updated-at]
                   ;; Expand feature: number of stores for this supplier
                   :store_count [:store-count]}}))
 

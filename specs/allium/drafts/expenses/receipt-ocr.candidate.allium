@@ -222,6 +222,12 @@ rule HandleOCRExtractionSuccess {
         extraction.merchant?.raw_address
         ?? extraction.merchant?.address
         ?? extraction.merchant?.store_name
+    let has_store_evidence =
+        extraction.merchant?.raw_address != null
+        or extraction.merchant?.address != null
+        or extraction.merchant?.store_name != null
+        or guesses.store_guess != null
+    let resolved = resolve_canonical_supplier_store(extraction)
 
     ensures: receipt.raw_extract_json = provider_extraction
     ensures: receipt.extraction = extraction
@@ -246,6 +252,10 @@ rule HandleOCRExtractionSuccess {
 
     ensures:
         if receipt.requires_human_review:
+            receipt.status = review_required
+        else if has_store_evidence and resolved.store = null:
+            receipt.status = review_required
+        else if resolved.store != null and resolved.supplier != null and resolved.store.supplier != resolved.supplier:
             receipt.status = review_required
         else:
             receipt.status = extracted

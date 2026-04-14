@@ -88,3 +88,16 @@
           (is (re-find #"receipts\.purchased_at_guess <= \?" sql-lc))
           (is (re-find #"receipts\.created_at >= \?" sql-lc))
           (is (re-find #"receipts\.updated_at <= \?" sql-lc)))))))
+
+(deftest get-receipt-refine-context-prefers-supplier-alias-and-hides-mismatched-store-context-test
+  (testing "supplier alias wins over a conflicting store alias in refine context"
+    (let [captured-sql (atom nil)]
+      (with-redefs [jdbc/execute-one! (fn [_db sql-params _opts]
+                                        (reset! captured-sql sql-params)
+                                        nil)]
+        (receipt-queries/get-receipt-refine-context :db (UUID/randomUUID))
+        (let [sql-lc (some-> @captured-sql first str str/lower-case)]
+          (is (string? sql-lc))
+          (is (re-find #"coalesce\(sup_from_alias\.id, sup_from_store\.id\)" sql-lc))
+          (is (re-find #"coalesce\(sup_from_alias\.normalized_key, sup_from_store\.normalized_key\)" sql-lc))
+          (is (re-find #"case when .*sup_from_alias\.id is null.*sup_from_store\.id = sup_from_alias\.id.* then st\.id else null end" sql-lc)))))))

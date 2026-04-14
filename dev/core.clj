@@ -2,13 +2,16 @@
   (:require
     [app.template.backend.core :as backend]
     [clojure.java.io :as io]
+    [clojure.string :as str]
     [nrepl.server :as nrepl]
     [shadow.cljs.devtools.api :as shadow.api]
     [shadow.cljs.devtools.server :as shadow.server]
     [system.core :refer [restart-system start-system]]
     [system.state :as system-state]
     [system.watchers :as watchers]
-    [taoensso.timbre :as log]))
+    [taoensso.timbre :as log])
+  (:import
+    [java.net BindException InetSocketAddress ServerSocket]))
 
 (defn suppress-stderr []
   (let [env (System/getenv "DEV_SUPPRESS_STDERR")
@@ -53,7 +56,70 @@
                :dbname dbname
                :user user})))
 
-(defn start-dev []
+(def ^:private dev-nrepl-port 7888)
+
+(defn- port-free?
+  [port]
+  (try
+    (with-open [socket (ServerSocket.)]
+      (.setReuseAddress socket true)
+      (.bind socket (InetSocketAddress. "127.0.0.1" port))
+      true)
+    (catch BindException _
+      false)
+    (catch Exception _
+      false)))
+
+(defn- shadow-already-running?
+  [e]
+  (and (instance? clojure.lang.ExceptionInfo e)
+    (str/includes? (or (ex-message e) "")
+      "shadow-cljs already running in project")))
+
+(defn- ensure-shadow-watch!
+  []
+  (try
+    (shadow.server/start!)
+    (shadow.api/watch :app)
+    (shadow.api/nrepl-select :app)
+    (log/info {:event :dev/shadow-watch-started
+               :builds [:app]
+               :status :started
+               :note "(shadow.api/watch :test) currently commented out"})
+    {:status :started}
+    (catch clojure.lang.ExceptionInfo e
+      (if (shadow-already-running? e)
+        (let [message (ex-message e)]
+          (log/warn {:event :dev/shadow-already-running
+                     :status :reused
+                     :message message
+                     :action "Reusing external shadow-cljs instance; skipping local shadow start/watch."
+                     :hint "Stop the existing shadow-cljs JVM if you need a clean single-process dev session."})
+          {:status :reused
+           :message message})
+        (throw e)))))
+
+(defn- ensure-dev-nrepl!
+  []
+  (if (port-free? dev-nrepl-port)
+    (do
+      (nrepl/start-server :port dev-nrepl-port)
+      (log/info {:event :dev/nrepl-started
+                 :port dev-nrepl-port
+                 :status :started})
+      {:status :started
+       :port dev-nrepl-port})
+    (do
+      (log/warn {:event :dev/nrepl-already-running
+                 :status :reused
+                 :port dev-nrepl-port
+                 :action "Skipping duplicate nREPL start."
+                 :hint "Connect to the existing dev nREPL or stop it before starting another dev JVM."})
+      {:status :reused
+       :port dev-nrepl-port})))
+
+(defn start-dev
+  []
   (log/info {:event :dev/start-called
              :cwd (System/getProperty "user.dir")
              :thread (.getName (Thread/currentThread))})
@@ -67,18 +133,10 @@
              :models-watcher-set? (boolean @system-state/models-watcher)})
   ;;(println "CREATING GO BLOCK FOR POSTCSS WATCH")
   ;;(go (watchers/postcss-watch))
-  (shadow.server/start!)
-  ;; Start watching builds on main thread
-  (shadow.api/watch :app)
-  ;;(shadow.api/watch :test)
-  ;; Select browser REPL on main thread before starting nREPL
-  (shadow.api/nrepl-select :app)
-  (nrepl/start-server :port 7888)
-  (log/info {:event :dev/nrepl-started
-             :port 7888})
-  (log/info {:event :dev/shadow-watch-started
-             :builds [:app]
-             :note "(shadow.api/watch :test) currently commented out"})
-  (log/info {:event :dev/start-dev-finished
-             :watchers [:backend :models]
-             :admin-url "http://localhost:8085"}))
+  (let [shadow-status (ensure-shadow-watch!)
+        nrepl-status (ensure-dev-nrepl!)]
+    (log/info {:event :dev/start-dev-finished
+               :watchers [:backend :models]
+               :admin-url "http://localhost:8085"
+               :shadow-status (:status shadow-status)
+               :nrepl-status (:status nrepl-status)})))
