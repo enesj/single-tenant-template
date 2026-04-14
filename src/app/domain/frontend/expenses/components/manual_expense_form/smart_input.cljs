@@ -13,11 +13,12 @@
     [app.domain.frontend.expenses.components.manual-expense-form.smart-input.components
      :refer [build-quick-pick-groups]]
     [app.domain.frontend.expenses.components.manual-expense-form.smart-input.constants
-     :refer [create-events create-field-names]]
+     :refer [create-events create-field-names supplier-color-palette]]
     [app.domain.frontend.expenses.components.manual-expense-form.smart-input.context-phase
      :refer [context-phase-view]]
     [app.domain.frontend.expenses.components.manual-expense-form.smart-input.helpers
-     :refer [compute-items-total current-related-context
+     :refer [build-supplier-color-map colorize-quick-pick-groups
+             compute-items-total current-related-context
              focused-search-types payer-default-id prepare-submit-values
              validate-form]]
     [app.domain.frontend.expenses.components.manual-expense-form.smart-input.items-phase
@@ -72,6 +73,10 @@
         [highlight-idx set-highlight-idx!] (use-state -1)
         [type-picker-text set-type-picker-text!] (use-state nil)
         [creating? set-creating!] (use-state false)
+        ;; One-shot focus signal: when an article is added we set this to the
+        ;; new item id, the matching item-row picks it up via use-effect and
+        ;; calls back to clear it. Keeps qty-ref encapsulated in the row.
+        [focus-item-id set-focus-item-id!] (use-state nil)
 
         ;; Form values (Phase 2)
         [currency set-currency!] (use-state "BAM")
@@ -117,6 +122,7 @@
                          (search/merge-search-results local-search-results filtered-quick-search-results 10))
         selected-supplier-id (some-> context :supplier :id)
         selected-supplier-id-str (some-> selected-supplier-id str)
+        supplier-color-map (build-supplier-color-map suppliers supplier-color-palette)
         ;; Per-supplier full store pool — populated lazily by
         ;; ::supplier-stores-events/fetch-stores-for-supplier when a
         ;; supplier becomes selected (see use-effect below). The local
@@ -141,16 +147,17 @@
                            (or (get-in quick-add-related [:related :articles]) articles)
                            articles)
         ;; Co-occurring article suggestions (article-mode) or normal quick picks
-        focused-quick-pick-groups (when (and (str/blank? input-text)
-                                          (not article-mode?)
-                                          (< (count available-search-types) 4))
-                                    (build-quick-pick-groups
-                                      available-search-types
-                                      suppliers
-                                      related-stores
-                                      expense-categories
-                                      related-articles
-                                      selected-supplier-id))
+        focused-quick-pick-groups (some-> (when (and (str/blank? input-text)
+                                                  (not article-mode?)
+                                                  (< (count available-search-types) 4))
+                                            (build-quick-pick-groups
+                                              available-search-types
+                                              suppliers
+                                              related-stores
+                                              expense-categories
+                                              related-articles
+                                              selected-supplier-id))
+                                    (colorize-quick-pick-groups supplier-color-map))
         cooccurring-pick-items (when (and article-mode?
                                        (str/blank? input-text)
                                        (seq cooccurring-articles))
@@ -176,7 +183,8 @@
                          (js/setTimeout #(.focus el) 60)))
 
         add-item! (fn [article-id label-text last-price]
-                    (let [new-item {:id (str (random-uuid))
+                    (let [new-id (str (random-uuid))
+                          new-item {:id new-id
                                     :article-id article-id
                                     :label label-text
                                     :qty "1"
@@ -191,6 +199,7 @@
                       (set-highlight-idx! -1)
                       (set-type-picker-text! nil)
                       (set-article-mode! true)
+                      (set-focus-item-id! new-id)
                       (rf/dispatch [:user-expenses/clear-quick-add-search :all])
                       (rf/dispatch [:user-expenses/fetch-cooccurring-articles
                                     all-article-ids selected-supplier-id])))
@@ -531,7 +540,9 @@
              :on-remove-item remove-item!
              :on-focus-input focus-input!
              :on-cancel-type-picker #(set-type-picker-text! nil)
-             :on-set-error set-error!}))
+             :on-set-error set-error!
+             :focus-item-id focus-item-id
+             :on-focus-handled #(set-focus-item-id! nil)}))
 
         ;; Phase 2: Context + Review
         (when (= phase :context)
@@ -559,6 +570,7 @@
              :submitting? submitting?
              :on-submit on-submit
              :on-cancel on-cancel
+             :supplier-color-map supplier-color-map
              :suppliers suppliers
              :stores phase-two-stores
              :expense-categories expense-categories

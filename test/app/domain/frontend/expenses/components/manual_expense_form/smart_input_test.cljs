@@ -51,6 +51,41 @@
           (smart-input/current-related-context {:supplier {:id "sup-1"}
                                                 :store {:id "store-1"}})))))
 
+(deftest supplier-color-map-links-supplier-and-store-quick-picks
+  (let [palette [{:supplier "supplier-a" :store "store-a"}
+                 {:supplier "supplier-b" :store "store-b"}]]
+    (testing "valid suppliers get stable first-seen palette slots"
+      (is (= {"sup-1" {:supplier "supplier-a" :store "store-a"}
+              "sup-2" {:supplier "supplier-b" :store "store-b"}}
+            (smart-input/build-supplier-color-map
+              [{:id "sup-1"}
+               {:id nil}
+               {:id "sup-2"}
+               {:id "sup-1"}]
+              palette))))
+
+    (testing "supplier and store quick-picks share the same hue, while unrelated types stay untouched"
+      (let [supplier-color-map (smart-input/build-supplier-color-map
+                                 [{:id "sup-1"}
+                                  {:id "sup-2"}]
+                                 palette)
+            groups [{:entity-type :supplier
+                     :items [{:id "sup-1" :label "Bingo"}
+                             {:id "sup-2" :label "Konzum"}]}
+                    {:entity-type :store
+                     :items [{:id "store-1" :label "PJ 91" :entity {:supplier_id "sup-1"}}
+                             {:id "store-2" :label "Branch 47" :supplier_id "sup-2"}
+                             {:id "store-3" :label "Unknown"}]}
+                    {:entity-type :category
+                     :items [{:id "cat-1" :label "Household"}]}]
+            colorized (smart-input/colorize-quick-pick-groups groups supplier-color-map)]
+        (is (= ["supplier-a" "supplier-b"]
+              (mapv :chip-class (get-in colorized [0 :items]))))
+        (is (= ["store-a" "store-b" nil]
+              (mapv :chip-class (get-in colorized [1 :items]))))
+        (is (= [nil]
+              (mapv :chip-class (get-in colorized [2 :items]))))))))
+
 (deftest build-quick-pick-groups-uses-top-10-for-single-missing-type
   (testing "a single remaining entity type shows up to 10 local candidates"
     (let [stores (mapv (fn [n]

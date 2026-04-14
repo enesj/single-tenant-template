@@ -8,7 +8,7 @@
      :refer [autocomplete-dropdown entity-chip phase-two-quick-pick-groups
              quick-picks type-picker]]
     [app.domain.frontend.expenses.components.manual-expense-form.smart-input.helpers
-     :refer [entity-type-label]]
+     :refer [colorize-quick-pick-groups entity-type-label]]
     [clojure.string :as str]
     [uix.core :refer [$ defui]]))
 
@@ -21,17 +21,16 @@
   [{:keys [t items context input-text input-ref
            dropdown-open? highlight-idx type-picker-text creating?
            search-results quick-search-loading? context-suggestions
-           available-search-types items-total currency currency-options
+           items-total currency currency-options
            payers payer-id purchased-at notes submitting?
-           on-submit on-cancel
+           on-cancel supplier-color-map
            suppliers stores expense-categories articles
            ;; handlers
            on-input-change on-input-keydown on-select-result
            on-create-inline on-type-pick on-remove-context
            on-set-phase on-focus-input on-set-payer-id
            on-set-purchased-at on-set-currency on-set-notes
-           on-set-error on-cancel-type-picker on-handle-submit
-           submit-disabled?]}]
+           on-cancel-type-picker submit-disabled?]}]
   ($ :div {:class "space-y-6"}
 
     ;; Back to items link
@@ -58,7 +57,7 @@
               ($ :span "📦")
               ($ :span {:class "flex-1 truncate"} (:label item))
               ($ :span {:class "font-mono"}
-                (str q " \u00D7 " (format-decimal p))))))))
+                (str q " × " (format-decimal p))))))))
 
     ;; Context chips (already selected)
     (when (seq context)
@@ -79,14 +78,16 @@
       (when (seq missing)
         (let [missing-set (set missing)
               selected-supplier-id (some-> context :supplier :id)
-              quick-pick-groups (when (str/blank? input-text)
-                                  (phase-two-quick-pick-groups missing
-                                    context-suggestions
-                                    suppliers
-                                    stores
-                                    expense-categories
-                                    articles
-                                    selected-supplier-id))
+              raw-quick-pick-groups (when (str/blank? input-text)
+                                      (phase-two-quick-pick-groups missing
+                                        context-suggestions
+                                        suppliers
+                                        stores
+                                        expense-categories
+                                        articles
+                                        selected-supplier-id))
+              quick-pick-groups (some-> raw-quick-pick-groups
+                                  (colorize-quick-pick-groups supplier-color-map))
               filtered-results (filterv
                                  (fn [r]
                                    (let [et (keyword (or (:entity-type r) (:entity_type r)))]
@@ -101,8 +102,7 @@
                     ($ :p {:class "text-sm text-base-content/50"}
                       (str (t :smart-expense/pick-prefix) (entity-type-label t entity-type)))
                     ($ quick-picks
-                      {:t t
-                       :entity-type entity-type
+                      {:entity-type entity-type
                        :items items
                        :on-select on-select-result})))))
 

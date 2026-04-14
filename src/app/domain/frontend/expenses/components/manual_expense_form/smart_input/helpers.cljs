@@ -112,3 +112,68 @@
     (:store context) {:entity-type :store :entity-id (get-in context [:store :id])}
     (:supplier context) {:entity-type :supplier :entity-id (get-in context [:supplier :id])}
     :else nil))
+
+(defn build-supplier-color-map
+  "Build `{supplier-id-string → palette-slot}` so that supplier chips and
+   their stores share a hue. Slots are assigned in first-seen supplier
+   order, skipping missing ids and duplicate suppliers, so the first N
+   valid suppliers get distinct colors and assignment stays stable across
+   renders as long as the supplier list order does."
+  [suppliers palette]
+  (let [n (count palette)]
+    (if (or (zero? n) (empty? suppliers))
+      {}
+      (->> suppliers
+        (keep (fn [supplier]
+                (some-> (:id supplier) str)))
+        distinct
+        (map-indexed (fn [i supplier-id]
+                       [supplier-id (nth palette (mod i n))]))
+        (into {})))))
+
+(defn- store-supplier-id
+  [item]
+  (or (get-in item [:entity :supplier-id])
+    (get-in item [:entity :supplier_id])
+    (:supplier-id item)
+    (:supplier_id item)))
+
+(defn colorize-quick-pick-groups
+  "Inject a per-item `:chip-class` so supplier rows and the store rows
+   that belong to them share a hue. Categories/articles pass through
+   untouched. Items whose supplier is missing from the color map (e.g.
+   stores with no supplier id) are left without an override and fall
+   back to the default chip style."
+  [groups supplier-color-map]
+  (mapv
+    (fn [{:keys [entity-type items] :as group}]
+      (assoc group :items
+        (mapv
+          (fn [item]
+            (let [supplier-id-str (case entity-type
+                                    :supplier (some-> (:id item) str)
+                                    :store (some-> (store-supplier-id item) str)
+                                    nil)
+                  slot (when supplier-id-str
+                         (get supplier-color-map supplier-id-str))
+                  klass (when slot
+                          (case entity-type
+                            :supplier (:supplier slot)
+                            :store (:store slot)
+                            nil))]
+              (cond-> item
+                klass (assoc :chip-class klass))))
+          items)))
+    groups))
+
+(defn supplier-chip-class
+  "Return the supplier-variant chip class for the given supplier id, or
+   nil if the id is not in the color map."
+  [supplier-color-map supplier-id]
+  (some-> (get supplier-color-map (some-> supplier-id str)) :supplier))
+
+(defn store-chip-class
+  "Return the store-variant chip class for the given supplier id, or nil
+   if the supplier id is not in the color map."
+  [supplier-color-map supplier-id]
+  (some-> (get supplier-color-map (some-> supplier-id str)) :store))

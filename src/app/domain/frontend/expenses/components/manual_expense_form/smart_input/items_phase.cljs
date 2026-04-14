@@ -19,12 +19,12 @@
            dropdown-open? highlight-idx type-picker-text creating?
            search-results quick-search-loading? cooccurring-pick-items
            focused-quick-pick-groups available-search-types items-total
-           currency total-dropdown-count
+           currency total-dropdown-count focus-item-id
            ;; handlers
            on-input-change on-input-keydown on-select-result
            on-create-inline on-type-pick on-remove-context
            on-update-item on-remove-item on-focus-input
-           on-cancel-type-picker on-set-error]}]
+           on-cancel-type-picker on-set-error on-focus-handled]}]
   ($ :div {:class "space-y-4"}
 
     ;; Welcome prompt
@@ -53,7 +53,9 @@
                        :item item
                        :on-change on-update-item
                        :on-remove on-remove-item
-                       :on-enter-price on-focus-input}))))
+                       :on-enter-price on-focus-input
+                       :auto-focus-qty? (= focus-item-id (:id item))
+                       :on-focus-handled on-focus-handled}))))
 
     ;; The BIG search input
     ($ :div {:class "relative"

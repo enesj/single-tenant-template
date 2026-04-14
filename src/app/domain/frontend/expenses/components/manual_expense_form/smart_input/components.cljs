@@ -257,18 +257,18 @@
 
 (defui quick-picks
   "Shows top N options as clickable chips when only one entity type is missing."
-  [{:keys [entity-type items on-select t]}]
+  [{:keys [entity-type items on-select]}]
   (let [{:keys [icon]} (search/entity-type-info entity-type)
-        style (get chip-styles entity-type "bg-base-200 text-base-content")]
+        default-style (get chip-styles entity-type "bg-base-200 text-base-content")]
     (when (seq items)
       ($ :div {:class "flex flex-wrap gap-2"}
-        (for [{:keys [id label] :as item} items]
+        (for [{:keys [id label chip-class] :as item} items]
           ($ :button {:key (str (name entity-type) "-" id)
                       :type "button"
                       :class (str "inline-flex items-center gap-2 px-4 py-2.5 rounded-full "
                                "text-base font-medium border cursor-pointer "
                                "transition-all hover:shadow-md hover:scale-[1.02] "
-                               style)
+                               (or chip-class default-style))
                       :on-click (fn [e] (.preventDefault e) (.stopPropagation e)
                                   (on-select item))}
             ($ :span icon)
@@ -276,44 +276,74 @@
 
 (defui item-row
   "A single item row with inline qty and price inputs."
-  [{:keys [item on-change on-remove on-enter-price]}]
+  [{:keys [item on-change on-remove on-enter-price auto-focus-qty? on-focus-handled]}]
   (let [{:keys [id label qty unit-price]} item
         qty-ref (use-ref nil)
         price-ref (use-ref nil)
+        ;; Latest-callback ref: lets the use-effect read the current
+        ;; `on-focus-handled` without listing it as a dep (it's recreated
+        ;; every parent render, so adding it would re-run the effect on
+        ;; every render).
+        handled-ref (use-ref nil)
         line-total (* (or (safe-parse-number qty) 1)
-                     (or (safe-parse-number unit-price) 0))]
-    ($ :div {:class (str "flex items-center gap-3 py-3 px-4 bg-white rounded-xl "
-                      "border border-base-200 group")}
+                     (or (safe-parse-number unit-price) 0))
+        input-class (str "text-center text-lg font-semibold p-2 h-12 rounded-lg "
+                      "border-2 border-base-300 bg-white "
+                      "focus:border-primary focus:outline-none focus:shadow-sm "
+                      "transition-colors")
+        label-class "text-sm font-bold text-base-content/60 select-none"]
+    (reset! handled-ref on-focus-handled)
+    ;; One-shot focus signal from parent: when this row is the freshly-added
+    ;; item, focus the qty input and select its value so the user can type the
+    ;; new quantity immediately, then notify the parent to clear the signal.
+    (use-effect
+      (fn []
+        (when (and auto-focus-qty? @qty-ref)
+          (js/setTimeout
+            (fn []
+              (when-let [el @qty-ref]
+                (.focus el)
+                (when (.-select el) (.select el))))
+            30)
+          (when-let [cb @handled-ref] (cb)))
+        js/undefined)
+      [auto-focus-qty?])
+    ($ :div {:class (str "flex items-center gap-3 py-3 px-4 bg-base-100 rounded-xl "
+                      "border-2 border-base-200 group")}
       ;; Article icon + name
       ($ :span {:class "text-xl flex-none"} "📦")
       ($ :span {:class "flex-1 text-base font-medium truncate min-w-0"} label)
 
       ;; Qty input
-      ($ :div {:class "flex items-center gap-1.5"}
-        ($ :label {:class "text-xs text-base-content/40"} "\u00D7")
+      ($ :div {:class "flex items-center gap-2"}
+        ($ :label {:class label-class} "\u00D7")
         ($ :input {:ref qty-ref
                    :type "number"
                    :step "1"
                    :min "0"
-                   :class (str "w-16 text-center text-base p-2 h-10 rounded-lg border "
-                            "border-base-300 focus:border-primary focus:outline-none")
+                   :class (str "w-20 " input-class)
                    :value (str qty)
+                   :on-focus (fn [e] (when-let [el (.-target e)]
+                                       (when (.-select el) (.select el))))
                    :on-change (fn [e] (on-change id :qty (.. e -target -value)))
                    :on-key-down (fn [e]
                                   (when (= (.-key e) "Enter")
                                     (.preventDefault e)
-                                    (when-let [el @price-ref] (.focus el))))}))
+                                    (when-let [el @price-ref]
+                                      (.focus el)
+                                      (when (.-select el) (.select el)))))}))
 
       ;; Price input
-      ($ :div {:class "flex items-center gap-1.5"}
-        ($ :label {:class "text-xs text-base-content/40"} "@")
+      ($ :div {:class "flex items-center gap-2"}
+        ($ :label {:class label-class} "@")
         ($ :input {:ref price-ref
                    :type "number"
                    :step "0.01"
                    :min "0"
-                   :class (str "w-24 text-center text-base p-2 h-10 rounded-lg border "
-                            "border-base-300 focus:border-primary focus:outline-none")
+                   :class (str "w-28 " input-class)
                    :value (str unit-price)
+                   :on-focus (fn [e] (when-let [el (.-target e)]
+                                       (when (.-select el) (.select el))))
                    :on-change (fn [e] (on-change id :unit-price (.. e -target -value)))
                    :on-key-down (fn [e]
                                   (when (= (.-key e) "Enter")
@@ -321,7 +351,7 @@
                                     (when on-enter-price (on-enter-price))))}))
 
       ;; Line total display
-      ($ :span {:class "text-sm font-mono text-base-content/50 w-20 text-right"}
+      ($ :span {:class "text-base font-mono font-bold text-base-content w-24 text-right"}
         (when (pos? line-total) (format-decimal line-total)))
 
       ;; Remove button
