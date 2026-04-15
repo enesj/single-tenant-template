@@ -42,6 +42,22 @@
                 "limit" 5}
               (sup/req-params req)))))))
 
+(deftest fetch-quick-add-history-sends-correct-request
+  (testing "phase-1 history fetch hits the dedicated endpoint and forwards supplier filters"
+    (sup/reset-db!)
+    (rf/dispatch-sync [:user-expenses/fetch-quick-add-history "sup-1" 10])
+    (let [req (sup/last-http-request)]
+      (is (= :get (sup/req-method req)))
+      (is (= "/api/v1/expenses/quick-add-history" (sup/req-uri req)))
+      (is (= {:limit 10
+              :supplier_id "sup-1"}
+            (sup/req-params req)))))
+  (testing "global history fetch omits supplier_id when none is selected"
+    (sup/reset-db!)
+    (rf/dispatch-sync [:user-expenses/fetch-quick-add-history nil 10])
+    (is (= {:limit 10}
+          (sup/req-params (sup/last-http-request))))))
+
 (deftest clear-quick-add-search-resets-the-entity-slice
   (testing "clear-quick-add-search resets the selected search bucket"
     (sup/reset-db!)
@@ -54,6 +70,21 @@
             :loading? false
             :results []}
           (get-in @rf-db/app-db [:user-expenses :quick-add-search :all])))))
+
+(deftest clear-quick-add-history-resets-history-slice
+  (testing "clear-quick-add-history removes stale phase-1 history"
+    (sup/reset-db!)
+    (swap! rf-db/app-db assoc-in [:user-expenses :quick-add-history]
+      {:loading? true
+       :loaded? true
+       :stores [{:id 1}]
+       :articles [{:id 2}]})
+    (rf/dispatch-sync [:user-expenses/clear-quick-add-history])
+    (is (= {:loading? false
+            :loaded? false
+            :stores []
+            :articles []}
+          (get-in @rf-db/app-db [:user-expenses :quick-add-history])))))
 
 (deftest clear-quick-add-related-resets-related-slice
   (testing "clear-quick-add-related resets the related candidates state"

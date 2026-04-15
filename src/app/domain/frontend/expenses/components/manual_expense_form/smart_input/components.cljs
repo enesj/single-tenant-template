@@ -163,10 +163,17 @@
     (->> base-items
       (take n)
       (mapv (fn [item]
-              {:id (:id item)
-               :label (or (when name-fn (name-fn item)) "")
-               :entity-type entity-type
-               :entity item})))))
+              (let [last-price (or (:last-price item) (:last_price item))
+                    last-price-source (or (:last-price-source item) (:last_price_source item))
+                    last-price-supplier-name (or (:last-price-supplier-display-name item)
+                                               (:last_price_supplier_display_name item))]
+                (cond-> {:id (:id item)
+                         :label (or (when name-fn (name-fn item)) "")
+                         :entity-type entity-type
+                         :entity item}
+                  (some? last-price) (assoc :last-price last-price)
+                  last-price-source (assoc :last-price-source last-price-source)
+                  last-price-supplier-name (assoc :last-price-supplier-display-name last-price-supplier-name))))))))
 
 (defn build-quick-pick-groups
   [missing-types suppliers stores expense-categories articles selected-supplier-id]
@@ -184,6 +191,41 @@
       (filter #(seq (:items %)))
       vec)))
 
+(defn- dedupe-by
+  [key-fn items]
+  (let [seen (volatile! #{})]
+    (->> items
+      (keep (fn [item]
+              (let [k (key-fn item)]
+                (when-not (contains? @seen k)
+                  (vswap! seen conj k)
+                  item))))
+      vec)))
+
+(defn- store-supplier-id
+  [store]
+  (or (:supplier-id store)
+    (:supplier_id store)
+    (get-in store [:entity :supplier-id])
+    (get-in store [:entity :supplier_id])))
+
+(defn- store-visible-label
+  [store]
+  (or (:label store)
+    (:address store)
+    (:display-name store)
+    (:display_name store)
+    ""))
+
+(defn- store-visible-dedupe-key
+  [store]
+  (let [supplier-id (some-> (store-supplier-id store) str)
+        label (some-> (store-visible-label store) str str/trim str/lower-case)]
+    (if (str/blank? label)
+      (or (some-> (:id store) str)
+        (str supplier-id "::missing-label"))
+      (str supplier-id "::" label))))
+
 (defn phase-two-quick-pick-groups
   [missing-types context-suggestions suppliers stores expense-categories articles selected-supplier-id]
   (let [limit (if (= 1 (count missing-types)) 10 5)
@@ -195,25 +237,71 @@
                                     selected-supplier-id)
                                (map (juxt :entity-type identity))
                                (into {}))
+        supplier-name-by-id (->> suppliers
+                              (keep (fn [supplier]
+                                      (let [supplier-id (some-> (:id supplier) str)
+                                            supplier-label (or (:label supplier)
+                                                             (:display-name supplier)
+                                                             (:display_name supplier))]
+                                        (when (and supplier-id
+                                                (not (str/blank? (str supplier-label))))
+                                          [supplier-id supplier-label]))))
+                              (into {}))
         store-matches-supplier? (fn [s]
                                   (or (nil? selected-supplier-id)
                                     (= (str selected-supplier-id)
-                                      (str (or (:supplier-id s) (:supplier_id s))))))
+                                      (str (store-supplier-id s)))))
         wrap-store (fn [s]
                      {:id (:id s)
-                      :label (or (:address s)
-                               (:label s) (:display-name s) (:display_name s) "")
+                      :label (store-visible-label s)
                       :entity-type :store
                       :entity s})
-        dedupe-by-id (fn [items]
-                       (let [seen (volatile! #{})]
-                         (->> items
-                           (keep (fn [item]
-                                   (let [id (:id item)]
-                                     (when-not (contains? @seen id)
-                                       (vswap! seen conj id)
-                                       item))))
-                           vec)))]
+        wrap-supplier (fn [supplier]
+                        {:id (:id supplier)
+                         :label (or (:label supplier)
+                                  (:display-name supplier)
+                                  (:display_name supplier)
+                                  "")
+                         :entity-type :supplier
+                         :entity supplier})
+        context-store-items (->> (:stores context-suggestions)
+                              (filter store-matches-supplier?)
+                              (mapv wrap-store))
+        pool-store-items (->> stores
+                           (filter store-matches-supplier?)
+                           (mapv wrap-store))
+        store-candidates (cond
+                           (seq context-store-items)
+                           (if selected-supplier-id
+                             (concat context-store-items pool-store-items)
+                             context-store-items)
+
+                           :else
+                           pool-store-items)
+        merged-store-items (->> store-candidates
+                             (dedupe-by store-visible-dedupe-key)
+                             (take limit)
+                             vec)
+        inferred-supplier-items (->> merged-store-items
+                                  (keep (fn [store]
+                                          (let [supplier-id (some-> (store-supplier-id store) str)
+                                                supplier-label (or (get-in store [:entity :supplier-display-name])
+                                                                 (get-in store [:entity :supplier_display_name])
+                                                                 (get supplier-name-by-id supplier-id))]
+                                            (when (and supplier-id
+                                                    (not (str/blank? (str supplier-label))))
+                                              {:id supplier-id
+                                               :label supplier-label
+                                               :entity-type :supplier
+                                               :entity {:id supplier-id
+                                                        :display_name supplier-label}}))))
+                                  (dedupe-by #(some-> (:id %) str)))
+        merged-supplier-items (->> (concat
+                                     (mapv wrap-supplier (:suppliers context-suggestions))
+                                     inferred-supplier-items)
+                                (dedupe-by #(some-> (:id %) str))
+                                (take limit)
+                                vec)]
     (->> missing-types
       (keep (fn [entity-type]
               (let [raw-suggested (case entity-type
@@ -222,31 +310,20 @@
                                     :category (:categories context-suggestions)
                                     [])]
                 (cond
-                  ;; Stores: when a supplier is selected, filter to
-                  ;; that supplier's branches. Otherwise show the top
-                  ;; stores from the full local pool (user history
-                  ;; order), independent of which supplier they belong
-                  ;; to — context suggestions seed extra picks but the
-                  ;; pool dominates.
+                  ;; Suppliers: prefer article-context suggestions and backfill the
+                  ;; owners of whatever store chips are currently visible so colors
+                  ;; stay paired on-screen.
+                  (= entity-type :supplier)
+                  (when (seq merged-supplier-items)
+                    {:entity-type :supplier
+                     :items merged-supplier-items})
+
+                  ;; Stores: with no selected supplier, keep phase-2 focused on the
+                  ;; article-context matches only. Once a supplier is selected,
+                  ;; allow its broader branch pool to fill the remaining slots.
                   (= entity-type :store)
-                  (let [history-items (->> raw-suggested
-                                        (filter store-matches-supplier?)
-                                        (mapv wrap-store))
-                        pool-items (->> stores
-                                     (filter store-matches-supplier?)
-                                     (mapv wrap-store))
-                        ;; No supplier selected → pool first (top-used
-                        ;; stores dominate); supplier selected → history
-                        ;; suggestions first, then remaining branches.
-                        ordered (if selected-supplier-id
-                                  (concat history-items pool-items)
-                                  (concat pool-items history-items))
-                        merged (->> ordered
-                                 dedupe-by-id
-                                 (take limit)
-                                 vec)]
-                    (when (seq merged)
-                      {:entity-type :store :items merged}))
+                  (when (seq merged-store-items)
+                    {:entity-type :store :items merged-store-items})
 
                   ;; Categories: merge suggestions with full local pool
                   ;; so the user always sees all available categories,
@@ -260,7 +337,7 @@
                         history-items (mapv wrap-cat raw-suggested)
                         pool-items (mapv wrap-cat expense-categories)
                         merged (->> (concat history-items pool-items)
-                                 dedupe-by-id
+                                 (dedupe-by #(some-> (:id %) str))
                                  vec)]
                     (when (seq merged)
                       {:entity-type :category :items merged}))
@@ -280,58 +357,6 @@
                   :else
                   (get local-groups-by-type entity-type)))))
       vec)))
-
-(defui combination-chip
-  "A single expense combination chip showing supplier, store, count, and article names.
-   Articles scroll horizontally on hover when there are 3+ items."
-  [{:keys [combo on-apply]}]
-  (let [supplier (:supplier_label combo)
-        store-address (:store_address combo)
-        store (or store-address (:store_label combo))
-        items (:items combo)
-        item-count (count items)
-        store-short (if (> (count store) 20) (str (subs store 0 17) "...") store)
-        articles-text (str/join ", " (map :label items))
-        should-scroll? (>= item-count 3)]
-    ($ :button
-      {:type "button"
-       :class (str "group flex flex-col items-start gap-0.5 px-3 py-2 rounded-xl "
-                "border-2 border-base-300 bg-base-100 "
-                "hover:border-primary hover:bg-primary/5 "
-                "transition-all cursor-pointer text-left min-w-0 max-w-[280px]")
-       :on-click #(on-apply combo)}
-      ($ :div {:class "flex items-center gap-1.5 w-full"}
-        ($ :span {:class "text-sm font-semibold text-base-content truncate"}
-          supplier)
-        ($ :span {:class "text-xs text-base-content/40"} "\u00B7")
-        ($ :span {:class "text-xs text-base-content/60 truncate"}
-          store-short)
-        ($ :span {:class "text-xs text-base-content/40 ml-auto shrink-0"}
-          (str item-count)))
-      ($ :div {:class "w-full overflow-hidden"}
-        ($ :span {:class (str "text-xs text-base-content/40 whitespace-nowrap inline-block"
-                           (if should-scroll?
-                             " group-hover:animate-marquee"
-                             " truncate max-w-full"))
-                  :style (when should-scroll?
-                           #js {"--marquee-duration"
-                                (str (max 3 (/ (count articles-text) 10)) "s")})}
-          articles-text)))))
-
-(defui combination-picks
-  "Shows filtered expense combination quick-picks with a label."
-  [{:keys [t combos on-apply-combination]}]
-  (when (seq combos)
-    ($ :div {:class "space-y-2"}
-      ($ :p {:class "text-sm text-base-content/50"}
-        (t :smart-expense/recent-combinations))
-      ($ :div {:class "flex flex-wrap gap-2"}
-        (for [combo combos]
-          ($ combination-chip
-            {:key (str "combo-" (:supplier_id combo) "-" (:store_id combo)
-                    "-" (hash (map :article_id (:items combo))))
-             :combo combo
-             :on-apply on-apply-combination}))))))
 
 (defui quick-picks
   "Shows top N options as clickable chips when only one entity type is missing."

@@ -195,6 +195,135 @@
         base-articles))
     []))
 
+(defn- history-top-stores
+  "Top stores ranked by usage. When `manual-only?` is true, only manual
+  expenses (receipt_id IS NULL) are counted."
+  [db tenant-id limit supplier-id manual-only?]
+  (if tenant-id
+    (let [usage-count-expr [:count [:distinct :e.id]]
+          last-used-expr [:max :e.purchased_at]]
+      (jdbc/execute!
+        db
+        (sql/format
+          {:select [[:st.id :id]
+                    [:st.display_name :display_name]
+                    [:st.supplier_id :supplier_id]
+                    [:sup.display_name :supplier_display_name]
+                    [usage-count-expr :usage_count]
+                    [last-used-expr :last_used_at]]
+           :from [[:expenses :e]]
+           :join [[:stores :st] [:= :st.id :e.store_id]]
+           :left-join [[:suppliers :sup] [:= :sup.id :st.supplier_id]]
+           :where (cond-> [:and
+                           [:= :e.tenant_id tenant-id]
+                           [:is-not :e.store_id nil]]
+                    manual-only? (conj [:is :e.receipt_id nil])
+                    supplier-id (conj [:= :st.supplier_id supplier-id]))
+           :group-by [:st.id :st.display_name :st.supplier_id :sup.display_name]
+           :order-by [[usage-count-expr :desc]
+                      [last-used-expr :desc]
+                      [:st.display_name :asc]]
+           :limit limit})
+        {:builder-fn rs/as-unqualified-lower-maps}))
+    []))
+
+(defn- history-top-articles
+  "Top articles ranked by usage. When `manual-only?` is true, only manual
+  expenses (receipt_id IS NULL) are counted."
+  [db tenant-id limit supplier-id manual-only?]
+  (if tenant-id
+    (let [usage-count-expr [:count [:distinct :ei.expense_id]]
+          last-used-expr [:max :e.purchased_at]
+          base-articles
+          (jdbc/execute!
+            db
+            (sql/format
+              {:select [[:a.id :id]
+                        [:a.canonical_name :canonical_name]
+                        [:a.unit :unit]
+                        [usage-count-expr :usage_count]
+                        [last-used-expr :last_used_at]]
+               :from [[:expense_items :ei]]
+               :join [[:expenses :e] [:= :e.id :ei.expense_id]
+                      [:article_aliases :aa] [:= :aa.id :ei.alias_id]
+                      [:articles :a] [:= :a.id :aa.article_id]]
+               :where (cond-> [:and
+                               [:= :e.tenant_id tenant-id]
+                               [:is-not :aa.article_id nil]]
+                        manual-only? (conj [:is :e.receipt_id nil])
+                        supplier-id (conj [:= :e.supplier_id supplier-id]))
+               :group-by [:a.id :a.canonical_name :a.unit]
+               :order-by [[usage-count-expr :desc]
+                          [last-used-expr :desc]
+                          [:a.canonical_name :asc]]
+               :limit limit})
+            {:builder-fn rs/as-unqualified-lower-maps})
+          article-ids (mapv :id base-articles)
+          supplier-price-map (reduce (fn [acc {:keys [article_id] :as row}]
+                                       (assoc acc article_id row))
+                               {}
+                               (if supplier-id
+                                 (quick-add-article-last-prices db article-ids tenant-id supplier-id)
+                                 []))
+          global-price-map (reduce (fn [acc {:keys [article_id] :as row}]
+                                     (assoc acc article_id row))
+                             {}
+                             (quick-add-article-last-prices db article-ids tenant-id nil))]
+      (mapv (fn [article]
+              (let [supplier-price (get supplier-price-map (:id article))
+                    global-price (get global-price-map (:id article))
+                    chosen-price (or supplier-price global-price)
+                    price-source (cond
+                                   supplier-price "supplier"
+                                   global-price "global"
+                                   :else nil)]
+                (cond-> article
+                  chosen-price (assoc :last_price (:unit_price chosen-price)
+                                 :last_price_source price-source
+                                 :last_price_supplier_display_name (:supplier_display_name chosen-price)))))
+        base-articles))
+    []))
+
+(defn quick-add-history-handler
+  "Returns history-ranked quick-pick candidates for phase 1.
+  Prefers manual-only expenses; falls back to all-expense usage ranking
+  when no manual history exists."
+  [db]
+  (fn [request]
+    (if-let [_user-id (h/get-user-id request)]
+      (if-let [forbidden (h/ensure-role request h/expenses-read-roles "Role required")]
+        forbidden
+        (let [tenant-id (h/get-tenant-id request)
+              limit (min (or (some-> (h/get-param (:query-params request) :limit)
+                               parse-long)
+                           10)
+                      20)
+              supplier-id-raw (h/get-param (:query-params request) :supplier_id)
+              supplier-id (some-> supplier-id-raw h/try-parse-uuid)]
+          (cond
+            (and (some? supplier-id-raw)
+              (not (str/blank? (str supplier-id-raw)))
+              (nil? supplier-id))
+            (h/json-response {:error "Invalid supplier_id"} 400)
+
+            :else
+            (try
+              (let [manual-stores (history-top-stores db tenant-id limit supplier-id true)
+                    manual-articles (history-top-articles db tenant-id limit supplier-id true)
+                    stores (if (seq manual-stores)
+                             manual-stores
+                             (history-top-stores db tenant-id limit supplier-id false))
+                    articles (if (seq manual-articles)
+                               manual-articles
+                               (history-top-articles db tenant-id limit supplier-id false))]
+                (h/json-response {:stores stores :articles articles}))
+              (catch Exception e
+                (log/error e "Error fetching quick add history"
+                  {:tenant-id tenant-id
+                   :supplier-id supplier-id})
+                (h/json-response {:error "Quick add history failed"} 500))))))
+      (h/unauthorized-response))))
+
 (defn quick-add-search-handler
   "Dedicated filtered search for Quick Add expense context and article inputs.
 

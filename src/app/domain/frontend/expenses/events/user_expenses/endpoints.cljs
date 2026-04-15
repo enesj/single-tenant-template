@@ -54,12 +54,11 @@
 
 ;; Quick add search (context-first /expenses/new workflow)
 (def quick-add-search-endpoint (api/versioned-endpoint "/expenses/quick-add-search"))
+(def quick-add-history-endpoint (api/versioned-endpoint "/expenses/quick-add-history"))
 
 (def related-search-endpoint (str list-endpoint "/search/related"))
 
 (def cooccurring-articles-endpoint (api/versioned-endpoint "/expenses/quick-add-cooccurring"))
 
 (def context-suggestions-endpoint (api/versioned-endpoint "/expenses/quick-add-context-suggestions"))
-
-(def expense-combinations-endpoint (api/versioned-endpoint "/expenses/quick-add-combinations"))
 

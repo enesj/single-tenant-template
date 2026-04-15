@@ -148,6 +148,61 @@
                :related {}})))
 
 ;; ─────────────────────────────────────────────
+;; Manual-history quick picks (phase 1 stores/articles)
+;; ─────────────────────────────────────────────
+
+(defn- history-path []
+  [:user-expenses :quick-add-history])
+
+(rf/reg-event-fx
+  :user-expenses/fetch-quick-add-history
+  common-interceptors
+  (fn [{:keys [db]} [supplier-id limit]]
+    {:db (assoc-in db (history-path)
+                   {:loading? true
+                    :loaded? false
+                    :stores []
+                    :articles []})
+     :http-xhrio (http/api-request
+                   {:method :get
+                    :uri endpoints/quick-add-history-endpoint
+                    :params (cond-> {:limit (or limit 10)}
+                              supplier-id (assoc :supplier_id (str supplier-id)))
+                    :on-success [:user-expenses/quick-add-history-success]
+                    :on-failure [:user-expenses/quick-add-history-failure]})}))
+
+(rf/reg-event-db
+  :user-expenses/quick-add-history-success
+  common-interceptors
+  (fn [db [response]]
+    (assoc-in db (history-path)
+              {:loading? false
+               :loaded? true
+               :stores (vec (or (:stores response) []))
+               :articles (vec (or (:articles response) []))})))
+
+(rf/reg-event-db
+  :user-expenses/quick-add-history-failure
+  common-interceptors
+  (fn [db [error]]
+    (log/warn "Quick Add history fetch failed" {:error error})
+    (assoc-in db (history-path)
+              {:loading? false
+               :loaded? true
+               :stores []
+               :articles []})))
+
+(rf/reg-event-db
+  :user-expenses/clear-quick-add-history
+  common-interceptors
+  (fn [db _]
+    (assoc-in db (history-path)
+              {:loading? false
+               :loaded? false
+               :stores []
+               :articles []})))
+
+;; ─────────────────────────────────────────────
 ;; Co-occurring articles (article-mode suggestions)
 ;; ─────────────────────────────────────────────
 
@@ -243,40 +298,3 @@
   (fn [db _]
     (assoc-in db (context-suggestions-path)
               {:loading? false :suppliers [] :stores [] :categories []})))
-
-;; ── Expense combinations (quick-fill templates) ─────────────────────
-
-(defn- combinations-path []
-  [:user-expenses :expense-combinations])
-
-(rf/reg-event-fx
-  :user-expenses/fetch-expense-combinations
-  common-interceptors
-  (fn [{:keys [db]} _]
-    {:db (assoc-in db (combinations-path) {:loading? true :combinations []})
-     :http-xhrio (http/api-request
-                   {:method :get
-                    :uri endpoints/expense-combinations-endpoint
-                    :params {:limit 10}
-                    :on-success [:user-expenses/expense-combinations-success]
-                    :on-failure [:user-expenses/expense-combinations-failure]})}))
-
-(rf/reg-event-db
-  :user-expenses/expense-combinations-success
-  common-interceptors
-  (fn [db [response]]
-    (assoc-in db (combinations-path)
-              {:loading? false
-               :combinations (vec (or (:combinations response) []))})))
-
-(rf/reg-event-db
-  :user-expenses/expense-combinations-failure
-  common-interceptors
-  (fn [db [error]]
-    (log/warn "Expense combinations fetch failed" {:error error})
-    (assoc-in db (combinations-path) {:loading? false :combinations []})))
-
-(rf/reg-sub
-  :user-expenses/expense-combinations
-  (fn [db _]
-    (get-in db (combinations-path))))

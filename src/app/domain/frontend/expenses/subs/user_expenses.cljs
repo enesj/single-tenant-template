@@ -1,6 +1,7 @@
 (ns app.domain.frontend.expenses.subs.user-expenses
   "Subscriptions for user-facing expense dashboard data."
   (:require
+    [app.template.frontend.db.paths :as paths]
     [re-frame.core :as rf]))
 
 ;; Summary
@@ -321,16 +322,24 @@
   (fn [db _]
     (reports-data db :by-category :error)))
 
+(defn- entity-items
+  [db entity-type]
+  (let [ids (get-in db (paths/entity-ids entity-type) [])
+        data (get-in db (paths/entity-data entity-type) {})]
+    (->> ids
+      (keep #(get data %))
+      vec)))
+
 ;; Stores and articles (synced to admin entity store by fetch events)
 (rf/reg-sub
   :user-expenses/stores
   (fn [db _]
-    (get-in db [:admin :expenses :stores :items])))
+    (entity-items db :stores)))
 
 (rf/reg-sub
   :user-expenses/articles
   (fn [db _]
-    (get-in db [:admin :expenses :articles :items])))
+    (entity-items db :articles)))
 
 ;; Search
 (rf/reg-sub
@@ -382,6 +391,15 @@
        :entity-id nil
        :loading? false
        :related {}})))
+
+(rf/reg-sub
+  :user-expenses/quick-add-history
+  (fn [db _]
+    (get-in db [:user-expenses :quick-add-history]
+      {:loading? false
+       :loaded? false
+       :stores []
+       :articles []})))
 
 (rf/reg-sub
   :user-expenses/cooccurring-articles

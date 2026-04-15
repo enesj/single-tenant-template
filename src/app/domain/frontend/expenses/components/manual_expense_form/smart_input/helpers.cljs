@@ -1,77 +1,20 @@
 (ns app.domain.frontend.expenses.components.manual-expense-form.smart-input.helpers
   "Pure helper functions for the smart expense input."
   (:require
-    [app.domain.frontend.expenses.components.form-fields.helpers
-     :refer [safe-parse-number]]
+    [app.domain.frontend.expenses.shared.manual-entry.core :as manual-entry]
     [clojure.string :as str]))
 
-(defn payer-default-id
-  [payers]
-  (or (some #(when (or (:is-default %) (:isDefault %)) (:id %)) payers)
-    (:id (first payers))))
+(def payer-default-id manual-entry/payer-default-id)
 
-(defn expense-category-default-id
-  [expense-categories _settings]
-  (some (fn [category]
-          (when (or (:is-default category) (:isDefault category))
-            (:id category)))
-    (or expense-categories [])))
+(def expense-category-default-id manual-entry/expense-category-default-id)
 
-(defn default-category-chip-to-preselect
-  "Return the normalized default category chip to auto-preselect, or nil
-   when auto-preselection is disabled, a category is already selected, or
-   no default category exists."
-  [expense-categories profile-settings default-category-preselect-enabled? selected-category]
-  (let [default-category-id (some-> (expense-category-default-id expense-categories profile-settings)
-                              str
-                              str/trim
-                              not-empty)]
-    (when (and default-category-preselect-enabled?
-            (nil? selected-category)
-            default-category-id)
-      (some (fn [category]
-              (when (= default-category-id (some-> (:id category) str))
-                {:id (:id category)
-                 :label (or (:name category) "")}))
-        expense-categories))))
+(def default-category-chip-to-preselect manual-entry/default-category-chip-to-preselect)
 
-(defn compute-items-total
-  "Sum line totals for all items."
-  [items]
-  (reduce (fn [acc item]
-            (let [qty (or (safe-parse-number (:qty item)) 1)
-                  price (or (safe-parse-number (:unit-price item)) 0)]
-              (+ acc (* qty price))))
-    0 items))
+(def compute-items-total manual-entry/compute-items-total)
 
-(defn prepare-submit-items
-  "Convert internal items to backend-expected format."
-  [items]
-  (vec
-    (keep (fn [{:keys [label qty unit-price]}]
-            (let [q (or (safe-parse-number qty) 1)
-                  p (or (safe-parse-number unit-price) 0)
-                  total (* q p)]
-              (when (and (not (str/blank? (str label))) (pos? total))
-                {:raw_label (str label)
-                 :qty q
-                 :unit_price p
-                 :line_total total})))
-      items)))
+(def prepare-submit-items manual-entry/prepare-submit-items)
 
-(defn prepare-submit-values
-  [{:keys [items context currency purchased-at payer-id notes]}]
-  (let [prepared (prepare-submit-items items)
-        total (reduce + 0 (map :line_total prepared))]
-    (cond-> {:payer_id payer-id
-             :purchased_at purchased-at
-             :currency currency
-             :total_amount total
-             :items prepared}
-      (:supplier context) (assoc :supplier_id (get-in context [:supplier :id]))
-      (:store context) (assoc :store_id (get-in context [:store :id]))
-      (:category context) (assoc :expense_category_id (get-in context [:category :id]))
-      (not (str/blank? notes)) (assoc :notes notes))))
+(def prepare-submit-values manual-entry/prepare-submit-values)
 
 (defn entity-type-label
   "Translated entity type label."
@@ -99,6 +42,16 @@
 
       :else {:ok? true})))
 
+(defn context-phase-initial-sub-stage
+  "Resolve which phase-2 sub-stage should open first. An explicit requested
+   sub-stage wins; otherwise existing supplier/store context opens directly
+   into store-search and the default flow starts at defaults."
+  [context requested-sub-stage]
+  (or requested-sub-stage
+    (when (or (:supplier context) (:store context))
+      :store-search)
+    :defaults))
+
 (def context-search-order
   [:supplier :store :category])
 
@@ -109,6 +62,60 @@
     (vec (concat
            (remove #(contains? context %) context-search-order)
            [:article]))))
+
+(defn items-phase-quick-pick-types
+  "Return which entity types should be surfaced as visible quick-pick chips
+   in phase 1. Suppliers are intentionally excluded from phase 1 quick-picks
+   so that articles get the prominent slot. Users can still search for suppliers
+   via the search input. Articles always show when not in article-mode."
+  [available-search-types context article-mode?]
+  (cond
+    article-mode?
+    []
+
+    (< (count available-search-types) 4)
+    (vec (remove #{:supplier} available-search-types))
+
+    (empty? context)
+    [:category :article]
+
+    :else
+    [:article]))
+
+(defn items-phase-quick-pick-layout
+  "Split phase-1 quick-pick groups into a top slot and the normal lower slot.
+   When category is still missing, pin the category group near the context-chip
+   area so dismissing the default category keeps the replacement chips in the
+   same visual location."
+  [focused-quick-pick-groups context]
+  (let [top-groups (if (:category context)
+                     []
+                     (->> focused-quick-pick-groups
+                       (filter #(= :category (:entity-type %)))
+                       vec))
+        inline-groups (if (seq top-groups)
+                        (->> focused-quick-pick-groups
+                          (remove #(= :category (:entity-type %)))
+                          vec)
+                        (vec focused-quick-pick-groups))]
+    {:top-groups top-groups
+     :inline-groups inline-groups}))
+
+(defn phase-two-missing-context-types
+  "Return the context types that phase 2 should keep available in the
+   current sub-stage. Defaults keeps category selectable until chosen;
+   store-search keeps supplier/store/category available until chosen."
+  [context sub-stage]
+  (case sub-stage
+    :defaults
+    (if (:category context)
+      []
+      [:category])
+
+    :store-search
+    (vec (remove #(contains? context %) context-search-order))
+
+    (vec (remove #(contains? context %) context-search-order))))
 
 (defn search-placeholder
   [t context active-search? article-mode?]

@@ -4,9 +4,9 @@
     [app.domain.frontend.expenses.components.form-fields.helpers
      :refer [format-decimal]]
     [app.domain.frontend.expenses.components.manual-expense-form.smart-input.components
-     :refer [autocomplete-dropdown combination-picks entity-chip item-row quick-picks type-picker]]
+     :refer [autocomplete-dropdown entity-chip item-row quick-picks type-picker]]
     [app.domain.frontend.expenses.components.manual-expense-form.smart-input.helpers
-     :refer [entity-type-label search-placeholder]]
+     :refer [entity-type-label items-phase-quick-pick-layout search-placeholder]]
     [clojure.string :as str]
     [uix.core :refer [$ defui]]))
 
@@ -19,29 +19,23 @@
            dropdown-open? highlight-idx type-picker-text creating?
            search-results quick-search-loading? cooccurring-pick-items
            focused-quick-pick-groups available-search-types items-total
-           currency total-dropdown-count focus-item-id
-           filtered-combos top-manual-articles
+           currency focus-item-id
            ;; handlers
            on-input-change on-input-keydown on-select-result
            on-create-inline on-type-pick on-remove-context
            on-update-item on-remove-item on-focus-input
-           on-cancel-type-picker on-set-error on-focus-handled
-           on-apply-combination]}]
-  ($ :div {:class "space-y-4"}
+           on-cancel-type-picker on-focus-handled]}]
+  (let [{:keys [top-groups inline-groups]}
+        (items-phase-quick-pick-layout focused-quick-pick-groups context)]
+    ($ :div {:class "space-y-4"}
 
-    ;; Welcome prompt
-    (when (and (empty? items) (empty? context))
-      ($ :div {:class "text-center py-2"}
-        ($ :p {:class "text-2xl font-semibold text-base-content/80 mb-1"}
-          (t :smart-expense/title))
-        ($ :p {:class "text-base text-base-content/50"}
-          (t :smart-expense/subtitle))))
-
-    ;; Expense combination quick-picks (filtered by current context)
-    ($ combination-picks
-      {:t t
-       :combos filtered-combos
-       :on-apply-combination on-apply-combination})
+      ;; Welcome prompt
+      (when (and (empty? items) (empty? context))
+        ($ :div {:class "text-center py-2"}
+          ($ :p {:class "text-2xl font-semibold text-base-content/80 mb-1"}
+            (t :smart-expense/title))
+          ($ :p {:class "text-base text-base-content/50"}
+            (t :smart-expense/subtitle))))
 
       ;; Selected context chips
       (when (seq context)
@@ -52,6 +46,22 @@
                             :label (:label chip)
                             :on-remove #(on-remove-context entity-type)
                             :size :sm}))))
+
+      ;; Keep category quick picks in the same slot where the default category
+      ;; chip appears, so dismissing that chip doesn't push replacement choices
+      ;; to the bottom of the page.
+      (when (seq top-groups)
+        ($ :div {:class "space-y-4"}
+          (for [{:keys [entity-type items]} top-groups]
+            ($ :div {:key (str "items-phase-top-" (name entity-type))
+                     :class "space-y-2"}
+              ($ :p {:class "text-sm text-base-content/50"}
+                (str (t :smart-expense/pick-prefix) (entity-type-label t entity-type)))
+              ($ quick-picks
+                {:t t
+                 :entity-type entity-type
+                 :items items
+                 :on-select on-select-result})))))
 
       ;; Items list
       (when (seq items)
@@ -97,19 +107,6 @@
              :input-text (str/trim input-text)
              :anchor-ref input-ref})))
 
-      ;; Top articles from manual purchases (initial state, before article-mode)
-      (when (and (empty? items)
-              (not article-mode?)
-              (str/blank? input-text)
-              (seq top-manual-articles))
-        ($ :div {:class "space-y-2"}
-          ($ :p {:class "text-sm text-base-content/50"}
-            (t :smart-expense/top-articles))
-          ($ quick-picks
-            {:entity-type :article
-             :items top-manual-articles
-             :on-select on-select-result})))
-
       ;; Co-occurring article suggestions (article mode)
       (when (seq cooccurring-pick-items)
         ($ :div {:class "space-y-2"}
@@ -122,10 +119,10 @@
              :on-select on-select-result})))
 
       ;; Normal quick pick groups (when not in article mode)
-      (when (seq focused-quick-pick-groups)
+      (when (seq inline-groups)
         ($ :div {:class "space-y-4"}
-          (for [{:keys [entity-type items]} focused-quick-pick-groups]
-            ($ :div {:key (str "items-phase-" (name entity-type))
+          (for [{:keys [entity-type items]} inline-groups]
+            ($ :div {:key (str "items-phase-inline-" (name entity-type))
                      :class "space-y-2"}
               ($ :p {:class "text-sm text-base-content/50"}
                 (str (t :smart-expense/pick-prefix) (entity-type-label t entity-type)))
@@ -164,4 +161,4 @@
             (t :smart-expense/hint-has-items)
 
             :else
-            (t :smart-expense/hint-empty))))))
+            (t :smart-expense/hint-empty)))))))

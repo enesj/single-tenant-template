@@ -2,6 +2,7 @@
   "Mobile app entry point — bootstrap, routing, root view."
   (:require
     [ajax.core :as ajax]
+    [app.mobile.frontend.auth-redirect :as auth-redirect]
     [app.mobile.frontend.events]
     [app.mobile.frontend.layout :refer [mobile-layout]]
     [day8.re-frame.http-fx]
@@ -19,6 +20,7 @@
     [app.mobile.frontend.pages.upload :refer [camera-capture-page upload-page]]
     [app.mobile.frontend.routes :as routes]
     [app.template.frontend.events.bootstrap :as bootstrap]
+    [clojure.string :as str]
     [re-frame.core :as rf]
     [taoensso.timbre :as log]
     [uix.core :refer [$ defui]]
@@ -115,15 +117,16 @@
   :mobile/auth-status-loaded
   (fn [{:keys [db]} [_ response]]
     (let [authenticated? (:authenticated response)
-          tenant-required? (:tenant-selection-required response)]
+          tenant-required? (:tenant-selection-required response)
+          current-view (get-in db [:current-route :data :view])
+          current-path (some-> js/window .-location .-pathname)
+          redirect-path (auth-redirect/auth-status-navigation-path authenticated? tenant-required? current-view current-path)]
       {:db (-> db
              (assoc-in [:session :authenticated?] authenticated?)
              (assoc-in [:session :loading?] false))
-       :fx [[:dispatch [:mobile/navigate
-                        (cond
-                          tenant-required? "/m/tenant-select"
-                          authenticated? "/m/dashboard"
-                          :else "/m/login")]]]})))
+       :fx (cond-> []
+             redirect-path
+             (conj [:dispatch [:mobile/navigate redirect-path]]))})))
 
 (rf/reg-event-fx
   :mobile/login-failure

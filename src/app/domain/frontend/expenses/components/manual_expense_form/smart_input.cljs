@@ -18,8 +18,9 @@
      :refer [context-phase-view]]
     [app.domain.frontend.expenses.components.manual-expense-form.smart-input.helpers
      :refer [build-quick-pick-supplier-color-map colorize-quick-pick-groups
-             compute-items-total current-related-context
-             default-category-chip-to-preselect focused-search-types
+             compute-items-total context-phase-initial-sub-stage
+             current-related-context default-category-chip-to-preselect
+             focused-search-types items-phase-quick-pick-types
              payer-default-id prepare-submit-values validate-form]]
     [app.domain.frontend.expenses.components.manual-expense-form.smart-input.items-phase
      :refer [items-phase-view]]
@@ -31,12 +32,6 @@
     [re-frame.core :as rf]
     [uix.core :refer [$ defui use-effect use-ref use-state]]
     [uix.re-frame :refer [use-subscribe]]))
-
-;; ─────────────────────────────────────────────
-;; Well-known "unknown" entity IDs (seeded in DB)
-;; ─────────────────────────────────────────────
-(def ^:private unknown-supplier-id "00000000-0000-0000-0000-000000000001")
-(def ^:private unknown-store-id    "00000000-0000-0000-0000-000000000002")
 
 ;; ─────────────────────────────────────────────
 ;; Main component
@@ -65,12 +60,13 @@
         quick-search-results (use-subscribe [:user-expenses/quick-add-search-results :all])
         quick-search-loading? (use-subscribe [:user-expenses/quick-add-search-loading? :all])
         quick-add-related (use-subscribe [:user-expenses/quick-add-related])
+        quick-add-history (use-subscribe [:user-expenses/quick-add-history])
         cooccurring-articles (use-subscribe [:user-expenses/cooccurring-articles])
         context-suggestions (use-subscribe [:user-expenses/context-suggestions])
-        expense-combinations (use-subscribe [:user-expenses/expense-combinations])
 
         ;; Core state
         [phase set-phase!] (use-state :items)       ;; :items or :context
+        [context-initial-sub-stage set-context-initial-sub-stage!] (use-state nil)
         [items set-items!] (use-state [])            ;; [{:id :article-id :label :qty :unit-price}]
         [context set-context!] (use-state {})        ;; {:supplier {:id :label} :store ... :category ...}
         [input-text set-input-text!] (use-state "")
@@ -149,57 +145,32 @@
         related-matches? (and related-context
                            (= (:entity-type quick-add-related) (:entity-type related-context))
                            (= (:entity-id quick-add-related) (some-> (:entity-id related-context) str)))
-        related-stores (if (and related-matches? (= :supplier (:entity-type related-context)))
-                         (get-in quick-add-related [:related :stores] stores)
-                         stores)
-        related-articles (if related-matches?
-                           (or (get-in quick-add-related [:related :articles]) articles)
-                           articles)
-
-        ;; Filter expense combinations by already-selected context
-        ;; (category is excluded — combos are store+article patterns)
-        all-combos (get expense-combinations :combinations)
-        filtered-combos (when (seq all-combos)
-                          (let [sel-supplier (some-> context :supplier :id str)
-                                sel-store (some-> context :store :id str)
-                                item-article-ids (when (seq items)
-                                                   (set (map str (keep :article-id items))))]
-                            (cond->> all-combos
-                              sel-supplier (filter #(= sel-supplier (str (:supplier_id %))))
-                              sel-store (filter #(= sel-store (str (:store_id %))))
-                              item-article-ids (filter (fn [combo]
-                                                         (let [combo-article-ids (set (map (comp str :article_id) (:items combo)))]
-                                                           (every? combo-article-ids item-article-ids))))
-                              true seq
-                              true vec)))
-
-        ;; Top articles from manual expense history (derived from combos).
-        ;; Each article is weighted by the sum of combo frequencies it appears in.
-        top-manual-articles (when (seq all-combos)
-                              (->> all-combos
-                                (mapcat (fn [combo]
-                                          (let [freq (or (:frequency combo) 1)]
-                                            (map #(assoc % :freq freq) (:items combo)))))
-                                (group-by (fn [item] (str (:article_id item))))
-                                (map (fn [[_aid items-for-article]]
-                                       (let [first-item (first items-for-article)
-                                             total-freq (reduce + 0 (map :freq items-for-article))]
-                                         {:id (:article_id first-item)
-                                          :label (:label first-item)
-                                          :entity-type :article
-                                          :last-price (:unit_price first-item)
-                                          :entity first-item
-                                          :total-freq total-freq})))
-                                (sort-by :total-freq >)
-                                (take 10)
-                                vec))
+        history-loaded? (:loaded? quick-add-history)
+        history-stores (vec (or (:stores quick-add-history) []))
+        history-articles (vec (or (:articles quick-add-history) []))
+        ;; Trust the backend history endpoint which returns usage-ranked
+        ;; data (manual-first, all-expenses fallback). No alphabetical
+        ;; general-pool fallback here.
+        related-stores (cond
+                         (seq history-stores) history-stores
+                         ;; When a supplier is selected and related data
+                         ;; has supplier-specific stores, use those.
+                         (and history-loaded? related-matches?
+                           (= :supplier (:entity-type related-context)))
+                         (get-in quick-add-related [:related :stores] [])
+                         :else [])
+        related-articles (cond
+                           (seq history-articles) history-articles
+                           (and history-loaded? related-matches?)
+                           (or (get-in quick-add-related [:related :articles]) [])
+                           :else [])
 
         ;; Co-occurring article suggestions (article-mode) or normal quick picks
+        items-phase-quick-pick-types* (items-phase-quick-pick-types available-search-types context article-mode?)
         raw-focused-quick-pick-groups (when (and (str/blank? input-text)
-                                              (not article-mode?)
-                                              (< (count available-search-types) 4))
+                                              (seq items-phase-quick-pick-types*))
                                         (build-quick-pick-groups
-                                          available-search-types
+                                          items-phase-quick-pick-types*
                                           suppliers
                                           related-stores
                                           expense-categories
@@ -208,12 +179,8 @@
         focused-quick-pick-supplier-color-map (build-quick-pick-supplier-color-map
                                                 raw-focused-quick-pick-groups
                                                 supplier-color-palette)
-        focused-quick-pick-groups (cond-> (some-> raw-focused-quick-pick-groups
-                                           (colorize-quick-pick-groups focused-quick-pick-supplier-color-map))
-                                    ;; When top-manual-articles are shown,
-                                    ;; drop the supplier group to avoid clutter.
-                                    (seq top-manual-articles)
-                                    (->> (remove #(= :supplier (:entity-type %))) seq vec))
+        focused-quick-pick-groups (some-> raw-focused-quick-pick-groups
+                                    (colorize-quick-pick-groups focused-quick-pick-supplier-color-map))
         cooccurring-pick-items (when (and article-mode?
                                        (str/blank? input-text)
                                        (seq cooccurring-articles))
@@ -325,6 +292,27 @@
                                     c* (if (= entity-type :supplier) (dissoc c* :store) c*)]
                                 c*))))
 
+        begin-context-phase! (fn [requested-sub-stage]
+                               (let [article-ids (->> items (keep :article-id) vec)]
+                                 (set-input-text! "")
+                                 (set-article-mode! false)
+                                 (set-dropdown-open! false)
+                                 (set-highlight-idx! -1)
+                                 (set-type-picker-text! nil)
+                                 (set-context-initial-sub-stage!
+                                   (context-phase-initial-sub-stage
+                                     context
+                                     requested-sub-stage))
+                                 (set-phase! :context)
+                                 (rf/dispatch [:user-expenses/clear-cooccurring-articles])
+                                 (when (seq article-ids)
+                                   (rf/dispatch [:user-expenses/fetch-context-suggestions article-ids]))
+                                 (js/setTimeout
+                                   (fn []
+                                     (when-let [el @input-ref]
+                                       (.focus el)))
+                                   100)))
+
         handle-select-result (fn [result]
                                (let [etype (keyword (or (:entity-type result) (:entity_type result)))
                                      ;; Merge inner :entity fields to top level so add-context!
@@ -381,37 +369,6 @@
                                   (do (set-dropdown-open! false)
                                     (rf/dispatch [:user-expenses/clear-quick-add-search :all])))))
 
-        apply-combination! (fn [combo]
-                             (let [combo-items (mapv (fn [item]
-                                                       {:id (str (random-uuid))
-                                                        :article-id (:article_id item)
-                                                        :label (or (:label item) "")
-                                                        :qty (if (:qty item) (format-decimal (:qty item)) "1")
-                                                        :unit-price (if (:unit_price item) (format-decimal (:unit_price item)) "")})
-                                                 (or (:items combo) []))
-                                   new-context (cond-> {}
-                                                 (:supplier_id combo)
-                                                 (assoc :supplier {:id (:supplier_id combo)
-                                                                   :label (:supplier_label combo)})
-                                                 (:store_id combo)
-                                                 (assoc :store {:id (:store_id combo)
-                                                                :label (:store_label combo)
-                                                                :supplier-id (:supplier_id combo)
-                                                                :supplier-display-name (:supplier_label combo)})
-                                                 (:category_id combo)
-                                                 (assoc :category {:id (:category_id combo)
-                                                                   :label (:category_label combo)}))]
-                               (set-items! combo-items)
-                               (set-context! new-context)
-                               (set-article-mode! (boolean (seq combo-items)))
-                               (set-default-category-preselect-enabled! false)
-                               (when (seq combo-items)
-                                 (let [all-article-ids (->> combo-items (keep :article-id) vec)]
-                                   (when (seq all-article-ids)
-                                     (rf/dispatch [:user-expenses/fetch-cooccurring-articles
-                                                   all-article-ids (:supplier_id combo)]))))
-                               (focus-input!)))
-
         handle-input-keydown (fn [e]
                                (let [key (.-key e)]
                                  (cond
@@ -421,16 +378,7 @@
                                        (cond
                                          ;; Empty input + has items -> transition to context phase
                                          (and (str/blank? text) (= phase :items) (seq items))
-                                         (let [article-ids (->> items (keep :article-id) vec)]
-                                           (set-article-mode! false)
-                                           (set-dropdown-open! false)
-                                           (set-phase! :context)
-                                           (rf/dispatch [:user-expenses/clear-cooccurring-articles])
-                                           (when (seq article-ids)
-                                             (rf/dispatch [:user-expenses/fetch-context-suggestions article-ids]))
-                                           (js/setTimeout
-                                             (fn [] (when-let [el @input-ref] (.focus el)))
-                                             100))
+                                         (begin-context-phase! nil)
 
                                          ;; Highlighted suggestion -> select it
                                          (and dropdown-open?
@@ -498,33 +446,6 @@
                                               :notes notes}))))
                             (set-error! (:error validation)))))
 
-        ;; Quick finish: save with unknown supplier/store when user skips store selection
-        handle-finish-quick
-        (fn []
-          (let [;; Inject unknown supplier + store when not already set
-                ctx (cond-> (or context {})
-                      (not (:supplier context))
-                      (assoc :supplier {:id unknown-supplier-id
-                                        :label "Nepoznat dobavljač"})
-                      (not (:store context))
-                      (assoc :store {:id unknown-store-id
-                                     :label "Nepoznata trgovina"}))
-                validation (validate-form t
-                             {:items items
-                              :context ctx
-                              :payer-id payer-id})]
-            (if (:ok? validation)
-              (do (set-error! nil)
-                (when (fn? on-submit)
-                  (on-submit (prepare-submit-values
-                               {:items items
-                                :context ctx
-                                :currency currency
-                                :purchased-at purchased-at
-                                :payer-id payer-id
-                                :notes notes}))))
-              (set-error! (:error validation)))))
-
         ;; Pre-compute submit disabled for context phase
         submit-disabled? (not (:ok? (validate-form t
                                       {:items items
@@ -539,15 +460,20 @@
         (rf/dispatch [:user-expenses/fetch-articles {:limit 200 :offset 0}])
         (rf/dispatch [:user-expenses/fetch-payers {:limit 100 :offset 0}])
         (rf/dispatch [:user-expenses/fetch-expense-categories {:limit 500 :offset 0}])
-        (rf/dispatch [:user-expenses/fetch-expense-combinations])
-        (when-not (currency-ui/has-enabled-currencies? profile)
-          (rf/dispatch [:profile/fetch]))
-        ;; Cleanup quick add search on unmount
+        ;; Cleanup quick add search only when the form truly unmounts.
         (fn []
           (rf/dispatch [:user-expenses/clear-quick-add-search :all])
           (rf/dispatch [:user-expenses/clear-quick-add-related])
+          (rf/dispatch [:user-expenses/clear-quick-add-history])
           (rf/dispatch [:user-expenses/clear-cooccurring-articles])
           (rf/dispatch [:user-expenses/clear-context-suggestions])))
+      [])
+
+    (use-effect
+      (fn []
+        (when-not (currency-ui/has-enabled-currencies? profile)
+          (rf/dispatch [:profile/fetch]))
+        js/undefined)
       [profile])
 
     (use-effect
@@ -563,15 +489,24 @@
         js/undefined)
       [currency-options profile currency])
 
-    ;; Set default payer once loaded
+    ;; Set default payer once loaded enough to render the form.
     (use-effect
       (fn []
         (when (and (not ready?)
                 (or (seq payers) (not payers-loading?)))
-          (set-ready! true)
-          (set-payer-id! (some-> (payer-default-id payers) str)))
+          (set-ready! true))
         js/undefined)
       [payers payers-loading? ready?])
+
+    ;; Backfill the default payer once payers arrive, unless the user has
+    ;; already made a deliberate selection.
+    (use-effect
+      (fn []
+        (when (and (nil? payer-id)
+                (seq payers))
+          (set-payer-id! (some-> (payer-default-id payers) str)))
+        js/undefined)
+      [payers payer-id])
 
     ;; Preselect the effective default expense category once, without
     ;; re-opening it after the user explicitly closes or replaces it.
@@ -589,6 +524,13 @@
           (set-default-category-preselect-enabled! false))
         js/undefined)
       [selected-category expense-categories profile-settings default-category-preselect-enabled?])
+
+    ;; Load manual-history quick picks for phase 1 and re-scope them when a supplier is selected.
+    (use-effect
+      (fn []
+        (rf/dispatch [:user-expenses/fetch-quick-add-history selected-supplier-id-str 10])
+        js/undefined)
+      [selected-supplier-id-str])
 
     ;; Load related records for focused quick picks when context narrows the search.
     (use-effect
@@ -665,8 +607,6 @@
              :items-total items-total
              :currency currency
              :total-dropdown-count total-dropdown-count
-             :filtered-combos filtered-combos
-             :top-manual-articles top-manual-articles
              ;; handlers
              :on-input-change handle-input-change
              :on-input-keydown handle-input-keydown
@@ -679,9 +619,34 @@
              :on-focus-input focus-input!
              :on-cancel-type-picker #(set-type-picker-text! nil)
              :on-set-error set-error!
-             :on-apply-combination apply-combination!
              :focus-item-id focus-item-id
              :on-focus-handled #(set-focus-item-id! nil)}))
+
+        ;; Phase 1 footer: save or jump straight to store selection
+        (when (and (= phase :items) (seq items))
+          ($ :div {:class (str "sticky bottom-0 bg-white/95 backdrop-blur-sm "
+                            "border-t border-base-200 pt-3 pb-3 -mx-6 px-6 "
+                            "flex items-center gap-3")}
+            ($ :button {:id "btn-add-store"
+                        :type "button"
+                        :class "ds-btn ds-btn-outline ds-btn-lg text-lg mr-auto"
+                        :disabled (or submitting? (some? (:store context)))
+                        :on-click (fn [e]
+                                    (.preventDefault e)
+                                    (begin-context-phase! :store-search))}
+              (t :smart-expense/add-store))
+            (when on-cancel
+              ($ :button {:id "btn-cancel-smart-expense"
+                          :type "button"
+                          :class "ds-btn ds-btn-lg text-lg"
+                          :disabled submitting?
+                          :on-click (fn [e] (.preventDefault e) (on-cancel))}
+                (t :smart-expense/cancel)))
+            ($ :button {:id "btn-save-smart-expense"
+                        :type "submit"
+                        :class "ds-btn ds-btn-primary ds-btn-lg text-lg px-8"
+                        :disabled (or submitting? submit-disabled?)}
+              (if submitting? (t :smart-expense/saving) (t :smart-expense/save)))))
 
         ;; Phase 2: Context + Review
         (when (= phase :context)
@@ -698,16 +663,13 @@
              :search-results search-results
              :quick-search-loading? quick-search-loading?
              :context-suggestions context-suggestions
-             :filtered-combos filtered-combos
-             :on-apply-combination apply-combination!
              :items-total items-total
              :currency currency
              :currency-options currency-options
              :payers payers
              :payer-id payer-id
              :purchased-at purchased-at
-             :submitting? submitting?
-             :on-finish-quick handle-finish-quick
+             :initial-sub-stage context-initial-sub-stage
              :suppliers suppliers
              :stores phase-two-stores
              :expense-categories expense-categories
@@ -719,7 +681,10 @@
              :on-create-inline handle-create-inline
              :on-type-pick handle-type-pick
              :on-remove-context remove-context!
-             :on-set-phase set-phase!
+             :on-set-phase (fn [next-phase]
+                             (when (= next-phase :items)
+                               (set-context-initial-sub-stage! nil))
+                             (set-phase! next-phase))
              :on-focus-input focus-input!
              :on-set-payer-id set-payer-id!
              :on-set-purchased-at set-purchased-at!

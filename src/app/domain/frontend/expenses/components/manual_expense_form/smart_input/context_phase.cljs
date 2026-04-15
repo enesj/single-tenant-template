@@ -5,13 +5,14 @@
     [app.domain.frontend.expenses.components.form-fields.helpers
      :refer [format-decimal safe-parse-number]]
     [app.domain.frontend.expenses.components.manual-expense-form.smart-input.components
-     :refer [autocomplete-dropdown combination-picks entity-chip phase-two-quick-pick-groups
+     :refer [autocomplete-dropdown entity-chip phase-two-quick-pick-groups
              quick-picks type-picker]]
     [app.domain.frontend.expenses.components.manual-expense-form.smart-input.constants
      :refer [supplier-color-palette]]
     [app.domain.frontend.expenses.components.manual-expense-form.smart-input.helpers
      :refer [build-quick-pick-supplier-color-map colorize-quick-pick-groups
-             entity-type-label]]
+             context-phase-initial-sub-stage entity-type-label
+             phase-two-missing-context-types]]
     [clojure.string :as str]
     [uix.core :refer [$ defui use-state]]))
 
@@ -20,15 +21,13 @@
 
   Two sub-stages:
   1. :defaults — items summary, category chip, payer/date/currency,
-     plus Finish / Add-store choice buttons.
+     plus an optional Add-store action.
   2. :store-search — store/supplier search + suggestions."
   [{:keys [t items context input-text input-ref
            dropdown-open? highlight-idx type-picker-text creating?
            search-results quick-search-loading? context-suggestions
-           filtered-combos on-apply-combination
            items-total currency currency-options
-           payers payer-id purchased-at submitting?
-           on-finish-quick
+           payers payer-id purchased-at initial-sub-stage
            suppliers stores expense-categories articles
            ;; handlers
            on-input-change on-input-keydown on-select-result
@@ -37,29 +36,31 @@
            on-set-purchased-at on-set-currency
            on-cancel-type-picker]}]
   (let [[sub-stage set-sub-stage!] (use-state
-                                     ;; If supplier or store already set, skip to store-search
-                                     (if (or (:supplier context) (:store context))
-                                       :store-search
-                                       :defaults))]
+                                     (context-phase-initial-sub-stage
+                                       context
+                                       initial-sub-stage))
+        selected-supplier-id (some-> context :supplier :id)
+        defaults-missing-types (phase-two-missing-context-types context :defaults)
+        defaults-quick-pick-groups (when (seq defaults-missing-types)
+                                     (phase-two-quick-pick-groups defaults-missing-types
+                                       context-suggestions
+                                       suppliers
+                                       stores
+                                       expense-categories
+                                       articles
+                                       selected-supplier-id))]
     ($ :div {:class "space-y-6"}
 
       ;; Back to items link
       ($ :button {:type "button"
                   :class "text-base text-primary hover:text-primary/80 transition-colors"
                   :on-click (fn [e] (.preventDefault e)
-                              (if (= sub-stage :store-search)
+                              (if (and (= sub-stage :store-search)
+                                    (not= initial-sub-stage :store-search))
                                 (set-sub-stage! :defaults)
                                 (do (on-set-phase :items)
                                   (on-focus-input))))}
-        (if (= sub-stage :store-search)
-          (t :smart-expense/back-to-items)
-          (t :smart-expense/back-to-items)))
-
-      ;; Expense combination quick-picks (filtered by current context)
-      ($ combination-picks
-        {:t t
-         :combos filtered-combos
-         :on-apply-combination on-apply-combination})
+        (t :smart-expense/back-to-items))
 
       ;; Items summary
       ($ :div {:class "bg-base-100 rounded-2xl border border-base-200 p-4"}
@@ -90,6 +91,18 @@
       ;; ── Sub-stage: defaults ──────────────────────────────────
       (when (= sub-stage :defaults)
         ($ :<>
+          (when (seq defaults-quick-pick-groups)
+            ($ :div {:class "space-y-4"}
+              (for [{:keys [entity-type items]} defaults-quick-pick-groups]
+                ($ :div {:key (str "defaults-" (name entity-type))
+                         :class "space-y-2"}
+                  ($ :p {:class "text-base text-base-content/50"}
+                    (str (t :smart-expense/pick-prefix) (entity-type-label t entity-type)))
+                  ($ quick-picks
+                    {:entity-type entity-type
+                     :items items
+                     :on-select on-select-result})))))
+
           ;; Payer + Date + Currency row
           ($ :div {:class "grid grid-cols-3 gap-3"}
             ;; Payer
@@ -128,24 +141,15 @@
                 (for [{:keys [value label]} currency-options]
                   ($ :option {:key value :value value} label)))))
 
-          ;; Choice: Finish quick vs Add store
-          ($ :div {:class "flex gap-3 pt-2"}
-            ($ :button {:id "btn-finish-quick"
-                        :type "button"
-                        :class (str "flex-1 ds-btn ds-btn-primary ds-btn-lg text-lg "
-                                 "flex flex-col items-center gap-0.5 py-3")
-                        :disabled submitting?
-                        :on-click (fn [e] (.preventDefault e)
-                                    (when on-finish-quick (on-finish-quick)))}
-              ($ :span (t :smart-expense/finish-quick))
-              ($ :span {:class "text-xs font-normal opacity-70"}
-                (t :smart-expense/finish-quick-hint)))
-            ($ :button {:id "btn-add-store"
-                        :type "button"
-                        :class "flex-1 ds-btn ds-btn-outline ds-btn-lg text-lg py-3"
-                        :on-click (fn [e] (.preventDefault e)
-                                    (set-sub-stage! :store-search))}
-              (t :smart-expense/add-store)))))
+          ;; Optional: add store context before saving
+          (when-not (:store context)
+            ($ :div {:class "pt-2 flex"}
+              ($ :button {:id "btn-add-store"
+                          :type "button"
+                          :class "ds-btn ds-btn-outline ds-btn-lg text-lg py-3"
+                          :on-click (fn [e] (.preventDefault e)
+                                      (set-sub-stage! :store-search))}
+                (t :smart-expense/add-store))))))
 
       ;; ── Sub-stage: store-search ──────────────────────────────
       (when (= sub-stage :store-search)
@@ -161,8 +165,8 @@
                                 :label (:label chip)
                                 :on-remove #(on-remove-context entity-type)}))))
 
-          ;; Context search for supplier/store
-          (let [missing (vec (remove #(contains? context %) [:supplier :store]))
+          ;; Context search for supplier/store/category
+          (let [missing (phase-two-missing-context-types context :store-search)
                 placeholder (when (seq missing)
                               (str (t :smart-expense/search-prefix)
                                 (str/join ", " (map #(entity-type-label t %) missing))
@@ -170,7 +174,6 @@
                 single-missing? (= 1 (count missing))]
             (when (seq missing)
               (let [missing-set (set missing)
-                    selected-supplier-id (some-> context :supplier :id)
                     raw-quick-pick-groups (when (str/blank? input-text)
                                             (phase-two-quick-pick-groups missing
                                               context-suggestions

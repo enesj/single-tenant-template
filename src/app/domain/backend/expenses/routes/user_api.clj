@@ -42,11 +42,9 @@
 
    ;; Dedicated search for Quick Add expense context inputs
    ["/quick-add-search" {:get {:handler (search/quick-add-search-handler db)}}]
+   ["/quick-add-history" {:get {:handler (search/quick-add-history-handler db)}}]
    ["/quick-add-cooccurring" {:get {:handler (search/cooccurring-articles-handler db)}}]
    ["/quick-add-context-suggestions" {:get {:handler (search/context-suggestions-handler db)}}]
-
-   ;; Expense combination templates for quick-fill
-   ["/quick-add-combinations" {:get {:handler (search/expense-combinations-handler db)}}]
 
    ;; Lightweight scored search for smart expense form (global catalog)
    ["/quick-search" {:get {:handler (search/quick-search-handler db)}}]

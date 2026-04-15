@@ -6,7 +6,6 @@
     [app.domain.backend.expenses.handlers.search.quick-search :as qs]
     [app.domain.backend.expenses.handlers.search.quick-add :as qa]
     [app.domain.backend.expenses.handlers.search.context-suggestions :as cs]
-    [app.domain.backend.expenses.handlers.search.expense-combinations :as ec]
     [app.domain.backend.expenses.handlers.search.related-records :as rr]))
 
 ;; ── Cross-entity search ───────────────────────────────────────────────────────
@@ -20,11 +19,11 @@
 (def quick-add-search-handler qa/quick-add-search-handler)
 (def cooccurring-articles-handler qa/cooccurring-articles-handler)
 
+(def quick-add-history-handler qa/quick-add-history-handler)
+
 ;; ── Context suggestions ───────────────────────────────────────────────────────
 (def context-suggestions-handler cs/context-suggestions-handler)
 
 ;; ── Related records ───────────────────────────────────────────────────────────
 (def user-related-handler rr/user-related-handler)
 (def admin-related-handler rr/admin-related-handler)
-;; ── Expense combinations (quick-fill) ────────────────────────────────
-(def expense-combinations-handler ec/expense-combinations-handler)

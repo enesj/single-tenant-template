@@ -20,6 +20,77 @@
                                              :store {:id "store-1"}
                                              :category {:id "cat-1"}} false)))))
 
+(deftest items-phase-quick-pick-types-keep-category-visible-from-blank-state
+  (testing "blank initial state keeps category visible while preserving article quick picks"
+    (is (= [:category :article]
+          (smart-input/items-phase-quick-pick-types
+            [:supplier :store :category :article]
+            {}
+            false))))
+  (testing "narrowed state keeps all remaining context types visible"
+    (is (= [:store :category :article]
+          (smart-input/items-phase-quick-pick-types
+            [:store :category :article]
+            {:supplier {:id "sup-1"}}
+            false))))
+  (testing "article mode suppresses context quick picks"
+    (is (= []
+          (smart-input/items-phase-quick-pick-types
+            [:category :article]
+            {}
+            true)))))
+
+(deftest items-phase-quick-pick-layout-pins-category-near-the-chip-slot
+  (let [groups [{:entity-type :store :items [{:id "store-1"}]}
+                {:entity-type :category :items [{:id "cat-1"}]}
+                {:entity-type :article :items [{:id "article-1"}]}]]
+    (testing "missing category is pulled into the top slot"
+      (let [{:keys [top-groups inline-groups]}
+            (smart-input/items-phase-quick-pick-layout groups {:supplier {:id "sup-1"}})]
+        (is (= [:category] (mapv :entity-type top-groups)))
+        (is (= [:store :article] (mapv :entity-type inline-groups)))))
+    (testing "selected category leaves all groups inline"
+      (let [{:keys [top-groups inline-groups]}
+            (smart-input/items-phase-quick-pick-layout groups {:category {:id "cat-1"}})]
+        (is (empty? top-groups))
+        (is (= [:store :category :article] (mapv :entity-type inline-groups)))))))
+
+(deftest phase-two-missing-context-types-keep-category-available-after-dismiss
+  (testing "defaults sub-stage re-offers category until one is selected"
+    (is (= [:category]
+          (smart-input/phase-two-missing-context-types {} :defaults)))
+    (is (= []
+          (smart-input/phase-two-missing-context-types
+            {:category {:id "cat-1"}}
+            :defaults))))
+  (testing "store-search keeps category alongside supplier/store gaps"
+    (is (= [:store :category]
+          (smart-input/phase-two-missing-context-types
+            {:supplier {:id "sup-1"}}
+            :store-search)))
+    (is (= [:category]
+          (smart-input/phase-two-missing-context-types
+            {:supplier {:id "sup-1"}
+             :store {:id "store-1"}}
+            :store-search)))))
+
+(deftest context-phase-initial-sub-stage-prefers-explicit-entry
+  (testing "an explicit requested sub-stage wins even before context exists"
+    (is (= :store-search
+          (smart-input/context-phase-initial-sub-stage {} :store-search))))
+  (testing "existing supplier/store context still defaults into store-search"
+    (is (= :store-search
+          (smart-input/context-phase-initial-sub-stage
+            {:supplier {:id "sup-1"}}
+            nil)))
+    (is (= :store-search
+          (smart-input/context-phase-initial-sub-stage
+            {:store {:id "store-1"}}
+            nil))))
+  (testing "plain context review still starts in defaults"
+    (is (= :defaults
+          (smart-input/context-phase-initial-sub-stage {} nil)))))
+
 (deftest search-placeholder-reflects-remaining-search-targets
   (let [t (fn [k & args]
             (case k
@@ -273,6 +344,59 @@
         "history items appear at the head")
       (is (= ["local-0" "local-1" "local-2" "local-3" "local-4" "local-5"] (subvec ids 4 10))
         "remaining slots are filled from the supplier-scoped local pool"))))
+
+(deftest phase-two-quick-pick-groups-dedupes-visible-store-collisions-and-backfills-suppliers
+  (let [context-suggestions {:suppliers [{:id "sup-bingo"
+                                          :label "BINGO"}]
+                             :stores [{:id "store-ap-1"
+                                       :label "BRAĆE BEGIĆ br.4, 71000 Sarajevo"
+                                       :supplier_id "sup-apo"
+                                       :supplier_display_name "APOTEKE SARAJEVO"}
+                                      {:id "store-ap-2"
+                                       :label "BRAĆE BEGIĆ br.4, 71000 Sarajevo"
+                                       :supplier_id "sup-apo"
+                                       :supplier_display_name "APOTEKE SARAJEVO"}
+                                      {:id "store-bk-1"
+                                       :label "Kranjčevićeva-Tepebašina 1, 71000 Sarajevo"
+                                       :supplier_id "sup-bk"
+                                       :supplier_display_name "B&K"}]
+                             :categories []}
+        suppliers [{:id "sup-bingo" :display-name "BINGO"}
+                   {:id "sup-apo" :display-name "APOTEKE SARAJEVO"}
+                   {:id "sup-bk" :display-name "B&K"}
+                   {:id "sup-konzum" :display-name "KONZUM"}]
+        local-stores [{:id "store-konzum-1"
+                       :display-name "MARŠALA TITA BR.1, 71000 Sarajevo"
+                       :supplier_id "sup-konzum"}
+                      {:id "store-bingo-1"
+                       :display-name "SALKE LAGUMDŽIJE br.15, 71000 SARAJEVO"
+                       :supplier_id "sup-bingo"}]
+        groups (smart-input-components/phase-two-quick-pick-groups
+                 [:supplier :store]
+                 context-suggestions
+                 suppliers
+                 local-stores
+                 []
+                 []
+                 nil)
+        groups-by-type (into {} (map (juxt :entity-type identity) groups))
+        supplier-items (get-in groups-by-type [:supplier :items])
+        store-items (get-in groups-by-type [:store :items])]
+    (testing "duplicate store records that collapse to the same visible address only render once"
+      (is (= ["store-ap-1" "store-bk-1"]
+            (mapv :id store-items)))
+      (is (= 1
+            (count (filter #(= "BRAĆE BEGIĆ br.4, 71000 Sarajevo" (:label %))
+                     store-items)))
+        "same supplier + same visible label should not show as duplicate chips")
+      (is (not-any? #{"store-konzum-1" "store-bingo-1"}
+            (mapv :id store-items))
+        "when no supplier is selected, article-context store suggestions should not be padded with the general store pool"))
+    (testing "supplier quick-picks backfill only the owners of the visible stores"
+      (is (= ["sup-bingo" "sup-apo" "sup-bk"]
+            (mapv :id supplier-items)))
+      (is (= ["BINGO" "APOTEKE SARAJEVO" "B&K"]
+            (mapv :label supplier-items))))))
 
 (deftest supplier-color-palette-shares-border-language-within-slot
   (let [class-tokens (fn [klass]

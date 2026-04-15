@@ -35,6 +35,7 @@
     :mobile/review-receipt     "Pregledaj račun"
     :mobile/confirm-approve    "Potvrdi i spremi"
     :mobile/unknown-supplier   "Nepoznat dobavljač"
+    :mobile/unknown-store      "Nepoznata trgovina"
 
     ;; Mobile dashboard
     :mobile/monthly-trend      "Mjesečni trend"
@@ -200,6 +201,7 @@
     :mobile/review-receipt     "Review Receipt"
     :mobile/confirm-approve    "Confirm & Save"
     :mobile/unknown-supplier   "Unknown supplier"
+    :mobile/unknown-store      "Unknown store"
 
     ;; Mobile dashboard
     :mobile/monthly-trend      "Monthly Trend"
