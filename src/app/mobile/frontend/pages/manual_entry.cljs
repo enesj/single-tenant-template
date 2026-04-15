@@ -779,7 +779,6 @@
         total (manual-entry/compute-items-total items)
         cooccurring-picks (mapv normalize-article-pick (:results cooccurring-data))
         history-picks (phase-one-history-picks history items context search-query)
-        store-picks (:stores history-picks)
         article-history-picks (:articles history-picks)
         category-picks (phase-one-category-picks expense-categories context search-query)
 
@@ -875,16 +874,6 @@
                                   :price (:last-price article)
                                   :on-select #(add-item! article)})))))
 
-      (when (seq store-picks)
-        ($ :div {:class "space-y-2"}
-          ($ :p {:class "text-sm text-base-content/60"}
-            (t :smart-expense/entity-store))
-          ($ :div {:class "flex flex-col gap-2"}
-            (for [store store-picks]
-              ($ quick-pick-pill {:key (str "store-pick-" (:id store))
-                                  :label (result-display-name store)
-                                  :on-select #(add-context! :store store)})))))
-
       (when (seq article-history-picks)
         ($ :div {:class "space-y-2"}
           ($ :p {:class "text-sm text-base-content/60"}
@@ -965,7 +954,7 @@
 ;; Phase 2 — Review + context + submit
 ;; ========================================================================
 
-(defui phase-two [{:keys [form set-form! on-back on-save on-cancel submitting?
+(defui phase-two [{:keys [form set-form! on-save on-cancel submitting?
                           submit-disabled? error on-disable-default-category-preselect]}]
   (let [t (use-t)
         payers (use-subscribe [:mobile/payers])
@@ -992,10 +981,6 @@
                            (manual-entry/payer-default-id payers))]
 
     ($ :div {:class "p-4 pb-36 space-y-4"}
-      ($ :button {:class "ds-btn ds-btn-ghost ds-btn-sm gap-1"
-                  :on-click on-back}
-        (t :mobile/back-to-items))
-
       (when error
         ($ :div {:class "ds-alert ds-alert-error text-sm"}
           ($ :span (if (keyword? error) (t error) error))))
@@ -1208,8 +1193,12 @@
       [expense-categories default-category-preselect-enabled? selected-category])
 
     ($ :<>
-      ($ mobile-header {:title (t :mobile/quick-add-title)
-                        :show-back? true})
+      ($ mobile-header {:title (if (= phase :phase-2)
+                                 (t :mobile/back-to-items)
+                                 (t :mobile/quick-add-title))
+                        :show-back? (= phase :phase-2)
+                        :on-back (when (= phase :phase-2)
+                                   #(set-phase! :phase-1))})
       (case phase
         :phase-1 ($ phase-one {:form form
                                :set-form! set-form!
@@ -1227,5 +1216,4 @@
                                :error visible-error
                                :on-disable-default-category-preselect #(set-default-category-preselect-enabled! false)
                                :on-save save-expense!
-                               :on-cancel cancel-entry!
-                               :on-back #(set-phase! :phase-1)})))))
+                               :on-cancel cancel-entry!})))))
