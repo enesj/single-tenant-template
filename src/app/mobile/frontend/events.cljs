@@ -65,6 +65,16 @@
     (get-in db [:mobile :active-tab])))
 
 (rf/reg-sub
+  :session-loading?
+  (fn [db _]
+    (get-in db [:session :loading?] false)))
+
+(rf/reg-sub
+  :available-tenants
+  (fn [db _]
+    (get-in db [:session :available-tenants])))
+
+(rf/reg-sub
   :mobile/pending-review-count
   (fn [db _]
     (get-in db [:mobile :pending-review-count] 0)))

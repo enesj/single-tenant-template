@@ -1014,36 +1014,36 @@
                              :t t}))
 
       ($ :div {:class "space-y-3"}
-        ($ autocomplete-field {:label (t :smart-expense/entity-supplier)
-                               :placeholder (t :mobile/search-supplier)
-                               :entity-type :supplier
-                               :search-value supplier-query
-                               :on-search-change set-supplier-query!
-                               :selected-label (some-> context :supplier context-entry-label)
-                               :on-select (fn [id label raw]
-                                            (if id
-                                              (add-context! :supplier (assoc raw :id id :label label))
-                                              (remove-context! :supplier)))})
-        ($ autocomplete-field {:label (t :smart-expense/entity-store)
-                               :placeholder (t :mobile/search-store)
-                               :entity-type :store
-                               :search-value store-query
-                               :on-search-change set-store-query!
-                               :selected-label (some-> context :store context-entry-label)
-                               :on-select (fn [id label raw]
-                                            (if id
-                                              (add-context! :store (assoc raw :id id :label label))
-                                              (remove-context! :store)))})
-        ($ autocomplete-field {:label (t :smart-expense/entity-category)
-                               :placeholder (t :mobile/search-category)
-                               :entity-type :expense-category
-                               :search-value category-query
-                               :on-search-change set-category-query!
-                               :selected-label (some-> context :category context-entry-label)
-                               :on-select (fn [id label raw]
-                                            (if id
-                                              (add-context! :category (assoc raw :id id :label label))
-                                              (remove-context! :category)))}))
+        (when-not (:supplier context)
+          ($ autocomplete-field {:label (t :smart-expense/entity-supplier)
+                                 :placeholder (t :mobile/search-supplier)
+                                 :entity-type :supplier
+                                 :search-value supplier-query
+                                 :on-search-change set-supplier-query!
+                                 :selected-label nil
+                                 :on-select (fn [id label raw]
+                                              (when id
+                                                (add-context! :supplier (assoc raw :id id :label label))))}))
+        (when-not (:store context)
+          ($ autocomplete-field {:label (t :smart-expense/entity-store)
+                                 :placeholder (t :mobile/search-store)
+                                 :entity-type :store
+                                 :search-value store-query
+                                 :on-search-change set-store-query!
+                                 :selected-label nil
+                                 :on-select (fn [id label raw]
+                                              (when id
+                                                (add-context! :store (assoc raw :id id :label label))))}))
+        (when-not (:category context)
+          ($ autocomplete-field {:label (t :smart-expense/entity-category)
+                                 :placeholder (t :mobile/search-category)
+                                 :entity-type :expense-category
+                                 :search-value category-query
+                                 :on-search-change set-category-query!
+                                 :selected-label nil
+                                 :on-select (fn [id label raw]
+                                              (when id
+                                                (add-context! :category (assoc raw :id id :label label))))})))
 
       ($ :div
         ($ :label {:class "ds-label text-sm"} (t :smart-expense/payer-label))

@@ -21,11 +21,13 @@
           ($ :span {:class "ds-loading ds-loading-spinner ds-loading-lg"}))
         ($ :div {:class "space-y-3"}
           (for [tenant (or tenants [])]
-            ($ :button
-              {:key (or (:id tenant) (:tenants/id tenant))
-               :class "ds-btn ds-btn-outline w-full h-14 justify-start text-left"
-               :on-click #(rf/dispatch [:mobile/select-tenant
-                                        (or (:id tenant) (:tenants/id tenant))])}
-              ($ :div {:class "flex flex-col"}
-                ($ :span {:class "font-medium"}
-                  (or (:name tenant) (:tenants/name tenant)))))))))))
+            (let [tenant-id (or (:tenant-id tenant) (:tenant_id tenant)
+                              (:tenants/id tenant) (:id tenant))
+                  tenant-name (or (:tenant-name tenant) (:name tenant)
+                                (:tenants/name tenant) "Unnamed")]
+              ($ :button
+                {:key tenant-id
+                 :class "ds-btn ds-btn-outline w-full h-14 justify-start text-left"
+                 :on-click #(rf/dispatch [:mobile/select-tenant tenant-id])}
+                ($ :div {:class "flex flex-col"}
+                  ($ :span {:class "font-medium"} tenant-name))))))))))

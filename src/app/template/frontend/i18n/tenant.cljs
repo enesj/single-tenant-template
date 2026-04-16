@@ -5,6 +5,7 @@
    {;; Tenant pages
     :tenant/welcome          (fn [name] (str "Dobrodošli, " name "!"))
     :tenant/select-workspace "Odaberite radni prostor"
+    :tenant/select-workspace-subtitle "Odaberite radni prostor za nastavak"
     :tenant/no-workspaces    "Nema dostupnih radnih prostora. Kontaktirajte administratora."
     :tenant/members-title    "Članovi"
     :tenant/members-subtitle (fn [workspace] (str "Upravljajte članovima " workspace))
@@ -152,6 +153,7 @@
    {;; Tenant pages
     :tenant/welcome          (fn [name] (str "Welcome, " name "!"))
     :tenant/select-workspace "Select a Workspace"
+    :tenant/select-workspace-subtitle "Choose a workspace to continue"
     :tenant/no-workspaces    "No workspaces available. Contact your administrator."
     :tenant/members-title    "Members"
     :tenant/members-subtitle (fn [workspace] (str "Manage members of " workspace))

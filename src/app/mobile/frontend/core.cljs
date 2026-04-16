@@ -118,12 +118,15 @@
   (fn [{:keys [db]} [_ response]]
     (let [authenticated? (:authenticated response)
           tenant-required? (:tenant-selection-required response)
+          available-tenants (:available-tenants response)
           current-view (get-in db [:current-route :data :view])
           current-path (some-> js/window .-location .-pathname)
           redirect-path (auth-redirect/auth-status-navigation-path authenticated? tenant-required? current-view current-path)]
       {:db (-> db
              (assoc-in [:session :authenticated?] authenticated?)
-             (assoc-in [:session :loading?] false))
+             (assoc-in [:session :loading?] false)
+             (assoc-in [:session :available-tenants] available-tenants)
+             (assoc-in [:session :tenant-selection-required] tenant-required?))
        :fx (cond-> []
              redirect-path
              (conj [:dispatch [:mobile/navigate redirect-path]]))})))
