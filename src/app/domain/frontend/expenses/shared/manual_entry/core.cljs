@@ -10,7 +10,7 @@
 
 (defn payer-default-id
   [payers]
-  (or (some #(when (or (:is-default %) (:isDefault %)) (:id %)) payers)
+  (or (some #(when (or (:is_default %) (:is-default %) (:isDefault %)) (:id %)) payers)
     (:id (first payers))))
 
 (defn expense-category-default-id

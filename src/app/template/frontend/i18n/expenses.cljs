@@ -133,6 +133,7 @@
     :smart-expense/payer-select-ph    "Odaberite platitelja..."
     :smart-expense/date-label         "Datum"
     :smart-expense/currency-label     "Valuta"
+    :smart-expense/defaults-label     "Odabrano"
     :smart-expense/notes-label        "Napomene"
     :smart-expense/notes-ph           "Opcionalne napomene..."
     ;; Actions
@@ -454,6 +455,7 @@
     :smart-expense/payer-select-ph    "Select payer..."
     :smart-expense/date-label         "Date"
     :smart-expense/currency-label     "Currency"
+    :smart-expense/defaults-label     "Selected"
     :smart-expense/notes-label        "Notes"
     :smart-expense/notes-ph           "Optional notes..."
     :smart-expense/cancel             "Cancel"

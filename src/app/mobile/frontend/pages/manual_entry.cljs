@@ -24,7 +24,10 @@
   {:supplier "bg-blue-100 text-blue-800"
    :store    "bg-green-100 text-green-800"
    :category "bg-purple-100 text-purple-800"
-   :article  "bg-amber-100 text-amber-800"})
+   :article  "bg-amber-100 text-amber-800"
+   :payer    "bg-teal-100 text-teal-800"
+   :date     "bg-sky-100 text-sky-800"
+   :currency "bg-orange-100 text-orange-800"})
 
 (def ^:private currency-options
   ["BAM" "EUR" "USD" "GBP" "CHF" "HRK" "RSD"])
@@ -656,11 +659,12 @@
           (str (format-decimal price) " BAM"))))))
 
 (defui context-chip [{:keys [entity-type label on-remove]}]
-  ($ :span {:class (str "inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium "
+  ($ :span {:class (str "inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border "
                      (get chip-colors entity-type "bg-base-200 text-base-content"))}
     label
     (when on-remove
-      ($ :button {:class "ml-0.5 hover:opacity-70"
+      ($ :button {:class "ml-0.5 hover:opacity-70 cursor-pointer"
+                  :type "button"
                   :on-click on-remove}
         "×"))))
 
@@ -772,9 +776,17 @@
         loading? (use-subscribe [:mobile/quick-search-loading?])
         expense-categories (use-subscribe [:mobile/expense-categories])
         cooccurring-data (use-subscribe [:mobile/cooccurring-articles])
+        payers (use-subscribe [:mobile/payers])
         [search-query set-search-query!] (uix/use-state "")
         items (:items form)
         context (:context form)
+        payer-name (some (fn [p]
+                           (when (= (str (:id p)) (str (:payer-id form)))
+                             (or (:label p) (:display_name p) (:name p))))
+                     payers)
+        purchased-date (when-let [pa (:purchased-at form)]
+                         (let [[y m d] (str/split (first (str/split (str pa) #"T")) #"-")]
+                           (str d "." m "." y)))
         selected-supplier-id (get-in context [:supplier :id])
         total (manual-entry/compute-items-total items)
         cooccurring-picks (mapv normalize-article-pick (:results cooccurring-data))
@@ -898,13 +910,31 @@
                           :on-click #(add-context! :category category)}
                 (str "📂 " (result-display-name category)))))))
 
-      (when (seq context)
-        ($ :div {:class "flex flex-wrap gap-1.5"}
-          (for [[etype entry] context]
-            ($ context-chip {:key (name etype)
-                             :entity-type etype
-                             :label (context-entry-label entry)
-                             :on-remove #(remove-context! etype)}))))
+      (when (or (seq context) payer-name purchased-date (:currency form))
+        ($ :div {:class "rounded-lg border border-base-300 p-2"}
+          ($ :p {:class "text-[10px] text-base-content/50 mb-1.5 uppercase tracking-wider font-medium"}
+            (t :smart-expense/defaults-label))
+          ($ :div {:class "flex flex-wrap gap-1.5"}
+            (for [[etype entry] context]
+              ($ context-chip {:key (name etype)
+                               :entity-type etype
+                               :label (context-entry-label entry)
+                               :on-remove #(remove-context! etype)}))
+            (when payer-name
+              ($ context-chip {:key "default-payer"
+                               :entity-type :payer
+                               :label payer-name
+                               :on-remove #(set-form! (fn [f] (dissoc f :payer-id)))}))
+            (when purchased-date
+              ($ context-chip {:key "default-date"
+                               :entity-type :date
+                               :label purchased-date
+                               :on-remove #(set-form! (fn [f] (dissoc f :purchased-at)))}))
+            (when (:currency form)
+              ($ context-chip {:key "default-currency"
+                               :entity-type :currency
+                               :label (:currency form)
+                               :on-remove #(set-form! (fn [f] (dissoc f :currency)))})))))
 
       (when (seq items)
         ($ :div {:class "space-y-3"}
@@ -1053,7 +1083,7 @@
           ($ :option {:value ""} (t :smart-expense/payer-select-ph))
           (for [p payers]
             ($ :option {:key (:id p) :value (str (:id p))}
-              (or (:display_name p) (:display-name p) (:name p))))))
+              (or (:label p) (:display_name p) (:display-name p) (:name p))))))
 
       ($ :div {:class "grid grid-cols-3 gap-3"}
         ($ :div {:class "col-span-2"}
