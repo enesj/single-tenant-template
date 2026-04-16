@@ -16,7 +16,13 @@
    :category {:icon "📂" :label "Category" :color "purple"
               :name-fn #(or (:name %) "")}
    :article {:icon "📦" :label "Article" :color "amber"
-             :name-fn #(or (:canonical-name %) (:canonical_name %) "")}})
+             :name-fn #(or (:canonical-name %) (:canonical_name %) "")}
+   :payer {:icon "👤" :label "Payer" :color "teal"
+           :name-fn #(or (:label %) (:name %) "")}
+   :date {:icon "📅" :label "Date" :color "sky"
+          :name-fn (constantly "")}
+   :currency {:icon "💱" :label "Currency" :color "orange"
+              :name-fn (constantly "")}})
 
 (defn entity-type-info
   [entity-type]

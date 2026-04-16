@@ -5,7 +5,10 @@
   {:supplier "bg-blue-100 text-blue-800 border-blue-200"
    :store    "bg-emerald-100 text-emerald-800 border-emerald-200"
    :category "bg-purple-100 text-purple-800 border-purple-200"
-   :article  "bg-amber-100 text-amber-800 border-amber-200"})
+   :article  "bg-amber-100 text-amber-800 border-amber-200"
+   :payer    "bg-teal-100 text-teal-800 border-teal-200"
+   :date     "bg-sky-100 text-sky-800 border-sky-200"
+   :currency "bg-orange-100 text-orange-800 border-orange-200"})
 
 ;; Per-supplier color palette: each entry pairs a stronger shade for the
 ;; supplier chip with a lighter shade in the same hue for its store chips,

@@ -20,13 +20,16 @@
            search-results quick-search-loading? cooccurring-pick-items
            focused-quick-pick-groups available-search-types items-total
            currency focus-item-id
+           payer-name purchased-date
            ;; handlers
            on-input-change on-input-keydown on-select-result
            on-create-inline on-type-pick on-remove-context
            on-update-item on-remove-item on-focus-input
-           on-cancel-type-picker on-focus-handled]}]
+           on-cancel-type-picker on-focus-handled
+           on-clear-payer on-clear-date on-clear-currency]}]
   (let [{:keys [top-groups inline-groups]}
-        (items-phase-quick-pick-layout focused-quick-pick-groups context)]
+        (items-phase-quick-pick-layout focused-quick-pick-groups context)
+        has-defaults? (or payer-name purchased-date currency)]
     ($ :div {:class "space-y-4"}
 
       ;; Welcome prompt
@@ -37,15 +40,36 @@
           ($ :p {:class "text-base text-base-content/50"}
             (t :smart-expense/subtitle))))
 
-      ;; Selected context chips
-      (when (seq context)
-        ($ :div {:class "flex flex-wrap gap-2"}
-          (for [[entity-type chip] context]
-            ($ entity-chip {:key (str "items-phase-" (name entity-type))
-                            :entity-type entity-type
-                            :label (:label chip)
-                            :on-remove #(on-remove-context entity-type)
-                            :size :sm}))))
+      ;; Selected context + default chips
+      (when (or (seq context) has-defaults?)
+        ($ :div {:class "rounded-2xl border border-base-200 p-3"}
+          ($ :p {:class "text-sm text-base-content/70 mb-2 uppercase tracking-wider font-semibold"}
+            (t :smart-expense/defaults-label))
+          ($ :div {:class "flex flex-wrap gap-2"}
+            (for [[entity-type chip] context]
+              ($ entity-chip {:key (str "items-phase-" (name entity-type))
+                              :entity-type entity-type
+                              :label (:label chip)
+                              :on-remove #(on-remove-context entity-type)
+                              :size :sm}))
+            (when payer-name
+              ($ entity-chip {:key "default-payer"
+                              :entity-type :payer
+                              :label payer-name
+                              :on-remove on-clear-payer
+                              :size :sm}))
+            (when purchased-date
+              ($ entity-chip {:key "default-date"
+                              :entity-type :date
+                              :label purchased-date
+                              :on-remove on-clear-date
+                              :size :sm}))
+            (when currency
+              ($ entity-chip {:key "default-currency"
+                              :entity-type :currency
+                              :label currency
+                              :on-remove on-clear-currency
+                              :size :sm})))))
 
       ;; Keep category quick picks in the same slot where the default category
       ;; chip appears, so dismissing that chip doesn't push replacement choices

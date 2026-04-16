@@ -28,6 +28,8 @@
            search-results quick-search-loading? context-suggestions
            items-total currency currency-options
            payers payer-id purchased-at initial-sub-stage
+           payer-name purchased-date
+           on-clear-payer on-clear-date on-clear-currency
            suppliers stores expense-categories articles
            ;; handlers
            on-input-change on-input-keydown on-select-result
@@ -48,7 +50,8 @@
                                        stores
                                        expense-categories
                                        articles
-                                       selected-supplier-id))]
+                                       selected-supplier-id))
+        has-preselections? (or (seq context) payer-name purchased-date currency)]
     ($ :div {:class "space-y-6"}
 
       ;; Back to items link
@@ -80,13 +83,32 @@
                 ($ :span {:class "font-mono"}
                   (str q " × " (format-decimal p))))))))
 
-      ;; Category chip (always visible if selected)
-      (when (:category context)
-        ($ :div {:class "flex flex-wrap gap-2"}
-          ($ entity-chip {:key "category"
-                          :entity-type :category
-                          :label (get-in context [:category :label])
-                          :on-remove #(on-remove-context :category)})))
+      ;; Preselection chips (context + defaults)
+      (when has-preselections?
+        ($ :div {:class "rounded-2xl border border-base-200 p-3"}
+          ($ :p {:class "text-sm text-base-content/70 mb-2 uppercase tracking-wider font-semibold"}
+            (t :smart-expense/defaults-label))
+          ($ :div {:class "flex flex-wrap gap-2"}
+            (for [[entity-type chip] context]
+              ($ entity-chip {:key (str "ctx-" (name entity-type))
+                              :entity-type entity-type
+                              :label (:label chip)
+                              :on-remove #(on-remove-context entity-type)}))
+            (when payer-name
+              ($ entity-chip {:key "default-payer"
+                              :entity-type :payer
+                              :label payer-name
+                              :on-remove on-clear-payer}))
+            (when purchased-date
+              ($ entity-chip {:key "default-date"
+                              :entity-type :date
+                              :label purchased-date
+                              :on-remove on-clear-date}))
+            (when currency
+              ($ entity-chip {:key "default-currency"
+                              :entity-type :currency
+                              :label currency
+                              :on-remove on-clear-currency})))))
 
       ;; ── Sub-stage: defaults ──────────────────────────────────
       (when (= sub-stage :defaults)
@@ -154,17 +176,6 @@
       ;; ── Sub-stage: store-search ──────────────────────────────
       (when (= sub-stage :store-search)
         ($ :<>
-          ;; Store/supplier context chips (already selected)
-          (when (or (:supplier context) (:store context))
-            ($ :div {:class "flex flex-wrap gap-2"}
-              (for [entity-type [:supplier :store]
-                    :let [chip (get context entity-type)]
-                    :when chip]
-                ($ entity-chip {:key (name entity-type)
-                                :entity-type entity-type
-                                :label (:label chip)
-                                :on-remove #(on-remove-context entity-type)}))))
-
           ;; Context search for supplier/store/category
           (let [missing (phase-two-missing-context-types context :store-search)
                 placeholder (when (seq missing)

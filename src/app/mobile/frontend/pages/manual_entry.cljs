@@ -912,7 +912,7 @@
 
       (when (or (seq context) payer-name purchased-date (:currency form))
         ($ :div {:class "rounded-lg border border-base-300 p-2"}
-          ($ :p {:class "text-[10px] text-base-content/50 mb-1.5 uppercase tracking-wider font-medium"}
+          ($ :p {:class "text-sm text-base-content/70 mb-1.5 uppercase tracking-wider font-semibold"}
             (t :smart-expense/defaults-label))
           ($ :div {:class "flex flex-wrap gap-1.5"}
             (for [[etype entry] context]

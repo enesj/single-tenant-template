@@ -94,6 +94,16 @@
 
         input-ref (use-ref nil)
 
+        ;; Resolved default labels for Phase 1 chips
+        payer-name (some (fn [p]
+                           (when (= (str (:id p)) (str payer-id))
+                             (or (:label p) (:display_name p) (:name p))))
+                     payers)
+        purchased-date (when purchased-at
+                         (let [[date-part] (str/split (str purchased-at) #"T")
+                               [y m d] (str/split date-part #"-")]
+                           (str d "." m "." y)))
+
         ;; Search results: show immediate local matches while dedicated backend search loads.
         selected-category (:category context)
         available-search-types (focused-search-types context article-mode?)
@@ -607,6 +617,12 @@
              :items-total items-total
              :currency currency
              :total-dropdown-count total-dropdown-count
+             ;; default chips
+             :payer-name payer-name
+             :purchased-date purchased-date
+             :on-clear-payer #(set-payer-id! nil)
+             :on-clear-date #(set-purchased-at! nil)
+             :on-clear-currency #(set-currency! nil)
              ;; handlers
              :on-input-change handle-input-change
              :on-input-keydown handle-input-keydown
@@ -669,6 +685,11 @@
              :payers payers
              :payer-id payer-id
              :purchased-at purchased-at
+             :payer-name payer-name
+             :purchased-date purchased-date
+             :on-clear-payer #(set-payer-id! nil)
+             :on-clear-date #(set-purchased-at! nil)
+             :on-clear-currency #(set-currency! nil)
              :initial-sub-stage context-initial-sub-stage
              :suppliers suppliers
              :stores phase-two-stores
