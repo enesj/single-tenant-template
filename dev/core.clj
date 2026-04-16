@@ -78,26 +78,30 @@
 
 (defn- ensure-shadow-watch!
   []
-  (try
-    (shadow.server/start!)
-    (shadow.api/watch :app)
-    (shadow.api/nrepl-select :app)
-    (log/info {:event :dev/shadow-watch-started
-               :builds [:app]
-               :status :started
-               :note "(shadow.api/watch :test) currently commented out"})
-    {:status :started}
-    (catch clojure.lang.ExceptionInfo e
-      (if (shadow-already-running? e)
-        (let [message (ex-message e)]
-          (log/warn {:event :dev/shadow-already-running
-                     :status :reused
-                     :message message
-                     :action "Reusing external shadow-cljs instance; skipping local shadow start/watch."
-                     :hint "Stop the existing shadow-cljs JVM if you need a clean single-process dev session."})
-          {:status :reused
-           :message message})
-        (throw e)))))
+  (let [builds [:app :mobile]]
+    (try
+      (shadow.server/start!)
+      (doseq [build builds]
+        (shadow.api/watch build))
+      (shadow.api/nrepl-select :app)
+      (log/info {:event :dev/shadow-watch-started
+                 :builds builds
+                 :status :started
+                 :note "(shadow.api/watch :test) currently commented out"})
+      {:status :started
+       :builds builds}
+      (catch clojure.lang.ExceptionInfo e
+        (if (shadow-already-running? e)
+          (let [message (ex-message e)]
+            (log/warn {:event :dev/shadow-already-running
+                       :status :reused
+                       :message message
+                       :action "Reusing external shadow-cljs instance; skipping local shadow start/watch."
+                       :hint "Stop the existing shadow-cljs JVM if you need a clean single-process dev session."})
+            {:status :reused
+             :message message
+             :builds builds})
+          (throw e))))))
 
 (defn- ensure-dev-nrepl!
   []
