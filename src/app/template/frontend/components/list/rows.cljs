@@ -301,6 +301,8 @@
         selected? (or (contains? selected-id-set item-id)
                     (contains? selected-id-set item-id-int)
                     (contains? selected-id-set item-id-str))
+        custom-row-class (when-let [row-class-fn (:row-class-fn props)]
+                           (row-class-fn item-clj))
         disallowed-mode (or (:disallowed-action-mode props) :hide)
         disable-mode? (= disallowed-mode :disable)
         allowed-edit? (not (false? (:allow-edit? props)))
@@ -351,5 +353,6 @@
                             :user-filterable-settings user-filterable-settings})
        :recently-updated? recently-updated?
        :recently-created? recently-created?
+       :row-class custom-row-class
        :selected? selected?
        :is-api-failure? (boolean (:is-api-failure item-clj))})))

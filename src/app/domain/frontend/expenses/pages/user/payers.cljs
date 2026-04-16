@@ -32,6 +32,19 @@
     {:on-success on-success
      :on-cancel on-cancel}))
 
+(def ^:private system-payer-row-border-class
+  "[&>td]:border-y [&>td]:border-y-primary/20 [&>td:first-child]:border-l-4 [&>td:first-child]:border-l-primary [&>td:last-child]:border-r [&>td:last-child]:border-r-primary/20")
+
+(defn- system-payer-row?
+  [item]
+  (boolean (or (:payer-type-is-system item)
+             (:payer_type_is_system item))))
+
+(defn- payer-row-class
+  [item]
+  (when (system-payer-row? item)
+    system-payer-row-border-class))
+
 (defui payers-page []
   (let [t (use-t)
         role (use-subscribe [:expenses/user-role])
@@ -58,7 +71,7 @@
             (let [payer-id (id-utils/extract-entity-id item)
                   payer-id-str (some-> payer-id str)
                   on-edit-click (:on-edit-click item)
-                  is-system-payer? (boolean (or (:payer-type-is-system item) (:payer_type_is_system item)))
+                  is-system-payer? (system-payer-row? item)
                   is-active? (let [v (if (contains? item :is-active) (:is-active item) (get item :is_active true))]
                                (not (false? v)))
                   is-own-payer? (and (some? user-payer-id) (= payer-id-str user-payer-id))
@@ -72,8 +85,6 @@
                   delete-disabled? (true? (:delete-disabled? item))
                   item-data (dissoc item :show-edit? :show-delete? :edit-disabled? :delete-disabled? :on-edit-click)]
               ($ :div {:class "flex items-center justify-center gap-2"}
-                (when is-system-payer?
-                  ($ :span {:class "ds-badge ds-badge-sm ds-badge-neutral"} "System"))
                 (when-not is-active?
                   ($ :span {:class "ds-badge ds-badge-sm ds-badge-warning"} "Inactive"))
                 (when show-edit?
@@ -131,4 +142,5 @@
              :render-add-form (when can-manage? render-add-form)
              ;; members get label-only edit form; admin/owner get full form
              :render-edit-form (partial render-edit-form (not can-manage?))
-             :render-actions render-actions}))))))
+             :render-actions render-actions
+             :row-class-fn payer-row-class}))))))

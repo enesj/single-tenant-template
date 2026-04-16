@@ -78,6 +78,46 @@
               "Row should NOT have highlight class when highlights are disabled")
             (is (not (.contains (.-classList tr) "bg-blue-200/50")))))))))
 
+(deftest custom-row-class-test
+  (testing "row-class-fn classes are appended to the rendered table row"
+    (let [row-props {:entity-spec {:fields [{:id :name
+                                             :label "Name"}]}
+                     :editing nil
+                     :set-editing! (fn [_] nil)
+                     :entity-name :items
+                     :recently-updated-ids #{}
+                     :recently-created-ids #{}
+                     :selected-ids #{}
+                     :on-select-change (fn [& _] nil)
+                     :visible-columns {:name true}
+                     :column-order nil
+                     :show-filtering? false
+                     :filterable-fields []
+                     :user-filterable-settings {}
+                     :row-class-fn (fn [item]
+                                     (when (:system? item)
+                                       "custom-system-row border-l-4"))
+                     :show-edit? false
+                     :show-delete? false}
+          render-row-fn (fn [item _]
+                          (list-rows/render-row row-props {:item item}))]
+      (with-redefs [display-settings/use-display-settings (fn [_]
+                                                            {:show-select? false})]
+        (mount-component!
+          ($ table/table
+            {:headers ["Select" "Name" "Actions"]
+             :rows [{:id "1" :name "System Payer" :system? true}]
+             :row-key :id
+             :render-row render-row-fn
+             :entity-name :items})
+          (fn [container]
+            (let [tr (.querySelector container "tbody tr")]
+              (is (some? tr) "Row should be rendered")
+              (is (.contains (.-classList tr) "custom-system-row")
+                "Custom row class should be appended to the rendered table row")
+              (is (.contains (.-classList tr) "border-l-4")
+                "Additional row classes should also be preserved"))))))))
+
 (deftest double-click-cell-dispatches-filter-test
   (testing "double-clicking a filterable list cell dispatches an equality filter"
     (let [dispatched (atom [])

@@ -390,7 +390,12 @@
                     main-row ($ row
                                {:key (str "row-" idx "-" row-id)
                                 :cells cells
-                                :class (str "ds-hover" highlight-class selection-class)
+                                :class (str "ds-hover"
+                                         highlight-class
+                                         selection-class
+                                         (when-let [row-class (and (map? rendered-result)
+                                                                (:row-class rendered-result))]
+                                           (str " " row-class)))
                                 :num-columns header-count
                                 :is-header? false
                                 :entity-name entity-name
