@@ -114,6 +114,7 @@
                             "focus:shadow-primary/10 "
                             "transition-all bg-white placeholder:text-base-content/30")
                    :placeholder (search-placeholder t context (or (seq items) (seq context)) article-mode?)
+                   :title (t :smart-expense/hint-empty)
                    :value input-text
                    :on-change on-input-change
                    :on-key-down on-input-keydown
@@ -174,15 +175,10 @@
           ($ :p {:class "text-lg font-bold"}
             (format-decimal items-total) " " currency)))
 
-      ;; Hint text
-      (when (nil? type-picker-text)
+      ;; Hint text (only for contextual hints, not empty state)
+      (when (and (nil? type-picker-text)
+                 (or article-mode? (seq items)))
         ($ :p {:class "text-center text-sm text-base-content/35 mt-2"}
-          (cond
-            article-mode?
+          (if article-mode?
             (t :smart-expense/hint-article-mode)
-
-            (seq items)
-            (t :smart-expense/hint-has-items)
-
-            :else
-            (t :smart-expense/hint-empty)))))))
+            (t :smart-expense/hint-has-items)))))))

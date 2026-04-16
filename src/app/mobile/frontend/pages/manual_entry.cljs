@@ -958,13 +958,15 @@
               ($ :span {:class "text-xs text-base-content/50"} (t :mobile/total-label))
               ($ :span {:class "text-sm font-semibold"} (str (format-decimal total) " " (or (:currency form) "BAM")))))))
 
-      ($ :div {:class "fixed bottom-16 left-0 right-0 p-4 bg-base-100 border-t border-base-300 space-y-2"}
+      ($ :div {:class "pt-3"}
         ($ :button {:id "mobile-manual-phase1-btn-add-store"
                     :type "button"
                     :class "ds-btn ds-btn-outline w-full h-11 text-base"
                     :disabled (or submitting? (empty? items))
                     :on-click (fn [_] (on-add-store))}
-          (t :smart-expense/add-store))
+          (t :smart-expense/add-store)))
+
+      ($ :div {:class "fixed bottom-16 left-0 right-0 p-4 bg-base-100 border-t border-base-300"}
         ($ :div {:class "grid grid-cols-2 gap-3"}
           ($ :button {:id "mobile-manual-phase1-btn-cancel"
                       :type "button"

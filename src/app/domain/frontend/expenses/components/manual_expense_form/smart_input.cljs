@@ -639,14 +639,14 @@
              :on-focus-handled #(set-focus-item-id! nil)}))
 
         ;; Phase 1 footer: save or jump straight to store selection
-        (when (and (= phase :items) (seq items))
+        (when (= phase :items)
           ($ :div {:class (str "sticky bottom-0 bg-white/95 backdrop-blur-sm "
                             "border-t border-base-200 pt-3 pb-3 -mx-6 px-6 "
                             "flex items-center gap-3")}
             ($ :button {:id "btn-add-store"
                         :type "button"
                         :class "ds-btn ds-btn-outline ds-btn-lg text-lg mr-auto"
-                        :disabled (or submitting? (some? (:store context)))
+                        :disabled (or submitting? (empty? items) (some? (:store context)))
                         :on-click (fn [e]
                                     (.preventDefault e)
                                     (begin-context-phase! :store-search))}
@@ -661,7 +661,7 @@
             ($ :button {:id "btn-save-smart-expense"
                         :type "submit"
                         :class "ds-btn ds-btn-primary ds-btn-lg text-lg px-8"
-                        :disabled (or submitting? submit-disabled?)}
+                        :disabled (or submitting? submit-disabled? (empty? items))}
               (if submitting? (t :smart-expense/saving) (t :smart-expense/save)))))
 
         ;; Phase 2: Context + Review
