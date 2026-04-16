@@ -93,22 +93,26 @@
               ($ entity-chip {:key (str "ctx-" (name entity-type))
                               :entity-type entity-type
                               :label (:label chip)
+                              :tooltip (entity-type-label t entity-type)
                               :on-remove #(on-remove-context entity-type)}))
             (when payer-name
               ($ entity-chip {:key "default-payer"
                               :entity-type :payer
                               :label payer-name
+                              :tooltip (entity-type-label t :payer)
                               :on-remove on-clear-payer}))
             (when purchased-date
               ($ entity-chip {:key "default-date"
                               :entity-type :date
                               :label purchased-date
+                              :tooltip (entity-type-label t :date)
                               :on-remove on-clear-date}))
             (when currency
               ($ entity-chip {:key "default-currency"
                               :entity-type :currency
                               :label currency
-                              :on-remove on-clear-currency})))))
+                              :tooltip (entity-type-label t :currency)
+                              :on-remove on-clear-currency}))))))
 
       ;; ── Sub-stage: defaults ──────────────────────────────────
       (when (= sub-stage :defaults)
@@ -293,5 +297,5 @@
                           :value currency
                           :on-change (fn [e] (on-set-currency (.. e -target -value)))}
                 (for [{:keys [value label]} currency-options]
-                  ($ :option {:key value :value value} label))))))))))
+                  ($ :option {:key value :value value} label)))))))))
 

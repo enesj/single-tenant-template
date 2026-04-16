@@ -24,6 +24,9 @@
     :store    (t :smart-expense/entity-store)
     :category (t :smart-expense/entity-category)
     :article  (t :smart-expense/entity-article)
+    :payer    (t :smart-expense/entity-payer)
+    :date     (t :smart-expense/entity-date)
+    :currency (t :smart-expense/entity-currency)
     ""))
 
 (defn validate-form

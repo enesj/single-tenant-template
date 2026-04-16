@@ -29,6 +29,19 @@
    :date     "bg-sky-100 text-sky-800"
    :currency "bg-orange-100 text-orange-800"})
 
+(defn ^:private mobile-entity-type-label
+  "Translated entity type label for tooltips."
+  [t entity-type]
+  (case entity-type
+    :supplier (t :smart-expense/entity-supplier)
+    :store    (t :smart-expense/entity-store)
+    :category (t :smart-expense/entity-category)
+    :article  (t :smart-expense/entity-article)
+    :payer    (t :smart-expense/entity-payer)
+    :date     (t :smart-expense/entity-date)
+    :currency (t :smart-expense/entity-currency)
+    ""))
+
 (def ^:private currency-options
   ["BAM" "EUR" "USD" "GBP" "CHF" "HRK" "RSD"])
 
@@ -658,9 +671,10 @@
         ($ :span {:class "text-xs text-base-content/50 ml-2 whitespace-nowrap"}
           (str (format-decimal price) " BAM"))))))
 
-(defui context-chip [{:keys [entity-type label on-remove]}]
+(defui context-chip [{:keys [entity-type label on-remove tooltip]}]
   ($ :span {:class (str "inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border "
-                     (get chip-colors entity-type "bg-base-200 text-base-content"))}
+                     (get chip-colors entity-type "bg-base-200 text-base-content"))
+            :title tooltip}
     label
     (when on-remove
       ($ :button {:class "ml-0.5 hover:opacity-70 cursor-pointer"
@@ -919,21 +933,25 @@
               ($ context-chip {:key (name etype)
                                :entity-type etype
                                :label (context-entry-label entry)
+                               :tooltip (mobile-entity-type-label t etype)
                                :on-remove #(remove-context! etype)}))
             (when payer-name
               ($ context-chip {:key "default-payer"
                                :entity-type :payer
                                :label payer-name
+                               :tooltip (t :smart-expense/entity-payer)
                                :on-remove #(set-form! (fn [f] (dissoc f :payer-id)))}))
             (when purchased-date
               ($ context-chip {:key "default-date"
                                :entity-type :date
                                :label purchased-date
+                               :tooltip (t :smart-expense/entity-date)
                                :on-remove #(set-form! (fn [f] (dissoc f :purchased-at)))}))
             (when (:currency form)
               ($ context-chip {:key "default-currency"
                                :entity-type :currency
                                :label (:currency form)
+                               :tooltip (t :smart-expense/entity-currency)
                                :on-remove #(set-form! (fn [f] (dissoc f :currency)))})))))
 
       (when (seq items)
@@ -1039,6 +1057,7 @@
               ($ context-chip {:key (name etype)
                                :entity-type etype
                                :label (context-entry-label entry)
+                               :tooltip (mobile-entity-type-label t etype)
                                :on-remove #(remove-context! etype)}))))
         ($ suggestion-chips {:suggestions suggestions
                              :context context

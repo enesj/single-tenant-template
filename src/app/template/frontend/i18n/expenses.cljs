@@ -102,8 +102,11 @@
     ;; Entity type labels (nominative)
     :smart-expense/entity-supplier    "Dobavljač"
     :smart-expense/entity-store       "Trgovina"
-    :smart-expense/entity-category    "Kategorija"
+    :smart-expense/entity-category    "Kategorija troška"
     :smart-expense/entity-article     "Artikal"
+    :smart-expense/entity-payer       "Platitelj"
+    :smart-expense/entity-date        "Datum kupovine"
+    :smart-expense/entity-currency    "Valuta"
     ;; Phase 1
     :smart-expense/title              "Novi trošak"
     :smart-expense/subtitle           "Počnite s dobavljačem, trgovinom, kategorijom ili artiklom"
@@ -427,8 +430,11 @@
     ;; Smart expense form (Quick Add modal)
     :smart-expense/entity-supplier    "Supplier"
     :smart-expense/entity-store       "Store"
-    :smart-expense/entity-category    "Category"
+    :smart-expense/entity-category    "Expense Category"
     :smart-expense/entity-article     "Article"
+    :smart-expense/entity-payer       "Payer"
+    :smart-expense/entity-date        "Purchase Date"
+    :smart-expense/entity-currency    "Currency"
     :smart-expense/title              "New Expense"
     :smart-expense/subtitle           "Start with supplier, store, category, or article"
     :smart-expense/searching          "Searching..."

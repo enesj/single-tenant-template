@@ -50,24 +50,28 @@
               ($ entity-chip {:key (str "items-phase-" (name entity-type))
                               :entity-type entity-type
                               :label (:label chip)
+                              :tooltip (entity-type-label t entity-type)
                               :on-remove #(on-remove-context entity-type)
                               :size :sm}))
             (when payer-name
               ($ entity-chip {:key "default-payer"
                               :entity-type :payer
                               :label payer-name
+                              :tooltip (entity-type-label t :payer)
                               :on-remove on-clear-payer
                               :size :sm}))
             (when purchased-date
               ($ entity-chip {:key "default-date"
                               :entity-type :date
                               :label purchased-date
+                              :tooltip (entity-type-label t :date)
                               :on-remove on-clear-date
                               :size :sm}))
             (when currency
               ($ entity-chip {:key "default-currency"
                               :entity-type :currency
                               :label currency
+                              :tooltip (entity-type-label t :currency)
                               :on-remove on-clear-currency
                               :size :sm})))))
 

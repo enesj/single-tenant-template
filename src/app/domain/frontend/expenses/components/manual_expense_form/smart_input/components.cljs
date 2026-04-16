@@ -14,14 +14,15 @@
     [uix.core :refer [$ defui use-effect use-ref use-state]]))
 
 (defui entity-chip
-  [{:keys [entity-type label on-remove size]}]
+  [{:keys [entity-type label on-remove size tooltip]}]
   (let [{:keys [icon]} (search/entity-type-info entity-type)
         style-class (get chip-styles entity-type "bg-base-200 text-base-content")
         large? (not= size :sm)]
     ($ :span {:class (str "inline-flex items-center gap-2 rounded-full font-medium border "
                        "transition-all select-none "
                        (if large? "px-4 py-2.5 text-base " "px-3 py-1.5 text-sm ")
-                       style-class)}
+                       style-class)
+              :title tooltip}
       ($ :span {:class (if large? "text-lg" "text-base")} icon)
       ($ :span label)
       (when on-remove
