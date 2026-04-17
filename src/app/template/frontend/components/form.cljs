@@ -16,6 +16,7 @@
     [app.template.frontend.components.messages :as messages]
     [app.template.frontend.events.form :as form-events]
     [app.template.frontend.events.list.crud :as crud-events]
+    [app.template.frontend.i18n :refer [use-t]]
     [app.template.frontend.subs.form :as form-subs]
     [clojure.string :as str]
     [re-frame.core :as rf]
@@ -47,7 +48,7 @@
        :auto-complete (or (:autocomplete field-spec) "on")  ;; Use validation metadata autocomplete
        :placeholder (:placeholder field-spec)               ;; Use validation metadata placeholder
        :on-change handle-change
-       :aria-label (str "Enter " label)
+       :aria-label label
        :aria-required required
        :aria-invalid (boolean error)
        :validate-server? (= (:validate-server? field-spec) "unique")})))
@@ -175,7 +176,8 @@
     ($ :fieldset {:class "fieldset border-1 border-base-300 p-4 mb-4 shadow text-left"
                   :id (when form-id (str form-id "-fieldset"))}
       ($ :legend {:class "legend font-bold mb-4 ml-4 text-left"}
-        (str (if editing "Edit " "Add ") (or (when-let [en (:entity-name props)] (str/capitalize (name en))) (:legend props) "")))
+        (or (:legend props)
+          (str (if editing "Edit " "Add ") (or (when-let [en (:entity-name props)] (str/capitalize (name en))) ""))))
       (map (fn [field-spec]
              (let [field-id (:id field-spec)
                    safe-label (or (:label field-spec)
@@ -203,6 +205,8 @@
 (def form-props
   {:on-cancel {:type :function :required false}
    :button-text {:type :string :required false}
+   :legend {:type :string :required false}
+   :success-message {:type :string :required false}
    :entity-spec {:type :array :required true}
    :entity-name {:type :string :required true}
    :editing {:type :boolean :required false}
@@ -214,8 +218,9 @@
 (defui form
   "Renders a form with fields based on entity specification"
   {:prop-types form-props}
-  [{:keys [on-cancel button-text entity-spec entity-name editing initial-values set-editing! on-submit save-disabled?] :as _props}]
-  (let [form-success? (urf/use-subscribe [::form-subs/form-success entity-name])
+  [{:keys [on-cancel button-text legend success-message entity-spec entity-name editing initial-values set-editing! on-submit save-disabled?] :as _props}]
+  (let [t (use-t)
+        form-success? (urf/use-subscribe [::form-subs/form-success entity-name])
         submitted? (urf/use-subscribe [::form-subs/submitted? entity-name])
         form-errors (urf/use-subscribe [::form-subs/form-errors entity-name])]
 
@@ -251,12 +256,16 @@
                              :entity-name entity-name}))
                         (when (and form-success? submitted?)
                           ($ messages/success-alert
-                            {:message (str (if editing "Updated" "Created") " successfully!")
+                            {:message (or success-message
+                                        (if editing
+                                          "Updated successfully!"
+                                          "Created successfully!"))
                              :entity-name entity-name}))
                         ($ form-fields
                           (merge form-props
                             {:entity-name entity-name
                              :editing editing
+                             :legend legend
                              :values values
                              :form-id form-id
                              :entity-spec entity-spec}))
@@ -278,7 +287,7 @@
                                            ;; Only call the on-cancel callback if it's a function (not for batch editing)
                                            (when (fn? on-cancel)
                                              (on-cancel)))
-                               :children ["Cancel" ($ cancel-icon)]})
+                               :children [(t :common/cancel) ($ cancel-icon)]})
                             ($ button
                               {:btn-type :save
                                :id (if editing "btn-update" "btn-save")
@@ -291,7 +300,7 @@
                                                (and (set? dirty) (empty? dirty))))
                                            (not all-fields-valid?)
                                            save-disabled?*)
-                               :children [(or button-text (if editing "Update" "Save")) ($ save-icon)]}))
+                               :children [(or button-text (if editing (t :common/save-changes) (t :common/save))) ($ save-icon)]}))
                           (when on-submit-server-message
                             ($ :div {:class (str "message "
                                               (if (str/includes? on-submit-server-message "Success")

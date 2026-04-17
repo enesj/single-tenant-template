@@ -110,13 +110,6 @@
        EXECUTE FUNCTION update_updated_at_column();"
   :down "DROP TRIGGER IF EXISTS password_reset_tokens_updated_at ON password_reset_tokens;"}
 
- :payer-types-updated-at-trigger
- {:up "CREATE TRIGGER payer_types_updated_at
-       BEFORE UPDATE ON payer_types
-       FOR EACH ROW
-       EXECUTE FUNCTION update_updated_at_column();"
-  :down "DROP TRIGGER IF EXISTS payer_types_updated_at ON payer_types;"}
-
  :payers-updated-at-trigger
  {:up "CREATE TRIGGER payers_updated_at
        BEFORE UPDATE ON payers

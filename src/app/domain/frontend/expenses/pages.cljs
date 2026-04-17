@@ -18,7 +18,6 @@
     [app.domain.frontend.expenses.pages.user.expenses-dashboard :refer [expenses-dashboard-page]]
     [app.domain.frontend.expenses.pages.user.expenses-list :refer [expenses-list-page]]
     [app.domain.frontend.expenses.pages.user.manufacturers :refer [manufacturers-page]]
-    [app.domain.frontend.expenses.pages.user.payer-types :refer [payer-types-page]]
     [app.domain.frontend.expenses.pages.user.payers :refer [payers-page]]
 
     [app.domain.frontend.expenses.pages.user.receipt-detail :refer [receipt-detail-page]]
@@ -57,7 +56,6 @@
    :expense-subcategories subcategories-page
    :expense-article-aliases article-aliases-page
    :expense-supplier-aliases supplier-aliases-page
-   :expense-payer-types payer-types-page
    :expense-search search-page
 
    :unmapped-items unmapped-items-page})

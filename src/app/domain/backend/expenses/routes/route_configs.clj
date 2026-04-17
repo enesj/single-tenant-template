@@ -3,7 +3,6 @@
   (:require
     [app.domain.backend.expenses.routes.middleware :as impersonation-mw]
     [app.domain.backend.expenses.services.service-configs :as svc-configs]
-    [app.template.backend.middleware.admin :as admin-mw]
     [app.template.backend.routes.admin.utils :as utils]
     [clojure.string :as str]))
 
@@ -137,22 +136,9 @@
    :service 'app.domain.backend.expenses.services.payers
    :default-limit 100
    :default-order-by "label"
-   :required-fields [:payer-type-id :label]
+  :required-fields [:label]
    :has-search? false
    :route-middleware [(fn [handler] (impersonation-mw/wrap-require-impersonation handler))]})
-
-(def payer-type-config
-  {:entity-key :payer-type
-   :entity-plural :payer-types
-   :route-segment "payer-types"
-   :service 'app.domain.backend.expenses.services.payer-types
-   :default-limit 100
-   :default-order-by "label"
-   :required-fields [:label]
-   :has-search? false
-   ;; Impersonation required + at least :admin role
-   :route-middleware [(fn [handler] (impersonation-mw/wrap-require-impersonation handler))
-                      (fn [handler] (admin-mw/wrap-admin-role handler :admin))]})
 
 (def article-config
   {:entity-key :article

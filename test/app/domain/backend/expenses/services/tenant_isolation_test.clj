@@ -3,14 +3,13 @@
 
   These tests create two tenants and verify that:
   - Payers created in tenant A are invisible to tenant B
-  - Default payer/payer-type in tenant A does not affect tenant B
+  - Default payer in tenant A does not affect tenant B
   - User expense settings are per-tenant per-user
   - Expenses created in tenant A are invisible when querying tenant B
   - Global catalog (suppliers) remains visible to both tenants"
   (:require
     [app.backend.fixtures :as fixtures]
     [app.domain.backend.expenses.services.payers :as payers]
-    [app.domain.backend.expenses.services.payer-types :as payer-types]
     [app.domain.backend.expenses.services.user-expense-settings :as settings]
     [app.domain.backend.expenses.services.user-expenses :as user-expenses]
     [app.domain.expenses.test-helpers :as th]
@@ -73,34 +72,6 @@
         "Tenant B default payer should remain unchanged")
       (is (not= (:id default-a) (:id default-b-after))
         "Tenant defaults should remain isolated"))))
-
-;; ---------------------------------------------------------------------------
-;; Payer-type isolation
-;; ---------------------------------------------------------------------------
-
-(deftest payer-types-isolated-by-tenant
-  (testing "payer types created in tenant A are invisible to tenant B"
-    (let [db fixtures/*test-db*
-          user-a (th/ensure-test-user! db {:email "pt-alice@tenant-a.com"})
-          user-b (th/ensure-test-user! db {:email "pt-bob@tenant-b.com"})
-          {:keys [tenant-id] :as _ta} (th/ensure-test-tenant! db user-a)
-          tenant-a-id tenant-id
-          {:keys [tenant-id] :as _tb} (th/ensure-test-tenant! db user-b)
-          tenant-b-id tenant-id
-          ;; Create payer type in tenant A
-          pt-a (payer-types/create-payer-type!
-                 db
-                 {:label (str "A-type-" (UUID/randomUUID))
-                  :is_default false
-                  :tenant_id tenant-a-id})
-          ;; List payer types for tenant B
-          list-pts (:list payer-types/service)
-          pts-in-b (list-pts db {:tenant-id tenant-b-id :limit 100 :offset 0})
-          pt-b-ids (set (map :id pts-in-b))]
-      (is (some? (:id pt-a))
-        "Payer type should be created in tenant A")
-      (is (not (contains? pt-b-ids (:id pt-a)))
-        "Tenant B should not see tenant A's payer type"))))
 
 ;; ---------------------------------------------------------------------------
 ;; User expense settings isolation

@@ -20,7 +20,6 @@
     [app.domain.backend.expenses.services.cities :as cities]
     [app.domain.backend.expenses.services.expense-categories :as expense-categories]
     [app.domain.backend.expenses.services.manufacturers :as manufacturers]
-    [app.domain.backend.expenses.services.payer-types :as payer-types]
     [app.domain.backend.expenses.services.payers :as payers]
     [app.domain.backend.expenses.services.store-aliases :as store-aliases]
     [app.domain.backend.expenses.services.stores.service :as stores-service]
@@ -46,9 +45,7 @@
   (let [suppliers-opts (atom nil)
         suppliers-count-opts (atom nil)
         payers-opts (atom nil)
-        payers-count-opts (atom nil)
-        payer-types-opts (atom nil)
-        payer-types-count-opts (atom nil)]
+        payers-count-opts (atom nil)]
     (with-redefs [suppliers/list-suppliers
                   (fn [_db opts]
                     (reset! suppliers-opts opts)
@@ -57,20 +54,16 @@
                   (fn [_db opts]
                     (reset! suppliers-count-opts opts)
                     10)
+                  payers/list-payers
+                  (fn [_db opts]
+                    (reset! payers-opts opts)
+                    [{:id (UUID/randomUUID)}])
                   payers/service
-                  {:list (fn [_db opts]
-                           (reset! payers-opts opts)
-                           [{:id (UUID/randomUUID)}])
-                   :count (fn [_db opts]
+                  {:count (fn [_db opts]
                             (reset! payers-count-opts opts)
                             7)}
-                  payer-types/service
-                  {:list (fn [_db opts]
-                           (reset! payer-types-opts opts)
-                           [{:id (UUID/randomUUID)}])
-                   :count (fn [_db opts]
-                            (reset! payer-types-count-opts opts)
-                            5)}
+                  payers/get-user-payer-id
+                  (fn [_db _user-id _tenant-id] nil)
                   h/json-response (fn [body & [status]] {:status (or status 200)
                                                          :body body})]
       (testing "suppliers clamps invalid pagination and includes envelope"
@@ -85,7 +78,7 @@
           (is (= {:limit 1 :offset 0 :search "milk"} @suppliers-opts))
           (is (= {:search "milk"} @suppliers-count-opts))))
 
-      (testing "payers passes parsed pagination/search and includes envelope"
+      (testing "payers pass parsed pagination/search and default to active rows only"
         (let [handler (reference-data/list-payers-handler db)
               resp (handler (req "member" {:limit "3"
                                            :offset "4"
@@ -94,20 +87,30 @@
           (is (= 7 (get-in resp [:body :total])))
           (is (= 3 (get-in resp [:body :limit])))
           (is (= 4 (get-in resp [:body :offset])))
-          (is (= {:limit 3 :offset 4 :search "cash"} @payers-opts))
-          (is (= {:search "cash" :tenant-id nil} @payers-count-opts))))
+          (is (= {:limit 3
+                  :offset 4
+                  :search "cash"
+                  :extra-filters [[:= :p/is_active true]]}
+                @payers-opts))
+          (is (= {:search "cash"
+                  :tenant-id nil
+                  :extra-filters [[:= :p/is_active true]]}
+                @payers-count-opts))))
 
-      (testing "payer types clamps non-positive limit/offset and includes envelope"
-        (let [handler (reference-data/list-payer-types-handler db)
-              resp (handler (req "member" {:limit "0"
-                                           :offset "-1"
-                                           :search "type"}))]
+      (testing "payers can explicitly include inactive rows for management pages"
+        (let [handler (reference-data/list-payers-handler db)
+              resp (handler (req "member" {:limit "3"
+                                           :offset "4"
+                                           :search "cash"
+                                           :include_inactive "true"}))]
           (is (= 200 (:status resp)))
-          (is (= 5 (get-in resp [:body :total])))
-          (is (= 1 (get-in resp [:body :limit])))
-          (is (= 0 (get-in resp [:body :offset])))
-          (is (= {:limit 1 :offset 0 :search "type"} @payer-types-opts))
-          (is (= {:search "type" :tenant-id nil} @payer-types-count-opts)))))))
+          (is (= {:limit 3
+                  :offset 4
+                  :search "cash"}
+                @payers-opts))
+          (is (= {:search "cash"
+                  :tenant-id nil}
+                @payers-count-opts)))))))
 
 (deftest supplier-detail-and-supplier-aliases-list-handlers-return-standard-envelope
   (let [article-aliases-opts (atom nil)

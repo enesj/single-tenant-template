@@ -254,10 +254,9 @@
             (let [system-payers (jdbc/execute! tx
                                   (sql/format {:select [:p.id]
                                                :from   [[:payers :p]]
-                                               :join   [[:payer_types :pt] [:= :pt.id :p.payer_type_id]]
                                                :where  [:and
                                                         [:= :p.tenant_id target-tenant-id]
-                                                        [:= :pt.is_system true]
+                                                        [:= :p.type [:cast "system" :payer_type]]
                                                         [:= :p.is_active true]]})
                                   {:builder-fn rs/as-unqualified-lower-maps})
                   ;; Find payers that belong to this user (by matching label or via user_expense_settings)

@@ -422,26 +422,6 @@
    [:updated_at :timestamptz {:default [:now]}]],
   :indexes
   [[:idx_countries_code :btree {:fields [:code], :unique true}]]},
- :payer_types
- {:fields
-  [[:id :uuid {:primary-key true}]
-   [:tenant_id
-    :uuid
-    {:foreign-key :tenants/id, :null false, :on-delete :cascade}]
-   [:label [:varchar 255] {:null false}]
-   [:is_default :boolean {:null false, :default false}]
-   [:is_system :boolean {:null false, :default false}]
-   [:created_at :timestamptz {:default [:now]}]
-   [:updated_at :timestamptz {:default [:now]}]],
-  :indexes
-  [[:idx_payer_types_tenant_label
-    :btree
-    {:fields [:tenant_id :label], :unique true}]
-   [:uniq_payer_types_tenant_default
-    :btree
-    {:fields [:tenant_id :is_default],
-     :unique true,
-     :where [:= :is_default true]}]]},
  :payment_provider_account_links
  {:fields
   [[:id :uuid {:primary-key true}]
@@ -493,17 +473,16 @@
    [:tenant_id
     :uuid
     {:foreign-key :tenants/id, :null false, :on-delete :cascade}]
-   [:payer_type_id
-    :uuid
-    {:foreign-key :payer_types/id, :on-delete :set-null}]
+   [:type [:enum :payer-type] {:null false, :default "custom"}]
    [:label [:varchar 255] {:null false}]
    [:is_default :boolean {:default false}]
    [:is_active :boolean {:null false, :default true}]
    [:created_at :timestamptz {:default [:now]}]
    [:updated_at :timestamptz {:default [:now]}]],
+  :types [[:payer-type :enum {:choices ["system" "custom"]}]],
   :indexes
   [[:idx_payers_tenant :btree {:fields [:tenant_id]}]
-   [:idx_payers_payer_type :btree {:fields [:payer_type_id]}]]},
+   [:idx_payers_type :btree {:fields [:type]}]]},
  :user_sessions
  {:fields
   [[:id :uuid {:primary-key true}]

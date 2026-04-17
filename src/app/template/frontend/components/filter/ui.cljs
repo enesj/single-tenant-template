@@ -3,6 +3,7 @@
     [app.template.frontend.components.filter.components :as filter-components]
     [app.template.frontend.components.filter.date-range-picker :as date-range-picker]
     [app.template.frontend.components.filter.hooks :as filter-hooks]
+    [app.template.frontend.i18n :refer [use-t]]
     [app.template.frontend.components.filter.utils :as filter-utils]
     [app.template.frontend.events.list.filters :as filter-events]
     [app.template.frontend.ui.z-scale :as z]
@@ -13,28 +14,31 @@
 ;; UI Component for text field filtering
 (defui text-field-filter
   [{:keys [_field-id _field-label filter-text set-filter-text matching-count _entity-type]}]
-  ($ :div
-    ;; Field input section
-    ($ :div {:class "p-4"}
-      ($ :div {:class "mb-2"}
-        ($ filter-components/filter-label
-          {:text "Contains text:"})
-        ($ filter-components/filter-input
-          {:type "text"
-           :id "filter-text-input"
-           :value filter-text
-           :placeholder "Type to filter..."
-           :on-change #(set-filter-text (.. % -target -value))}))
+  (let [t (use-t)]
+    ($ :div
+      ;; Field input section
+      ($ :div {:class "p-4"}
+        ($ :div {:class "mb-2"}
+          ($ filter-components/filter-label
+            {:text (t :common/filter-contains-text)})
+          ($ filter-components/filter-input
+            {:type "text"
+             :id "filter-text-input"
+             :value filter-text
+             :placeholder (t :common/filter-type-placeholder)
+             :on-change #(set-filter-text (.. % -target -value))}))
 
-      ;; Helper text for character requirements and auto-filtering
-      ($ filter-components/text-filter-helper
-        {:filter-text filter-text})
+        ;; Helper text for character requirements and auto-filtering
+        ($ filter-components/text-filter-helper
+          {:filter-text filter-text})
 
-      ;; Show match count when filtering is active
-      (when (and matching-count (pos? (count filter-text)))
-        ($ :div {:class "text-sm text-gray-600 mt-1"}
-          (str "Found " matching-count " matching "
-            (if (= matching-count 1) "item" "items")))))))
+        ;; Show match count when filtering is active
+        (when (and matching-count (pos? (count filter-text)))
+          ($ :div {:class "text-sm text-gray-600 mt-1"}
+            (str (t :common/found) " " matching-count " "
+              (if (= matching-count 1)
+                (t :common/matching-item)
+                (t :common/matching-items)))))))))
 
 ;; Debounce helper
 ;; Debounce function moved to utils namespace
@@ -43,25 +47,26 @@
 (defui number-range-filter
   [{:keys [field-id filter-min filter-max matching-count entity-type]}]
   (let [{:keys [local-min local-max handle-min-change handle-max-change has-values]}
-        (filter-hooks/use-number-range-filter entity-type field-id filter-min filter-max)]
+        (filter-hooks/use-number-range-filter entity-type field-id filter-min filter-max)
+        t (use-t)]
 
     ($ :div
       ($ :div {:class "p-4"}
         ($ :div {:class "mb-2"}
-          ($ filter-components/filter-label {:text "Min"})
+          ($ filter-components/filter-label {:text (t :common/min)})
           ($ filter-components/number-input
             {:id "filter-min-input"
              :value local-min
              :on-change handle-min-change
-             :placeholder "Min"}))
+             :placeholder (t :common/min)}))
 
         ($ :div
-          ($ filter-components/filter-label {:text "Max"})
+          ($ filter-components/filter-label {:text (t :common/max)})
           ($ filter-components/number-input
             {:id "filter-max-input"
              :value local-max
              :on-change handle-max-change
-             :placeholder "Max"}))
+             :placeholder (t :common/max)}))
 
         ;; Status indicator
         ($ filter-components/filter-status-indicator
@@ -106,7 +111,7 @@
        :on-close on-close})))
 
 (defui date-range-filter
-  [{:keys [field-id filter-from filter-to matching-count entity-type active-filters items
+  [{:keys [field-id matching-count entity-type active-filters items
            list-ui-state set-filter-from-date set-filter-to-date]}]
   ($ date-range-picker/date-range-picker
     {:field-id field-id
@@ -122,6 +127,7 @@
 (defui active-filters-display
   [{:keys [entity-type active-filters on-clear-filter]}]
   (let [filter-count (count active-filters)
+        t (use-t)
         ;; Subscribe to entity config to get field labels
         entity-config (uix.re-frame/use-subscribe [:app.template.frontend.subs.entity/entity-config entity-type])
         ;; Subscribe to all entities for value lookup
@@ -130,7 +136,7 @@
     (when (pos? filter-count)
       ($ :div {:class "bg-blue-50 pt-2 pb-2 border-t border-gray-200 rounded-b-lg"}
         ($ :div {:class "text-xs font-medium text-gray-700 ml-2 mb-2"}
-          (str "Active Filters (" filter-count ")"))
+          (str (t :common/active-filters) " (" filter-count ")"))
         ($ :div {:class "ml-2 space-y-1"}
           (for [[field-id filter-value] active-filters]
             (let [field-label (filter-utils/get-field-label entity-config field-id)
@@ -140,6 +146,7 @@
                 ($ :span {:class "text-gray-600"}
                   (str field-label ": " value-text))
                 ($ :button {:class "text-red-500 hover:text-red-700 ml-2 cursor-pointer"
+                            :title (t :common/remove-filter)
                             :on-click (fn [e]
                                         (.preventDefault e)
                                         (.stopPropagation e)
@@ -151,6 +158,7 @@
   "Compact active filters display that's always visible when filters are active"
   [{:keys [entity-type active-filters on-clear-filter class]}]
   (let [filter-count (count active-filters)
+        t (use-t)
         ;; Subscribe to entity config to get field labels
         entity-config (uix.re-frame/use-subscribe [:app.template.frontend.subs.entity/entity-config entity-type])
         ;; Subscribe to all entities to get possible option values
@@ -160,7 +168,7 @@
       ($ :div {:class (str "bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 mb-3 " (or class ""))}
         ($ :div {:class "flex flex-wrap items-center gap-2"}
           ($ :span {:class "text-xs font-medium text-blue-700 mr-2"}
-            (str "Active Filters (" filter-count "):"))
+            (str (t :common/active-filters) " (" filter-count "):"))
 
           ;; Render filter chips
           (for [[field-id filter-value] active-filters]
@@ -184,6 +192,7 @@
   (let [;; State for dropdown open/closed
         [dropdown-open?, set-dropdown-open] (use-state false)
         dropdown-root-ref (use-ref nil)
+        t (use-t)
 
         ;; Handle option toggle
         handle-option-toggle (fn [option-value]
@@ -273,10 +282,12 @@
             {:has-filter? true
              :matching-count nil})
           ($ :div {:class "text-xs text-gray-600"}
-            (str "Selected " selected-count " of " total-count " options"))))
+            (str selected-count " / " total-count " " (t :common/selected)))))
 
       ;; Match count
       (when matching-count
         ($ :div {:class "text-sm text-gray-600"}
-          (str "Found " matching-count " matching "
-            (if (= matching-count 1) "item" "items")))))))
+          (str (t :common/found) " " matching-count " "
+            (if (= matching-count 1)
+              (t :common/matching-item)
+              (t :common/matching-items))))))))

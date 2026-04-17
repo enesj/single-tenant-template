@@ -4,6 +4,7 @@
     [app.shared.adapters.normalization :as norm]
     [app.shared.model-naming :as model-naming]
     [app.template.frontend.components.form :refer [form]]
+    [app.template.frontend.i18n :refer [use-t]]
     [re-frame.core :as rf]
     [uix.core :refer [$ defui]]
     [uix.re-frame :refer [use-subscribe]]))
@@ -20,31 +21,76 @@
     :required false
     :placeholder "Optional"}])
 
-(defn- payer-form-spec
-  [payer-type-options]
-  [{:id :label
-    :type :text
-    :label "Label"
-    :required true
-    :placeholder "e.g. Visa 1234"}
-   {:id :payer_type_id
-    :type :select
-    :label "Type"
-    :required true
-    :options payer-type-options}
-   {:id :is_default
-    :type :checkbox
-    :label "Default"}])
+(defn- payer-label-field
+  [t placeholder-key]
+  {:id :label
+   :type :text
+   :label (t :common/label)
+   :required true
+   :placeholder (t placeholder-key)})
 
-(def ^:private payer-type-form-spec
-  [{:id :label
-    :type :text
-    :label "Label"
-    :required true
-    :placeholder "e.g. Family"}
-   {:id :is_default
-    :type :checkbox
-    :label "Default"}])
+(defn- payer-default-field
+  [t field-id]
+  {:id field-id
+   :type :checkbox
+   :label (t :common/is-default)})
+
+(defn- payer-active-field
+  [t]
+  {:id :is-active
+   :type :checkbox
+   :label (t :common/active)})
+
+(defn- payer-form-spec
+  [t]
+  [(payer-label-field t :payers/form-placeholder)
+   (payer-default-field t :is_default)])
+
+(defn- payer-label-only-form-spec
+  [t]
+  [(payer-label-field t :payers/form-own-placeholder)])
+
+(defn- payer-label-and-default-form-spec
+  [t]
+  [(payer-label-field t :payers/form-own-placeholder)
+   (payer-default-field t :is-default)])
+
+(defn- payer-full-form-spec
+  [t]
+  [(payer-label-field t :payers/form-placeholder)
+   (payer-default-field t :is-default)
+   (payer-active-field t)])
+
+(defn- payer-edit-form-spec
+  [t edit-mode]
+  (case edit-mode
+    :label-only (payer-label-only-form-spec t)
+    :label-and-default (payer-label-and-default-form-spec t)
+    (payer-full-form-spec t)))
+
+(defn- payer-edit-initial-values
+  [edit-mode initial-data]
+  (let [normalized-data (norm/convert-db-keys->app-keys (or initial-data {}))]
+    (case edit-mode
+      :label-only {:label (or (:label normalized-data) "")}
+      :label-and-default {:label (or (:label normalized-data) "")
+                          :is-default (boolean (:is-default normalized-data))}
+      {:label (or (:label normalized-data) "")
+       :is-default (boolean (:is-default normalized-data))
+       :is-active (if (contains? normalized-data :is-active)
+                    (boolean (:is-active normalized-data))
+                    true)})))
+
+(defn- payer-edit-submit-data
+  [edit-mode values]
+  (case edit-mode
+    :label-only {:label (:label values)}
+    :label-and-default (-> values
+                         (select-keys [:label :is-default])
+                         model-naming/app-map-keys->db)
+    (-> values
+      (select-keys [:label :is-default :is-active])
+      model-naming/app-map-keys->db)))
 
 (defui user-supplier-add-form-modal
   [{:keys [on-success on-cancel]}]
@@ -96,18 +142,7 @@
 (defui user-payer-add-form-modal
   [{:keys [on-success on-cancel]}]
   (let [form-error (use-subscribe [:user-expenses/form-error])
-        payer-types (or (use-subscribe [:user-expenses/payer-types]) [])
-        payer-type-options (mapv (fn [{:keys [id label]}]
-                                   {:label label :value (str id)})
-                             payer-types)
-        default-type-id (or (some->> payer-types
-                              (some (fn [pt]
-                                      (when (true? (:is_default pt))
-                                        (:id pt))))
-                              str)
-                          (get-in payer-type-options [0 :value]))
-        initial-values (cond-> {:is_default false}
-                         default-type-id (assoc :payer_type_id default-type-id))]
+        t (use-t)]
     ($ :div {:class "space-y-4"}
       (when form-error
         ($ :div {:class "ds-alert ds-alert-error"}
@@ -115,111 +150,42 @@
 
       ($ form
         {:entity-name "user-payer"
-         :entity-spec (payer-form-spec payer-type-options)
+         :entity-spec (payer-form-spec t)
          :editing false
-         :initial-values initial-values
+         :initial-values {:is_default false}
+         :legend (t :payers/form-add-title)
+         :success-message (t :payers/form-created-success)
          :on-cancel on-cancel
          :on-submit (fn [{:keys [values]}]
                       (rf/dispatch [:user-expenses/create-payer-modal values on-success]))
-         :button-text "Save Payer"}))))
+         :button-text (t :common/save)}))))
 
 (defui user-payer-edit-form-modal
-  [{:keys [payer-id initial-data on-success on-cancel label-only?]}]
+  [{:keys [payer-id initial-data on-success on-cancel edit-mode]}]
   (let [form-error (use-subscribe [:user-expenses/form-error])
-        ;; Get dynamic form spec from user-settings config
-        dynamic-spec (use-subscribe [:form-entity-specs/by-name :payers true])
-        payer-types (or (use-subscribe [:user-expenses/payer-types]) [])
-        payer-type-options (mapv (fn [{:keys [id label]}]
-                                   {:label label :value (str id)})
-                             payer-types)
-        default-type-id (or (some->> payer-types
-                              (some (fn [pt]
-                                      (when (true? (:is_default pt))
-                                        (:id pt))))
-                              str)
-                          (get-in payer-type-options [0 :value]))
-        ;; Build initial values from data.
-        ;; Dynamic form spec uses kebab-case IDs (e.g. :payer-type-id, :is-default).
-        ;; The entity data often uses snake_case keys.
-        initial-values (if label-only?
-                         {:label (or (:label initial-data) "")}
-                         (-> (norm/convert-db-keys->app-keys (or initial-data {}))
-                           (select-keys [:label :payer-type-id :is-default :id])
-                           (update :payer-type-id #(or (when % (str %)) default-type-id))
-                           (update :is-default boolean)))]
+        t (use-t)
+        edit-mode (or edit-mode :full)
+        initial-values (payer-edit-initial-values edit-mode initial-data)]
     ($ :div {:class "space-y-4"}
       (when form-error
         ($ :div {:class "ds-alert ds-alert-error"}
           ($ :span form-error)))
 
       ($ form
-        {:entity-name "payers"
-         ;; label-only? uses a minimal spec; otherwise prefer dynamic config, fall back to full spec
-         :entity-spec (cond
-                        label-only? [{:id :label
-                                      :type :text
-                                      :label "Label"
-                                      :required true
-                                      :placeholder "e.g. Visa 1234"}]
-                        (seq dynamic-spec) nil
-                        :else (payer-form-spec payer-type-options))
+        ;; Use a non-registry entity-name so the shared form component does not
+        ;; pick up the dynamic models-derived :payers spec (which would render
+        ;; an editable type dropdown). The static spec below governs the form.
+        {:entity-name "user-payer-edit"
+         ;; Intentionally fixed for user-facing payer edits: type is never editable here.
+         :entity-spec (payer-edit-form-spec t edit-mode)
          :editing true
          :initial-values initial-values
+         :legend (t :payers/form-edit-title)
+         :success-message (t :payers/form-updated-success)
          :on-cancel on-cancel
          :on-submit (fn [{:keys [values]}]
-                      ;; Convert kebab-case form keys to snake_case for the API.
                       (rf/dispatch [:user-expenses/update-payer-modal
                                     payer-id
-                                    (if label-only?
-                                      {:label (:label values)}
-                                      (model-naming/app-map-keys->db values))
+                                    (payer-edit-submit-data edit-mode values)
                                     on-success]))
-         :button-text "Update Payer"}))))
-
-(defui user-payer-type-add-form-modal
-  [{:keys [on-success on-cancel]}]
-  (let [form-error (use-subscribe [:user-expenses/form-error])]
-    ($ :div {:class "space-y-4"}
-      (when form-error
-        ($ :div {:class "ds-alert ds-alert-error"}
-          ($ :span form-error)))
-
-      ($ form
-        {:entity-name "user-payer-type"
-         :entity-spec payer-type-form-spec
-         :editing false
-         :initial-values {:is_default false}
-         :on-cancel on-cancel
-         :on-submit (fn [{:keys [values]}]
-                      (rf/dispatch [:user-expenses/create-payer-type-modal values on-success]))
-         :button-text "Save Payer Type"}))))
-
-(defui user-payer-type-edit-form-modal
-  [{:keys [payer-type-id initial-data on-success on-cancel]}]
-  (let [form-error (use-subscribe [:user-expenses/form-error])
-        ;; Get dynamic form spec from user-settings config
-        dynamic-spec (use-subscribe [:form-entity-specs/by-name :payer-types true])
-        ;; Build initial values from data.
-        ;; Dynamic form spec uses kebab-case IDs (e.g. :is-default).
-        initial-values (-> (norm/convert-db-keys->app-keys (or initial-data {}))
-                         (select-keys [:label :is-default :id])
-                         (update :is-default boolean))]
-    ($ :div {:class "space-y-4"}
-      (when form-error
-        ($ :div {:class "ds-alert ds-alert-error"}
-          ($ :span form-error)))
-
-      ($ form
-        {:entity-name "payer-types"
-         ;; Only use hardcoded spec as fallback if dynamic config not available
-         :entity-spec (when-not (seq dynamic-spec) payer-type-form-spec)
-         :editing true
-         :initial-values initial-values
-         :on-cancel on-cancel
-         :on-submit (fn [{:keys [values]}]
-                      ;; Convert kebab-case form keys to snake_case for the API.
-                      (rf/dispatch [:user-expenses/update-payer-type-modal
-                                    payer-type-id
-                                    (model-naming/app-map-keys->db values)
-                                    on-success]))
-         :button-text "Update Payer Type"}))))
+         :button-text (t :common/save-changes)}))))

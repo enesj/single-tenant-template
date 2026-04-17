@@ -4,8 +4,6 @@
     [app.template.frontend.components.button :refer [button]]
     [app.template.frontend.components.icons :refer [admins-icon
                                                     arrow-up
-                                                    article-aliases-icon
-                                                    articles-icon
                                                     chart-bar
                                                     dashboard-icon
                                                     expense-items-icon
@@ -254,13 +252,7 @@
                                         :icon ($ payers-icon {:class "w-6 h-6"})
                                         :active? (active? #{:expense-payers})})]
                             (when power-user?
-                              [(nav-item {:id "user-sidebar-payer-types"
-                                          :label (t :nav/payer-types)
-                                          :href (th "/payer-types")
-                                          :route :expense-payer-types
-                                          :icon ($ payers-icon {:class "w-6 h-6"})
-                                          :active? (active? #{:expense-payer-types})})
-                               (nav-item {:id "user-sidebar-expense-categories"
+                              [(nav-item {:id "user-sidebar-expense-categories"
                                           :label (t :nav/expense-categories)
                                           :href (th "/expense-categories")
                                           :route :expense-categories-catalog

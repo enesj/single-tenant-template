@@ -115,10 +115,10 @@
        FROM tenants t WHERE t.slug = 'e2e-user-a'"
       (str (java.util.UUID/randomUUID)))
 
-    ;; Create a custom payer type in tenant-a
+    ;; Create a custom payer in tenant-a
     (h/query-db
-      "INSERT INTO payer_types (id, tenant_id, label, is_default)
-       SELECT ?::uuid, t.id, 'TenantA Wallet', false
+      "INSERT INTO payers (id, tenant_id, type, label, is_default, is_active)
+       SELECT ?::uuid, t.id, 'custom', 'TenantA Wallet', false, true
        FROM tenants t WHERE t.slug = 'e2e-user-a'"
       (str (java.util.UUID/randomUUID)))
 
@@ -133,11 +133,11 @@
         (is (not (contains? names "TenantA Special"))
           "TenantA's custom category should not leak to Tenant B")))
 
-    (testing "Tenant B does NOT see the custom payer type"
-      (let [pts    (h/get-payer-types-for-tenant "e2e-user-b")
+    (testing "Tenant B does NOT see the custom payer"
+      (let [pts    (h/get-payers-for-tenant "e2e-user-b")
             labels (set (map :label pts))]
         (is (not (contains? labels "TenantA Wallet"))
-          "TenantA's custom payer type should not leak to Tenant B")))))
+          "TenantA's custom payer should not leak to Tenant B")))))
 
 ;; ---------------------------------------------------------------------------
 ;; Test: Global catalog (suppliers) is shared across tenants

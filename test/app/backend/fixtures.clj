@@ -28,7 +28,7 @@
   Why: tests use the running system's pooled datasource from `system.state`, but
   `automigrate.core/migrate` runs against a JDBC URL. If an env var like
   DATABASE_URL points elsewhere, using `mig/get-jdbc-url` can migrate the wrong
-  database and leave the test DB stale (e.g. missing payer_types)."
+  database and leave the test DB stale (e.g. missing payers columns)."
   []
   (let [db (get @state/state :database)]
     (or (when (instance? com.zaxxer.hikari.HikariDataSource db)

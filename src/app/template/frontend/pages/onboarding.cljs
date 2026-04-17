@@ -17,7 +17,7 @@
    "setup_profile"        {:icon "user"        :color "secondary" :link "/profile"}
   "rename_default_category" {:icon "tag"      :color "accent"    :link "/expense-categories"}
    "configure_categories" {:icon "tag"         :color "accent"    :link "/expense-categories"}
-   "review_payer_types"   {:icon "credit-card" :color "accent"    :link "/payer-types"}
+  "review_payer_types"   {:icon "credit-card" :color "accent"    :link "/payers"}
    "invite_members"       {:icon "user-plus"   :color "primary"   :link "/tenant/members"}
    "management_intro"     {:icon "shield"      :color "secondary" :link "/management-guide"}
    "upload_first_receipt" {:icon "upload"      :color "primary"   :link "/expenses/upload"}

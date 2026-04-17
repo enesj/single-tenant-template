@@ -1,6 +1,6 @@
 (ns app.domain.backend.expenses.services.payers
   "Payer CRUD services using factory pattern.
-   Payers represent payment methods: cash, cards, bank accounts, or people."
+   Payers represent shared payment sources within a tenant."
   (:require
     [app.domain.backend.expenses.services.service-configs :as configs]
     [app.domain.backend.expenses.services.services-factory :as factory]
@@ -23,56 +23,77 @@
 
 ;; NOTE: Avoid legacy alias vars like `list-payers`/`get-payer`/etc.
 ;; Route handlers resolve operations via the `service` map, except where we
-;; intentionally provide wrappers (create/update) below.
-;; NOTE: We wrap the factory create/update fns to enforce that there is at most
-;; one default payer at any time.
-(declare set-default-payer-in-tx!)
+;; intentionally provide wrappers (create/update/delete) below.
+;; NOTE: We wrap the factory create/update/delete fns to enforce payer-specific
+;; invariants such as default uniqueness and delete guards.
+(declare set-default-payer-in-tx!
+  payer-has-system-type?)
 
 (def ^:private create-payer!* (:create! service))
 (def ^:private update-payer!* (:update! service))
+(def ^:private delete-payer!* (:delete! service))
 
 (def ^:private list-payers* (:list service))
 (def ^:private get-payer* (:get service))
 
+(defn- resolve-payer-email [row]
+  (let [email (email-privacy/resolve-email row)]
+    (cond-> (dissoc row :user_email_ciphertext)
+      email (assoc :user_email email))))
+
 (defn list-payers
-  "List payers with routine user-linked fields pseudonymized for admin browsing."
+  "List payers with the linked user's email resolved from ciphertext."
   [db opts]
-  (mapv email-privacy/routine-payer-view (list-payers* db opts)))
+  (mapv resolve-payer-email (list-payers* db opts)))
 
 (defn get-payer
-  "Get a payer by id with routine user-linked fields pseudonymized."
+  "Get a payer by id with the linked user's email resolved from ciphertext."
   ([db payer-id]
    (get-payer db payer-id nil))
   ([db payer-id opts]
-   (some-> (get-payer* db payer-id opts)
-     email-privacy/routine-payer-view)))
+   (some-> (get-payer* db payer-id opts) resolve-payer-email)))
 
-(defn- assert-payer-type-not-system!
-  "Guard: throw if the given payer_type_id belongs to a system payer type.
-   Called before creation so users cannot create system-provisioned payers."
-  [db payer-type-id]
-  (when payer-type-id
-    (let [pt-id (if (string? payer-type-id)
-                  (java.util.UUID/fromString payer-type-id)
-                  payer-type-id)
-          row   (jdbc/execute-one! db
-                  (sql/format {:select [:is_system]
-                               :from   [:payer_types]
-                               :where  [:= :id pt-id]
-                               :limit  1})
-                  {:builder-fn rs/as-unqualified-lower-maps})]
-      (when (:is_system row)
-        (throw (ex-info "Cannot create a system-provisioned payer"
-                 {:type   :validation-error
-                  :status 403
-                  :errors {:payer_type_id ["System payer types can only be created by the application"]}}))))))
+(defn- system-payer-type?
+  [value]
+  (= "system" (some-> value str)))
+
+(defn related-expense-count
+  "Count expenses currently linked to the payer.
+
+   Optional `tenant-id` scopes the count to the current tenant."
+  ([db payer-id]
+   (related-expense-count db payer-id nil))
+  ([db payer-id tenant-id]
+   (let [where-clause (if tenant-id
+                        [:and
+                         [:= :e/payer_id payer-id]
+                         [:= :e/tenant_id tenant-id]]
+                        [:= :e/payer_id payer-id])
+         row (jdbc/execute-one! db
+               (sql/format {:select [[[:count :*] :n]]
+                            :from [[:expenses :e]]
+                            :where where-clause})
+               {:builder-fn rs/as-unqualified-lower-maps})]
+     (long (or (:n row) 0)))))
+
+(defn- payer-has-related-expenses?
+  [db payer-id tenant-id]
+  (pos? (related-expense-count db payer-id tenant-id)))
 
 (def create-payer!
   (fn
     ([db payer-data] (create-payer! db payer-data nil))
     ([db payer-data opts]
-     (assert-payer-type-not-system! db (:payer_type_id payer-data))
-     (let [want-default? (true? (:is_default payer-data))
+     (when (system-payer-type? (:type payer-data))
+       (throw (ex-info "Cannot create a system-provisioned payer"
+                {:type :validation-error
+                 :status 403
+                 :errors {:type ["System payers can only be created by the application"]}})))
+     ;; Force the type to "custom" for user-initiated creates; the enum cast
+     ;; itself is applied by the payer-config :before-insert step in
+     ;; service_configs/config_maps.clj, so passing a plain string here is safe.
+     (let [payer-data (assoc payer-data :type "custom")
+           want-default? (true? (:is_default payer-data))
            tenant-id (or (:tenant-id opts) (:tenant_id payer-data))]
        (if want-default?
          (jdbc/with-transaction [tx db]
@@ -85,7 +106,14 @@
     ([db payer-id updates] (update-payer! db payer-id updates nil))
     ([db payer-id updates opts]
      (let [want-default? (true? (:is_default updates))
-           tenant-id (:tenant-id opts)]
+           tenant-id (:tenant-id opts)
+           active-change? (contains? updates :is_active)]
+       (when (and active-change?
+               (payer-has-system-type? db payer-id))
+         (throw (ex-info "Cannot activate or deactivate a system-provisioned payer"
+                  {:type :validation-error
+                   :status 403
+                   :errors {:payer ["System-provisioned payers cannot be activated or deactivated"]}})))
        (if want-default?
          (jdbc/with-transaction [tx db]
            (when-let [_payer (update-payer!* tx payer-id (assoc (dissoc updates :is_default) :is_default false) opts)]
@@ -97,32 +125,45 @@
 ;; ============================================================================
 
 (defn- payer-has-system-type?
-  "Check if a payer's payer_type has is_system = true."
+  "Check if a payer is system-provisioned."
   [db payer-id]
   (let [row (jdbc/execute-one! db
-              (sql/format {:select [:pt.is_system]
-                           :from   [[:payers :p]]
-                           :join   [[:payer_types :pt] [:= :pt.id :p.payer_type_id]]
-                           :where  [:= :p.id payer-id]
-                           :limit  1})
+              (sql/format {:select [:type]
+                           :from [[:payers :p]]
+                           :where [:= :p.id payer-id]
+                           :limit 1})
               {:builder-fn rs/as-unqualified-lower-maps})]
-    (boolean (:is_system row))))
+    (system-payer-type? (:type row))))
 
 (defn- assert-payer-not-system!
-  "Guard: throw if the payer belongs to a system payer type."
+  "Guard: throw if the payer is system-provisioned."
   [db payer-id]
   (when (payer-has-system-type? db payer-id)
     (throw (ex-info "Cannot modify a system-provisioned payer"
-             {:type :validation-error :status 403
+             {:type :validation-error
+              :status 403
               :errors {:payer ["System-provisioned payers cannot be deleted"]}}))))
 
-(def delete-payer!* (:delete! service))
+(defn- assert-payer-without-related-expenses!
+  [db payer-id tenant-id]
+  (when (payer-has-related-expenses? db payer-id tenant-id)
+    (throw (ex-info "Cannot delete a payer that is already used by expenses. Deactivate it instead."
+             {:type :validation-error
+              :status 409
+              :errors {:payer ["Payers already used by expenses cannot be deleted"]
+                       :action ["Deactivate the payer instead"]}}))))
 
 (defn delete-payer!
-  "Delete a payer. Guards against deleting system-type payers."
+  "Delete a payer.
+
+   Guards against deleting:
+   - system-type payers
+   - payers already referenced by expenses"
   [db id & [opts]]
-  (assert-payer-not-system! db id)
-  (delete-payer!* db id opts))
+  (let [tenant-id (:tenant-id opts)]
+    (assert-payer-not-system! db id)
+    (assert-payer-without-related-expenses! db id tenant-id)
+    (delete-payer!* db id opts)))
 
 ;; ============================================================================
 ;; Custom Operations
@@ -181,9 +222,9 @@
     (:default_payer_id
      (jdbc/execute-one! db
        (sql/format {:select [:default_payer_id]
-                    :from   [:user_expense_settings]
-                    :where  [:and
-                             [:= :user_id user-id]
-                             [:= :tenant_id tenant-id]]
-                    :limit  1})
+                    :from [:user_expense_settings]
+                    :where [:and
+                            [:= :user_id user-id]
+                            [:= :tenant_id tenant-id]]
+                    :limit 1})
        {:builder-fn rs/as-unqualified-lower-maps}))))

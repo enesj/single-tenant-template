@@ -27,7 +27,7 @@
     ;; Mobile manual entry form
     :mobile/search-supplier    "Traži dobavljača..."
     :mobile/search-store       "Traži prodavnicu..."
-    :mobile/search-payer       "Traži platitelja..."
+    :mobile/search-payer       "Traži kupca..."
     :mobile/search-category    "Traži kategoriju..."
     :mobile/notes-placeholder  "Opcionalne napomene..."
 

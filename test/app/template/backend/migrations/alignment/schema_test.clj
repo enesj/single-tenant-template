@@ -68,17 +68,17 @@
 
 (deftest models->expected-includes-index-definitions-test
   (testing "models->expected extracts index definitions (keys/unique/where)"
-    (let [models {:payer_types
+    (let [models {:payers
                   {:fields [[:id :uuid {:primary-key true}]
                             [:is_default :boolean {:null false}]]
-                   :indexes [[:uniq_payer_types_default
+                   :indexes [[:uniq_payers_default
                               :btree
                               {:fields [:is_default]
                                :unique true
                                :where [:= :is_default true]}]]}}
           expected (schema/models->expected models)
-          idx (get-in expected [:index-definitions "uniq_payer_types_default"])]
-      (is (= {:table "payer_types"
+          idx (get-in expected [:index-definitions "uniq_payers_default"])]
+      (is (= {:table "payers"
               :method "btree"
               :unique? true
               :keys ["is_default"]}

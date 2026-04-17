@@ -28,7 +28,6 @@
    {:id :expense-categories-catalog :path "/expense-categories" :spa-fallback? true}
    {:id :expense-cities :path "/cities" :spa-fallback? true}
    {:id :expense-subcategories :path "/subcategories" :spa-fallback? true}
-   {:id :expense-payer-types :path "/payer-types" :spa-fallback? true}
    {:id :expense-article-aliases :path "/article-aliases" :spa-fallback? true}
    {:id :expense-supplier-aliases :path "/supplier-aliases" :spa-fallback? true}
    {:id :expense-search :path "/search" :spa-fallback? true}

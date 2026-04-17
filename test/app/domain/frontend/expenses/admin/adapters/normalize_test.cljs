@@ -18,3 +18,15 @@
       ;; sanity: existing computed/aliased fields remain available
       (is (= "Test Supplier" (:supplier-display-name normalized)))
       (is (= "Suknja" (:article-canonical-name normalized))))))
+
+(deftest payer-normalization-exposes-legacy-payer-type-label-alias
+  (testing "payers expose :payer-type-label for stale runtime table-column configs"
+    (let [payer {:id "00000000-0000-0000-0000-000000000010"
+                 :payer_type "custom"
+                 :type "custom"
+                 :label "Shared household"
+                 :user_email "demo@example.com"}
+          normalized (sut/payer->template-entity payer)]
+      (is (= "custom" (:payer-type normalized)))
+      (is (= "custom" (:payer-type-label normalized)))
+      (is (= "demo@example.com" (:user-email normalized))))))

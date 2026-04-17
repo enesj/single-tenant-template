@@ -1,0 +1,12 @@
+({:action :create-type,
+  :type-name :payer-type,
+  :model-name :payers,
+  :options {:choices ["system" "custom"], :type :enum}}
+ {:action :add-column,
+  :field-name :type,
+  :model-name :payers,
+  :options {:null false, :default "custom", :type [:enum :payer-type]}}
+ {:action :create-index,
+  :index-name :idx-payers-type,
+  :model-name :payers,
+  :options {:fields [:type], :type :btree}})

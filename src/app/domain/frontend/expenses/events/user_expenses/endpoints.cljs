@@ -25,7 +25,6 @@
 (def stores-batch-endpoint (str stores-endpoint "/batch"))
 (def store-aliases-endpoint (api/versioned-endpoint "/expenses/store-aliases"))
 (def payers-endpoint (api/versioned-endpoint "/expenses/payers"))
-(def payer-types-endpoint (api/versioned-endpoint "/expenses/payer-types"))
 (def expense-items-endpoint (api/versioned-endpoint "/expenses/expense-items"))
 (def article-aliases-endpoint (api/versioned-endpoint "/expenses/article-aliases"))
 (def supplier-aliases-endpoint (api/versioned-endpoint "/expenses/supplier-aliases"))

@@ -856,7 +856,7 @@
         (rf/dispatch-sync [:user-expenses/refresh-payers-list])
         (let [[event-id params] (first @dispatches)]
           (is (= :user-expenses/fetch-payers event-id))
-          (is (= {:limit 200 :offset 0}
+          (is (= {:limit 200 :offset 0 :include_inactive true}
                 params)))
         (finally
           (rf/reg-fx :dispatch rf/dispatch)))))
@@ -879,50 +879,9 @@
                   :offset 30
                   :label "Main payer"
                   :order-by "label"
-                  :order-dir "asc"}
-                (select-keys params [:limit :offset :label :order-by :order-dir]))))
-        (finally
-          (rf/reg-fx :dispatch rf/dispatch))))))
-
-(deftest payer-types-refresh-list-uses-fixed-params-unless-server-mode
-  (testing "payer types refresh ignores list UI state outside server mode"
-    (sup/reset-db!)
-    (swap! rf-db/app-db assoc-in (paths/list-per-page :payer-types) 12)
-    (swap! rf-db/app-db assoc-in (paths/list-current-page :payer-types) 4)
-    (swap! rf-db/app-db assoc-in (paths/list-filters :payer-types) {:label "  Business  "})
-    (rf/dispatch-sync [::list-ui-state-events/set-sort-field :payer-types :label])
-    (let [dispatches (atom [])]
-      (rf/reg-fx :dispatch (fn [event]
-                             (swap! dispatches conj event)))
-      (try
-        (rf/dispatch-sync [:user-expenses/refresh-payer-types-list])
-        (let [[event-id params] (first @dispatches)]
-          (is (= :user-expenses/fetch-payer-types event-id))
-          (is (= {:limit 200 :offset 0}
-                params)))
-        (finally
-          (rf/reg-fx :dispatch rf/dispatch)))))
-
-  (testing "payer types refresh derives pagination, filters, and sort in server mode"
-    (sup/reset-db!)
-    (swap! rf-db/app-db assoc-in (paths/list-per-page :payer-types) 12)
-    (swap! rf-db/app-db assoc-in (paths/list-filters :payer-types) {:label "  Business  "})
-    (rf/dispatch-sync [::list-ui-state-events/set-pagination-mode :payer-types :server])
-    (rf/dispatch-sync [::list-ui-state-events/set-sort-field :payer-types :label])
-    (swap! rf-db/app-db assoc-in (paths/list-current-page :payer-types) 4)
-    (let [dispatches (atom [])]
-      (rf/reg-fx :dispatch (fn [event]
-                             (swap! dispatches conj event)))
-      (try
-        (rf/dispatch-sync [:user-expenses/refresh-payer-types-list])
-        (let [[event-id params] (first @dispatches)]
-          (is (= :user-expenses/fetch-payer-types event-id))
-          (is (= {:limit 12
-                  :offset 36
-                  :label "Business"
-                  :order-by "label"
-                  :order-dir "asc"}
-                (select-keys params [:limit :offset :label :order-by :order-dir]))))
+                  :order-dir "asc"
+                  :include_inactive true}
+                (select-keys params [:limit :offset :label :order-by :order-dir :include_inactive]))))
         (finally
           (rf/reg-fx :dispatch rf/dispatch))))))
 

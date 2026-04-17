@@ -419,19 +419,18 @@
    :table-alias :p
    :primary-key :id
    :tenant-scoped? true
-   :required-fields [:payer_type_id :label]
+   :required-fields [:label]
    :allowed-order-by {:label :p/label
-                      :payer-type :pt/label
-                      :payer-type-label :pt/label
+                      :payer-type :p/type
                       :is-active :p/is_active
                       :created-at :p/created_at
                       :updated-at :p/updated_at}
    :default-order-by :p/label
    :search-fields [:p/label]
-   :joins [[:payer_types :pt] [:= :pt/id :p/payer_type_id]]
    :select-fields [[:p/*]
-                   [:pt/label :payer_type_label]
-                   [:pt/is_system :payer_type_is_system]
+                   ;; Cast the payer_type enum to text so JDBC returns a plain
+                   ;; string and JSON encoding stays predictable downstream.
+                   [[:cast :p/type :text] :payer_type]
                    ;; Correlated subquery: stable user linkage for the system payer.
                    ;; We surface refs/names downstream, never raw email, so admin
                    ;; tables can still follow structure without exposing identity.
@@ -446,37 +445,29 @@
                      :join [[:user_expense_settings :ues] [:= :ues/user_id :u/id]]
                      :where [:= :ues/default_payer_id :p/id]
                      :limit 1}
-                    :user_full_name]]
+                    :user_full_name]
+                   [{:select [:u/email_ciphertext]
+                     :from [[:users :u]]
+                     :join [[:user_expense_settings :ues] [:= :ues/user_id :u/id]]
+                     :where [:= :ues/default_payer_id :p/id]
+                     :limit 1}
+                    :user_email_ciphertext]
+                   [{:select [[[:count :*] :n]]
+                     :from [[:expenses :e]]
+                     :where [:and
+                             [:= :e/payer_id :p/id]
+                             [:= :e/tenant_id :p/tenant_id]]}
+                    :related_expense_count]]
    :before-insert (fn [data]
-                    (when-not (get data :payer_type_id)
-                      (throw (ex-info "payer_type_id is required" {:status 400 :field :payer_type_id})))
                     (-> data
                       (assoc :id (UUID/randomUUID))
+                      ;; Cast string to the payer_type enum; HoneySQL emits the
+                      ;; correct ::payer_type cast so JDBC can bind the value.
+                      (update :type (fn [t] [:cast (or t "custom") :payer_type]))
                       (update :is_default #(boolean %))
                       (update :is_active #(if (nil? %) true (boolean %)))))
    :before-update (fn [_id updates]
-                    updates)
-   :has-search? true
-   :has-count? true})
-
-(def payer-type-config
-  {:table-name "payer_types"
-   :primary-key :id
-   :tenant-scoped? true
-   :required-fields [:label]
-   :allowed-order-by {:label :label
-                      :is-system :is_system
-                      :created-at :created_at
-                      :updated-at :updated_at}
-   :default-order-by :label
-   :search-fields [:label]
-   :before-insert (fn [data]
-                    (-> data
-                      (assoc :id (UUID/randomUUID))
-                      (update :is_default #(boolean %))
-                      (update :is_system #(boolean %))))
-   :before-update (fn [_id updates]
-                    (dissoc updates :is_system))
+                    (dissoc updates :type))
    :has-search? true
    :has-count? true})
 
@@ -531,7 +522,7 @@
                    [:s/display_name :supplier_display_name]
                    [:s/normalized_key :supplier_normalized_key]
                    [:p/label :payer_label]
-                   [:p/type :payer_type]]
+                   [[:cast :p/type :text] :payer_type]]
    :before-insert (fn [data]
                     (-> data
                       (assoc :id (UUID/randomUUID))

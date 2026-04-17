@@ -15,7 +15,7 @@
                 text-where)]
     (jdbc/execute!
       db
-      (sql/format {:select [:id :label :payer_type_id]
+      (sql/format {:select [:id :label :type]
                    :from [:payers]
                    :where where
                    :order-by [[:label :asc]]

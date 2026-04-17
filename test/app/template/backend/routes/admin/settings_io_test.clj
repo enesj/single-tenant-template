@@ -11,7 +11,6 @@
     [app.backend.fixtures :as fixtures]
     [app.template.backend.routes.admin.settings-io :as settings-io]
     [clojure.test :refer [deftest is testing use-fixtures]]
-    [honey.sql :as sql]
     [next.jdbc :as jdbc]))
 
 (use-fixtures :each fixtures/with-transaction-rollback)
@@ -106,6 +105,32 @@
         ;; "avatar-url" should be removed from users
         (is (not (some #{"avatar-url"} (get-in resolved [:users :available-columns]))))
         (is (not (some #{"avatar-url"} (get-in resolved [:users :default-visible-columns]))))))))
+
+(deftest user-table-columns-normalize-legacy-payer-type-filter
+  (testing "legacy user payer type columns are upgraded to a select filter with explicit options"
+    (let [db fixtures/*test-db*
+          payload {:payers {:available-columns ["label" "payer_type_label" "is_default"]
+                            :default-visible-columns ["label" "payer_type_label"]
+                            :filterable-columns ["label" "payer_type_label"]
+                            :sortable-columns ["label" "payer_type_label"]
+                            :computed-fields {:payer_type_label {:type "string"
+                                                                 :label "Payer Type"}}}}]
+      (clear-runtime-overrides! db)
+      (seed-runtime-config! db "user" :table-columns payload)
+      (let [resolved (settings-io/read-user-table-columns db)]
+        (is (= "select"
+              (get-in resolved [:payers :computed-fields :payer_type_label :type])))
+        (is (= [{:value "system" :label "system"}
+                {:value "custom" :label "custom"}]
+              (get-in resolved [:payers :computed-fields :payer_type_label :options]))))
+
+      (clear-runtime-overrides! db)
+      (let [written (settings-io/write-user-table-columns! db payload)]
+        (is (= "select"
+              (get-in written [:payers :computed-fields :payer_type_label :type])))
+        (is (= [{:value "system" :label "system"}
+                {:value "custom" :label "custom"}]
+              (get-in written [:payers :computed-fields :payer_type_label :options])))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Write + read roundtrips via public API

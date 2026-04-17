@@ -4,6 +4,7 @@
     [app.template.frontend.components.button :refer [button]]
     [app.template.frontend.components.form :refer [form]]
     [app.template.frontend.components.icons :refer [plus-icon]]
+    [app.template.frontend.i18n :refer [use-t]]
     [app.template.frontend.events.form :as form-events]
     [app.template.frontend.events.list.crud :as crud-events]
     [clojure.string :as str]
@@ -21,7 +22,8 @@
                                    acc))
                          {}
                          effective-entity-spec)
-        entity-name-kw (keyword entity-name)]
+        entity-name-kw (keyword entity-name)
+        t (use-t)]
     ($ :div {:class "w-full mt-4"}
       ($ form
         (merge (dissoc props-map
@@ -36,15 +38,20 @@
                          (rf/dispatch [::crud-events/clear-error entity-name-kw])
                          (rf/dispatch [::form-events/clear-form-errors entity-name-kw])
                          (set-show-add-form! false))
-           :button-text "Save"})))))
+           :button-text (t :common/save)})))))
 
 (defui header-section
   [{:keys [title show-add-form? set-show-add-form! set-editing! entity-name show-add-button? add-disabled?
-           on-add-click]}]
+           on-add-click add-button-label]}]
   (let [plus-icon-el ($ plus-icon)
+        t (use-t)
         entity-label (or (when title (str/lower-case (name title)))
                        (when entity-name (str/lower-case (name entity-name))))
         button-id (str "btn-add-" entity-label)
+        resolved-add-button-label (or add-button-label
+                                    (if entity-label
+                                      (str (t :common/add) " " entity-label)
+                                      (t :common/add)))
         ;; Session + metadata to determine if adding is allowed
         current-tenant (use-subscribe [:current-tenant])
         models-data (use-subscribe [:models-data])
@@ -66,7 +73,7 @@
           ($ button
             {:shape "circle"
              :id button-id
-             :aria-label (str "Add " (or entity-label "item"))
+             :aria-label resolved-add-button-label
              :disabled add-disabled?
              :on-click (if on-add-click
                          ;; Use custom handler if provided (for modal mode)

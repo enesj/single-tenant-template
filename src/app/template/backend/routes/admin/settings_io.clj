@@ -11,6 +11,7 @@
     [app.shared.specs.table-columns :as table-columns-spec]
     [app.shared.specs.view-options :as view-options-spec]
     [clojure.edn :as edn]
+    [clojure.string :as str]
     [honey.sql :as sql]
     [next.jdbc :as jdbc]
     [next.jdbc.result-set :as rs]
@@ -163,6 +164,46 @@
     (or table-columns {})
     retired-admin-table-columns))
 
+(def ^:private payer-type-filter-options
+  [{:value "system" :label "system"}
+   {:value "custom" :label "custom"}])
+
+(def ^:private legacy-user-payer-type-columns
+  [:payer_type_label "payer_type_label" :payer_type "payer_type"])
+
+(defn- referenced-user-payer-type-column
+  [entity-config]
+  (or
+    (some #(when (contains? (or (:computed-fields entity-config) {}) %)
+             %)
+      legacy-user-payer-type-columns)
+    (let [referenced-columns (into #{}
+                               (mapcat #(or (get entity-config %) []))
+                               [:available-columns
+                                :default-visible-columns
+                                :filterable-columns
+                                :sortable-columns
+                                :always-visible])]
+      (some referenced-columns legacy-user-payer-type-columns))))
+
+(defn- ensure-user-payer-type-select-filter
+  [table-columns]
+  (if-let [payer-type-column (some-> (get table-columns :payers)
+                               referenced-user-payer-type-column)]
+    (let [current-field (get-in table-columns [:payers :computed-fields payer-type-column])
+          current-label (some-> (:label current-field) str str/trim not-empty)]
+      (assoc-in table-columns [:payers :computed-fields payer-type-column]
+                (cond-> (assoc (or current-field {})
+                          :type "select"
+                          :options payer-type-filter-options)
+                  (nil? current-label) (assoc :label "Payer Type"))))
+    (or table-columns {})))
+
+(defn- normalize-user-table-columns
+  [table-columns]
+  (-> (or table-columns {})
+    ensure-user-payer-type-select-filter))
+
 ;; ---------------------------------------------------------------------------
 ;; Admin config — read / write
 ;; ---------------------------------------------------------------------------
@@ -276,15 +317,17 @@
 (defn read-user-table-columns
   "Read user-facing table-columns from the runtime store."
   [db]
-  (let [data (read-runtime-override db user-scope :table-columns)]
+  (let [data (-> (read-runtime-override db user-scope :table-columns)
+               normalize-user-table-columns)]
     (warn-on-invalid "user table-columns"
       (table-columns-spec/validate-table-columns-strict data))
     data))
 
 (defn write-user-table-columns!
   [db table-columns]
-  (let [validation (table-columns-spec/validate-table-columns-strict table-columns)]
+  (let [sanitized-table-columns (normalize-user-table-columns table-columns)
+        validation (table-columns-spec/validate-table-columns-strict sanitized-table-columns)]
     (validate-or-throw! "user table-columns" validation
       {:errors (:errors validation)
-       :warnings (:warnings validation)}))
-  (write-runtime-override! db user-scope :table-columns table-columns))
+       :warnings (:warnings validation)})
+    (write-runtime-override! db user-scope :table-columns sanitized-table-columns)))

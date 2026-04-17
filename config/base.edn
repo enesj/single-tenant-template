@@ -199,12 +199,11 @@
 
  ;; Tenant provisioning defaults
  ;; These are copied into each new tenant's lookup tables on creation.
- ;; The first payer_type with :is-default true becomes the tenant's default.
  ;; Labels/names may be locale maps {:en "..." :bs "..."} — resolved via :default-locale.
  :default-locale :bs
 
- :tenant-defaults {:payer-types        [{:label {:en "Household" :bs "Kućanstvo"} :is-default true}
-                                        {:label {:en "Other"     :bs "Ostalo"}    :is-default false}]
+ :tenant-defaults {:payers             [{:label {:en "Household" :bs "Kućanstvo"}}
+                                        {:label {:en "Other"     :bs "Ostalo"}}]
 
                    :expense-categories [{:name {:en "Default"       :bs "Podrazumijevano"} :is-default true}
                                         {:name {:en "Groceries"     :bs "Namirnice"}}

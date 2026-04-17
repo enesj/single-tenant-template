@@ -73,9 +73,9 @@
                         :description (t :guide/tool-categories-desc)
                         :link "/expense-categories"
                         :link-label (t :guide/open)})
-          ($ tool-card {:title (t :guide/tool-payer-types)
-                        :description (t :guide/tool-payer-types-desc)
-                        :link "/payer-types"
+          ($ tool-card {:title (t :guide/tool-payers)
+                        :description (t :guide/tool-payers-desc)
+                        :link "/payers"
                         :link-label (t :guide/open)})
           ($ tool-card {:title (t :guide/tool-suppliers)
                         :description (t :guide/tool-suppliers-desc)

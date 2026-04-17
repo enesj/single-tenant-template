@@ -10,7 +10,7 @@
 
 (defn render-add-modal
   [{:keys [add-modal-open?
-           title
+           add-modal-title
            entity-name
            entity-kw
            entity-spec
@@ -22,7 +22,7 @@
   (when add-modal-open?
     ($ modal-wrapper
       {:visible? true
-       :title (str "Add " title)
+       :title add-modal-title
        :size :large
        :on-close handle-add-modal-close
        :close-button-id (str "btn-close-add-modal-" (kw/ensure-name entity-name))}
@@ -57,7 +57,7 @@
 (defn render-edit-modal
   [{:keys [edit-modal-open?
            edit-modal-item
-           title
+           edit-modal-title
            entity-name
            entity-kw
            entity-spec
@@ -93,7 +93,7 @@
                                     (rf/dispatch [::form-events/set-submitted entity-kw true])))]
       ($ modal-wrapper
         {:visible? true
-         :title (str "Edit " title)
+         :title edit-modal-title
          :size :large
          :draggable? true
          :on-close handle-edit-modal-close

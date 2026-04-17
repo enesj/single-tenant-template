@@ -1,6 +1,7 @@
 (ns app.template.frontend.components.filter.components
   (:require
     [app.template.frontend.components.button :refer [button]]
+    [app.template.frontend.i18n :refer [use-t]]
     [uix.core :refer [$ defui]]))
 
 ;; Common filter status indicators
@@ -8,18 +9,21 @@
 (defui filter-status-indicator
   "Shows auto-filtering status and match count"
   [{:keys [has-filter? matching-count]}]
-  (when has-filter?
-    ($ :div {:class "space-y-1"}
-      ;; Auto-filtering indicator
-      ($ :div {:class "text-xs text-success flex items-center"}
-        ($ :span {:class "mr-1"} "Auto-filtering")
-        ($ :span {:class "ds-loading ds-loading-spinner ds-loading-xs"}))
+  (let [t (use-t)]
+    (when has-filter?
+      ($ :div {:class "space-y-1"}
+        ;; Auto-filtering indicator
+        ($ :div {:class "text-xs text-success flex items-center"}
+          ($ :span {:class "mr-1"} (t :common/auto-filtering))
+          ($ :span {:class "ds-loading ds-loading-spinner ds-loading-xs"}))
 
-      ;; Match count
-      (when matching-count
-        ($ :div {:class "text-sm text-gray-600"}
-          (str "Found " matching-count " matching "
-            (if (= matching-count 1) "item" "items")))))))
+        ;; Match count
+        (when matching-count
+          ($ :div {:class "text-sm text-gray-600"}
+            (str (t :common/found) " " matching-count " "
+              (if (= matching-count 1)
+                (t :common/matching-item)
+                (t :common/matching-items)))))))))
 
 (defui filter-input
   "Reusable input component for filters"
@@ -73,12 +77,13 @@
 (defui text-filter-helper
   "Helper text for text filters showing character requirements"
   [{:keys [filter-text]}]
-  (let [char-count (count filter-text)]
+  (let [char-count (count filter-text)
+        t (use-t)]
     (cond
       ;; Show auto-filtering as soon as user starts typing
       (pos? char-count)
       ($ :div {:class "text-xs text-success mt-1 flex items-center"}
-        ($ :span {:class "mr-1"} "Auto-filtering")
+        ($ :span {:class "mr-1"} (t :common/auto-filtering))
         ($ :span {:class "ds-loading ds-loading-spinner ds-loading-xs"})))))
 
 ;; Filter action buttons
@@ -86,26 +91,28 @@
 (defui clear-filter-button
   "Reusable clear filter button"
   [{:keys [on-click class]}]
-  ($ button
-    {:btn-type :secondary
-     :class (str "ds-btn-sm " (or class ""))
-     :id "filter-clear-button"
-     :on-click (fn [e]
-                 (.stopPropagation e)
-                 (when on-click (on-click)))}
-    "Clear"))
+  (let [t (use-t)]
+    ($ button
+      {:btn-type :secondary
+       :class (str "ds-btn-sm " (or class ""))
+       :id "filter-clear-button"
+       :on-click (fn [e]
+                   (.stopPropagation e)
+                   (when on-click (on-click)))}
+      (t :common/clear))))
 
 (defui close-filter-button
   "Reusable close filter button"
   [{:keys [on-click class]}]
-  ($ button
-    {:btn-type :primary
-     :class (str "ds-btn-sm " (or class ""))
-     :id "filter-close-button"
-     :on-click (fn [e]
-                 (.stopPropagation e)
-                 (when on-click (on-click)))}
-    "Close"))
+  (let [t (use-t)]
+    ($ button
+      {:btn-type :primary
+       :class (str "ds-btn-sm " (or class ""))
+       :id "filter-close-button"
+       :on-click (fn [e]
+                   (.stopPropagation e)
+                   (when on-click (on-click)))}
+      (t :common/close))))
 
 (defui filter-action-bar
   "Action bar with clear and close buttons"
@@ -119,47 +126,50 @@
 (defui filter-chip
   "Individual filter chip with remove button"
   [{:keys [field-id field-label value-text on-remove]}]
-  ($ :div {:class "inline-flex items-center bg-white border border-blue-300 rounded-full px-2 py-1 text-xs"}
-    ($ :span {:class "text-gray-700 mr-1"}
-      (str field-label ": " value-text))
-    ($ :button {:id (str "filter-remove-" (name field-id))
-                :class "text-red-500 hover:text-red-600 ml-1 cursor-pointer text-sm font-bold leading-none"
-                :title "Remove this filter"
-                :on-click (fn [e]
-                            (.preventDefault e)
-                            (.stopPropagation e)
-                            (when on-remove (on-remove field-id)))}
-      "×")))
+  (let [t (use-t)]
+    ($ :div {:class "inline-flex items-center bg-white border border-blue-300 rounded-full px-2 py-1 text-xs"}
+      ($ :span {:class "text-gray-700 mr-1"}
+        (str field-label ": " value-text))
+      ($ :button {:id (str "filter-remove-" (name field-id))
+                  :class "text-red-500 hover:text-red-600 ml-1 cursor-pointer text-sm font-bold leading-none"
+                  :title (t :common/remove-filter)
+                  :on-click (fn [e]
+                              (.preventDefault e)
+                              (.stopPropagation e)
+                              (when on-remove (on-remove field-id)))}
+        "×"))))
 
 (defui clear-all-button
   "Clear all filters button"
   [{:keys [on-click]}]
-  ($ :button {:id "filter-clear-all-button"
-              :class "inline-flex items-center bg-red-100 hover:bg-red-200 border border-red-300 rounded-full px-2 py-1 text-xs text-red-700 cursor-pointer"
-              :title "Clear all filters"
-              :on-click (fn [e]
-                          (.preventDefault e)
-                          (.stopPropagation e)
-                          (when on-click (on-click)))}
-    "Clear All"))
+  (let [t (use-t)]
+    ($ :button {:id "filter-clear-all-button"
+                :class "inline-flex items-center bg-red-100 hover:bg-red-200 border border-red-300 rounded-full px-2 py-1 text-xs text-red-700 cursor-pointer"
+                :title (t :common/clear-all)
+                :on-click (fn [e]
+                            (.preventDefault e)
+                            (.stopPropagation e)
+                            (when on-click (on-click)))}
+      (t :common/clear-all))))
 
 ;; Dropdown components for select filters
 
 (defui dropdown-toggle
   "Dropdown toggle button for select filters"
   [{:keys [selected-count field-label first-selection on-toggle dropdown-open?]}]
-  ($ :button {:class "w-full px-3 py-2 text-left bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              :id "filter-dropdown-toggle"
-              :on-click #(on-toggle (not dropdown-open?))}
-    ($ :div {:class "flex justify-between items-center"}
-      ($ :span {:class "text-sm"}
-        (cond
-          (zero? selected-count) (str "Select " field-label "...")
-          (= selected-count 1) (:label first-selection)
-          :else (str selected-count " selected")))
-      ($ :svg {:class "w-4 h-4 text-gray-400" :fill "none" :stroke "currentColor" :viewBox "0 0 24 24"}
-        ($ :path {:stroke-linecap "round" :stroke-linejoin "round" :stroke-width "2"
-                  :d "M19 9l-7 7-7-7"})))))
+  (let [t (use-t)]
+    ($ :button {:class "w-full px-3 py-2 text-left bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                :id "filter-dropdown-toggle"
+                :on-click #(on-toggle (not dropdown-open?))}
+      ($ :div {:class "flex justify-between items-center"}
+        ($ :span {:class "text-sm"}
+          (cond
+            (zero? selected-count) (str (t :common/select) " " field-label "...")
+            (= selected-count 1) (:label first-selection)
+            :else (str selected-count " " (t :common/selected))))
+        ($ :svg {:class "w-4 h-4 text-gray-400" :fill "none" :stroke "currentColor" :viewBox "0 0 24 24"}
+          ($ :path {:stroke-linecap "round" :stroke-linejoin "round" :stroke-width "2"
+                    :d "M19 9l-7 7-7-7"}))))))
 
 (defui dropdown-option
   "Individual option in dropdown"
@@ -179,12 +189,13 @@
 (defui dropdown-controls
   "Select all / clear all controls for dropdown"
   [{:keys [on-select-all _on-clear-all]}]
-  ($ :div {:class "px-3 py-2 border-b border-gray-100 flex justify-between"}
-    ($ :button {:id "filter-select-all-btn"
-                :class "text-xs text-blue-600 hover:text-blue-800"
-                :on-click #(on-select-all true)}
-      "Select All")
-    ($ :button {:id "filter-clear-selection-btn"
-                :class "text-xs text-red-600 hover:text-red-800"
-                :on-click #(on-select-all false)}
-      "Clear All")))
+  (let [t (use-t)]
+    ($ :div {:class "px-3 py-2 border-b border-gray-100 flex justify-between"}
+      ($ :button {:id "filter-select-all-btn"
+                  :class "text-xs text-blue-600 hover:text-blue-800"
+                  :on-click #(on-select-all true)}
+        (t :common/select-all))
+      ($ :button {:id "filter-clear-selection-btn"
+                  :class "text-xs text-red-600 hover:text-red-800"
+                  :on-click #(on-select-all false)}
+        (t :common/clear-all)))))

@@ -30,7 +30,7 @@
                    :returning [:*]}))))
 
 (def ^:private test-config
-  {:tenant-defaults {:payer-types [{:label "Cash" :is-default true}]
+  {:tenant-defaults {:payers [{:label "Cash"}]
                      :expense-categories [{:name "Other"}]}})
 
 ;; ============================================================================

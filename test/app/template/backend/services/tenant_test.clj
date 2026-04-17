@@ -86,11 +86,11 @@
 (deftest provision-tenant-test
   (let [db   fixtures/*test-db*
         user (create-test-user! db)
-  config {:default-locale :en
-    :tenant-defaults {:payer-types [{:label "Cash" :is-default true}
-            {:label "Card" :is-default false}]
-          :expense-categories [{:name "Groceries"}
-                   {:name "Transport"}]}}
+        config {:default-locale :en
+                :tenant-defaults {:payers [{:label "Cash"}
+                                           {:label "Card"}]
+                                  :expense-categories [{:name "Groceries"}
+                                                       {:name "Transport"}]}}
         result (tenant-svc/provision-tenant! db config user)]
 
     (testing "creates a tenant"
@@ -103,20 +103,17 @@
       (is (= "owner" (or (:role (:membership result))
                        (:tenant_memberships/role (:membership result))))))
 
-    (testing "seeds payer_types plus the auto-provisioned system payer type"
+    (testing "seeds starter payers plus the auto-provisioned system payer"
       (let [tenant-id (or (:id (:tenant result)) (:tenants/id (:tenant result)))
-            pts (jdbc/execute! db
-                  (sql/format {:select [:*]
-                               :from [:payer_types]
-                               :where [:= :tenant_id tenant-id]}))
-            seeded-pts (jdbc/execute! db
-                         (sql/format {:select [:*]
-                                      :from [:payer_types]
-                                      :where [:and
-                                              [:= :tenant_id tenant-id]
-                                              [:= :is_system false]]}))]
-        (is (= 3 (count pts)))
-        (is (= 2 (count seeded-pts)))))
+        payers (jdbc/execute! db
+             (sql/format {:select [:label :type :is_default]
+                    :from [:payers]
+                    :where [:= :tenant_id tenant-id]}))
+        system-payers (filter #(= "system" (:payers/type %)) payers)
+        custom-payers (filter #(= "custom" (:payers/type %)) payers)]
+      (is (= 3 (count payers)))
+      (is (= 1 (count system-payers)))
+      (is (= 2 (count custom-payers)))))
 
     (testing "seeds expense_categories"
       (let [tenant-id (or (:id (:tenant result)) (:tenants/id (:tenant result)))
@@ -146,7 +143,7 @@
   (let [db fixtures/*test-db*
         user (create-test-user! db)
         config {:default-locale :en
-                :tenant-defaults {:payer-types []
+          :tenant-defaults {:payers []
                                   :expense-categories []}}
         result (tenant-svc/provision-tenant! db config user)
         tenant-id (or (:id (:tenant result)) (:tenants/id (:tenant result)))
@@ -158,7 +155,7 @@
   (let [db fixtures/*test-db*
         user (create-test-user! db)
         config {:default-locale :en
-                :tenant-defaults {:payer-types []
+          :tenant-defaults {:payers []
                                   :expense-categories []}}
         result (tenant-svc/provision-tenant! db config user)
         tenant-id (or (:id (:tenant result)) (:tenants/id (:tenant result)))
@@ -176,7 +173,7 @@
 (deftest get-user-memberships-test
   (let [db     fixtures/*test-db*
         user   (create-test-user! db)
-        config {:tenant-defaults {:payer-types [] :expense-categories []}}
+        config {:tenant-defaults {:payers [] :expense-categories []}}
         _      (tenant-svc/provision-tenant! db config user)
         user-id (or (:id user) (:users/id user))
         memberships (tenant-svc/get-user-memberships db user-id)]
@@ -190,7 +187,7 @@
   (let [db        fixtures/*test-db*
         adapter   (db-adapter/create-postgres-adapter db)
         user      (create-test-user! db)
-        config    {:tenant-defaults {:payer-types [] :expense-categories []}}
+        config    {:tenant-defaults {:payers [] :expense-categories []}}
         _         (tenant-svc/provision-tenant! db config user)
         user-id   (or (:id user) (:users/id user))
         memberships (tenant-svc/get-user-memberships adapter user-id)]
@@ -203,7 +200,7 @@
 (deftest get-tenant-members-test
   (let [db     fixtures/*test-db*
         user   (create-test-user! db)
-        config {:tenant-defaults {:payer-types [] :expense-categories []}}
+        config {:tenant-defaults {:payers [] :expense-categories []}}
         result (tenant-svc/provision-tenant! db config user)
         tenant-id (or (:id (:tenant result)) (:tenants/id (:tenant result)))
         members (tenant-svc/get-tenant-members db tenant-id)]
@@ -218,7 +215,7 @@
 (deftest get-tenant-members-include-suspended-test
   (let [db        fixtures/*test-db*
         owner     (create-test-user! db)
-        config    {:tenant-defaults {:payer-types [] :expense-categories []}}
+        config    {:tenant-defaults {:payers [] :expense-categories []}}
         result    (tenant-svc/provision-tenant! db config owner)
         tenant-id (or (:id (:tenant result)) (:tenants/id (:tenant result)))
         user2     (create-test-user! db)
@@ -250,7 +247,7 @@
 (deftest get-membership-test
   (let [db     fixtures/*test-db*
         user   (create-test-user! db)
-        config {:tenant-defaults {:payer-types [] :expense-categories []}}
+        config {:tenant-defaults {:payers [] :expense-categories []}}
         result (tenant-svc/provision-tenant! db config user)
         tenant-id (or (:id (:tenant result)) (:tenants/id (:tenant result)))
         user-id   (or (:id user) (:users/id user))

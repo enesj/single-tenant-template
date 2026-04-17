@@ -20,7 +20,7 @@
     :suppliers/aliases-empty              "Nema pravila artikala za ovog dobavljača."
     :suppliers/col-purchased              "Kupljeno"
     :suppliers/col-total                  "Ukupno"
-    :suppliers/col-payer                  "Platitelj"
+    :suppliers/col-payer                  "Kupac"
     :suppliers/col-status                 "Status"
     :suppliers/col-raw-label              "Originalna oznaka"
     :suppliers/col-article                "Artikal"
@@ -29,12 +29,22 @@
     :suppliers/delete-msg                 "Želite li obrisati ovog dobavljača?"
 
     ;; Payers page
-    :payers/title                         "Platitelji"
+    :payers/title                         "Kupci"
     :payers/subtitle                      "Zajednički načini plaćanja za vaše domaćinstvo"
     :payers/btn-dashboard                 "Nadzorna ploča"
-    :payers/read-only-notice              "Pristup samo za čitanje. Zamolite člana domaćinstva da ažurira platitelje."
-    :payers/delete-title                  "Obriši platitelja"
-    :payers/delete-msg                    "Želite li obrisati ovog platitelja?"
+    :payers/read-only-notice              "Pristup samo za čitanje. Zamolite člana domaćinstva da ažurira kupce."
+    :payers/delete-title                  "Obriši kupca"
+    :payers/delete-msg                    "Želite li obrisati ovog kupca?"
+    :payers/delete-disabled-linked        "Ovaj kupac se već koristi na postojećim troškovima. Deaktivirajte ga kroz Izmijeni umjesto brisanja."
+    :payers/delete-disabled-generic       "Ovaj kupac trenutno ne može biti obrisan."
+    :payers/form-add-title                "Dodaj kupca"
+    :payers/form-edit-title               "Izmijeni kupca"
+    :payers/form-created-success          "Kupac je uspješno dodan."
+    :payers/form-updated-success          "Kupac je uspješno ažuriran."
+    :payers/form-placeholder              "npr. Zajednički novčanik"
+    :payers/form-own-placeholder          "npr. Visa 1234"
+    :payers/type-system                   "Sistemski"
+    :payers/type-custom                   "Prilagođeni"
 
     ;; Articles page
     :articles/title                       "Artikli"
@@ -95,13 +105,6 @@
     :cities/delete-title                  "Obriši grad"
     :cities/delete-msg                    "Želite li obrisati ovaj grad?"
 
-    ;; Payer types page
-    :payer-types/title                    "Vrste platitelja"
-    :payer-types/subtitle                 "Katalog vrsta platitelja za napredne korisnike."
-    :payer-types/btn-dashboard            "Nadzorna ploča"
-    :payer-types/delete-title             "Obriši vrstu platitelja"
-    :payer-types/delete-msg               "Želite li obrisati ovu vrstu platitelja?"
-
     ;; Supplier aliases page
     :supplier-aliases/title               "Pravila dobavljača"
     :supplier-aliases/subtitle            "Katalog pravila dobavljača za napredne korisnike."
@@ -152,6 +155,16 @@
     :payers/read-only-notice              "Read-only access. Ask a household member to update payers."
     :payers/delete-title                  "Delete payer"
     :payers/delete-msg                    "Do you want to delete this payer?"
+    :payers/delete-disabled-linked        "This payer is already used by existing expenses. Deactivate it from Edit instead of deleting it."
+    :payers/delete-disabled-generic       "This payer cannot be deleted right now."
+    :payers/form-add-title                "Add payer"
+    :payers/form-edit-title               "Edit payer"
+    :payers/form-created-success          "Payer added successfully."
+    :payers/form-updated-success          "Payer updated successfully."
+    :payers/form-placeholder              "e.g. Shared wallet"
+    :payers/form-own-placeholder          "e.g. Visa 1234"
+    :payers/type-system                   "System"
+    :payers/type-custom                   "Custom"
 
     ;; Articles page
     :articles/title                       "Articles"
@@ -211,13 +224,6 @@
     :cities/btn-dashboard                 "Dashboard"
     :cities/delete-title                  "Delete city"
     :cities/delete-msg                    "Do you want to delete this city?"
-
-    ;; Payer types page
-    :payer-types/title                    "Payer Types"
-    :payer-types/subtitle                 "Power-user payer type catalog."
-    :payer-types/btn-dashboard            "Dashboard"
-    :payer-types/delete-title             "Delete payer type"
-    :payer-types/delete-msg               "Do you want to delete this payer type?"
 
     ;; Supplier aliases page
     :supplier-aliases/title               "Supplier Aliases"

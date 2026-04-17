@@ -19,7 +19,7 @@
       (let [payer (auto-test-data/generate-entity :payers)]
         (is (map? payer) "Should return a map")
         (is (string? (:label payer)) "Should have label")
-        (is (#{"cash" "card" "account" "person"} (:type payer)) "Should have valid payer type")))
+        (is (#{"system" "custom"} (:type payer)) "Should have valid payer type")))
 
     (testing "expenses entity with foreign keys"
       (auto-test-data/reset-id-counter!)

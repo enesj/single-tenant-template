@@ -48,16 +48,6 @@
                 :action-gates {:add :expenses/articles.manage
                                :edit :expenses/articles.manage
                                :delete :expenses/articles.manage}}},
- :payer-types
- {:display-locks {},
-  :display-defaults {:per-page 50, :show-edit? false},
-  :column-defaults {},
-  :column-locks {},
-  :list-config {:form-display :modal
-                :disallowed-action-mode :disable
-                :action-gates {:add :expenses/power-user
-                               :edit :expenses/power-user
-                               :delete :expenses/power-user}}},
  :expenses
  {:display-defaults
   {:show-add-button? false,

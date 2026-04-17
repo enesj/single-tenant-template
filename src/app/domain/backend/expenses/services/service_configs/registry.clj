@@ -16,7 +16,6 @@
    :expense-category config-maps/expense-category-config
    :city config-maps/city-config
    :subcategory config-maps/subcategory-config
-   :payer-type config-maps/payer-type-config
    :payer config-maps/payer-config
    :article config-maps/article-config
    :expense config-maps/expense-config

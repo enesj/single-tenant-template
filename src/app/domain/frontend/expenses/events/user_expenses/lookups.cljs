@@ -23,19 +23,11 @@
   :user-expenses/refresh-payers-list
   common-interceptors
   (fn [{:keys [db]} _]
-    (let [params (if (= :server (get-in db (paths/list-pagination-mode :payers)))
-                   (list-support/build-list-request-params db :payers 200)
-                   {:limit 200 :offset 0})]
+    (let [params (cond-> (if (= :server (get-in db (paths/list-pagination-mode :payers)))
+                           (list-support/build-list-request-params db :payers 200)
+                           {:limit 200 :offset 0})
+                   true (assoc :include_inactive true))]
       {:dispatch [:user-expenses/fetch-payers params]})))
-
-(rf/reg-event-fx
-  :user-expenses/refresh-payer-types-list
-  common-interceptors
-  (fn [{:keys [db]} _]
-    (let [params (if (= :server (get-in db (paths/list-pagination-mode :payer-types)))
-                   (list-support/build-list-request-params db :payer-types 200)
-                   {:limit 200 :offset 0})]
-      {:dispatch [:user-expenses/fetch-payer-types params]})))
 
 ;; ---------------------------------------------------------------------------
 ;; Suppliers
@@ -113,43 +105,6 @@
   (fn [db [error]]
     (log/warn "Failed to fetch payers" {:error error})
     (list-support/finish-loading db [:user-expenses :payers :loading?] [:user-expenses :payers :error] error)))
-
-;; ---------------------------------------------------------------------------
-;; Payer Types
-;; ---------------------------------------------------------------------------
-
-(rf/reg-event-fx
-  :user-expenses/fetch-payer-types
-  common-interceptors
-  (fn [{:keys [db]} [params]]
-    {:db (list-support/begin-loading db [:user-expenses :payer-types :loading?] [:user-expenses :payer-types :error])
-     :http-xhrio (x/xhrio db
-                   {:method :get
-                    :uri endpoints/payer-types-endpoint
-
-                    :params (when (map? params) params)
-                    :on-success [:user-expenses/fetch-payer-types-success]
-                    :on-failure [:user-expenses/fetch-payer-types-failure]})}))
-
-(rf/reg-event-fx
-  :user-expenses/fetch-payer-types-success
-  common-interceptors
-  (fn [{:keys [db]} [response]]
-    (let [payer-types (vec (or (:data response) []))
-          total (or (:total response) (count payer-types))]
-      {:db (-> db
-             (assoc-in [:user-expenses :payer-types :data] payer-types)
-             (assoc-in [:user-expenses :payer-types :items] payer-types)
-             (list-support/finish-loading [:user-expenses :payer-types :loading?] [:user-expenses :payer-types :error] nil)
-             (assoc-in (paths/list-total-items :payer-types) total))
-       :dispatch [::expenses-sync/sync-payer-types payer-types]})))
-
-(rf/reg-event-db
-  :user-expenses/fetch-payer-types-failure
-  common-interceptors
-  (fn [db [error]]
-    (log/warn "Failed to fetch payer types" {:error error})
-    (list-support/finish-loading db [:user-expenses :payer-types :loading?] [:user-expenses :payer-types :error] error)))
 
 ;; ---------------------------------------------------------------------------
 ;; Upload (image handling)

@@ -23,7 +23,7 @@
                      [:is_default :boolean {:default false}]
                      [:created_at :timestamptz {:default [:now]}]
                      [:updated_at :timestamptz {:default [:now]}]]
-            :types [[:payer-type :enum {:choices ["cash" "card" "account" "person"]}]]}
+            :types [[:payer-type :enum {:choices ["system" "custom"]}]]}
 
    :receipts {:fields [[:id :uuid {:primary-key true :default [:gen_random_uuid]}]
                        [:user_id :uuid {:foreign-key :users/id :on-delete :set-null}]

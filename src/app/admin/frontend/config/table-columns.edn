@@ -150,13 +150,6 @@
    :subcategory_id {:label-key :common/subcategory-id},
    :category_name {:label-key :common/category},
    :unit {:label-key :common/unit}}},
- :payer-types
- {:available-columns
-  ["label" "is_default" "created_at" "updated_at" "id" "tenant_id"],
-  :default-visible-columns ["label" "is_default"],
-  :filterable-columns ["label" "is_default"],
-  :sortable-columns ["label" "is_default"],
-  :always-visible ["label"]},
  :expenses
  {:available-columns
   ["purchased_at" "supplier_display_name" "payer_label" "currency" "total_amount" "notes" "is_posted" "id" "receipt_id" "created_at" "updated_at" "user_id" "supplier_id" "payer_id" "store_id" "tenant_id" "created_by" "expense_category_id"],
@@ -200,15 +193,12 @@
   :always-visible ["display_name"]},
  :payers
  {:available-columns
-  ["label" "payer_type_label" "is_default" "created_at" "updated_at" "id" "tenant_id"],
-  :default-visible-columns ["label" "payer_type_label" "is_default"],
-  :filterable-columns ["label" "payer_type_label" "is_default"],
-  :sortable-columns ["label" "payer_type_label" "is_default"],
+  ["label" "is_default" "created_at" "updated_at" "id" "tenant_id"],
+  :default-visible-columns ["label" "is_default"],
+  :filterable-columns ["label" "is_default"],
+  :sortable-columns ["label" "is_default"],
   :always-visible ["label"],
-  :computed-fields
-  {:payer_type_label {:type "string", :label "Payer Type"}},
-  :column-metadata
-  {:payer_type_label {:label-key :common/payer-type}}},
+  :column-metadata {}},
  :supplier-aliases
  {:available-columns
   ["supplier_display_name"

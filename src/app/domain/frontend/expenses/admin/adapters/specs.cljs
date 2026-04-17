@@ -110,16 +110,10 @@
 (def payers-entity-spec
   {:id :payers
    :fields [{:id :label :label "Label" :type :text}
-            {:id :payer-type-id :label "Payer type" :type :text}
+            {:id :payer-type :label "Payer type" :type :text}
             {:id :is-default :label "Default?" :type :boolean}
             {:id :is-active :label "Active?" :type :boolean}
-            {:id :payer-type-is-system :label "System?" :type :boolean}]})
-
-(def payer-types-entity-spec
-  {:id :payer-types
-   :fields [{:id :label :label "Label" :type :text}
-            {:id :is-default :label "Default?" :type :boolean}
-            {:id :is-system :label "System?" :type :boolean}]})
+            {:id :user-full-name :label "User" :type :text}]})
 
 (def articles-entity-spec
   {:id :articles
@@ -258,6 +252,3 @@
   {:entity-key :unmapped-aliases
    :value-fn (fn [spec _] (or spec unmapped-aliases-entity-spec))})
 
-(entity-utils/register-entity-spec-sub!
-  {:entity-key :payer-types
-   :value-fn (fn [spec _] (or spec payer-types-entity-spec))})

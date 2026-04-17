@@ -13,7 +13,6 @@
     [app.domain.backend.expenses.routes.expenses :as expenses]
     [app.domain.backend.expenses.routes.global-settings :as global-settings]
     [app.domain.backend.expenses.routes.manufacturers :as manufacturers]
-    [app.domain.backend.expenses.routes.payer-types :as payer-types]
     [app.domain.backend.expenses.routes.payers :as payers]
     [app.domain.backend.expenses.routes.receipts :as receipts]
     [app.domain.backend.expenses.routes.reports :as reports]
@@ -41,7 +40,6 @@
      (expense-categories/routes db)
      (subcategories/routes db)
      (payers/routes db)
-     (payer-types/routes db)
      (receipts/routes db app-config)
      (article-aliases/routes db)
      (supplier-aliases/routes db)

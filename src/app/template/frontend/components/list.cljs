@@ -21,6 +21,7 @@
     [app.template.frontend.events.list.filters :as filter-events]
     [app.template.frontend.events.list.settings :as settings-events]
     [app.template.frontend.events.list.ui-state :as ui-events]
+    [app.template.frontend.i18n :refer [use-t]]
     [app.template.frontend.subs.entity :as entity-subs]
     [app.template.frontend.subs.form :as form-subs]
     [app.template.frontend.subs.list :as list-subs]
@@ -92,6 +93,8 @@
   [{:keys [entity-name
            entity-spec
            title
+           add-modal-title
+           edit-modal-title
            display-settings
            filterable-columns
            per-page
@@ -106,6 +109,7 @@
            on-edit-success]
     :as props}]
   (let [entity-kw (if (keyword? entity-name) entity-name (keyword entity-name))
+        t (use-t)
         items (use-subscribe [::entity-subs/paginated-entities entity-name])
         loading? (use-subscribe [::entity-subs/loading? entity-name])
         error (use-subscribe [::entity-subs/error entity-name])
@@ -255,7 +259,13 @@
         ;; Determine form display mode
         use-modal-forms? (= effective-form-display :modal)
         has-custom-add-form? (some? render-add-form)
-        has-custom-edit-form? (some? render-edit-form)]
+        has-custom-edit-form? (some? render-edit-form)
+        resolved-title (or title
+                         (some-> entity-name name))
+        resolved-add-modal-title (or add-modal-title
+                                   (str (t :common/add) " " resolved-title))
+        resolved-edit-modal-title (or edit-modal-title
+                                    (str (t :common/edit) " " resolved-title))]
 
     ;; Store the current entity type in the app state when it changes
     (use-effect
@@ -568,7 +578,7 @@
           ;; Modal rendering moved to extracted module.
           (list-modals/render-add-modal
             {:add-modal-open? add-modal-open?
-             :title title
+             :add-modal-title resolved-add-modal-title
              :entity-name entity-name
              :entity-kw entity-kw
              :entity-spec entity-spec
@@ -581,7 +591,7 @@
           (list-modals/render-edit-modal
             {:edit-modal-open? edit-modal-open?
              :edit-modal-item edit-modal-item
-             :title title
+             :edit-modal-title resolved-edit-modal-title
              :entity-name entity-name
              :entity-kw entity-kw
              :entity-spec entity-spec
@@ -640,7 +650,7 @@
                :entity-name entity-name}))
           (cond
             loading?                                        ;; Display loading message if loading
-            ($ :div ($ :span "Loading..."))
+            ($ :div ($ :span (t :common/loading)))
             :else                                           ;; Otherwise, display the list
             ($ :div
               (if show-inline-add-form?
@@ -665,6 +675,7 @@
                        :entity-name entity-name
                        :show-add-button? show-add-button?
                        :add-disabled? add-disabled?
+                       :add-button-label (:add-button-label props)
                        ;; Allow callers to provide a direct add click handler (e.g., navigate to upload),
                        ;; otherwise fall back to the modal-mode handler when using custom add forms.
                        :on-add-click (or (:on-add-click props)
@@ -679,12 +690,14 @@
                       ($ :div {:id (str "selected-count-" (kw/ensure-name entity-name))
                                :class "flex items-center gap-2 text-sm text-base-content/70"}
                         ($ :span {:class "font-semibold"}
-                          (str record-count " " (if (= record-count 1) "record" "records")))
+                          (str record-count " " (if (= record-count 1)
+                                                  (t :common/record-singular)
+                                                  (t :common/record-plural))))
                         (when (pos? selected-count)
                           ($ :span
-                            (str "(" selected-count " selected"
+                            (str "(" selected-count " " (t :common/selected)
                               (when (pos? hidden-selected-count)
-                                (str ", " hidden-selected-count " hidden"))
+                                (str ", " hidden-selected-count " " (t :common/hidden)))
                               ")")))))
 
                     ($ :div {:id (str "table-shell-" (kw/ensure-name entity-name))

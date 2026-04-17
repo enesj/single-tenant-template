@@ -30,7 +30,7 @@
           "Tenant should be active")))))
 
 ;; ---------------------------------------------------------------------------
-;; Test: Registration seeds default categories and payer types
+;; Test: Registration seeds default categories and payers
 ;; ---------------------------------------------------------------------------
 
 (deftest register-seeds-categories-and-payers
@@ -52,15 +52,20 @@
           (is (contains? names "Shopping"))
           (is (contains? names "Other")))))
 
-    (testing "4 default payer types are seeded"
-      (let [payer-types (h/get-payer-types-for-tenant "e2e-user-b")]
-        (is (= 4 (count payer-types))
-          "Should have 4 default payer types")
-        (let [labels (set (map :label payer-types))]
-          (is (contains? labels "Cash"))
-          (is (contains? labels "Credit Card"))
-          (is (contains? labels "Debit Card"))
-          (is (contains? labels "Bank Transfer")))))))
+    (testing "starter payers plus the owner system payer are seeded"
+      (let [payers (h/get-payers-for-tenant "e2e-user-b")
+            labels (set (map :label payers))
+            system-count (count (filter #(= "system" (:type %)) payers))
+            custom-labels (set (map :label (filter #(= "custom" (:type %)) payers)))]
+        (is (= 3 (count payers))
+          "Should have 2 starter payers plus 1 owner system payer")
+        (is (= 1 system-count)
+          "Should create exactly one system payer for the tenant owner")
+        (is (contains? labels "E2E User B")
+          "Owner system payer should use the user's full name")
+        (is (or (= #{"Household" "Other"} custom-labels)
+              (= #{"Kućanstvo" "Ostalo"} custom-labels))
+          "Custom payers should match the configured tenant starter payers")))))
 
 ;; ---------------------------------------------------------------------------
 ;; Test: Tenant slug is derived from email prefix

@@ -580,14 +580,19 @@
      WHERE t.slug = ?
      ORDER BY ec.name" slug))
 
-(defn get-payer-types-for-tenant
-  "Get payer types for a tenant by slug."
+(defn get-payers-for-tenant
+  "Get payers for a tenant by slug."
   [slug]
   (query-db
-    "SELECT pt.* FROM payer_types pt
-     JOIN tenants t ON t.id = pt.tenant_id
+    "SELECT p.* FROM payers p
+     JOIN tenants t ON t.id = p.tenant_id
      WHERE t.slug = ?
-     ORDER BY pt.label" slug))
+     ORDER BY p.label" slug))
+
+(defn get-payer-types-for-tenant
+  "Backward-compatible alias for older tests. Returns payers for the tenant."
+  [slug]
+  (get-payers-for-tenant slug))
 
 (defn get-audit-logs
   "Get recent audit log entries."

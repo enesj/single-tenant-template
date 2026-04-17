@@ -31,7 +31,7 @@
                    :returning [:*]}))))
 
 (defn- provision! [db user]
-  (tenant-svc/provision-tenant! db {:tenant-defaults {:payer-types [] :expense-categories []}} user))
+  (tenant-svc/provision-tenant! db {:tenant-defaults {:payers [] :expense-categories []}} user))
 
 ;; ============================================================================
 ;; create-invitation!

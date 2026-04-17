@@ -13,7 +13,6 @@
     [app.template.backend.services.gmail-smtp :as gmail-smtp]
     [next.jdbc :as jdbc]
     [next.jdbc.result-set :as rs]
-    [system.state :as state]
     [taoensso.timbre :as log])
   (:import
     [com.microsoft.playwright BrowserType$LaunchOptions Playwright]))
@@ -87,7 +86,6 @@
    "expense_items"
    "expenses"
    "receipts"
-   "payer_types"
    "payers"
    "expense_categories"
    "tenant_memberships"

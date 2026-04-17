@@ -126,7 +126,8 @@
         now (java.time.LocalDateTime/now)
         defaults (:tenant-defaults config)
         locale (or (:default-locale config) :bs)
-        expense-category-defaults (normalize-expense-category-defaults defaults locale)]
+        expense-category-defaults (normalize-expense-category-defaults defaults locale)
+        payer-defaults (vec (or (:payers defaults) []))]
     (jdbc/with-transaction [tx db]
       ;; 1) Create tenant
       (let [tenant (convert-pg-objects
@@ -151,40 +152,29 @@
                                                   :created_at now
                                                   :updated_at now}]
                                         :returning [:*]})))
-            system-pt-id (java.util.UUID/randomUUID)
             owner-label (or (some-> (user-full-name user) str/trim not-empty)
                           (first (str/split (user-email user) #"@")))
             owner-payer-id (java.util.UUID/randomUUID)]
 
-        ;; 3a) Create system "user" payer type (auto-provisioned, not admin-managed)
-        (jdbc/execute-one! tx
-          (sql/format {:insert-into [:payer_types]
-                       :values [{:id system-pt-id
-                                 :tenant_id tenant-id
-                                 :label "user"
-                                 :is_default false
-                                 :is_system true
-                                 :created_at now
-                                 :updated_at now}]}))
-
-        ;; 3b) Seed config payer types (admin-managed)
-        (doseq [pt (:payer-types defaults)]
+        ;; 3) Seed starter payers configured for the tenant.
+        (doseq [payer payer-defaults]
           (jdbc/execute-one! tx
-            (sql/format {:insert-into [:payer_types]
+            (sql/format {:insert-into [:payers]
                          :values [{:id (java.util.UUID/randomUUID)
                                    :tenant_id tenant-id
-                                   :label (resolve-label (:label pt) locale)
-                                   :is_default (boolean (:is-default pt))
-                                   :is_system false
+                                   :type [:cast "custom" :payer_type]
+                                   :label (resolve-label (:label payer) locale)
+                                   :is_default false
+                                   :is_active true
                                    :created_at now
                                    :updated_at now}]})))
 
-        ;; 4) Create owner payer (linked to system "user" payer type)
+        ;; 4) Create owner payer (system-provisioned)
         (jdbc/execute-one! tx
           (sql/format {:insert-into [:payers]
                        :values [{:id owner-payer-id
                                  :tenant_id tenant-id
-                                 :payer_type_id system-pt-id
+                                 :type [:cast "system" :payer_type]
                                  :label owner-label
                                  :is_default true
                                  :is_active true
@@ -232,7 +222,7 @@
            :user-id (user-id user)
            :user-ref (email-privacy/user-ref (user-id user))
            :email-masked (email-privacy/mask-email (user-email user))
-           :payer-type-count (count (:payer-types defaults))
+           :payer-count (inc (count payer-defaults))
             :expense-category-count (count expense-category-defaults)})
 
         {:tenant tenant :membership membership}))))
@@ -242,7 +232,7 @@
 ;; ============================================================================
 
 (defn provision-user-payer!
-  "Create a Payer of system 'user' type for a new tenant member.
+  "Create a system payer for a new tenant member.
    Label = full name or email prefix (before @).
    Also upserts user_expense_settings with the new payer as default.
 
@@ -251,20 +241,7 @@
   [db-or-tx tenant-id user-id user-email & {:keys [full-name]}]
   (let [t-id (if (string? tenant-id) (java.util.UUID/fromString tenant-id) tenant-id)
         u-id (if (string? user-id) (java.util.UUID/fromString user-id) user-id)
-        now  (java.time.LocalDateTime/now)
-        ;; Find the system payer_type for this tenant
-        system-pt (jdbc/execute-one! db-or-tx
-                    (sql/format {:select [:id]
-                                 :from   [:payer_types]
-                                 :where  [:and
-                                          [:= :tenant_id t-id]
-                                          [:= :is_system true]]
-                                 :limit  1})
-                    {:builder-fn rs/as-unqualified-lower-maps})]
-    (when-not system-pt
-      (log/warn "No system payer_type found for tenant" t-id "— skipping user payer provisioning")
-      (throw (ex-info "No system payer type for tenant"
-               {:type :provisioning-error :tenant-id t-id})))
+        now  (java.time.LocalDateTime/now)]
     (let [label    (or (some-> full-name str/trim not-empty)
                      (first (str/split (str user-email) #"@")))
           payer-id (java.util.UUID/randomUUID)
@@ -272,7 +249,7 @@
                      (sql/format {:insert-into [:payers]
                                   :values [{:id            payer-id
                                             :tenant_id     t-id
-                                            :payer_type_id (:id system-pt)
+                                            :type          [:cast "system" :payer_type]
                                             :label         label
                                             :is_default    false
                                             :is_active     true

@@ -132,17 +132,6 @@
    ["/payers/:id"
     {:put {:handler (user-expenses-reference-data/update-payer-handler db)}}]
 
-   ;; Payer Types (admin/owner only)
-   ["/payer-types"
-    {:get {:handler (user-expenses-reference-data/list-payer-types-handler db)}
-     :post {:handler (user-expenses-reference-data/create-payer-type-handler db)}}]
-
-   ["/payer-types/batch"
-    {:delete {:handler (user-expenses-reference-data/batch-delete-payer-types-handler db)}}]
-
-   ["/payer-types/:id"
-    {:put {:handler (user-expenses-reference-data/update-payer-type-handler db)}}]
-
    ;; Expense items (power-user only)
    ["/expense-items" {:get {:handler (user-expenses-expense-items/list-expense-items-handler db)}}]
 

@@ -84,3 +84,36 @@
         "Previous default should be cleared")
       (is (true? (:is_default p2*))
         "Updated payer should be set as default"))))
+
+(deftest create-payer-forces-custom-type
+  (testing "create-payer! always persists custom type for user-created payers"
+    (let [captured (atom nil)]
+      (with-redefs [app.domain.backend.expenses.services.payers/create-payer!* (fn [_db payload]
+                                                                                 (reset! captured payload)
+                                                                                 payload)]
+        (is (= {:label "Wallet"
+                :type "custom"
+                :tenant_id #uuid "00000000-0000-0000-0000-000000000111"}
+              (payers/create-payer!
+                :db
+                {:label "Wallet"
+                 :type "anything"
+                 :tenant_id #uuid "00000000-0000-0000-0000-000000000111"})))
+        (is (= "custom" (:type @captured)))))))
+
+(deftest delete-payer-rejects-linked-payers
+  (testing "delete-payer! rejects payers already used by expenses and skips the delete call"
+    (let [delete-called? (atom false)
+          payer-id #uuid "00000000-0000-0000-0000-000000000222"
+          tenant-id #uuid "00000000-0000-0000-0000-000000000333"]
+      (with-redefs [app.domain.backend.expenses.services.payers/payer-has-system-type? (fn [_db _payer-id] false)
+                    app.domain.backend.expenses.services.payers/related-expense-count (fn [_db seen-payer-id seen-tenant-id]
+                                                                                        (is (= payer-id seen-payer-id))
+                                                                                        (is (= tenant-id seen-tenant-id))
+                                                                                        2)
+                    app.domain.backend.expenses.services.payers/delete-payer!* (fn [_db _payer-id _opts]
+                                                                                 (reset! delete-called? true)
+                                                                                 :deleted)]
+        (is (thrown? clojure.lang.ExceptionInfo
+              (payers/delete-payer! :db payer-id {:tenant-id tenant-id})))
+        (is (false? @delete-called?))))))

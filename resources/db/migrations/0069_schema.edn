@@ -1,0 +1,7 @@
+({:action :drop-index,
+  :index-name :idx-payers-payer-type,
+  :model-name :payers}
+ {:action :drop-column,
+  :field-name :payer-type-id,
+  :model-name :payers}
+ {:action :drop-table, :model-name :payer_types})

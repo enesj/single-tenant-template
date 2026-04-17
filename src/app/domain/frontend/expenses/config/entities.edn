@@ -3,7 +3,6 @@
  :subcategories {:title "Subcategories"},
  :cities {:title "Cities"},
  :articles {:title "Articles"},
- :payer-types {:title "Payer Types"},
  :expenses {:title "My Expenses"},
  :manufacturers {:title "Manufacturers"},
  :payers {:title "Payers"},

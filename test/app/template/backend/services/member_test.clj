@@ -32,10 +32,11 @@
                    :returning [:*]}))))
 
 (defn- provision! [db user]
-  (tenant-svc/provision-tenant! db {:tenant-defaults {:payer-types [] :expense-categories []}} user))
+  (tenant-svc/provision-tenant! db {:tenant-defaults {:payers [] :expense-categories []}} user))
 
-(defn- add-member! [db tenant-id owner-id invitee role]
+(defn- add-member!
   "Invite and accept to create a membership."
+  [db tenant-id owner-id invitee role]
   (let [inv (invitation-svc/create-invitation! db
               {:tenant-id  tenant-id
                :email      (or (:email invitee) (:users/email invitee))
@@ -86,7 +87,7 @@
   (let [db       fixtures/*test-db*
         owner    (create-user! db "sp-cr-owner")
         member   (create-user! db "sp-cr-member")
-        {:keys [tenant membership]} (provision! db owner)
+  {:keys [tenant]} (provision! db owner)
         tenant-id (or (:id tenant) (:tenants/id tenant))
         owner-id  (or (:id owner) (:users/id owner))
         member-m  (add-member! db tenant-id owner-id member "member")
@@ -114,7 +115,7 @@
         owner    (create-user! db "cr-promote-owner")
         admin    (create-user! db "cr-promote-admin")
         member   (create-user! db "cr-promote-member")
-        {:keys [tenant membership]} (provision! db owner)
+  {:keys [tenant]} (provision! db owner)
         tenant-id (or (:id tenant) (:tenants/id tenant))
         owner-id  (or (:id owner) (:users/id owner))
         admin-m  (add-member! db tenant-id owner-id admin "admin")
@@ -186,7 +187,7 @@
   (let [db       fixtures/*test-db*
         owner    (create-user! db "sp-rm-owner")
         member   (create-user! db "sp-rm-member")
-        {:keys [tenant membership]} (provision! db owner)
+  {:keys [tenant]} (provision! db owner)
         tenant-id (or (:id tenant) (:tenants/id tenant))
         owner-id  (or (:id owner) (:users/id owner))
         member-m  (add-member! db tenant-id owner-id member "member")
@@ -218,7 +219,7 @@
   (let [db       fixtures/*test-db*
         owner    (create-user! db "db-owner")
         admin    (create-user! db "db-admin")
-        {:keys [tenant membership]} (provision! db owner)
+  {:keys [tenant]} (provision! db owner)
         tenant-id (or (:id tenant) (:tenants/id tenant))
         admin-id  (or (:id admin) (:users/id admin))]
 

@@ -64,6 +64,22 @@
    :column-metadata
    {"article_canonical_name" {:label-key :common/article}}})
 
+(def ^:private payers-models-data
+  {:payers
+   {:fields
+    [[:id :uuid {:null false}]
+     [:label [:varchar 255] {:null false}]
+     [:is_default :boolean {:null false}]]}})
+
+(def ^:private payers-table-columns
+  {:available-columns ["label" "payer_type_label" "is_default"]
+   :computed-fields
+   {"payer_type_label" {:type "select"
+                        :options [{:value "system" :label "system"}
+                                  {:value "custom" :label "custom"}]}}
+   :column-metadata
+   {"payer_type_label" {:label-key :common/payer-type}}})
+
 (deftest entity-specs-by-name-normalizes-entity-key
   (testing ":entity-specs/by-name resolves the same spec for snake_case and kebab-case entity identifiers"
     (reset-db! {:models-data models-data})
@@ -119,6 +135,24 @@
               "created-at"
               "id"]
             ids)))))
+
+(deftest entity-specs-by-name-preserves-computed-field-options
+  (testing ":entity-specs/by-name preserves computed field :options so filters can render selects"
+    (reset-db!
+      {:models-data payers-models-data
+       :domain {:config {:table-columns {:payers payers-table-columns}}}})
+    (rf/dispatch-sync [::entity-specs/initialize-entity-specs])
+
+    (let [spec @(rf/subscribe [:entity-specs/by-name :payers])
+          payer-type-field (some (fn [field]
+                                   (when (= "payer-type-label" (:id field))
+                                     field))
+                             spec)]
+      (is payer-type-field "Sanity: payer type computed field should be present")
+      (is (= "select" (:type payer-type-field)))
+      (is (= [{:value "system" :label "system"}
+              {:value "custom" :label "custom"}]
+            (:options payer-type-field))))))
 
 (deftest entity-specs-by-name-uses-label-key-for-current-locale
   (testing ":entity-specs/by-name resolves :label-key via the current locale"

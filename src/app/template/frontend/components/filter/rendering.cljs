@@ -1,6 +1,7 @@
 (ns app.template.frontend.components.filter.rendering
   (:require
     [app.template.frontend.components.button :refer [button]]
+    [app.template.frontend.i18n :refer [use-t]]
     [app.template.frontend.components.filter.ui :refer [active-filters-display
                                                         date-range-filter
                                                         filter-actions
@@ -72,16 +73,17 @@
 (defn render-filter-header
   "Render filter header with title and close button"
   [{:keys [field-label _on-close] :as props}]
-  ($ :div
-    {:class "flex justify-between items-center"}
-    ($ :h3
-      {:class "text-sm font-semibold text-base-content"}
-      (str "Filter by " field-label))
-    ($ button
-      {:btn-type :ghost
-       :class "ds-btn-xs"
-       :on-click (:on-close props)}
-      "×")))
+  (let [t (use-t)]
+    ($ :div
+      {:class "flex justify-between items-center"}
+      ($ :h3
+        {:class "text-sm font-semibold text-base-content"}
+        (str (t :common/filter-by) " " field-label))
+      ($ button
+        {:btn-type :ghost
+         :class "ds-btn-xs"
+         :on-click (:on-close props)}
+        "×"))))
 
 (defn render-filter-content
   "Render the main filter content area"

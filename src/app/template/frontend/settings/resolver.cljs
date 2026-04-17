@@ -325,15 +325,17 @@
 
    Falls back to labels/field-name->label when no label override exists."
   [locale table-config col-kw]
-  (let [m (lookup-column-entry (:computed-fields table-config) col-kw)
+  (let [m (or (lookup-column-entry (:computed-fields table-config) col-kw) {})
         label (or (resolve-column-label-override locale table-config col-kw)
                 (:label m)
                 (labels/field-name->label col-kw))]
-    {:id    (name col-kw)
-     :label label
-     :type  (or (:type m) :string)
-     :admin (merge
-              {:visible-in-table? true
-               :filterable? true
-               :sortable? true}
-              (:admin m))}))
+    (merge
+      (dissoc m :label :admin)
+      {:id (name col-kw)
+       :label label
+       :type (or (:type m) :string)
+       :admin (merge
+                {:visible-in-table? true
+                 :filterable? true
+                 :sortable? true}
+                (:admin m))})))

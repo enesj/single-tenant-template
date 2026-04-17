@@ -1,6 +1,7 @@
 (ns app.template.frontend.components.icons
   (:require
     [app.template.frontend.components.button :refer [button]]
+    [app.template.frontend.i18n :refer [use-t]]
     [uix.core :refer [$ defui]]))
 
 (defui google-icon []
@@ -170,30 +171,32 @@
               :d "M15 12a3 3 0 11-6 0 3 3 0 016 0z"})))
 
 (defui filter-icon [{:keys [id on-click active? field-id disabled? title]}]
-  ($ button {:type "button"
-             :btn-type :ghost
-             :class (str "ds-btn-xs p-0 m-0 ml-1 "
-                      (when disabled? "opacity-50 cursor-not-allowed"))
-             :id (or id (when field-id (str "filter-icon-" (name field-id))))
-             :tab-index (if disabled? -1 0)
-             :aria-label "Filter"
-             :title (or title "Filter")
-             :disabled disabled?
-             :style {:line-height "0" :vertical-align "middle"}
-             :on-click (fn [e]
-                         (.stopPropagation e)
-                         (when (and on-click (not disabled?)) (on-click e)))}
-    ($ :svg {:class (str "w-4 h-4 hover:text-accent " (when active? "drop-shadow-sm"))
-             :viewBox "0 0 24 24"
-             :fill "none"
-             :stroke (cond
-                       disabled? "#d1d5db"  ; Light gray when disabled
-                       active? "#3b82f6"    ; Blue when active
-                       :else "#6b7280")     ; Gray when inactive
-             :stroke-width (if active? "2.5" "1.7")
-             :stroke-linecap "round"
-             :stroke-linejoin "round"}
-      ($ :polygon {:points "22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"}))))
+  (let [t (use-t)
+        resolved-title (or title (t :common/filter-by))]
+    ($ button {:type "button"
+               :btn-type :ghost
+               :class (str "ds-btn-xs p-0 m-0 ml-1 "
+                        (when disabled? "opacity-50 cursor-not-allowed"))
+               :id (or id (when field-id (str "filter-icon-" (name field-id))))
+               :tab-index (if disabled? -1 0)
+               :aria-label resolved-title
+               :title resolved-title
+               :disabled disabled?
+               :style {:line-height "0" :vertical-align "middle"}
+               :on-click (fn [e]
+                           (.stopPropagation e)
+                           (when (and on-click (not disabled?)) (on-click e)))}
+      ($ :svg {:class (str "w-4 h-4 hover:text-accent " (when active? "drop-shadow-sm"))
+               :viewBox "0 0 24 24"
+               :fill "none"
+               :stroke (cond
+                         disabled? "#d1d5db"  ; Light gray when disabled
+                         active? "#3b82f6"    ; Blue when active
+                         :else "#6b7280")     ; Gray when inactive
+               :stroke-width (if active? "2.5" "1.7")
+               :stroke-linecap "round"
+               :stroke-linejoin "round"}
+        ($ :polygon {:points "22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"})))))
 
 (defui chart-bar [{:keys [class] :or {class "w-5 h-5"}}]
   ($ :svg {:class class
