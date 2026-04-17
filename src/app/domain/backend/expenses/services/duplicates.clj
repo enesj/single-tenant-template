@@ -729,6 +729,30 @@
                   members))))
           clusters)))))
 
+(defn filter-article-clusters-with-distinct-manufacturers
+  "Remove article clusters when every member has a known, distinct manufacturer.
+
+  These usually represent same product types across different brands, not true
+  merge candidates. Clusters with any missing manufacturer stay visible so admins
+  can still review genuinely ambiguous cases."
+  [entity-type clusters]
+  (if (= entity-type :articles)
+    (->> clusters
+      (remove (fn [{:keys [members]}]
+                (let [manufacturer-names (->> members
+                                           (keep (fn [member]
+                                                   (some-> (or (:manufacturer-name member)
+                                                             (:manufacturer_name member))
+                                                     str
+                                                     str/trim
+                                                     not-empty))))]
+                  (and (> (count members) 1)
+                    (= (count manufacturer-names) (count members))
+                    (= (count (distinct manufacturer-names))
+                      (count members))))))
+      vec)
+    (vec clusters)))
+
 (comment
   ;; REPL usage examples
   ;; (detect-duplicates db :suppliers :prefix {:prefix-words 2})

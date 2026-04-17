@@ -1,40 +1,177 @@
 (ns app.admin.frontend.adapters.audit
   "Adapter for audit logs to work with the template system.
-   
+
    This adapter is responsible for:
    - Data normalization (audit-log->template-entity)
    - Template system sync (register-sync-event!)
    - Bridge registration for CRUD operations
    - UI state initialization
-   
+
    HTTP events are in app.admin.frontend.events.audit"
   (:require
     [app.admin.frontend.adapters.core :as adapters.core]
     [app.template.frontend.db.paths :as paths]
+    [app.template.frontend.interceptors.persistence :as persistence]
     [app.template.frontend.shared.utils.db :as db-utils]
     [app.template.frontend.shared.utils.entity :as entity-utils]
+    [clojure.string :as str]
     [re-frame.core :as rf]
     [taoensso.timbre :as log]))
+
+(defn- present-string
+  [value]
+  (let [value* (some-> value str str/trim)]
+    (when (seq value*)
+      value*)))
+
+(defn- truncate-summary
+  [value]
+  (when-let [value* (present-string value)]
+    (if (> (count value*) 96)
+      (str (subs value* 0 93) "...")
+      value*)))
+
+(defn- actor-type-label
+  [actor-type]
+  (case (some-> actor-type present-string str/lower-case)
+    "admin" "Admin"
+    "user" "User"
+    "system" "System"
+    (some-> actor-type
+      present-string
+      (str/replace #"[_-]+" " ")
+      str/capitalize)))
+
+(defn- audit-changes
+  [log]
+  (let [candidate (or (:changes log) (:metadata log))]
+    (if (map? candidate)
+      candidate
+      {})))
+
+(defn- derive-actor-display-name
+  [log]
+  (or (present-string (:actor-display-name log))
+    (present-string (:admin-name log))
+    (present-string (:admin-ref log))
+    (actor-type-label (:actor-type log))))
+
+(defn- derive-entity-name
+  [log changes]
+  (or (present-string (:entity-name log))
+    (present-string (:api-name changes))
+    (present-string (:triggering-user-name changes))
+    (present-string (:target-type log))
+    (present-string (:entity-type changes))))
+
+(defn- derive-context-summary
+  [log changes]
+  (let [summary-parts (->> [(present-string (:api-name changes))
+                            (present-string (:operation changes))
+                            (when-let [http-status (:http-status changes)]
+                              (str "HTTP " http-status))
+                            (when-let [member-count (:member-ids-count changes)]
+                              (str member-count " members"))
+                            (when (and (nil? (:api-name changes))
+                                    (nil? (:operation changes))
+                                    (nil? (:http-status changes))
+                                    (nil? (:member-ids-count changes)))
+                              (or (present-string (:entity-type changes))
+                                (present-string (:target-type log))
+                                (truncate-summary (:error-message changes))))]
+                        (remove nil?)
+                        distinct
+                        vec)]
+    (when (seq summary-parts)
+      (str/join " • " summary-parts))))
+
+(def ^:private legacy-audit-visible-order
+  [:action :entity-name :admin-email :admin-name])
+
+(def ^:private enhanced-audit-visible-order
+  [:created-at :action :actor-display-name :entity-name :context-summary])
+
+(defn- normalize-visible-order
+  [visible-order]
+  (->> (or visible-order [])
+    (keep #(some-> % name keyword))
+    vec))
+
+(defn- audit-prefs-migration-needed?
+  [visible-order visible-map]
+  (let [normalized-order (normalize-visible-order visible-order)]
+    (and (= legacy-audit-visible-order normalized-order)
+      (= false (get visible-map :created-at))
+      (not (contains? visible-map :actor-display-name))
+      (not (contains? visible-map :context-summary)))))
+
+(defn- migrate-legacy-audit-visible-prefs
+  [db]
+  (let [prefs-key :admin/audit-logs
+        visible-order-path (paths/entity-prefs-columns-visible-order prefs-key)
+        order-path (paths/entity-prefs-columns-order prefs-key)
+        visible-path (paths/entity-prefs-columns-visible prefs-key)
+        visible-order (get-in db visible-order-path)
+        visible-map (or (get-in db visible-path) {})]
+    (if (audit-prefs-migration-needed? visible-order visible-map)
+      (-> db
+        (assoc-in visible-order-path enhanced-audit-visible-order)
+        (assoc-in order-path enhanced-audit-visible-order)
+        (assoc-in visible-path
+          (-> visible-map
+            (dissoc :admin-email :admin-name)
+            (assoc :created-at true
+              :action true
+              :actor-display-name true
+              :entity-name true
+              :context-summary true))))
+      db)))
 
 ;; Transform namespaced keys to simple keys for template system
 (defn audit-log->template-entity
   "Normalize audit log data for the template entity store.
-   Keep only plain keys without namespacing to avoid duplicate columns in the table."
+   Keep only plain keys without namespacing to avoid duplicate columns in the table.
+   Also promote the most useful audit details to top-level fields so the shared
+   list/detail UI can render meaningful summaries without bespoke row logic."
   [log]
-  ;; Simply ensure IDs are strings, don't create namespaced duplicates
-  (-> log
-    (update :id #(when % (str %)))
-    (update :audit-log-id #(when % (str %)))
-    (update :entity-id #(when % (str %)))
-    (update :actor-id #(when % (str %)))
-    (update :target-id #(when % (str %)))
-    (update :user-id #(when % (str %)))
-    (update :admin-id #(when % (str %)))
-      ;; Ensure we have an :id field for the template system
-    (as-> log*
-      (if (and (not (:id log*)) (:audit-log-id log*))
-        (assoc log* :id (:audit-log-id log*))
-        log*))))
+  (let [changes (audit-changes log)
+        normalized-log (-> log
+                         (update :id #(when % (str %)))
+                         (update :audit-log-id #(when % (str %)))
+                         (update :entity-id #(when % (str %)))
+                         (update :actor-id #(when % (str %)))
+                         (update :target-id #(when % (str %)))
+                         (update :user-id #(when % (str %)))
+                         (update :admin-id #(when % (str %)))
+                         ;; Ensure we have an :id field for the template system
+                         (as-> log*
+                           (if (and (not (:id log*)) (:audit-log-id log*))
+                             (assoc log* :id (:audit-log-id log*))
+                             log*)))
+        entity-type (or (:entity-type normalized-log) (:target-type normalized-log))
+        entity-id (or (:entity-id normalized-log) (:target-id normalized-log))
+        actor-display-name (derive-actor-display-name normalized-log)
+        entity-name (derive-entity-name normalized-log changes)
+        context-summary (derive-context-summary normalized-log changes)]
+    (cond-> normalized-log
+      entity-type (assoc :entity-type (str entity-type))
+      entity-id (assoc :entity-id (str entity-id))
+      actor-display-name (assoc :actor-display-name actor-display-name)
+      entity-name (assoc :entity-name entity-name)
+      context-summary (assoc :context-summary context-summary)
+      (contains? changes :api-name) (assoc :api-name (present-string (:api-name changes)))
+      (contains? changes :operation) (assoc :operation (present-string (:operation changes)))
+      (contains? changes :severity) (assoc :severity (present-string (:severity changes)))
+      (contains? changes :http-status) (assoc :http-status (:http-status changes))
+      (contains? changes :error-type) (assoc :error-type (present-string (:error-type changes)))
+      (contains? changes :error-message) (assoc :error-message (present-string (:error-message changes)))
+      (contains? changes :request-url) (assoc :request-url (present-string (:request-url changes)))
+      (contains? changes :retry-attempted) (assoc :retry-attempted (:retry-attempted changes))
+      (contains? changes :retry-succeeded) (assoc :retry-succeeded (:retry-succeeded changes))
+      (contains? changes :triggering-user-name)
+      (assoc :triggering-user-name (present-string (:triggering-user-name changes)))
+      (contains? changes :triggering-user-id)
+      (assoc :triggering-user-id (some-> (:triggering-user-id changes) str)))))
 
 ;; Sync normalized audit logs into template entity store (data + ids)
 (entity-utils/register-entity-spec-sub!
@@ -59,22 +196,24 @@
 
 (rf/reg-event-fx
   ::initialize-audit-ui-state
+  [persistence/persist-entity-prefs]
   (fn [{:keys [db]} _]
     (let [metadata-path (paths/entity-metadata :audit-logs)
           ui-state-path (paths/list-ui-state :audit-logs)
           selected-ids-path (paths/entity-selected-ids :audit-logs)
           ;; Seed only current-page and preserve existing pagination (including per-page) if present.
           ;; Per-page defaults are seeded by list-view from entities.edn (:display-settings :per-page).
-          db* (db-utils/assoc-paths db
-                [[(conj metadata-path :sort) {:field :created-at :direction :desc}]
-                 [(conj metadata-path :filters) {}]
-                 [ui-state-path {:sort {:field :created-at :direction :desc}
-                                 :pagination-mode :server
-                                 :refresh-event [:admin/load-audit-logs]
-                                 :pagination (-> (merge {:current-page 1}
-                                                   (:pagination (get-in db ui-state-path)))
-                                               (assoc :mode :server))}]
-                 [selected-ids-path #{}]])
+          db* (-> (db-utils/assoc-paths db
+                    [[(conj metadata-path :sort) {:field :created-at :direction :desc}]
+                     [(conj metadata-path :filters) {}]
+                     [ui-state-path {:sort {:field :created-at :direction :desc}
+                                     :pagination-mode :server
+                                     :refresh-event [:admin/load-audit-logs]
+                                     :pagination (-> (merge {:current-page 1}
+                                                       (:pagination (get-in db ui-state-path)))
+                                                   (assoc :mode :server))}]
+                     [selected-ids-path #{}]])
+                (migrate-legacy-audit-visible-prefs))
           fetch-config (db-utils/maybe-fetch-config db)]
       (cond-> {:db db*}
         fetch-config (assoc :dispatch-n [fetch-config])))))

@@ -228,9 +228,28 @@
   :column-config {:supplier_id {:type "text"}}},
  :audit-logs
  {:available-columns
-  ["action" "entity-name" "admin-ref" "admin-name" "user-agent" "id" "actor-type" "actor-id" "target-type" "target-id" "metadata" "ip" "created-at" "updated-at"],
+  ["created-at"
+   "action"
+   "actor-display-name"
+   "entity-name"
+   "context-summary"
+   "target-type"
+   "operation"
+   "severity"
+   "http-status"
+   "error-message"
+   "admin-ref"
+   "admin-name"
+   "user-agent"
+   "id"
+   "actor-type"
+   "actor-id"
+   "target-id"
+   "metadata"
+   "ip"
+   "updated-at"],
   :default-visible-columns
-  ["action" "entity-name" "admin-ref" "admin-name"],
+  ["created-at" "action" "actor-display-name" "entity-name" "context-summary"],
   :filterable-columns
   ["action" "entity-name" "admin-ref" "admin-name" "user-agent"],
   :sortable-columns
@@ -242,11 +261,26 @@
     :compute-fn "join-entity-name",
     :dependencies ["entity-type" "entity-id"]}},
   :column-config
-  {:user-agent {:width "200px"},
+  {:actor-display-name {:width "160px", :type "text"},
+   :context-summary {:width "360px", :type "text"},
+   :operation {:width "160px", :type "text"},
+   :severity {:width "110px", :formatter "status-badge"},
+   :http-status {:width "110px"},
+   :error-message {:width "320px", :type "text"},
+   :user-agent {:width "200px"},
    :admin-ref {:width "180px"},
-   :entity-name {:width "200px", :computed-field true},
-   :action {:width "120px", :formatter "audit-action-badge"},
-   :admin-name {:width "140px"}}},
+   :entity-name {:width "200px", :computed-field true, :type "text"},
+   :action {:width "140px"},
+   :admin-name {:width "140px"}},
+  :column-metadata
+  {:actor-display-name {:label "Actor"},
+   :entity-name {:label "Subject"},
+   :context-summary {:label "Details"},
+   :target-type {:label "Target type"},
+   :operation {:label "Operation"},
+   :severity {:label "Severity"},
+   :http-status {:label "HTTP status"},
+   :error-message {:label "Error message"}}},
  :receipts
  {:available-columns
   ["original-filename" "status" "supplier-guess" "created-at" "updated-at" "id" "file-size" "raw-extract-json" "parsed-markdown" "total-amount-guess" "currency-guess" "purchased-at-guess" "error-message" "error-details" "retry-count" "expense-id" "user-id" "payer-id" "storage-key" "file-hash" "content-type" "supplier-alias-id" "store-guess" "store-alias-id" "tenant-id" "created-by"],

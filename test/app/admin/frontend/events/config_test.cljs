@@ -1,5 +1,6 @@
 (ns app.admin.frontend.events.config-test
   (:require
+    [app.admin.frontend.config.loader :as config-loader]
     [app.admin.frontend.core :as admin-core]
     [app.admin.frontend.events.config]
     [app.admin.frontend.test-setup :as setup]
@@ -55,6 +56,43 @@
 
     (is (true? (get-in @rf-db/app-db [:admin :config :bootstrap :awaiting-auth?]))
       "Bootstrap state should remember that config loading is deferred until auth succeeds")))
+
+(deftest update-configs-from-cache-normalizes-legacy-audit-columns
+  (testing "admin bootstrap upgrades legacy audit table-column defaults from cache"
+    (setup/reset-db!)
+    (with-redefs [config-loader/load-all-configs
+                  (fn []
+                    {:table-columns
+                     {:audit-logs
+                      {:available-columns ["action"
+                                           "entity-name"
+                                           "admin-email"
+                                           "admin-name"
+                                           "user-agent"
+                                           "id"
+                                           "actor-type"
+                                           "actor-id"
+                                           "target-type"
+                                           "target-id"
+                                           "metadata"
+                                           "created-at"
+                                           "updated-at"]
+                       :default-visible-columns ["action" "entity-name" "admin-email" "admin-name"]
+                       :filterable-columns ["action" "entity-name" "admin-email" "admin-name" "user-agent"]
+                       :sortable-columns ["action" "entity-name" "admin-email" "admin-name" "user-agent"]
+                       :always-visible ["action"]
+                       :computed-fields {}
+                       :column-config {:action {:width "140px"}}}}
+                     :view-options {}
+                     :form-fields {}})]
+      (rf/dispatch-sync [:app.admin.frontend.events.config/update-configs-from-cache])
+      (let [audit-config (get-in @rf-db/app-db [:admin :config :table-columns :audit-logs])]
+        (is (= ["created-at" "action" "actor-display-name" "entity-name" "context-summary"]
+              (:default-visible-columns audit-config)))
+        (is (some #{"actor-display-name"} (:available-columns audit-config)))
+        (is (some #{"context-summary"} (:available-columns audit-config)))
+        (is (= {:label "Actor"}
+              (get-in audit-config [:column-metadata :actor-display-name])))))))
 
 (deftest init-admin-skips-ui-config-bootstrap-without-session
   (testing "Admin startup does not dispatch protected config loads before a session exists"

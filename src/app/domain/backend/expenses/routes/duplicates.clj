@@ -123,7 +123,9 @@
                            (duplicates/attach-cluster-ids entity-type))
                 ignored-ids (ignored-clusters/list-ignored-cluster-ids db admin-id entity-type)
                 clusters* (duplicates/filter-ignored-clusters ignored-ids clusters)
-                enriched (duplicates/enrich-with-usage-counts db entity-type clusters*)]
+                enriched (->> clusters*
+                           (duplicates/enrich-with-usage-counts db entity-type)
+                           (duplicates/filter-article-clusters-with-distinct-manufacturers entity-type))]
             (admin-utils/success-response {:clusters (to-app enriched)})))))
     "Failed to detect duplicates"))
 

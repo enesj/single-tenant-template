@@ -9,6 +9,7 @@
   (:require
     [app.admin.frontend.auth.persistence :as auth-persist]
     [app.admin.frontend.config.loader :as config-loader]
+    [app.admin.frontend.events.settings.table-columns :as settings-table-columns]
     [app.shared.keywords :as kw]
     [app.shared.model-naming :as model-naming]
     [app.template.frontend.db.paths :as paths]
@@ -138,7 +139,9 @@
           token (or (:admin/token db)
                   (auth-persist/get-persisted-token))
           force? (boolean (:force? opts))
-          preloaded-configs (config-loader/load-all-configs)
+          preloaded-configs (update (config-loader/load-all-configs)
+                              :table-columns
+                              settings-table-columns/normalize-table-columns)
           bootstrap (get-in db [:admin :config :bootstrap])
           last-started (:last-started-at bootstrap 0)
           inflight? (:in-flight? bootstrap)
@@ -206,7 +209,9 @@
 (rf/reg-event-fx
   ::update-configs-from-cache
   (fn [{:keys [db]} _]
-    (let [updated-configs (config-loader/load-all-configs)
+    (let [updated-configs (update (config-loader/load-all-configs)
+                            :table-columns
+                            settings-table-columns/normalize-table-columns)
           now-ts (now)]
       {:db (-> db
              (assoc-in [:admin :config] updated-configs)

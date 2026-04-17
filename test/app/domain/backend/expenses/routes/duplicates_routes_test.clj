@@ -61,6 +61,35 @@
             (is (= expected-prefix
                   (get-in (last @captured-opts) [:opts :prefix-words])))))))))
 
+(deftest detect-handler-filters-article-clusters-with-fully-distinct-manufacturers-test
+  (testing "detect handler hides article clusters when every manufacturer is different"
+    (let [handler (#'duplicates-routes/detect-handler :db)
+          id-a #uuid "00000000-0000-0000-0000-0000000000a1"
+          id-b #uuid "00000000-0000-0000-0000-0000000000b2"
+          raw-clusters [{:members [{:id id-a} {:id id-b}]
+                         :count 2}]
+          enriched-clusters [{:cluster-id "cid-1"
+                              :members [{:id id-a :manufacturer-name "Zbregov"}
+                                        {:id id-b :manufacturer-name "Dukat"}]
+                              :count 2}]]
+      (with-redefs [duplicates-svc/detect-duplicates
+                    (fn [_db _entity-type _strategy _opts]
+                      raw-clusters)
+                    duplicates-svc/attach-cluster-ids
+                    (fn [_entity-type clusters]
+                      (mapv #(assoc % :cluster-id "cid-1") clusters))
+                    ignored-clusters/list-ignored-cluster-ids (fn [_db _admin-id _entity-type] #{})
+                    duplicates-svc/filter-ignored-clusters (fn [_ignored clusters] clusters)
+                    duplicates-svc/enrich-with-usage-counts
+                    (fn [_db _entity-type _clusters]
+                      enriched-clusters)]
+        (let [response (handler {:admin {:id #uuid "00000000-0000-0000-0000-000000000001"}
+                                 :query-params {"entity-type" "articles"
+                                                "strategy" "prefix"}})
+              body (json/parse-string (:body response) true)]
+          (is (= 200 (:status response)))
+          (is (= [] (:clusters body))))))))
+
 (deftest manual-search-handler-uses-entity-search-with-bounded-limit-test
   (testing "manual search dispatches to the selected entity search function"
     (let [captured-args (atom nil)

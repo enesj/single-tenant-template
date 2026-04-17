@@ -221,4 +221,20 @@
  ["(?i)^\\Qdurabag\\E\\b"
   "DuraBag"
   "Jednokratno posuđe i pakovanje"
-  nil]]
+  nil]
+ ["(?i)^\\Qkraš\\E\\b" "Kraš" "Pakovana hrana i pića" nil]
+ ["(?i)^\\Qdenkmit\\E\\b" "dm" "Sredstva za čišćenje" nil]
+ ["(?i)^\\Qlasta\\E\\b" "Lasta" "Pakovana hrana i pića" nil]
+ ["(?i)^\\Qfaks\\E\\b" "Faks" "Sredstva za čišćenje" nil]
+ ["(?i)^\\Qviol\\E\\b" "Violeta" "Papirna galanterija" nil]
+ ["(?i)^\\Qoctenisept\\E\\b" "Schulke" "Zdravlje i apoteka" nil]
+ ["(?i)^\\Qsmajić\\E\\b" "Smajić" "Mliječni proizvodi i jaja" nil]
+ ["(?i)^\\Qfruvita\\E\\b" "Fruvita" "Pića" nil]
+ ["(?i)^\\Qfranck\\E\\b" "Franck" "Pakovana hrana i pića" nil]
+ ["(?i)^\\Qfine food\\E\\b" "Fine Food" "Pekara i deserti" nil]
+ ["(?i)^\\Qnescafé\\E\\b" "Nestlé" "Pakovana hrana i pića" nil]
+ ["(?i)^\\Qaprixa\\E\\b" "Aprixa" "Zdravlje i apoteka" nil]
+ ["(?i)^\\Qmak skincare\\E\\b" "Mak Skincare" "Lična njega" nil]
+ ["(?i)^\\Qmisura\\E\\b" "Misura" "Pakovana hrana i pića" nil]
+ ["(?i)^\\Qsolea\\E\\b" "Solea" "Lična njega" nil]
+ ["(?i)^\\Qvisimax\\E\\b" "Visimax" "Papirna galanterija" nil]]

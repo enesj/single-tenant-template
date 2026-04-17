@@ -228,6 +228,38 @@
     (let [enriched (duplicates/enrich-with-usage-counts :db :suppliers [])]
       (is (empty? enriched)))))
 
+(deftest filter-article-clusters-with-distinct-manufacturers-removes-fully-distinct-clusters-test
+  (testing "article clusters are removed when every member has a different manufacturer"
+    (let [clusters [{:members [{:id (UUID/randomUUID) :manufacturer-name "Zbregov"}
+                               {:id (UUID/randomUUID) :manufacturer-name "Dukat"}
+                               {:id (UUID/randomUUID) :manufacturer-name "Milkos"}]
+                     :count 3}]]
+      (is (= []
+            (duplicates/filter-article-clusters-with-distinct-manufacturers
+              :articles
+              clusters))))))
+
+(deftest filter-article-clusters-with-distinct-manufacturers-keeps-overlapping-or-missing-manufacturers-test
+  (testing "article clusters stay visible when manufacturers overlap or are missing"
+    (let [shared-clusters [{:members [{:id (UUID/randomUUID) :manufacturer-name "Meggle"}
+                                      {:id (UUID/randomUUID) :manufacturer-name "Meggle"}]
+                            :count 2}]
+          missing-clusters [{:members [{:id (UUID/randomUUID) :manufacturer-name "Meggle"}
+                                       {:id (UUID/randomUUID)}]
+                             :count 2}]]
+      (is (= shared-clusters
+            (duplicates/filter-article-clusters-with-distinct-manufacturers
+              :articles
+              shared-clusters)))
+      (is (= missing-clusters
+            (duplicates/filter-article-clusters-with-distinct-manufacturers
+              :articles
+              missing-clusters)))
+      (is (= shared-clusters
+            (duplicates/filter-article-clusters-with-distinct-manufacturers
+              :suppliers
+              shared-clusters))))))
+
 ;; ============================================================================
 ;; Invalid Entity Type
 ;; ============================================================================
