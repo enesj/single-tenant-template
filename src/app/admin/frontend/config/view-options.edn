@@ -89,14 +89,14 @@
   :display-defaults {:show-batch-delete? true, :per-page 50}},
  :receipts
  {:display-defaults
-  {:show-select? true,
-   :show-pagination? true,
+  {:show-pagination? true,
    :show-add-button? false,
    :show-filtering? true,
    :show-highlights? true,
    :per-page 50},
   :display-locks
-  {:show-add-button? false,
+  {:show-select? true,
+   :show-add-button? false,
    :show-batch-edit? false,
    :show-batch-delete? true}},
  :stores

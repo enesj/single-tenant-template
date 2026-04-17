@@ -14,6 +14,8 @@
     [app.template.frontend.components.modal-wrapper :refer [modal-wrapper]]
     [app.template.frontend.components.shared-utils :as shared]
     [app.template.frontend.events.list.ui-state :as ui-state]
+    [app.template.frontend.i18n :refer [use-t]]
+    [app.template.frontend.subs.list :as list-subs]
     [app.template.frontend.utils.id :as id-utils]
     [re-frame.core :as rf]
     [uix.core :refer [$ defui use-callback use-effect use-state]]
@@ -40,7 +42,7 @@
    :receipts-error-sub :admin/receipt-detail-error
    :fetch-receipt-event :admin/fetch-receipt-detail
    :close-modal on-close
-    :approve-form receipt-approval-form/receipt-approval-form
+   :approve-form receipt-approval-form/receipt-approval-form
    :can-approve-sub :admin/authenticated?
    :approve-unavailable-message "Receipt editing is currently unavailable in the admin view."})
 
@@ -94,8 +96,13 @@
 (defui admin-receipts-page
   "Admin route: /admin/receipts"
   []
-  (let [entity-name :receipts
+  (let [t (use-t)
+        entity-name :receipts
         entity-spec (use-subscribe [(keyword "entity-specs" (name entity-name))])
+        selected-ids (or (use-subscribe [::list-subs/selected-ids entity-name]) #{})
+        selected-count (count selected-ids)
+        action-loading? (boolean (use-subscribe [:admin/receipt-action-loading?]))
+        form-error (use-subscribe [:admin/receipt-form-error])
         [detail-open? set-detail-open!] (use-state false)
         [detail-receipt-id set-detail-receipt-id!] (use-state nil)
         refresh-list (use-callback
@@ -115,15 +122,55 @@
                                 (fn []
                                   (set-detail-open! false)
                                   (set-detail-receipt-id! nil))
-                                [])]
+                                [])
+        parse-selected! (use-callback
+                          (fn [e]
+                            (.preventDefault e)
+                            (rf/dispatch [:admin/ocr-selected (vec selected-ids)]))
+                          [selected-ids])
+        post-selected! (use-callback
+                         (fn [e]
+                           (.preventDefault e)
+                           (rf/dispatch [:admin/post-selected (vec selected-ids)]))
+                         [selected-ids])]
     (use-effect
       (fn []
+        (rf/dispatch [:app.template.frontend.events.list/clear-selection :receipts])
         (refresh-list)
         js/undefined)
       [refresh-list])
 
     ($ layout/admin-layout
       ($ :div {:class "p-6 min-h-screen"}
+        (when form-error
+          ($ :div {:class "ds-alert ds-alert-error flex items-center justify-between mb-3"}
+            ($ :span (str form-error))
+            ($ :button {:id "btn-clear-admin-receipts-form-error"
+                        :type "button"
+                        :class "ds-btn ds-btn-ghost ds-btn-xs"
+                        :on-click (fn [e]
+                                    (.preventDefault e)
+                                    (rf/dispatch [:admin/clear-receipt-form-error]))}
+              "\u2715")))
+
+        ($ :div {:class "flex items-center justify-end gap-2 mb-3"}
+          ($ :button {:id "btn-batch-parse-admin-receipts"
+                      :class "ds-btn ds-btn-outline ds-btn-sm"
+                      :type "button"
+                      :disabled (or action-loading? (zero? selected-count))
+                      :on-click parse-selected!}
+            (str (t :receipts/parse-selected)
+              (when (pos? selected-count)
+                (str " (" selected-count ")"))))
+          ($ :button {:id "btn-batch-post-admin-receipts"
+                      :class "ds-btn ds-btn-primary ds-btn-sm"
+                      :type "button"
+                      :disabled (or action-loading? (zero? selected-count))
+                      :on-click post-selected!}
+            (str (t :receipts/post-selected)
+              (when (pos? selected-count)
+                (str " (" selected-count ")")))))
+
         ($ list-view
           {:entity-name entity-name
            :entity-spec entity-spec

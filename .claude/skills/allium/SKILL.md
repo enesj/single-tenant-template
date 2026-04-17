@@ -1,14 +1,12 @@
 ---
-description: "Complete migration workflow guide - models, schema, functions, triggers, policies, views"
-metadata:
-  tags: ["migrations", "database", "schema", "automigrate", "models", "postgresql"]
+description: "Give your AI agents something more useful than a prompt. Velocity through clarity."
 ---
 
-# migrations
+# allium
 
 Use the GitHub Copilot skill as the single source of truth for this workflow:
 
-- `@.github/skills/migrations/SKILL.md`
+- `@.github/skills/allium/SKILL.md`
 
 Read and follow that skill for this task.
 

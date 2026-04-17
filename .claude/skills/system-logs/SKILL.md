@@ -1,21 +1,15 @@
 ---
 description: "Read backend + shadow-cljs logs from the dev monitoring output"
 metadata:
-	tags: ["logs", "debugging", "server", "shadow-cljs", "development"]
+  tags: ["logs", "debugging", "server", "shadow-cljs", "development"]
 ---
 
 # system-logs
 
-Use this when someone asks “what do the logs say?” (compile errors, runtime exceptions, auth/db issues).
+Use the GitHub Copilot skill as the single source of truth for this workflow:
 
-## Fast path
-- One-shot read last logs: `./scripts/sh/monitoring/read_output.sh`
-- Quick error scan: `./scripts/sh/monitoring/read_output.sh | grep -iE "error|exception|failed|fatal" -n`
+- `@.github/skills/system-logs/SKILL.md`
 
-## Need fresh server/compile logs?
-Restart the system via nREPL using `clj-nrepl-eval`:
+Read and follow that skill for this task.
 
-```bash
-clj-nrepl-eval --discover-ports
-clj-nrepl-eval -p <BACKEND_PORT> "(require 'system.core :reload) (system.core/restart-system)"
-```
+Do not duplicate or reinterpret the workflow here; keep this Claude skill as a thin reference wrapper so the GitHub Copilot skill and Claude skill stay in sync.

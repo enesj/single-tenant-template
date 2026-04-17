@@ -1,23 +1,9 @@
 # Start an nREPL server
 
-Start (or reuse) an nREPL server for this project so you can evaluate code with `clj-nrepl-eval`.
+Use the GitHub Copilot prompt as the single source of truth for this workflow:
 
-## 1) Prefer existing servers
+- `@.github/prompts/start-nrepl.prompt.md`
 
-- `clj-nrepl-eval --discover-ports`
+Run that prompt as the active instructions for this task.
 
-If a server is already running for this directory, reuse its port.
-
-## 2) Start a new server (deps.edn)
-
-This repo provides a deps alias:
-
-- `clojure -M:nrepl`
-
-By default it starts on port **7888** (see `deps.edn`).
-
-## 3) Verify the connection
-
-- `clj-nrepl-eval -p 7888 "(+ 1 2 3)"`
-
-If you started a server on a different port, substitute it for `7888`.
+Do not duplicate or reinterpret the workflow here; keep this Claude command as a thin reference wrapper so the GitHub Copilot prompt and Claude entry point stay in sync.

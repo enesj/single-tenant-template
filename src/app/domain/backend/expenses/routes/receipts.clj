@@ -1,13 +1,16 @@
 (ns app.domain.backend.expenses.routes.receipts
   "Admin API routes for receipt ingestion and approval."
   (:require
+    [app.domain.backend.expenses.integrations.ocr-provider :as ocr-provider]
     [app.domain.backend.expenses.services.expenses :as expenses]
     [app.domain.backend.expenses.services.receipts.approval :as receipt-approval]
     [app.domain.backend.expenses.services.receipts.image-preprocess :as image-preprocess]
     [app.domain.backend.expenses.services.receipts.queries :as receipt-queries]
+    [app.domain.backend.expenses.services.receipts.status :as receipt-status]
     [app.domain.backend.expenses.services.receipts.storage :as receipt-storage]
     [app.domain.backend.expenses.services.supplier-aliases :as supplier-aliases]
     [app.domain.backend.expenses.services.suppliers :as suppliers]
+    [app.domain.backend.expenses.workers.receipt-ocr.core :as receipt-ocr]
     [app.template.backend.routes.admin.utils :as utils]
     [app.shared.adapters.database :as shared-db]
     [clojure.string :as str]
@@ -287,11 +290,80 @@
           (utils/error-response "Invalid id" :status 400))))
     "Failed to update posted receipt"))
 
+(defn ocr-batch-handler
+  "Admin batch OCR trigger. Expects body {:receipt_ids [uuid ...]}.
+  Skips ids for missing receipts; blocks ids already linked to expenses."
+  [db app-config]
+  (utils/with-error-handling
+    (fn [request]
+      (let [body (:body request)
+            raw-ids (or (:receipt_ids body)
+                      (:receipt-ids body)
+                      (:ids body)
+                      [])
+            ids (->> raw-ids
+                  (map utils/parse-uuid-custom)
+                  (filter some?)
+                  distinct
+                  vec)]
+        (cond
+          (empty? raw-ids)
+          (utils/error-response "No receipt ids provided" :status 400)
+
+          (empty? ids)
+          (utils/error-response "One or more receipt ids are invalid" :status 400)
+
+          :else
+          (let [found-receipts (->> ids
+                                 (keep (fn [id] (receipt-queries/get-receipt db id)))
+                                 vec)
+                found-id-set (set (map :id found-receipts))
+                skipped-ids (->> ids (remove found-id-set) (map str) vec)
+                grouped (group-by #(boolean (receipt-status/linked-expense-id db (:id %)))
+                          found-receipts)
+                blocked-receipts (vec (get grouped true []))
+                allowed-receipts (vec (get grouped false []))
+                blocked-ids (mapv (comp str :id) blocked-receipts)
+                allowed-ids (mapv :id allowed-receipts)]
+            (cond
+              (and (empty? found-receipts) (empty? blocked-ids))
+              (utils/error-response "No accessible receipts found" :status 404)
+
+              (and (empty? allowed-ids) (seq blocked-ids))
+              (utils/error-response
+                "One or more receipts are already linked to expenses. Unlink them first before reparsing"
+                :status 409
+                :details {:blocked_receipt_ids blocked-ids})
+
+              :else
+              (let [{:keys [enabled? api-key] :as ocr-cfg}
+                    (ocr-provider/build-provider app-config)]
+                (cond
+                  (not enabled?)
+                  (utils/error-response (ocr-provider/disabled-message ocr-cfg) :status 409)
+
+                  (not (seq api-key))
+                  (utils/error-response (ocr-provider/missing-api-key-message ocr-cfg) :status 409)
+
+                  :else
+                  (let [admin-id (utils/get-admin-id request)]
+                    (receipt-ocr/queue-ui-ocr! db app-config allowed-ids
+                      {:source :admin-ui :admin-id admin-id})
+                    (utils/json-response
+                      (cond-> {:success true
+                               :queued true
+                               :receipt_ids (mapv str allowed-ids)}
+                        (seq skipped-ids) (assoc :skipped_receipt_ids skipped-ids)
+                        (seq blocked-ids) (assoc :blocked_receipt_ids blocked-ids))
+                      :status 202)))))))))
+    "Failed to trigger batch OCR"))
+
 (defn routes
   "Admin receipts routes. Mounted under /admin/api/expenses/receipts."
   [db & [app-config]]
   ["/receipts"
    ["" {:get (list-receipts-handler db)}]
+   ["/ocr" {:post (ocr-batch-handler db app-config)}]
    ["/:id/download" {:get (download-receipt-handler db)}]
    ["/:id" {:get (get-receipt-handler db)
             :delete (delete-receipt-handler db)}]

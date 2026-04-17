@@ -18,39 +18,32 @@
     [uix.re-frame :refer [use-subscribe]]))
 
 (defui table-header [{:keys [label sortable? on-click sort-direction filter-on-click filter-active? show-filtering? is-field-filterable? header-id active-inline-filter? field-id column-width]}]
-
   ($ :div
     {:class (str (when sortable? "cursor-pointer ")
-              "flex items-center gap-2")
+              "flex w-full min-w-0 flex-col items-start gap-1")
      :on-click on-click
      :id header-id
-     ;; NEW: Apply column width from admin metadata if specified
      :style (when column-width {:width column-width :minWidth column-width})}
-    ;; Always render label + filter icon placeholder in a flex row with consistent width
-    ($ :span {:class "inline-flex items-center gap-1"}
+    ($ :span {:class "min-w-0 whitespace-normal break-words leading-tight"}
       (if (or (string? label) (number? label))
         ($ :span {:class "font-bold"} (str label))
-        label)
-      ;; Always reserve space for the filter icon, show or hide based on conditions
-      ($ :span {:class "w-4 flex justify-center"}
-        (if (and show-filtering? is-field-filterable?)
-          ;; Show the actual filter icon when conditions are met
+        label))
+    ($ :span {:class "flex items-center gap-2"}
+      ($ :span {:class "flex w-4 justify-center"}
+        (when (and show-filtering? is-field-filterable?)
           ($ filter-icon {:on-click filter-on-click
                           :active? (or filter-active? active-inline-filter?)
-                          :field-id field-id})
-          ;; Empty placeholder to maintain layout when filter icon is hidden
-          nil)))
-    ;; Always reserve space for the sort arrow
-    ($ :span {:class "text-sm font-bold text-gray-600 inline-block w-4 text-center align-middle select-none"
-              :style {:minWidth "1em"}}
-      (cond
-        (and sortable? sort-direction)
-        (case sort-direction
-          :asc "↑"
-          :desc "↓"
-          "")
-        sortable? " "                                       ;; placeholder for unsorted sortable columns
-        :else ""))))
+                          :field-id field-id})))
+      ($ :span {:class "text-sm font-bold text-gray-600 inline-block w-4 text-center align-middle select-none"
+                :style {:minWidth "1em"}}
+        (cond
+          (and sortable? sort-direction)
+          (case sort-direction
+            :asc "↑"
+            :desc "↓"
+            "")
+          sortable? " "
+          :else "")))))
 
 (defui action-header-buttons
   "Action buttons for the table header"

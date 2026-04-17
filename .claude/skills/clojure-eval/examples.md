@@ -1,23 +1,9 @@
-# Examples: clj-nrepl-eval
+# Examples: clojure-eval
 
-## Discover servers
+Use the GitHub Copilot file as the single source of truth for these examples:
 
-- `clj-nrepl-eval --discover-ports`
+- `@.github/skills/clojure-eval/examples.md`
 
-## Reload and call a function
+Read and follow that file for copy/paste examples.
 
-- `clj-nrepl-eval -p 7888 "(require 'my.ns :reload)"`
-- `clj-nrepl-eval -p 7888 "(my.ns/my-fn {:x 1})"`
-
-## Run tests
-
-- `clj-nrepl-eval -p 7888 "(require 'clojure.test)"`
-- `clj-nrepl-eval -p 7888 "(require 'my.ns-test :reload)"`
-- `clj-nrepl-eval -p 7888 "(clojure.test/run-tests 'my.ns-test)"`
-
-## If you hit delimiter problems
-
-Don’t manually chase parentheses.
-
-- Run: `clj-paren-repair path/to/file.clj`
-- Then re-run `require ... :reload`.
+Do not duplicate or reinterpret the examples here; keep this Claude sidecar as a thin reference wrapper so the GitHub Copilot and Claude copies stay in sync.

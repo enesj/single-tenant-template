@@ -17,9 +17,10 @@
     :else nil))
 
 (defn- gate-allows-action?
-  [gate-id {:keys [expenses-role can-write? power-user?]}]
+  [gate-id {:keys [admin-route? expenses-role can-write? power-user?]}]
   (let [gate-id (normalize-gate-id gate-id)]
     (cond
+      admin-route? true
       (nil? gate-id) true
       (= gate-id :expenses/can-write) (boolean can-write?)
       (= gate-id :expenses/power-user) (boolean power-user?)
@@ -31,15 +32,22 @@
 
    Selection visibility is additionally constrained by any configured :select
    action gate from list-config. Other action gates are applied by list-view
-   itself because they interact with hide/disable action-mode semantics."
+   itself because they interact with hide/disable action-mode semantics.
+
+   Admin routes bypass action gates so reactive selection cells stay aligned
+   with the list-view container."
   [entity-name]
   (let [entity-key (if (keyword? entity-name) entity-name (keyword entity-name))
         settings (use-subscribe [::ui-subs/entity-display-settings entity-key])
         list-config (use-subscribe [::ui-subs/entity-list-config entity-key])
+        current-route (use-subscribe [:current-route])
+        route-name (get-in current-route [:data :name])
+        admin-route? (and route-name (boolean (re-find #"^admin" (name route-name))))
         expenses-role (use-subscribe [:expenses/user-role])
         can-write? (use-subscribe [:expenses/can-write?])
         power-user? (use-subscribe [:expenses/power-user?])
-        gate-ctx {:expenses-role expenses-role
+        gate-ctx {:admin-route? admin-route?
+                  :expenses-role expenses-role
                   :can-write? can-write?
                   :power-user? power-user?}
         select-allowed? (gate-allows-action?

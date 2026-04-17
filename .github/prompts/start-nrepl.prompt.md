@@ -1,8 +1,28 @@
 ---
-description: "Start (or reuse) an nREPL server for this project"
+description: "Start or reuse an nREPL server for this project so code can be evaluated through nREPL"
 agent: "agent"
 ---
 
-Run `@.claude/commands/start-nrepl.md` exactly as the active instructions for this task.
+# Start an nREPL server
 
-Do not invent alternative workflows. Follow that file end-to-end, including its required phases, hard rules, completion gate, and output contract.
+Start (or reuse) an nREPL server for this project so you can evaluate code with `clj-nrepl-eval`.
+
+## 1) Prefer existing servers
+
+- `clj-nrepl-eval --discover-ports`
+
+If a server is already running for this directory, reuse its port.
+
+## 2) Start a new server (deps.edn)
+
+This repo provides a deps alias:
+
+- `clojure -M:nrepl`
+
+By default it starts on port **7888** (see `deps.edn`).
+
+## 3) Verify the connection
+
+- `clj-nrepl-eval -p 7888 "(+ 1 2 3)"`
+
+If you started a server on a different port, substitute it for `7888`.

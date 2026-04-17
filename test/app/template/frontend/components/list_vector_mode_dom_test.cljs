@@ -8,8 +8,10 @@
     [app.template.frontend.components.pagination :as pagination]
     [app.template.frontend.components.settings.list-view-settings :as list-view-settings]
     [app.template.frontend.components.table :as table]
+    [app.template.frontend.i18n :as i18n]
     [app.template.frontend.events.list.ui-state :as ui-events]
     [app.template.frontend.events.list.settings :as settings-events]
+    [app.template.frontend.hooks.display-settings :as display-settings]
     [app.template.frontend.utils.column-config :as column-config]
     [app.template.frontend.utils.shared :as template-utils]
     [clojure.string :as str]
@@ -65,6 +67,27 @@
                    :can-write? false
                    :power-user? false}))
       "Non-admin routes should still respect expenses action gates")))
+
+(deftest selection-hook-admin-routes-bypass-select-gate
+  (let [gate-allows? @#'display-settings/gate-allows-action?]
+    (is (true? (gate-allows? "expenses/can-write"
+                 {:admin-route? true
+                  :expenses-role nil
+                  :can-write? false
+                  :power-user? false}))
+      "Admin routes should keep reactive selection cells visible even when the select gate is configured")
+    (is (false? (gate-allows? "expenses/can-write"
+                  {:admin-route? false
+                   :expenses-role nil
+                   :can-write? false
+                   :power-user? false}))
+      "Non-admin routes should still hide reactive selection cells when the user lacks the configured gate")
+    (is (true? (gate-allows? "expenses/can-write"
+                 {:admin-route? false
+                  :expenses-role nil
+                  :can-write? true
+                  :power-user? false}))
+      "Non-admin routes should continue to allow selection when the user satisfies the configured gate")))
 
 (deftest column-visibility-uses-legacy-when-admin-config-not-loaded
   (async done
@@ -414,8 +437,40 @@
             "Sticky header cells should use an opaque header background class"))
         (done)))))
 
+(deftest table-header-keeps-filter-controls-below-long-labels
+  (async done
+    (with-redefs [i18n/use-t (fn [] (fn [_ & _] "Filter by"))]
+      (mount-component!
+        ($ list-table/table-header
+          {:label "Originalni naziv dat"
+           :sortable? true
+           :on-click (fn [_] nil)
+           :sort-direction nil
+           :filter-on-click (fn [_] nil)
+           :filter-active? false
+           :show-filtering? true
+           :is-field-filterable? true
+           :header-id "header-original-filename"
+           :active-inline-filter? false
+           :field-id :original-filename})
+        (fn [container]
+          (let [header (.querySelector container "#header-original-filename")
+                filter-btn (.querySelector container "#filter-icon-original-filename")
+                children (when header (array-seq (.-children header)))
+                label-row (first children)
+                controls-row (second children)]
+            (is (some? header) "Expected a rendered table header")
+            (is (some? filter-btn) "Expected a filter button for filterable columns")
+            (is (some? label-row) "Expected a dedicated label row")
+            (is (some? controls-row) "Expected a dedicated controls row")
+            (is (str/includes? (.-textContent label-row) "Originalni naziv dat")
+              "Long header text should remain in the label row")
+            (is (true? (boolean (and controls-row filter-btn (.contains controls-row filter-btn))))
+              "Filter button should render in the controls row below the label")
+            (done)))))))
+
 (deftest table-thead-keeps-settings-row-sticky-with-header
-  (let [thead-class table/sticky-thead-class
+  (let [thead-class (:class table/sticky-thead-props)
         settings-class table/settings-row-cell-class]
     (is (str/includes? thead-class "sticky")
       "Thead should stay sticky so the settings row scrolls with the header")
