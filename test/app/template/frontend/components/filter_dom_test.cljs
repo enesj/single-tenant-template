@@ -33,6 +33,22 @@
       (is (= "Supplier" (filter-utils/get-field-label entity-config "supplier_display_name")))
       (is (= "Store" (filter-utils/get-field-label entity-config :store-display-name))))))
 
+(deftest get-field-label-prefers-translated-common-labels
+  (testing "active filter chips use localized common labels and criteria when available"
+    (let [entity-config {:fields [{:id :total-amount-guess :label "Total amount guess"}
+                                  {:id :purchased-at-guess :label "Purchased at guess"}]}
+          t (fn [translation-key]
+              (case translation-key
+                :common/total-amount-guess "Pretpostavljeni iznos"
+                :common/from "Od"
+                translation-key))]
+      (is (= "Pretpostavljeni iznos"
+            (filter-utils/get-field-label entity-config :total_amount_guess t)))
+      (is (= "Min 2"
+            (filter-utils/format-filter-value entity-config nil :total-amount-guess {:min 2} t)))
+      (is (= "Od 2024-01-15"
+            (filter-utils/format-filter-value entity-config nil :purchased-at-guess {:from (js/Date. 2024 0 15)} t))))))
+
 (deftest filter-form-wires-active-filter-clear-handler
   (testing "modal active-filter chips dispatch normalized clear events"
     (let [captured-props (atom nil)

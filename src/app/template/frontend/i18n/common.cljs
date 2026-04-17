@@ -6,6 +6,7 @@
     :common/add                  "Dodaj"
     :common/cancel               "Odustani"
     :common/clear                "Očisti"
+    :common/sort                 "Sortiranje"
     :common/clear-all            "Očisti sve"
     :common/confirm              "Potvrdi"
     :common/edit                 "Izmijeni"
@@ -141,6 +142,8 @@
     :common/remove-filter        "Ukloni ovaj filter"
     :common/min                  "Min"
     :common/max                  "Max"
+    :common/from                 "Od"
+    :common/to                   "Do"
 
     ;; Form validation
     :validation/email-required      "E-mail je obavezan"
@@ -158,6 +161,7 @@
     :common/add                  "Add"
     :common/cancel               "Cancel"
     :common/clear                "Clear"
+    :common/sort                 "Sorting"
     :common/clear-all            "Clear All"
     :common/confirm              "Confirm"
     :common/edit                 "Edit"
@@ -293,6 +297,8 @@
     :common/remove-filter        "Remove this filter"
     :common/min                  "Min"
     :common/max                  "Max"
+    :common/from                 "From"
+    :common/to                   "To"
 
     ;; Form validation
     :validation/email-required      "Email is required"

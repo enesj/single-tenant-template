@@ -41,8 +41,7 @@
                 offset (h/parse-page-offset qp)
                 search (or (h/get-param qp :search)
                          (h/get-param qp :display-name))
-                order-by (h/parse-order-by qp)
-                order-dir (h/parse-order-dir qp)
+                sort-opts (h/parse-sort-params qp)
                 supplier-id (some-> (h/get-param qp :supplier_id) h/try-parse-uuid)
                 supplier-display-name (h/get-param qp :supplier-display-name)
                 normalized-key (h/get-param qp :normalized-key)
@@ -74,8 +73,7 @@
                 opts (cond-> {:limit limit
                               :offset offset
                               :search search}
-                       order-by (assoc :order-by order-by)
-                       order-dir (assoc :order-dir order-dir)
+                    (seq sort-opts) (merge sort-opts)
                        extra-filters (assoc :extra-filters extra-filters)
                        (some? supplier-display-name) (assoc :supplier-display-name supplier-display-name)
                        (some? normalized-key) (assoc :normalized-key normalized-key)

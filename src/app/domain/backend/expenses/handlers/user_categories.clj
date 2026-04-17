@@ -29,8 +29,7 @@
                 offset (h/parse-page-offset qp)
                 search (or (h/get-param qp :search)
                          (h/get-param qp :name))
-                order-by (h/parse-order-by qp)
-                order-dir (h/parse-order-dir qp)
+                sort-opts (h/parse-sort-params qp)
                 description (h/get-param qp :description)
                 created-at-from (h/parse-instant-param (h/get-param qp :created-at-from))
                 created-at-to (h/parse-instant-param (h/get-param qp :created-at-to))
@@ -40,8 +39,7 @@
                 opts (cond-> {:limit limit
                               :offset offset
                               :search search}
-                       order-by (assoc :order-by order-by)
-                       order-dir (assoc :order-dir order-dir)
+                    (seq sort-opts) (merge sort-opts)
                        (some? description) (assoc :description description)
                        (seq extra-filters) (assoc :extra-filters extra-filters))
                 rows (h/to-app ((:list categories/service) db opts))

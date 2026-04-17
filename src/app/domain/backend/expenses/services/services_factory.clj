@@ -68,23 +68,29 @@
   "Build complete query with filters, ordering, and pagination."
   [{:keys [table-name primary-key joins select-fields allowed-order-by table-alias base-filters]
     :as config}
-   {:keys [limit offset order-by order-dir]
+   {:keys [limit offset sorts order-by order-dir]
     :or {limit 50 offset 0 order-dir :asc}}]
   (let [default-order-by (get config :default-order-by primary-key)
-        order-by-col (or order-by default-order-by)
+        default-order-dir (get config :default-order-dir :asc)
         base-query (build-base-query {:table-name table-name
                                       :primary-key primary-key
                                       :joins joins
                                       :select-fields select-fields
                                       :table-alias table-alias
                                       :base-filters base-filters})
-        order-column (get allowed-order-by order-by-col default-order-by)
-        order-direction (shared-qb/normalize-order-direction order-dir {:default :asc})]
+        order-clauses (shared-qb/resolve-order-by-clauses
+                        {:sorts sorts
+                         :order-by order-by
+                         :order-dir order-dir
+                         :allowed-order-by allowed-order-by
+                         :default-order-by default-order-by
+                         :default-order-dir default-order-dir
+                         :tie-breaker [primary-key :asc]})]
     (-> base-query
       (shared-qb/apply-pagination {:limit limit :offset offset}
         {:default-limit 50
          :default-offset 0})
-      (shared-qb/apply-order-by order-column order-direction))))
+      (shared-qb/apply-order-bys order-clauses))))
 
 (defn apply-search-filter
   "Apply search filter to query if search term provided."
@@ -141,10 +147,11 @@
            table-alias base-filters text-filter-columns numeric-filter-columns]
     :as config}]
   (fn list-entity
-    [db {:keys [limit offset order-by order-dir search tenant-id extra-filters]
+    [db {:keys [limit offset sorts order-by order-dir search tenant-id extra-filters]
          :as opts
          :or {limit 50 offset 0 order-dir :asc}}]
     (let [default-order-by (get config :default-order-by primary-key)
+          default-order-dir (get config :default-order-dir :asc)
           effective-filters (into (vec (inject-tenant-filter config tenant-id base-filters))
                               (or extra-filters []))
           base-query (build-query-with-filters
@@ -154,10 +161,12 @@
                         :select-fields select-fields
                         :allowed-order-by allowed-order-by
                         :default-order-by default-order-by
+                        :default-order-dir default-order-dir
                         :table-alias table-alias
                         :base-filters effective-filters}
                        {:limit limit
                         :offset offset
+                        :sorts sorts
                         :order-by order-by
                         :order-dir order-dir})
           final-query (cond-> base-query

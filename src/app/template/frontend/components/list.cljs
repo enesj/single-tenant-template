@@ -10,7 +10,8 @@
     [app.template.frontend.components.list.overrides :as overrides]
     [app.template.frontend.components.list.rows :refer [render-row]]
     [app.template.frontend.components.list.table :refer [make-table-headers]]
-    [app.template.frontend.components.list.ui :refer [add-item-section
+    [app.template.frontend.components.list.ui :refer [active-sort-controls
+                                                      add-item-section
                                                       header-section]]
     [app.template.frontend.components.messages :refer [error-alert]]
     [app.template.frontend.components.pagination :refer [pagination]]
@@ -34,12 +35,12 @@
     [uix.re-frame :refer [use-subscribe]]))
 
 (defn- apply-rows-override-transforms
-  [{:keys [rows active-filters sort-config entity-name entity-spec server-pagination?]}]
+  [{:keys [rows active-filters sorts entity-name entity-spec server-pagination?]}]
   (if server-pagination?
     (vec rows)
     (overrides/apply-rows-override-transforms {:rows rows
                                                :active-filters active-filters
-                                               :sort-config sort-config
+                                               :sorts sorts
                                                :entity-name entity-name
                                                :entity-spec entity-spec})))
 
@@ -157,7 +158,29 @@
                        (column-config/vector-config? entity-kw))
         visible-columns-raw (use-subscribe (column-config/visible-columns-source vector-mode? entity-kw))
         visible-columns (column-config/get-visible-columns vector-mode? entity-kw visible-columns-raw)
-        sort-config (use-subscribe [::list-subs/sort-config entity-name])
+        sorts (use-subscribe [::list-subs/sorts entity-name])
+        primary-sort (first sorts)
+        entity-spec-fields (cond
+                             (and (map? entity-spec) (contains? entity-spec :fields))
+                             (:fields entity-spec)
+
+                             (sequential? entity-spec)
+                             entity-spec
+
+                             :else [])
+        sort-field-labels (merge {:created-at (t :common/created)
+                                  :updated-at (t :common/updated)}
+                            (reduce (fn [acc field]
+                                      (if-let [field-id (some-> (:id field) kw/ensure-keyword)]
+                                        (assoc acc field-id
+                                          (let [label (:label field)]
+                                            (cond
+                                              (string? label) label
+                                              (number? label) (str label)
+                                              :else (kw/ensure-name field-id))))
+                                        acc))
+                              {}
+                                          entity-spec-fields))
         active-filters (use-subscribe [::list-subs/active-filters entity-name])
         batch-edit-inline-state (use-subscribe [::list-subs/batch-edit-inline entity-name])
         ui-state (use-subscribe [::list-subs/entity-ui-state entity-name])
@@ -195,7 +218,7 @@
                           (apply-rows-override-transforms
                             {:rows raw-items
                              :active-filters active-filters
-                             :sort-config sort-config
+                             :sorts sorts
                              :server-pagination? server-pagination?
                              :entity-name entity-kw
                              :entity-spec entity-spec})
@@ -367,7 +390,13 @@
     ;; still unset or represent only max constraints.
     (use-effect
       (fn []
-        (let [frame-id (js/requestAnimationFrame
+        (let [request-frame (or js/requestAnimationFrame
+                              (fn [callback]
+                                (js/setTimeout callback 0)))
+              cancel-frame (or js/cancelAnimationFrame
+                             (fn [handle]
+                               (js/clearTimeout handle)))
+              frame-id (request-frame
                          (fn []
                            (when-let [el @shell-ref]
                              (let [rect (.getBoundingClientRect el)
@@ -382,7 +411,7 @@
                                    (fn [current]
                                      (if (= current h) current h))))))))]
           (fn []
-            (js/cancelAnimationFrame frame-id))))
+            (cancel-frame frame-id))))
       [entity-name table-width table-height])
 
     ;; Fallback polling for native CSS resize-handle changes. Some browser flows
@@ -516,8 +545,9 @@
                               :set-editing! #(rf/dispatch [::config-events/set-editing %])
                               :recently-updated-ids recently-updated-ids
                               :recently-created-ids recently-created-ids
-                              :sort-field (:field sort-config)
-                              :sort-direction (:direction sort-config)
+                              :sorts sorts
+                              :sort-field (:field primary-sort)
+                              :sort-direction (:direction primary-sort)
                               :selected-ids selected-ids
                               :on-select-change handle-select-change
                               :show-add-form? show-add-form?
@@ -610,32 +640,6 @@
 
           ;; Inline batch edit form - shown at the top of the list when active
 
-          ($ :div {:class "ds-divider"})                    ;; Divider A (after header)
-
-          ;; Always-visible compact active filters (when not showing inline filter form)
-          (when (and (seq active-filters) (not active-inline-filter))
-            ($ compact-active-filters
-              {:entity-type entity-name
-               :active-filters active-filters
-               :on-clear-filter (fn [field-id]
-                                  (rf/dispatch [::filter-events/clear-filter entity-name field-id]))}))
-
-          ;; Render inline filter form when active
-          (when (and active-inline-filter inline-filter-field-spec)
-            ($ filter-form
-              {:entity-type entity-name
-               :field-spec inline-filter-field-spec
-               :initial-value inline-filter-value
-               :on-close handle-filter-close
-               :on-apply handle-filter-apply
-               :on-field-switch (fn [new-field]
-                                  ;; Clear current filter first
-                                  (rf/dispatch [::filter-events/clear-filter entity-name])
-                                  ;; Switch to the new field
-                                  (set-active-inline-filter (keyword (:id new-field)))
-                                  (set-inline-filter-field-spec new-field)
-                                  (set-inline-filter-value ""))}))
-
           (when (and (:open? batch-edit-inline-state)
                   (seq selected-ids)
                   entity-name)
@@ -681,6 +685,35 @@
                        :on-add-click (or (:on-add-click props)
                                        (when use-modal-forms?
                                          handle-add-click))})
+
+                    ($ :div {:class "ds-divider"})
+
+                    (when (and (seq active-filters) (not active-inline-filter))
+                      ($ compact-active-filters
+                        {:entity-type entity-name
+                         :active-filters active-filters
+                         :on-clear-filter (fn [field-id]
+                                            (rf/dispatch [::filter-events/clear-filter entity-name field-id]))}))
+
+                    (when (and active-inline-filter inline-filter-field-spec)
+                      ($ filter-form
+                        {:entity-type entity-name
+                         :field-spec inline-filter-field-spec
+                         :initial-value inline-filter-value
+                         :on-close handle-filter-close
+                         :on-apply handle-filter-apply
+                         :on-field-switch (fn [new-field]
+                                            ;; Clear current filter first
+                                            (rf/dispatch [::filter-events/clear-filter entity-name])
+                                            ;; Switch to the new field
+                                            (set-active-inline-filter (keyword (:id new-field)))
+                                            (set-inline-filter-field-spec new-field)
+                                            (set-inline-filter-value ""))}))
+
+                    ($ active-sort-controls
+                      {:entity-name entity-name
+                       :sorts sorts
+                       :field-labels sort-field-labels})
 
                     (let [server-mode? (list-subs/server-pagination? ui-state)
                           total-records (when server-mode?

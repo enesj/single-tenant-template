@@ -53,8 +53,7 @@
                 extra-filters (cond-> []
                                 created-at-from (conj [:>= :a.created_at created-at-from])
                                 created-at-to (conj [:<= :a.created_at created-at-to]))
-                order-by (h/parse-order-by qp)
-                order-dir (h/parse-order-dir qp)
+                  sort-opts (h/parse-sort-params qp)
                 opts (cond-> {:limit limit
                               :offset offset}
                        (some? search) (assoc :search search)
@@ -63,8 +62,7 @@
                        category-name (assoc :category-name category-name)
                        subcategory-name (assoc :subcategory-name subcategory-name)
                        (seq extra-filters) (assoc :extra-filters extra-filters)
-                       order-by (assoc :order-by order-by)
-                       order-dir (assoc :order-dir order-dir))
+                    (seq sort-opts) (merge sort-opts))
                 count-opts (cond-> {}
                              (some? search) (assoc :search search)
                              unit (assoc :unit unit)
@@ -246,8 +244,7 @@
                 occurrence-count-max (some-> (h/get-param qp :occurrence-count-max) parse-long)
                 limit (h/parse-page-limit qp 50)
                 offset (h/parse-page-offset qp)
-                order-by (h/parse-order-by qp)
-                order-dir (h/parse-order-dir qp)
+                  sort-opts (h/parse-sort-params qp)
                 opts (cond-> {:limit limit :offset offset}
                        supplier-id (assoc :supplier-id supplier-id)
                        unit (assoc :unit unit)
@@ -257,8 +254,7 @@
                        (some? raw-label-normalized) (assoc :raw-label-normalized raw-label-normalized)
                        (some? occurrence-count-min) (assoc :occurrence-count-min occurrence-count-min)
                        (some? occurrence-count-max) (assoc :occurrence-count-max occurrence-count-max)
-                       order-by (assoc :order-by order-by)
-                       order-dir (assoc :order-dir order-dir))
+                    (seq sort-opts) (merge sort-opts))
                 rows (h/to-app (aliases/list-unmapped-aliases db opts))
                 total (long (or (aliases/count-unmapped-aliases db opts) 0))]
             (h/json-response {:data rows

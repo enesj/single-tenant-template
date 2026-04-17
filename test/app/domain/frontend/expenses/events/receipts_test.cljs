@@ -44,8 +44,8 @@
          :original-filename "IMG_3885"
          :supplier-guess "SAMON"
          :created-at {:from created-at-from :to created-at-to}})
-      (swap! rf-db/app-db assoc-in (paths/list-sort-config :receipts)
-        {:field :status :direction :asc})
+      (swap! rf-db/app-db assoc-in (paths/list-sorts :receipts)
+        [{:field :status :direction :asc}])
 
       (rf/dispatch-sync [::receipts-events/load-list {}])
 
@@ -59,5 +59,4 @@
         (is (= "SAMON" (:supplier-guess params)))
         (is (= (.toISOString created-at-from) (:created-at-from params)))
         (is (= (.toISOString created-at-to) (:created-at-to params)))
-        (is (= "status" (:order-by params)))
-        (is (= "asc" (:order-dir params)))))))
+        (is (= "status:asc" (:sort params)))))))

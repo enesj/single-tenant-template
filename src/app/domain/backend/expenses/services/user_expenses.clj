@@ -335,7 +335,7 @@
                                 supplier-display-name store-display-name
                                 expense-category-name payer-label currency notes
                                 total-amount-min total-amount-max
-                                limit offset order-by order-dir]
+                                limit offset sorts order-by order-dir]
                          :or {limit 50 offset 0 order-dir :desc}}]
   (let [user-id (ensure-uuid user-id)
         tenant-id (ensure-uuid tenant-id)
@@ -346,9 +346,14 @@
         total-amount-min (parse-decimal-param total-amount-min)
         total-amount-max (parse-decimal-param total-amount-max)
         currency-values (normalize-currency-filter currency)
-        order-by* (model-naming/ensure-app-keyword order-by)
-        order-col (get allowed-user-expenses-order-by order-by* :e.purchased_at)
-        order-dir* (shared-qb/normalize-order-direction order-dir {:default :desc})]
+        order-clauses (shared-qb/resolve-order-by-clauses
+                        {:sorts sorts
+                         :order-by (some-> order-by model-naming/ensure-app-keyword)
+                         :order-dir order-dir
+                         :allowed-order-by allowed-user-expenses-order-by
+                         :default-order-by :expense-date
+                         :default-order-dir :desc
+                         :tie-breaker [:e.id :asc]})]
     (let [base-where (cond-> [:and]
                        user-id (conj [:= :e.user_id user-id])
                        tenant-id (conj [:= :e.tenant_id tenant-id])
@@ -378,8 +383,7 @@
                                  [:payers :p] [:= :p.id :e.payer_id]
                                  [:expense_categories :ec] [:= :ec.id :e.expense_category_id]]
                      :where base-where
-                     :order-by [[order-col order-dir*]
-                                [:e.id :asc]]
+                     :order-by order-clauses
                      :limit limit
                      :offset offset}
                   (shared-qb/apply-text-filters expense-text-filter-columns

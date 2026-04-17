@@ -163,8 +163,9 @@
                             :show-purged? false
                             :limit 25
                             :offset 50
+                            :sorts [{:field :created-at :direction :asc}]
                             :order-dir :asc
-                            :order-by "created_at"}
+                            :order-by :created-at}
                           opts))
                     {:rows [{:id (java.util.UUID/randomUUID)
                              :original_filename "receipt-1.jpg"}]
@@ -197,11 +198,14 @@
                             :show-purged? true
                             :limit 25
                             :offset 50
+                            :sorts [{:field :status :direction :asc}]
                             :order-dir :asc
-                            :order-by "status"
+                            :order-by :status
                             :original-filename "IMG_3885"
                             :supplier-guess "SAMON"
                             :created-by-name "Jane Admin"
+                            :total-amount-guess-min 2M
+                            :total-amount-guess-max 10.50M
                             :purchased-at-guess-from purchased-at-from
                             :created-at-from created-at-from
                             :created-at-to created-at-to
@@ -219,6 +223,8 @@
                                               "original-filename" "IMG_3885"
                                               "supplier-guess" "SAMON"
                                               "created-by-name" "Jane Admin"
+                                              "total-display-min" "2"
+                                              "total-amount-guess-max" "10.50"
                                               "purchased-at-guess-from" "2026-03-01T10:15:30Z"
                                               "created-at-from" "2026-04-01"
                                               "created-at-to" "2026-04-30"
@@ -231,7 +237,7 @@
         (is (= true (:success body)))
         (is (= 4 (:purged-total body)))))))
 
-(deftest list-receipts-handler-defaults-to-desc-order-dir
+(deftest list-receipts-handler-supports-canonical-sort-param
   (let [handler (receipts-routes/list-receipts-handler :db)]
     (with-redefs [receipt-queries/list-receipts-page
                   (fn [_db opts]
@@ -239,8 +245,31 @@
                             :show-purged? false
                             :limit 50
                             :offset 0
-                            :order-dir :desc
-                            :order-by nil}
+                            :sorts [{:field :purchased-at-guess :direction :asc}
+                                    {:field :status :direction :desc}]
+                            :order-by :purchased-at-guess
+                            :order-dir :asc}
+                          opts))
+                    {:rows []
+                     :total 0
+                     :purged-total 0})]
+      (let [response (handler {:query-params {"sort" "purchased-at-guess:asc,status:desc"}})
+            body (json/parse-string (if (string? (:body response))
+                                      (:body response)
+                                      (slurp (:body response)))
+                   true)]
+        (is (= 200 (:status response)))
+        (is (= true (:success body)))
+        (is (= 0 (:purged-total body)))))))
+
+(deftest list-receipts-handler-defaults-to-desc-order-dir
+  (let [handler (receipts-routes/list-receipts-handler :db)]
+    (with-redefs [receipt-queries/list-receipts-page
+                  (fn [_db opts]
+                    (is (= {:status nil
+                            :show-purged? false
+                            :limit 50
+                            :offset 0}
                           opts))
                     {:rows []
                      :total 0

@@ -24,8 +24,7 @@
                 limit (h/parse-page-limit qp 200)
                 offset (h/parse-page-offset qp)
                 search (h/get-param qp :search)
-                order-by (h/parse-order-by qp)
-                order-dir (h/parse-order-dir qp)
+                sort-opts (h/parse-sort-params qp)
                 supplier-display-name (h/get-param qp :supplier-display-name)
                 store-display-name (h/get-param qp :store-display-name)
                 store-address (h/get-param qp :store-address)
@@ -41,8 +40,7 @@
                 opts (cond-> {:limit limit
                               :offset offset
                               :search search}
-                       order-by (assoc :order-by order-by)
-                       order-dir (assoc :order-dir order-dir)
+                    (seq sort-opts) (merge sort-opts)
                        (some? supplier-display-name) (assoc :supplier-display-name supplier-display-name)
                        (some? store-display-name) (assoc :store-display-name store-display-name)
                        (some? store-address) (assoc :store-address store-address)

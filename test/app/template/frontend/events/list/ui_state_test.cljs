@@ -195,16 +195,20 @@
 
     (rf/dispatch-sync [::ui-state-events/set-sort-field :items :name])
     (let [db @rf-db/app-db]
-      (is (= :name (get-in db (conj (paths/list-sort-config :items) :field))) "Should set sort field")
-      (is (= :asc (get-in db (conj (paths/list-sort-config :items) :direction))) "Initial sort should be ascending"))
+      (is (= [{:field :name :direction :asc}]
+            (get-in db (paths/list-sorts :items)))
+        "Should initialize the ordered sort stack with an ascending primary sort"))
 
     (rf/dispatch-sync [::ui-state-events/set-sort-field :items :name])
-    (is (= :desc (get-in @rf-db/app-db (conj (paths/list-sort-config :items) :direction))) "Repeated field toggles to descending")
+    (is (= [{:field :name :direction :desc}]
+          (get-in @rf-db/app-db (paths/list-sorts :items)))
+      "Repeated field toggles the primary sort direction to descending")
 
     (rf/dispatch-sync [::ui-state-events/set-sort-field :items :amount])
     (let [db @rf-db/app-db]
-      (is (= :amount (get-in db (conj (paths/list-sort-config :items) :field))) "Switching field updates field")
-      (is (= :asc (get-in db (conj (paths/list-sort-config :items) :direction))) "New field resets direction to ascending"))
+      (is (= [{:field :amount :direction :asc}]
+            (get-in db (paths/list-sorts :items)))
+        "Switching the primary sort field should replace the stack with an ascending sort for that field"))
 
     (testing "Nil entity leaves db unchanged"
       (let [before @rf-db/app-db]

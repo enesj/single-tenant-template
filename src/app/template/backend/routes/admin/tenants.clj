@@ -14,6 +14,7 @@
    - DELETE /admin/api/tenants/:id/members/:member-id       - Remove member"
   (:require
     [app.shared.adapters.database :refer [convert-pg-objects]]
+    [app.shared.query-builders :as shared-qb]
     [app.template.backend.middleware.admin :as admin-mw]
     [app.template.backend.routes.admin.utils :as utils]
     [app.template.backend.security.email :as email-privacy]
@@ -40,20 +41,23 @@
    :member-count :member_count
    :owner-name :owner_u/full_name})
 
-(defn- normalize-order-dir [order-dir]
-  (if (= :asc order-dir) :asc :desc))
-
 (defn- list-tenants
   "List tenants with pagination, search, status filters, and sorting."
-  [db {:keys [search status limit offset order-by order-dir]}]
+  [db {:keys [search status limit offset sorts order-by order-dir]}]
   (let [base-where (cond-> []
                      status (conj [:= :t.status [:cast status :tenant_status]])
                      search (conj [:or
                                    [:ilike :t.name (str "%" search "%")]
                                    [:ilike :t.slug (str "%" search "%")]]))
         where-clause (when (seq base-where) (into [:and] base-where))
-        order-column (get allowed-tenant-order-by order-by :t/created_at)
-        order-direction (normalize-order-dir order-dir)
+        order-clauses (shared-qb/resolve-order-by-clauses
+                        {:sorts sorts
+                         :order-by order-by
+                         :order-dir order-dir
+                         :allowed-order-by allowed-tenant-order-by
+                         :default-order-by :t/created_at
+                         :default-order-dir :desc
+                         :tie-breaker [:t/id :asc]})
         query (cond-> {:select [:t.*
                                 [[:raw "COALESCE(mc.member_count, 0)"] :member_count]
                                 [:owner_u.id :owner_user_id]
@@ -74,7 +78,7 @@
 
                                    [:users :owner_u]
                                    [:= :owner_u.id :om.user_id]]
-                       :order-by [[order-column order-direction]]}
+                       :order-by order-clauses}
                 where-clause (assoc :where where-clause)
                 limit (assoc :limit limit)
                 offset (assoc :offset offset))]
@@ -133,7 +137,7 @@
   "List all members of a tenant with user info."
   [db tenant-id]
   (->> (jdbc/execute! db
-      (sql/format {:select [:tm.* [:u.email_ciphertext :user_email_ciphertext] [:u.full_name :user_full_name]]
+         (sql/format {:select [:tm.* [:u.email_ciphertext :user_email_ciphertext] [:u.full_name :user_full_name]]
                       :from   [[:tenant_memberships :tm]]
                       :join   [[:users :u] [:= :tm.user_id :u.id]]
                       :where  [:and

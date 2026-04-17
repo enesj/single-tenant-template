@@ -22,13 +22,27 @@
 
 (defn- mount-component! [component assertions]
   (let [container (.createElement js/document "div")
-        root (rdom/createRoot container)]
+        root (rdom/createRoot container)
+        original-raf (when (exists? js/requestAnimationFrame) js/requestAnimationFrame)
+        original-caf (when (exists? js/cancelAnimationFrame) js/cancelAnimationFrame)]
     (.appendChild (.-body js/document) container)
     (try
+      (when-not (some? original-raf)
+        (set! js/requestAnimationFrame (fn [callback]
+                                         (js/setTimeout callback 0))))
+      (when-not (some? original-caf)
+        (set! js/cancelAnimationFrame (fn [handle]
+                                        (js/clearTimeout handle))))
       (test-utils/act (fn [] (.render root component)))
       (assertions container)
       (finally
         (.unmount root)
+        (if (some? original-raf)
+          (set! js/requestAnimationFrame original-raf)
+          (js-delete js/globalThis "requestAnimationFrame"))
+        (if (some? original-caf)
+          (set! js/cancelAnimationFrame original-caf)
+          (js-delete js/globalThis "cancelAnimationFrame"))
         (.removeChild (.-body js/document) container)))))
 
 (defn- button-by-text [container text]
@@ -46,12 +60,95 @@
         entity-spec {:fields [{:id :status :label "Status" :type :text}]}
         result (apply-transforms {:rows rows
                                   :active-filters {}
-                                  :sort-config {:field :status :direction :asc}
+                                  :sorts [{:field :status :direction :asc}]
                                   :server-pagination? true
                                   :entity-name :receipts
                                   :entity-spec entity-spec})]
     (is (= rows result)
       "Server-paginated rows-override lists should preserve backend ordering")))
+
+(deftest table-headers-show-sort-direction-for-active-sorts
+  (with-redefs [rf/dispatch (fn [_] nil)
+                uix-rf/use-subscribe (fn [query]
+                                       (cond
+                                         (= query [:locale]) :bs
+                                         (= (first query) :admin/sortable-columns) nil
+                                         :else nil))]
+    (let [headers (list-table/make-table-headers {:entity-name :receipts
+                                                  :entity-spec [{:id :purchased-at-guess
+                                                                 :label "Datum kupovine"
+                                                                 :type :datetime}]
+                                                  :sorts [{:field :purchased-at-guess :direction :asc}]
+                                                  :all-items []
+                                                  :selected-ids #{}
+                                                  :active-filters {}
+                                                  :filterable-fields []
+                                                  :user-filterable-settings {}
+                                                  :visible-columns {}
+                                                  :column-order []})
+          header-component (nth headers 1)]
+      (mount-component!
+        ($ :div ($ header-component))
+        (fn [container]
+          (let [header (.querySelector container "#header-purchased-at-guess")]
+            (is (some? header) "Expected purchase-date header to render")
+            (is (str/includes? (.-textContent header) "↑")
+              "Active multi-sort state should render a sort arrow below the header label")))))))
+
+(deftest active-sort-controls-toggle-direction-from-chip
+  (async done
+    (let [dispatched (atom nil)]
+      (with-redefs [rf/dispatch (fn [evt] (reset! dispatched evt))
+                    i18n/use-t (fn []
+                                 (fn [k]
+                                   (case k
+                                     :common/sort "Sortiranje"
+                                     :common/clear "Očisti"
+                                     nil)))]
+        (mount-component!
+          ($ list-ui/active-sort-controls
+            {:entity-name :receipts
+             :sorts [{:field :purchased-at-guess :direction :asc}]
+             :field-labels {:purchased-at-guess "Datum kupovine"}})
+          (fn [container]
+            (let [direction-btn (.querySelector container "#btn-sort-direction-receipts-purchased-at-guess")]
+              (is (some? direction-btn) "Expected a clickable direction button on the sort chip")
+              (is (= "↑" (.-textContent direction-btn)))
+              (.click direction-btn)
+              (is (= [::ui-events/set-sort-field :receipts :purchased-at-guess {:append? true}]
+                    @dispatched)
+                "Clicking the chip direction button should toggle sort direction in place")
+              (done))))))))
+
+(deftest active-sort-controls-match-filter-section-styling
+  (with-redefs [rf/dispatch (fn [_] nil)
+                i18n/use-t (fn []
+                             (fn [k]
+                               (case k
+                                 :common/sort "Sortiranje"
+                                 :common/clear-all "Očisti sve"
+                                 nil)))]
+    (mount-component!
+      ($ list-ui/active-sort-controls
+        {:entity-name :receipts
+         :sorts [{:field :total-amount-guess :direction :asc}]
+         :field-labels {:total-amount-guess "Pretpostavljeni iznos"}})
+      (fn [container]
+        (let [section (.querySelector container "#active-sorts-receipts")
+              chip (.querySelector container "#sort-chip-receipts-total-amount-guess")
+              clear-btn (.querySelector container "#btn-clear-sorts-receipts")]
+          (is (some? section) "Expected sort chip section to render")
+          (is (str/includes? (.-className section) "bg-blue-50")
+            "Sorting section should share the same blue container styling as active filters")
+          (is (str/includes? (.-className section) "border-blue-200")
+            "Sorting section should use the same border tone as active filters")
+          (is (str/includes? (.-textContent section) "Sortiranje (1):")
+            "Sorting section should show the same count-driven heading pattern as active filters")
+          (is (some? chip) "Expected the sort chip to render")
+          (is (str/includes? (.-className chip) "border-blue-300")
+            "Sort chips should reuse the filter chip border styling")
+          (is (nil? clear-btn)
+            "Single-sort state should rely on the chip remove button instead of a separate clear-all button"))))))
 
 (deftest admin-routes-bypass-action-gates
   (let [gate-allows? @#'list/gate-allows-action?]
@@ -230,7 +327,7 @@
                                              (= (first query) :app.template.frontend.subs.ui/entity-display-settings) {}
                                              (= (first query) :app.template.frontend.subs.ui/filterable-fields) []
                                              (= (first query) :app.template.frontend.events.list.settings/filterable-fields) {}
-                                             (= (first query) :app.template.frontend.subs.list/sort-config) {:field nil :direction nil}
+                                             (= (first query) :app.template.frontend.subs.list/sorts) []
                                              (= (first query) :app.template.frontend.subs.list/active-filters) {}
                                              (= (first query) :app.template.frontend.subs.list/batch-edit-inline) {:open? false}
                                              (= (first query) :app.template.frontend.subs.list/entity-ui-state) {}
@@ -282,7 +379,7 @@
                                              (= (first query) :app.template.frontend.subs.ui/entity-display-settings) {}
                                              (= (first query) :app.template.frontend.subs.ui/filterable-fields) []
                                              (= (first query) :app.template.frontend.events.list.settings/filterable-fields) {}
-                                             (= (first query) :app.template.frontend.subs.list/sort-config) {:field nil :direction nil}
+                                             (= (first query) :app.template.frontend.subs.list/sorts) []
                                              (= (first query) :app.template.frontend.subs.list/active-filters) {}
                                              (= (first query) :app.template.frontend.subs.list/batch-edit-inline) {:open? false}
                                              ;; Critical: simulate no existing per-page in UI state
@@ -337,7 +434,7 @@
                                              (= (first query) :app.template.frontend.subs.ui/entity-display-settings) {}
                                              (= (first query) :app.template.frontend.subs.ui/filterable-fields) []
                                              (= (first query) :app.template.frontend.events.list.settings/filterable-fields) {}
-                                             (= (first query) :app.template.frontend.subs.list/sort-config) {:field nil :direction nil}
+                                             (= (first query) :app.template.frontend.subs.list/sorts) []
                                              (= (first query) :app.template.frontend.subs.list/active-filters) {}
                                              (= (first query) :app.template.frontend.subs.list/batch-edit-inline) {:open? false}
                                              ;; Critical: simulate an existing per-page in UI state
@@ -393,7 +490,7 @@
                                              (= (first query) :app.template.frontend.subs.ui/entity-display-settings) {}
                                              (= (first query) :app.template.frontend.subs.ui/filterable-fields) []
                                              (= (first query) :app.template.frontend.events.list.settings/filterable-fields) {}
-                                             (= (first query) :app.template.frontend.subs.list/sort-config) {:field :amount :direction :asc}
+                                             (= (first query) :app.template.frontend.subs.list/sorts) [{:field :amount :direction :asc}]
                                              (= (first query) :app.template.frontend.subs.list/active-filters) {:description "alp"}
                                              (= (first query) :app.template.frontend.subs.list/batch-edit-inline) {:open? false}
                                              (= (first query) :app.template.frontend.subs.list/entity-ui-state) {}
@@ -419,6 +516,67 @@
                 "rows-override should be filtered then sorted using current list UI state"))
             (done)))))))
 
+(deftest list-view-renders-active-filters-below-header-section
+  (async done
+    (with-redefs [rf/dispatch (fn [_] nil)
+                  column-config/vector-config? (constantly false)
+                  list-table/make-table-headers (fn [_] [])
+                  list-ui/header-section (fn [_] ($ :div {:id "list-header-stub"} "Receipts"))
+                  table/table (fn [_] ($ :div))
+                  i18n/use-t (fn []
+                               (fn [k & _]
+                                 (case k
+                                   :common/active-filters "Aktivni filteri"
+                                   :common/remove-filter "Ukloni ovaj filter"
+                                   :common/record-singular "zapis"
+                                   :common/record-plural "zapisa"
+                                   :common/selected "odabrano"
+                                   :common/hidden "skriveno"
+                                   :common/loading "Učitavanje..."
+                                   nil)))
+                  uix-rf/use-subscribe (fn [query]
+                                         (cond
+                                           (= query [:admin/config-loaded?]) false
+                                           (= (first query) :app.template.frontend.subs.entity/paginated-entities) []
+                                           (= (first query) :app.template.frontend.subs.entity/loading?) false
+                                           (= (first query) :app.template.frontend.subs.entity/error) nil
+                                           (= (first query) :app.template.frontend.subs.list/total-pages) 1
+                                           (= (first query) :app.template.frontend.subs.entity/current-page) 1
+                                           (= (first query) :app.template.frontend.subs.list/selected-ids) #{}
+                                           (= (first query) :app.template.frontend.subs.ui/editing) nil
+                                           (= (first query) :app.template.frontend.subs.ui/show-add-form) false
+                                           (= (first query) :app.template.frontend.subs.ui/recently-updated-entities) #{}
+                                           (= (first query) :app.template.frontend.subs.ui/recently-created-entities) #{}
+                                           (= (first query) :app.template.frontend.subs.ui/hardcoded-view-options) {}
+                                           (= (first query) :app.template.frontend.subs.ui/entity-display-settings) {}
+                                           (= (first query) :app.template.frontend.subs.ui/filterable-fields) []
+                                           (= (first query) :app.template.frontend.events.list.settings/filterable-fields) {}
+                                           (= (first query) :app.template.frontend.subs.list/sorts) []
+                                           (= (first query) :app.template.frontend.subs.list/active-filters) {:status [{:value "posted" :label "Objavljeno"}]}
+                                           (= (first query) :app.template.frontend.subs.list/batch-edit-inline) {:open? false}
+                                           (= (first query) :app.template.frontend.subs.list/entity-ui-state) {}
+                                           (= (first query) :app.template.frontend.events.list.settings/table-width) 1200
+                                           (= (first query) :app.template.frontend.subs.ui/entity-display-prefs) {}
+                                           (= (first query) :form-entity-specs/by-name) {:fields []}
+                                           (= (first query) :app.template.frontend.subs.ui/visible-columns) {}
+                                           (= (first query) :app.template.frontend.subs.entity/entity-config) {:fields [{:id :status :label "Status"}]}
+                                           (= (first query) :app.template.frontend.subs.entity/entities) []
+                                           :else nil))]
+      (mount-component!
+        ($ list/list-view
+          {:entity-name :expenses
+           :entity-spec {:fields [{:id :status :label "Status" :input-type "select"}]}
+           :title "Receipts"})
+        (fn [container]
+          (let [header (.querySelector container "#list-header-stub")
+                active-filters (.querySelector container "#active-filters-expenses")]
+            (is (some? header) "Expected the list header to render")
+            (is (some? active-filters) "Expected the compact active filters section to render")
+            (is (pos? (bit-and (.compareDocumentPosition header active-filters)
+                             (.-DOCUMENT_POSITION_FOLLOWING js/Node)))
+              "Active filter chips should render below the list header/title, not above it")
+            (done)))))))
+
 (deftest table-header-cells-stick-to-top-of-scroll-viewport
   (async done
     (mount-component!
@@ -427,14 +585,20 @@
          :index 0}
         "Name")
       (fn [container]
-        (let [header (.querySelector container "th")]
+        (let [header (.querySelector container "th")
+              header-inner (.querySelector container "th > span")]
           (is (some? header) "Expected a rendered header cell")
+          (is (some? header-inner) "Expected the header wrapper span to render")
           (is (= "sticky" (.. header -style -position))
             "Header cells should use sticky positioning inside the scroll viewport")
           (is (= "0px" (.. header -style -top))
             "Header cells should pin to the top edge of the scroll viewport")
           (is (str/includes? (.-className header) "bg-base-100")
-            "Sticky header cells should use an opaque header background class"))
+            "Sticky header cells should use an opaque header background class")
+          (is (str/includes? (.-className header) "align-top")
+            "Header cells should top-align their content instead of centering it vertically")
+          (is (str/includes? (.-className header-inner) "h-full")
+            "Header wrapper should stretch so inner header layouts can use full cell height"))
         (done)))))
 
 (deftest table-header-keeps-filter-controls-below-long-labels
@@ -463,8 +627,12 @@
             (is (some? filter-btn) "Expected a filter button for filterable columns")
             (is (some? label-row) "Expected a dedicated label row")
             (is (some? controls-row) "Expected a dedicated controls row")
+            (is (str/includes? (.-className header) "min-h-[4.5rem]")
+              "Header should reserve vertical space so labels stay top-aligned and controls stay bottom-aligned")
             (is (str/includes? (.-textContent label-row) "Originalni naziv dat")
               "Long header text should remain in the label row")
+            (is (str/includes? (.-className controls-row) "mt-auto")
+              "Controls row should push itself to the bottom of the header cell")
             (is (true? (boolean (and controls-row filter-btn (.contains controls-row filter-btn))))
               "Filter button should render in the controls row below the label")
             (done)))))))
@@ -504,7 +672,7 @@
                                            (= (first query) :app.template.frontend.subs.ui/entity-display-settings) {}
                                            (= (first query) :app.template.frontend.subs.ui/filterable-fields) []
                                            (= (first query) :app.template.frontend.events.list.settings/filterable-fields) {}
-                                           (= (first query) :app.template.frontend.subs.list/sort-config) {:field nil :direction nil}
+                                           (= (first query) :app.template.frontend.subs.list/sorts) []
                                            (= (first query) :app.template.frontend.subs.list/active-filters) {}
                                            (= (first query) :app.template.frontend.subs.list/batch-edit-inline) {:open? false}
                                            (= (first query) :app.template.frontend.subs.list/entity-ui-state) {}

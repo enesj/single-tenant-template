@@ -3,6 +3,7 @@
     [app.shared.model-naming :as model-naming]
     [app.shared.pagination :as pagination]
     [app.template.frontend.components.filter.helpers :as filter-helpers]
+    [app.template.frontend.components.list.overrides :as overrides]
     [app.template.frontend.db.paths :as paths]
     [re-frame.core :as rf]))
 
@@ -43,11 +44,9 @@
 ;; infer-filter-type is provided by filter-helpers/infer-filter-type
 
 (rf/reg-sub
-  ::sort-config
-  (fn [[_ entity-type]]
-    [(rf/subscribe [::entity-ui-state entity-type])])
-  (fn [[ui-state] [_ _]]
-    (get ui-state :sort)))
+  ::sorts
+  (fn [db [_ entity-type]]
+    (paths/resolved-list-sorts db entity-type)))
 
 (rf/reg-sub
   ::items
@@ -68,14 +67,12 @@
   (fn [[_ entity-type]]
     [(rf/subscribe [::filtered-items entity-type])
      (rf/subscribe [::items entity-type])
-     (rf/subscribe [::entity-ui-state entity-type])])
-  (fn [[filtered-items items ui-state] [_ _]]
+     (rf/subscribe [::entity-ui-state entity-type])
+     (rf/subscribe [::sorts entity-type])])
+  (fn [[filtered-items items ui-state sorts] [_ entity-type]]
     (if (server-pagination? ui-state)
       items
-      (let [sort-config (:sort ui-state)
-            sort-field (when sort-config (keyword (:field sort-config)))
-            sort-dir (:direction sort-config :asc)
-            per-page (or (:per-page ui-state)
+      (let [per-page (or (:per-page ui-state)
                        (get-in ui-state [:pagination :per-page])
                        pagination/default-page-size)
             current-page (or (get-in ui-state [:pagination :current-page])
@@ -84,8 +81,10 @@
             pagination-state (pagination/create-pagination-state
                                {:page-number current-page
                                 :page-size per-page
-                                :total-items (count filtered-items)})]
-        (pagination/paginate-with-sort filtered-items sort-field sort-dir pagination-state)))))
+                                :total-items (count filtered-items)})
+            sorted-items (overrides/sort-rows-by-sorts filtered-items {:sorts sorts
+                                                                       :entity-name entity-type})]
+        (pagination/paginate-collection sorted-items pagination-state)))))
 
 (rf/reg-sub
   ::total-pages

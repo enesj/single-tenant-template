@@ -78,8 +78,7 @@
                 offset (h/parse-page-offset qp)
                 search (or (h/get-param qp :search)
                          (h/get-param qp :name))
-                order-by (h/parse-order-by qp)
-                order-dir (h/parse-order-dir qp)
+                sort-opts (h/parse-sort-params qp)
                 created-at-from (parse-instant-param (h/get-param qp :created-at-from))
                 created-at-to (parse-instant-param (h/get-param qp :created-at-to))
                 extra-filters (cond-> []
@@ -89,8 +88,7 @@
                               :offset offset
                               :search search}
                        tenant-id (assoc :tenant-id tenant-id)
-                       order-by (assoc :order-by order-by)
-                       order-dir (assoc :order-dir order-dir)
+                    (seq sort-opts) (merge sort-opts)
                        (seq extra-filters) (assoc :extra-filters extra-filters))
                 rows (h/to-app ((:list expense-categories/service) db opts))
                 rows (cond-> rows (sequential? rows) vec)

@@ -101,7 +101,7 @@
   Supports:
   - :supplier-id / :supplier_id
   - :unmapped-only (boolean, filters to supplier_id IS NULL)"
-  [db {:keys [limit offset order-by order-dir search supplier-id supplier_id unmapped-only]
+  [db {:keys [limit offset sorts order-by order-dir search supplier-id supplier_id unmapped-only]
        :or {limit 50 offset 0 order-dir :asc}
        :as opts}]
   (let [supplier-uuid (try-uuid (or supplier-id supplier_id))
@@ -113,6 +113,7 @@
                      config*
                      {:limit limit
                       :offset offset
+                      :sorts sorts
                       :order-by order-by
                       :order-dir order-dir})
         final-query (factory/apply-search-filter base-query (:search-fields config*) search)]

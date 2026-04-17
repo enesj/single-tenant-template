@@ -343,7 +343,7 @@
                                                :table-alias :al})))
 
 (defn- build-audit-list-query
-  [{:keys [limit offset order-by order-dir] :as opts}]
+  [{:keys [limit offset sorts order-by order-dir] :as opts}]
   (let [join-clause [[:admins :a] [:= :al.actor_id :a.id]]
         base-query {:select [:al.*
                              [:a.full_name :admin_name]]
@@ -351,10 +351,16 @@
                     :left-join join-clause}
         base-options {:filters (build-audit-filters-map opts)
                       :pagination {:limit limit :offset offset}}
-        order-column (get allowed-audit-order-by order-by :al/created_at)
-        order-direction (shared-qb/normalize-order-direction order-dir {:default :desc})]
+        order-clauses (shared-qb/resolve-order-by-clauses
+                        {:sorts sorts
+                         :order-by order-by
+                         :order-dir order-dir
+                         :allowed-order-by allowed-audit-order-by
+                         :default-order-by :al/created_at
+                         :default-order-dir :desc
+                         :tie-breaker [:al/id :asc]})]
     (-> (qb/compose-admin-query base-query base-options)
-      (shared-qb/apply-order-by order-column order-direction))))
+      (shared-qb/apply-order-bys order-clauses))))
 
 (defn- build-audit-count-query
   [opts]

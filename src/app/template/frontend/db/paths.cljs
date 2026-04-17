@@ -161,10 +161,10 @@
   [entity-type]
   [:ui :lists entity-type])
 
-(defn list-sort-config
-  "Returns [:ui :lists entity-type :sort] path vector for sort configuration of a list for a specific entity type."
+(defn list-sorts
+  "Returns `[:ui :lists entity-type :sorts]` for the ordered sort entries of a list."
   [entity-type]
-  [:ui :lists entity-type :sort])
+  [:ui :lists entity-type :sorts])
 
 (defn list-current-page
   "Returns [:ui :lists entity-type :current-page] path vector for current page number of a list for a specific entity type."
@@ -225,37 +225,46 @@
     (parse-positive-int (get-in db (conj (list-ui-state entity-type) :pagination :current-page)))
     1))
 
-(defn resolved-list-sort-config
-  "Resolve an entity list's current sort config from canonical list UI state."
+(defn- normalize-sort-direction
+  [direction]
+  (cond
+    (or (= direction :asc)
+      (= direction "asc"))
+    :asc
+
+    (or (= direction :desc)
+      (= direction "desc"))
+    :desc
+
+    :else nil))
+
+(defn- normalize-sort-entry
+  [entry]
+  (let [field (some-> (:field entry) model-naming/ensure-app-keyword)
+        direction (normalize-sort-direction (:direction entry))]
+    (when (and field direction)
+      {:field field
+       :direction direction})))
+
+(defn resolved-list-sorts
+  "Resolve an entity list's current ordered sort entries from canonical list UI state."
   [db entity-type]
-  (let [sort-config (or (get-in db (list-sort-config entity-type)) {})
-        field (:field sort-config)
-        direction (cond
-                    (or (= :asc (:direction sort-config))
-                      (= "asc" (:direction sort-config)))
-                    :asc
-
-                    (or (= :desc (:direction sort-config))
-                      (= "desc" (:direction sort-config)))
-                    :desc
-
-                    :else nil)]
-    (cond-> {}
-      (some? field) (assoc :field field)
-      (some? direction) (assoc :direction direction))))
+  (->> (or (get-in db (list-sorts entity-type)) [])
+    (keep normalize-sort-entry)
+    vec))
 
 (defn resolved-list-sort-query-params
   "Resolve current list sort state to API query params."
   [db entity-type]
-  (let [{:keys [field direction]} (resolved-list-sort-config db entity-type)
-        order-by (cond
-                   (keyword? field) (name field)
-                   (string? field) field
-                   (some? field) (str field)
-                   :else nil)]
+  (let [encoded-sort (some->> (resolved-list-sorts db entity-type)
+                       (map (fn [{:keys [field direction]}]
+                              (when (and field direction)
+                                (str (name field) ":" (name direction)))))
+                       (remove nil?)
+                       seq
+                       (str/join ","))]
     (cond-> {}
-      (some? order-by) (assoc :order-by order-by)
-      (some? direction) (assoc :order-dir (name direction)))))
+      (seq encoded-sort) (assoc :sort encoded-sort))))
 
 (defn list-total-items
   "Returns [:ui :lists entity-type :total-items] path vector for total items count in a list for a specific entity type."

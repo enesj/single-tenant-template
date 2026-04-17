@@ -41,8 +41,7 @@
                 offset (h/parse-page-offset qp)
                 search (or (h/get-param qp :search)
                          (h/get-param qp :name))
-                order-by (h/parse-order-by qp)
-                order-dir (h/parse-order-dir qp)
+                sort-opts (h/parse-sort-params qp)
                 normalized-key (h/get-param qp :normalized-key)
                 zip (h/get-param qp :zip)
                 country (h/get-param qp :country)
@@ -54,8 +53,7 @@
                 opts (cond-> {:limit limit
                               :offset offset
                               :search search}
-                       order-by (assoc :order-by order-by)
-                       order-dir (assoc :order-dir order-dir)
+                    (seq sort-opts) (merge sort-opts)
                        (some? normalized-key) (assoc :normalized-key normalized-key)
                        (some? zip) (assoc :zip zip)
                        (some? country) (assoc :country country)

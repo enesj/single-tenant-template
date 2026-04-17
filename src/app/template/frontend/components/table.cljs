@@ -115,7 +115,7 @@
                 (when sticky? "transition-all duration-200 ")
                 (when resizing? "select-none ")
                 (when-not is-header? "p-2 ")
-                (when is-header? "px-3 py-4 text-left font-medium text-base-content border-r border-base-300/30 last:border-r-0 ")
+                (when is-header? "px-3 py-4 align-top text-left font-medium text-base-content border-r border-base-300/30 last:border-r-0 ")
                 header-class
                 sticky-body-class)
        :colSpan (when (and colspan (not is-header?)) colspan)
@@ -136,7 +136,7 @@
                 sticky-style)}
 
       (if is-header?
-        ($ :span {:class (str "whitespace-nowrap truncate block "
+        ($ :span {:class (str "block h-full w-full whitespace-nowrap truncate "
                            (when sticky? "font-bold text-primary "))}
           children
           (when sticky?

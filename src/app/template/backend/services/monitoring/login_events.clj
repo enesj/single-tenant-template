@@ -147,12 +147,18 @@
       (some? success?) (conj [:= :login_events.success success?]))))
 
 (defn- build-login-events-list-query
-  [{:keys [limit offset order-by order-dir] :as opts}]
+  [{:keys [limit offset sorts order-by order-dir] :as opts}]
   (let [limit (or limit 100)
         offset (or offset 0)
         conditions (build-login-events-conditions opts)
-        order-column (get allowed-login-events-order-by order-by :login_events.created_at)
-        order-direction (shared-qb/normalize-order-direction order-dir {:default :desc})]
+        order-clauses (shared-qb/resolve-order-by-clauses
+                        {:sorts sorts
+                         :order-by order-by
+                         :order-dir order-dir
+                         :allowed-order-by allowed-login-events-order-by
+                         :default-order-by :login_events.created_at
+                         :default-order-dir :desc
+                         :tie-breaker [:login_events.id :asc]})]
     (cond-> {:select [[:login_events.id :id]
                       :login_events.principal_type
                       :login_events.principal_id
@@ -166,7 +172,7 @@
              :from [[:login_events]]
              :left-join [[:admins :admins] [:= :admins.id :login_events.principal_id]
                          [:users :users] [:= :users.id :login_events.principal_id]]
-             :order-by [[order-column order-direction]]
+             :order-by order-clauses
              :limit limit
              :offset offset}
       (seq conditions) (assoc :where (into [:and] conditions)))))

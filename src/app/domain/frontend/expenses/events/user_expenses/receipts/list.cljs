@@ -79,18 +79,13 @@
          status (normalize-status-filter status-filter)
          show-purged? (true? (get-in db (conj base-path :show-purged?)))
          text-filters (filter-serialization/flatten-ui-filters (dissoc active-filters :status "status"))
-         sort-config (or (get-in db (paths/list-sort-config entity-key)) {})
-         order-dir (let [direction (:direction sort-config)]
-                     (when (contains? #{:asc :desc "asc" "desc"} direction)
-                       (name (keyword direction))))
-         order-field (when-let [f (:field sort-config)] (name f))]
+         sort-params (paths/resolved-list-sort-query-params db entity-key)]
      (cond-> (merge {:limit per-page
                      :offset (* (max 0 (dec current-page)) per-page)}
                text-filters)
        (and include-status? (some? status)) (assoc :status status)
        show-purged? (assoc :show-purged true)
-       (some? order-dir) (assoc :order-dir order-dir)
-       (some? order-field) (assoc :order-by order-field)))))
+       (seq sort-params) (merge sort-params)))))
 
 (defn- processing-check-page-params
   [db]

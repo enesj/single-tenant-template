@@ -114,6 +114,31 @@
           (is (= 20 (:limit body)))
           (is (= 40 (:offset body))))))))
 
+(deftest user-receipts-list-parses-total-amount-range-filters
+  (testing "list receipts normalizes total amount range params for receipt amount filters"
+    (let [handler (user-receipts/list-receipts-handler :mock-db)
+          user-id (UUID/randomUUID)
+          request {:identity {:id user-id
+                              :role "viewer"}
+                   :query-params {"total-display-min" "2"
+                                  "total-amount-guess-max" "10.50"}}]
+      (with-redefs [receipt-queries/list-user-receipts-page
+                    (fn [_db actual-user-id opts]
+                      (is (= user-id actual-user-id))
+                      (is (= 2M (:total-amount-guess-min opts)))
+                      (is (= 10.50M (:total-amount-guess-max opts)))
+                      {:rows []
+                       :total 0
+                       :purged-total 0
+                       :limit (:limit opts)
+                       :offset (:offset opts)})]
+        (let [resp (handler request)
+              body (parse-json-body resp)]
+          (is (= 200 (:status resp)))
+          (is (= 0 (:total body)))
+          (is (= 50 (:limit body)))
+          (is (= 0 (:offset body))))))))
+
 (deftest user-receipts-batch-ocr-empty-selection-is-safe
   (testing "batch OCR returns 400 when no receipt ids are provided"
     (let [handler (user-receipts/ocr-batch-receipts-handler nil nil)]

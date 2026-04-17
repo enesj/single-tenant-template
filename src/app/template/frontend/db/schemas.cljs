@@ -178,10 +178,11 @@
    [:per-page {:optional true} [:maybe :int]]
    [:total-items {:optional true} :int]
    [:pagination {:optional true} ui-pagination-schema]
-   [:sort {:optional true}
-    [:map {:closed false}
-     [:field {:optional true} :keyword]
-     [:direction {:optional true} [:enum :asc :desc]]]]
+   [:sorts {:optional true}
+    [:vector
+     [:map {:closed false}
+      [:field :keyword]
+      [:direction [:enum :asc :desc]]]]]
    [:selected-ids {:optional true} [:set :any]]
    [:filters {:optional true} [:map-of :keyword :any]]
    [:active-filters {:optional true} [:map-of :keyword :any]]

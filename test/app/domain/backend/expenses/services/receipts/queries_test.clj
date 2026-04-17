@@ -89,6 +89,26 @@
           (is (re-find #"receipts\.created_at >= \?" sql-lc))
           (is (re-find #"receipts\.updated_at <= \?" sql-lc)))))))
 
+(deftest list-user-receipts-applies-total-amount-range-filters-test
+  (testing "user receipts queries apply total amount min/max filters, including total-display aliases"
+    (let [captured-sql (atom nil)]
+      (with-redefs [jdbc/execute! (fn [_db sql-params _opts]
+                                    (reset! captured-sql sql-params)
+                                    [])]
+        (receipt-queries/list-user-receipts
+          :db
+          (UUID/randomUUID)
+          {:limit 20
+           :offset 0
+           :order-by "created-at"
+           :order-dir :desc
+           :total-display-min "2"
+           :total-amount-guess-max "10.50"})
+        (let [sql-lc (some-> @captured-sql first str str/lower-case)]
+          (is (string? sql-lc))
+          (is (re-find #"receipts\.total_amount_guess >= \?" sql-lc))
+          (is (re-find #"receipts\.total_amount_guess <= \?" sql-lc)))))))
+
 (deftest get-receipt-refine-context-prefers-supplier-alias-and-hides-mismatched-store-context-test
   (testing "supplier alias wins over a conflicting store alias in refine context"
     (let [captured-sql (atom nil)]

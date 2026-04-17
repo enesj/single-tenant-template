@@ -95,16 +95,21 @@
    :last-login-at effective-last-login-at-expr})
 
 (defn- build-users-list-query
-  [{:keys [limit offset order-by order-dir] :as filters}]
+  [{:keys [limit offset sorts order-by order-dir] :as filters}]
   (let [where-clause (build-user-list-where-clause filters)
-        order-column (get allowed-user-order-by order-by :u/created_at)
-        order-direction (shared-qb/normalize-order-direction order-dir {:default :desc})]
+        order-clauses (shared-qb/resolve-order-by-clauses
+                        {:sorts sorts
+                         :order-by order-by
+                         :order-dir order-dir
+                         :allowed-order-by allowed-user-order-by
+                         :default-order-by :u/created_at
+                         :default-order-dir :desc
+                         :tie-breaker [:u.id :asc]})]
     (cond-> {:select user-list-select-columns
              :from [[:users :u]]
              :left-join [[latest-successful-user-login-query :ul]
                          [:= :ul.principal_id :u.id]]
-             :order-by [[order-column order-direction]
-                        [:u.id :asc]]}
+             :order-by order-clauses}
       where-clause (assoc :where where-clause)
       limit (assoc :limit limit)
       offset (assoc :offset offset))))

@@ -123,20 +123,52 @@
     {}
     field-names))
 
-(defn extract-sort-params
-  "Extract sort parameters from request.
+(defn- normalize-sort-field
+  [field]
+  (some-> field str str/trim not-empty (str/replace #"^:" "") (str/replace #"_" "-") keyword))
 
-   Returns normalized :order-by and :order-dir values when present."
+(defn- normalize-sort-direction
+  [direction]
+  (case (some-> direction str str/trim str/lower-case (str/replace #"^:" ""))
+    "asc" :asc
+    "desc" :desc
+    nil))
+
+(defn- parse-sort-entry
+  [raw-entry]
+  (let [[field direction] (some-> raw-entry str str/trim (str/split #":" 2))
+        field* (normalize-sort-field field)
+        direction* (normalize-sort-direction direction)]
+    (when (and field* direction*)
+      {:field field*
+       :direction direction*})))
+
+(defn extract-sort-params
+  "Extract canonical sort parameters from request.
+
+   Accepts the new `sort` query param (for example `created-at:desc,name:asc`)
+   and also tolerates legacy `order-by` / `order-dir` inputs during the cutover.
+
+   Returns:
+   - :sorts     ordered sort entries
+   - :order-by  first sort field (legacy convenience)
+   - :order-dir first sort direction (legacy convenience)"
   [params]
-  (let [order-by (some-> (get-param params :order-by) str keyword)
-        order-dir-raw (some-> (get-param params :order-dir) str str/lower-case)
-        order-dir (case order-dir-raw
-                    "asc" :asc
-                    "desc" :desc
-                    nil)]
+  (let [sorts (or (some-> (get-param params :sort)
+                    str
+                    (str/split #",")
+                    (->> (keep parse-sort-entry)
+                      seq
+                      vec))
+                (let [order-by (normalize-sort-field (get-param params :order-by))
+                      order-dir (normalize-sort-direction (get-param params :order-dir))]
+                  (when (and order-by order-dir)
+                    [{:field order-by :direction order-dir}])))
+        primary-sort (first sorts)]
     (cond-> {}
-      order-by (assoc :order-by order-by)
-      order-dir (assoc :order-dir order-dir))))
+      (seq sorts) (assoc :sorts sorts)
+      (:field primary-sort) (assoc :order-by (:field primary-sort))
+      (:direction primary-sort) (assoc :order-dir (:direction primary-sort)))))
 
 ;; Error Handling Middleware
 

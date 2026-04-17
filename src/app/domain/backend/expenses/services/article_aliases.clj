@@ -274,12 +274,18 @@
   "List unmapped article aliases (article_id IS NULL) with occurrence counts.
    When :tenant-id is provided, only includes aliases seen in that tenant's
    expense items and counts occurrences within that tenant."
-  [db {:keys [limit offset order-by order-dir]
+  [db {:keys [limit offset sorts order-by order-dir]
        :or {limit 100 offset 0 order-dir :desc}
        :as opts}]
   (let [order-by* (some-> order-by model-naming/ensure-app-keyword)
-        order-col (get allowed-unmapped-aliases-order-by order-by* occurrence-count-expr)
-        order-dir* (shared-qb/normalize-order-direction order-dir {:default :desc})
+        order-clauses (shared-qb/resolve-order-by-clauses
+                        {:sorts sorts
+                         :order-by order-by*
+                         :order-dir order-dir
+                         :allowed-order-by allowed-unmapped-aliases-order-by
+                         :default-order-by occurrence-count-expr
+                         :default-order-dir :desc
+                         :tie-breaker [:aa.id :asc]})
         query (-> (build-unmapped-aliases-query opts)
                 (assoc :select [[:aa.id]
                                 [:aa.raw_label]
@@ -288,8 +294,7 @@
                                 [:aa.supplier_id]
                                 [:s.display_name :supplier_display_name]
                                 [occurrence-count-expr :occurrence_count]])
-                (assoc :order-by [[order-col order-dir*]
-                                  [:aa.id :asc]])
+                (assoc :order-by order-clauses)
                 (assoc :limit limit
                   :offset offset))]
     (jdbc/execute! db (sql/format query) {:builder-fn rs/as-unqualified-lower-maps})))

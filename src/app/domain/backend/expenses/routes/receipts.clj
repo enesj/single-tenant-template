@@ -130,6 +130,16 @@
 (def ^:private receipt-date-range-fields
   [:purchased-at-guess :created-at :updated-at])
 
+(defn- extract-total-amount-range-filters
+  [get-qp]
+  (let [min-value (or (some-> (get-qp :total-amount-guess-min) parse-money)
+                    (some-> (get-qp :total-display-min) parse-money))
+        max-value (or (some-> (get-qp :total-amount-guess-max) parse-money)
+                    (some-> (get-qp :total-display-max) parse-money))]
+    (cond-> {}
+      (some? min-value) (assoc :total-amount-guess-min min-value)
+      (some? max-value) (assoc :total-amount-guess-max max-value))))
+
 (defn list-receipts-handler [db]
   (utils/with-error-handling
     (fn [request]
@@ -142,15 +152,17 @@
                                      acc))
                            {}
                            receipt-text-filter-keys)
+            amount-filters (extract-total-amount-range-filters get-qp)
             date-filters (utils/extract-date-range-params qp receipt-date-range-fields)
             show-purged? (boolean (utils/parse-boolean-param qp :show-purged))
+            sort-opts (utils/extract-sort-params qp)
             opts (merge {:status status
                          :show-purged? show-purged?
                          :limit (utils/parse-int-param qp :limit 50)
-                         :offset (utils/parse-int-param qp :offset 0)
-                         :order-dir (keyword (or (get-qp :order-dir) "desc"))
-                         :order-by (get-qp :order-by)}
+                         :offset (utils/parse-int-param qp :offset 0)}
+                   sort-opts
                    text-filters
+                       amount-filters
                    date-filters)
             {:keys [rows total purged-total]} (receipt-queries/list-receipts-page db opts)]
         (utils/success-response {:receipts (to-app rows)

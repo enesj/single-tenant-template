@@ -13,6 +13,7 @@
     [app.admin.frontend.adapters.login-events :as login-events-adapter]
     [app.admin.frontend.utils.http :as admin-http]
     [app.template.frontend.db.paths :as paths]
+    [clojure.string :as str]
     [day8.re-frame.http-fx]
     [re-frame.core :as rf]
     [taoensso.timbre :as log]))
@@ -23,7 +24,7 @@
 
 (rf/reg-event-fx
   :admin/load-login-events
-  (fn [{:keys [db]} [_ {:keys [filters pagination sort] :as _params}]]
+  (fn [{:keys [db]} [_ {:keys [filters pagination sort sorts] :as _params}]]
     (let [entity-key :login-events
           parse-pos-int (fn [v]
                           (cond
@@ -39,6 +40,28 @@
                                               (when (and (number? n) (not (js/isNaN n)) (>= n 0))
                                                 (long n)))
                                 :else nil))
+          normalize-sort-direction (fn [direction]
+                                     (cond
+                                       (or (= direction :asc) (= direction "asc")) :asc
+                                       (or (= direction :desc) (= direction "desc")) :desc
+                                       :else nil))
+          normalize-sort-entry (fn [entry]
+                                 (let [field (:field entry)
+                                       direction (normalize-sort-direction (:direction entry))]
+                                   (when (and field direction)
+                                     {:field (if (keyword? field) field (keyword field))
+                                      :direction direction})))
+          normalize-sorts (fn [entries]
+                            (cond
+                              (map? entries) (->> [entries] (keep normalize-sort-entry) vec)
+                              (sequential? entries) (->> entries (keep normalize-sort-entry) vec)
+                              :else []))
+          serialize-sorts (fn [entries]
+                            (some->> (normalize-sorts entries)
+                              (map (fn [{:keys [field direction]}]
+                                     (str (name field) ":" (name direction))))
+                              seq
+                              (str/join ",")))
           template-per-page (paths/resolved-list-per-page db entity-key 20)
           template-page (paths/resolved-list-current-page db entity-key)
           current-filters (merge (get-in db [:admin :login-events :filters] {})
@@ -48,13 +71,14 @@
                                {:page template-page
                                 :current-page template-page
                                 :per-page template-per-page})
-          template-sort (paths/resolved-list-sort-config db entity-key)
-          current-sort (merge {:field :created-at :direction :desc}
-                         (get-in db [:admin :login-events :sort] {})
-                         template-sort)
+          current-sorts (or (seq (normalize-sorts (get-in db [:admin :login-events :sorts])))
+                          (seq (paths/resolved-list-sorts db entity-key))
+                          [{:field :created-at :direction :desc}])
           final-filters (merge current-filters filters)
           final-pagination (merge current-pagination pagination)
-          final-sort (merge current-sort sort)
+          final-sorts (vec (or (seq (normalize-sorts sorts))
+                             (seq (normalize-sorts sort))
+                             current-sorts))
           limit (or (parse-pos-int (:per-page pagination))
                   (parse-pos-int (:limit pagination))
                   (parse-pos-int (:per-page final-pagination))
@@ -72,20 +96,13 @@
                                 :per-page limit
                                 :limit limit
                                 :offset offset)
-          request-sort (let [{:keys [field direction]} final-sort
-                             order-dir (when (contains? #{:asc :desc "asc" "desc"} direction)
-                                         (name (keyword direction)))
-                             order-by (cond
-                                        (keyword? field) (name field)
-                                        (string? field) field
-                                        (some? field) (str field)
-                                        :else nil)]
-                         (cond-> {}
-                           (some? order-by) (assoc :order-by order-by)
-                           (some? order-dir) (assoc :order-dir order-dir)))
+          request-sort (some-> (serialize-sorts final-sorts)
+                         (as-> encoded-sort
+                           (when (seq encoded-sort)
+                             {:sort encoded-sort})))
           request-params (cond-> (merge {:limit limit
                                          :offset offset}
-                                   request-sort)
+                                   (or request-sort {}))
                            (seq final-filters) (merge final-filters))]
       (log/info "LOGIN EVENTS LOAD →" {:pagination resolved-pagination
                                        :filters final-filters
@@ -96,7 +113,8 @@
                (assoc-in [:admin :login-events :error] nil)
                (assoc-in [:admin :login-events :filters] final-filters)
                (assoc-in [:admin :login-events :pagination] resolved-pagination)
-               (assoc-in [:admin :login-events :sort] final-sort)
+               (assoc-in [:admin :login-events :sorts] final-sorts)
+               (update-in [:admin :login-events] dissoc :sort)
                (assoc-in (conj (paths/entity-metadata :login-events) :loading?) true))
          :http-xhrio (admin-http/admin-get
                        {:uri "/admin/api/login-events"

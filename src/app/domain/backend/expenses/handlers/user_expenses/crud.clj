@@ -28,8 +28,7 @@
         (let [tenant-id (h/get-tenant-id request)]
           (try
             (let [params (:query-params request)
-                  order-by (h/parse-order-by params)
-                  order-dir (h/parse-order-dir params)
+                  sort-opts (h/parse-sort-params params)
                   text-filters (h/extract-text-filter-params params
                                  [:supplier-display-name :store-display-name
                                   :expense-category-name :payer-label
@@ -61,8 +60,7 @@
                          currency-filter (assoc :currency currency-filter)
                          (some? total-amount-min) (assoc :total-amount-min total-amount-min)
                          (some? total-amount-max) (assoc :total-amount-max total-amount-max)
-                         order-by (assoc :order-by order-by)
-                         order-dir (assoc :order-dir order-dir))
+                         (seq sort-opts) (merge sort-opts))
                   uid (when-not (h/tenant-elevated? request) user-id)
                   expenses (user-expenses/list-user-expenses db tenant-id uid opts)
                   total (user-expenses/count-user-expenses db tenant-id uid opts)

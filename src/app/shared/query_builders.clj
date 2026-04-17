@@ -85,14 +85,77 @@
      (or (= dir :desc) (= dir "desc")) :desc
      :else default)))
 
+(defn- resolve-order-column
+  [allowed-order-by field]
+  (cond
+    (nil? field) nil
+    (map? allowed-order-by)
+    (or (get allowed-order-by field)
+      (when (some #(= field %) (vals allowed-order-by))
+        field))
+    :else field))
+
+(defn resolve-order-by-clauses
+  "Resolve one or more ORDER BY clauses from canonical sort entries.
+
+   Supports canonical `:sorts` vectors with entries like
+   `{:field :created-at :direction :desc}` while remaining tolerant of legacy
+   `:order-by` / `:order-dir` inputs.
+
+   Options:
+   - :sorts             ordered sort entries
+   - :order-by          legacy single field
+   - :order-dir         legacy single direction
+   - :allowed-order-by  map of app keywords to SQL identifiers/expressions
+   - :default-sorts     ordered fallback sort entries
+   - :default-order-by  legacy single fallback field/expression
+   - :default-order-dir fallback direction (default :desc)
+   - :tie-breaker       optional [column direction] appended when absent"
+  [{:keys [sorts order-by order-dir allowed-order-by default-sorts default-order-by
+           default-order-dir tie-breaker]
+    :or {default-order-dir :desc}}]
+  (letfn [(normalize-entry [{:keys [field direction]}]
+            (when-let [column (resolve-order-column allowed-order-by field)]
+              [column (normalize-order-direction direction {:default default-order-dir})]))]
+    (let [fallback-entries (or (seq default-sorts)
+                             (when (some? default-order-by)
+                               [{:field default-order-by
+                                 :direction default-order-dir}]))
+          requested-entries (cond
+                              (seq sorts) sorts
+                              (some? order-by) [{:field order-by :direction order-dir}]
+                              :else fallback-entries)
+          requested-clauses (->> requested-entries
+                              (keep normalize-entry)
+                              vec)
+          fallback-clauses (->> fallback-entries
+                             (keep normalize-entry)
+                             vec)
+          clauses (vec (or (seq requested-clauses)
+                         fallback-clauses
+                         []))]
+      (cond-> clauses
+        (and tie-breaker
+          (some? (first tie-breaker))
+          (not-any? #(= (first tie-breaker) (first %)) clauses))
+        (conj tie-breaker)))))
+
+(defn apply-order-bys
+  "Apply ORDER BY clauses to a HoneySQL query map.
+
+   No-ops when `clauses` is empty."
+  [query clauses]
+  (if (seq clauses)
+    (assoc query :order-by (vec clauses))
+    query))
+
 (defn apply-order-by
-  "Apply an ORDER BY clause to a HoneySQL query map.
+  "Apply a single ORDER BY clause to a HoneySQL query map.
 
    No-ops if `column` is nil."
   [query column direction]
-  (if (some? column)
-    (assoc query :order-by [[column direction]])
-    query))
+  (apply-order-bys query (when (some? column)
+                           [[column direction]])))
 
 ;; -----------------------------------------------------------------------------
 ;; Search helpers

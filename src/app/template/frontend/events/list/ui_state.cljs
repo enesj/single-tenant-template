@@ -159,25 +159,148 @@
 ;;; Sorting
 ;;; -------------------------
 
+(def ^:private max-active-sorts 3)
+
+(defn- normalize-sort-direction
+  [direction]
+  (cond
+    (or (= direction :asc)
+      (= direction "asc"))
+    :asc
+
+    (or (= direction :desc)
+      (= direction "desc"))
+    :desc
+
+    :else nil))
+
+(defn- normalize-sort-entry
+  [{:keys [field direction] :as _entry}]
+  (let [field* (some-> field model-naming/ensure-app-keyword)
+        direction* (normalize-sort-direction direction)]
+    (when (and field* direction*)
+      {:field field*
+       :direction direction*})))
+
+(defn- current-sorts
+  [db entity-key]
+  (->> (or (get-in db (paths/list-sorts entity-key)) [])
+    (keep normalize-sort-entry)
+    vec))
+
+(defn- truncate-sorts
+  [sorts]
+  (->> sorts
+    (keep normalize-sort-entry)
+    (take max-active-sorts)
+    vec))
+
+(defn- sync-sorts
+  [db entity-key sorts]
+  (assoc-in db (paths/list-sorts entity-key) (truncate-sorts sorts)))
+
+(defn- toggle-sort-direction
+  [direction]
+  (if (= direction :asc) :desc :asc))
+
+(defn- replace-primary-sort
+  [sorts field]
+  (let [primary (first sorts)]
+    [{:field field
+      :direction (if (= field (:field primary))
+                   (toggle-sort-direction (:direction primary))
+                   :asc)}]))
+
+(defn- append-or-toggle-sort
+  [sorts field]
+  (if-let [index (first (keep-indexed (fn [idx sort-entry]
+                                        (when (= field (:field sort-entry))
+                                          idx))
+                          sorts))]
+    (update sorts index update :direction toggle-sort-direction)
+    (let [trimmed-sorts (if (>= (count sorts) max-active-sorts)
+                          (vec (take (dec max-active-sorts) sorts))
+                          (vec sorts))]
+      (conj trimmed-sorts {:field field :direction :asc}))))
+
+(defn- move-sort
+  [sorts field direction]
+  (if-let [index (first (keep-indexed (fn [idx sort-entry]
+                                        (when (= field (:field sort-entry))
+                                          idx))
+                          sorts))]
+    (let [target-index (+ index direction)]
+      (if (<= 0 target-index (dec (count sorts)))
+        (let [current-entry (nth sorts index)
+              target-entry (nth sorts target-index)]
+          (-> sorts
+            (assoc index target-entry)
+            (assoc target-index current-entry)))
+        sorts))
+    sorts))
+
+(defn- sort-effect
+  [db entity-key sorts]
+  (let [db* (-> db
+              (sync-sorts entity-key sorts)
+              (sync-current-page entity-key 1))
+        refresh-dispatch (refresh-dispatch-for-server-mode db* entity-key)]
+    (cond-> {:db db*}
+      refresh-dispatch (assoc :dispatch refresh-dispatch))))
+
 (rf/reg-event-fx
   ::set-sort-field
   common-interceptors
+  (fn [{:keys [db]} [entity-type field {:keys [append?] :or {append? false}}]]
+    (if-let [entity-key (->entity-key entity-type)]
+      (if-let [field* (some-> field model-naming/ensure-app-keyword)]
+        (let [sorts (current-sorts db entity-key)
+              next-sorts (if append?
+                           (append-or-toggle-sort sorts field*)
+                           (replace-primary-sort sorts field*))]
+          (sort-effect db entity-key next-sorts))
+        {:db db})
+      {:db db})))
+
+(rf/reg-event-fx
+  ::remove-sort-field
+  common-interceptors
   (fn [{:keys [db]} [entity-type field]]
     (if-let [entity-key (->entity-key entity-type)]
-      (let [sort-config (get-in db (paths/list-sort-config entity-key))
-            current-direction (:direction sort-config)
-            current-field (:field sort-config)
-            new-direction (if (and (= field current-field)
-                                (= current-direction :asc))
-                            :desc
-                            :asc)
-            db* (-> db
-                  (assoc-in (conj (paths/list-sort-config entity-key) :field) field)
-                  (assoc-in (conj (paths/list-sort-config entity-key) :direction) new-direction)
-                  (sync-current-page entity-key 1))
-            refresh-dispatch (refresh-dispatch-for-server-mode db* entity-key)]
-        (cond-> {:db db*}
-          refresh-dispatch (assoc :dispatch refresh-dispatch)))
+      (if-let [field* (some-> field model-naming/ensure-app-keyword)]
+        (let [next-sorts (->> (current-sorts db entity-key)
+                           (remove #(= field* (:field %)))
+                           vec)]
+          (sort-effect db entity-key next-sorts))
+        {:db db})
+      {:db db})))
+
+(rf/reg-event-fx
+  ::move-sort-field-left
+  common-interceptors
+  (fn [{:keys [db]} [entity-type field]]
+    (if-let [entity-key (->entity-key entity-type)]
+      (if-let [field* (some-> field model-naming/ensure-app-keyword)]
+        (sort-effect db entity-key (move-sort (current-sorts db entity-key) field* -1))
+        {:db db})
+      {:db db})))
+
+(rf/reg-event-fx
+  ::move-sort-field-right
+  common-interceptors
+  (fn [{:keys [db]} [entity-type field]]
+    (if-let [entity-key (->entity-key entity-type)]
+      (if-let [field* (some-> field model-naming/ensure-app-keyword)]
+        (sort-effect db entity-key (move-sort (current-sorts db entity-key) field* 1))
+        {:db db})
+      {:db db})))
+
+(rf/reg-event-fx
+  ::clear-sorts
+  common-interceptors
+  (fn [{:keys [db]} [entity-type]]
+    (if-let [entity-key (->entity-key entity-type)]
+      (sort-effect db entity-key [])
       {:db db})))
 
 ;;; -------------------------

@@ -4,6 +4,7 @@
     [app.shared.model-naming :as model-naming]
     [app.shared.pagination :as pagination]
     [app.template.frontend.components.filter.helpers :as filter-helpers]
+    [app.template.frontend.components.list.overrides :as overrides]
     [app.template.frontend.db.paths :as paths]
     [app.template.frontend.subs.list :as list-subs]
     [clojure.string :as str]
@@ -82,17 +83,14 @@
   ::sorted-entities
   (fn [[_ entity-type]]
     [(rf/subscribe [::filtered-entities entity-type])
-     (rf/subscribe [::list-subs/sort-config entity-type])
+     (rf/subscribe [::list-subs/sorts entity-type])
      (rf/subscribe [:entity-specs/by-name (keyword entity-type)])
      (rf/subscribe [::entities-state])
      (rf/subscribe [::list-subs/entity-ui-state entity-type])])
-  (fn [[entities sort-config entity-specs entities-state ui-state] [_ entity-type]]
+  (fn [[entities sorts entity-specs entities-state ui-state] [_ entity-type]]
     (if (list-subs/server-pagination? ui-state)
       entities
-      (let [{:keys [field direction]} sort-config
-            field (when field (model-naming/ensure-app-keyword field))
-            ;; Resolve a field value from an item considering possible namespacing
-            resolve-field (fn [item fld]
+      (let [resolve-field (fn [item fld]
                             (let [direct (get item fld)]
                               (if (some? direct)
                                 direct
@@ -105,35 +103,32 @@
                                           by-ns (when ns-key (get item ns-key))]
                                       (if (some? by-ns)
                                         by-ns
-                                        ;; Fallback: find any key whose local name matches the field
                                         (some (fn [[k v]]
                                                 (when (and (keyword? k)
                                                         (= (name k) (name fld)))
                                                   v))
                                           item))))))))
-            ;; Get field specification from entity specs
-            get-field-spec (fn [field-name]
-                             (some (fn [spec]
-                                     (when (= (:id spec) (name field-name))
-                                       spec))
-                               entity-specs))
-            field-spec (when field (get-field-spec field))
-            date-field? (when field-spec
-                          (contains? #{"datetime-local" "date" "time"} (:input-type field-spec)))
-            select-sort-info (when (and field-spec
-                                     (= "select" (some-> (:type field-spec) kw/ensure-name str/lower-case))
-                                     (vector? (:options field-spec))
-                                     (= 2 (count (:options field-spec))))
-                               (let [[ref-entity label-field] (:options field-spec)
-                                     ref-entity (some-> ref-entity kw/ensure-keyword model-naming/ensure-app-keyword)
-                                     label-field (some-> label-field kw/ensure-keyword model-naming/ensure-app-keyword)]
-                                 (when (and ref-entity label-field)
-                                   {:ref-entity ref-entity
-                                    :label-field label-field})))
-            resolve-select-label (fn [raw-id]
-                                   (when (and select-sort-info (some? raw-id))
-                                     (let [{:keys [ref-entity label-field]} select-sort-info
-                                           data (get-in entities-state [ref-entity :data])
+            specs-by-field (into {}
+                             (keep (fn [spec]
+                                     (when-let [field-id (some-> (:id spec) model-naming/ensure-app-keyword)]
+                                       [field-id spec])))
+                             entity-specs)
+            select-sort-info-by-field (into {}
+                                        (keep (fn [[field field-spec]]
+                                                (when (and field-spec
+                                                        (= "select" (some-> (:type field-spec) kw/ensure-name str/lower-case))
+                                                        (vector? (:options field-spec))
+                                                        (= 2 (count (:options field-spec))))
+                                                  (let [[ref-entity label-field] (:options field-spec)
+                                                        ref-entity (some-> ref-entity kw/ensure-keyword model-naming/ensure-app-keyword)
+                                                        label-field (some-> label-field kw/ensure-keyword model-naming/ensure-app-keyword)]
+                                                    (when (and ref-entity label-field)
+                                                      [field {:ref-entity ref-entity
+                                                              :label-field label-field}]))))
+                                          specs-by-field))
+            resolve-select-label (fn [{:keys [ref-entity label-field]} raw-id]
+                                   (when (some? raw-id)
+                                     (let [data (get-in entities-state [ref-entity :data])
                                            ref-item (or (get data raw-id)
                                                       (when (and (not (string? raw-id))
                                                               (some? raw-id))
@@ -141,34 +136,16 @@
                                        (when (map? ref-item)
                                          (or (get ref-item label-field)
                                            (get ref-item (model-naming/app-keyword->db label-field)))))))
-            resolve-sort-value (fn [item]
-                                 (let [raw (resolve-field item field)]
-                                   (if select-sort-info
-                                     (or (resolve-select-label raw) raw)
-                                     raw)))
-            normalize (fn [v]
-                        (cond
-                          (nil? v) nil
-                          (string? v)
-                          (if date-field?
-                            (let [d (try (js/Date. v) (catch :default _ nil))]
-                              (if (and d (not (js/isNaN (.getTime d))))
-                                (.getTime d)
-                                (str/lower-case v)))
-                            (str/lower-case v))
-                          (boolean? v) (if v 1 0)
-                          (instance? js/Date v) (.getTime v)
-                          :else v))]
-        (if (and field direction)
-          (let [sorted (sort-by (fn [item]
-                                  (let [v (normalize (resolve-sort-value item))
-                                        nil-key (if (some? v) 1 0)]
-                                    [nil-key v]))
-                         entities)]
-            (if (= direction :desc)
-              (reverse sorted)
-              sorted))
-          entities)))))
+            value-resolver (fn [item field]
+                             (let [field* (some-> field model-naming/ensure-app-keyword)
+                                   raw (resolve-field item field*)]
+                               (if-let [select-sort-info (get select-sort-info-by-field field*)]
+                                 (or (resolve-select-label select-sort-info raw) raw)
+                                 raw)))]
+        (overrides/sort-rows-by-sorts entities {:sorts sorts
+                                                :entity-name entity-type
+                                                :entity-spec entity-specs
+                                                :value-resolver value-resolver})))))
 
 ;; Get entities with pagination applied
 (rf/reg-sub

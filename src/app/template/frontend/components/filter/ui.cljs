@@ -139,8 +139,8 @@
           (str (t :common/active-filters) " (" filter-count ")"))
         ($ :div {:class "ml-2 space-y-1"}
           (for [[field-id filter-value] active-filters]
-            (let [field-label (filter-utils/get-field-label entity-config field-id)
-                  value-text (filter-utils/format-filter-value entity-config all-entities field-id filter-value)]
+            (let [field-label (filter-utils/get-field-label entity-config field-id t)
+                  value-text (filter-utils/format-filter-value entity-config all-entities field-id filter-value t)]
               ($ :div {:key (str field-id)
                        :class "flex items-center justify-between bg-white rounded px-2 py-1 text-xs"}
                 ($ :span {:class "text-gray-600"}
@@ -158,6 +158,7 @@
   "Compact active filters display that's always visible when filters are active"
   [{:keys [entity-type active-filters on-clear-filter class]}]
   (let [filter-count (count active-filters)
+        entity-id (if (keyword? entity-type) (name entity-type) (str entity-type))
         t (use-t)
         ;; Subscribe to entity config to get field labels
         entity-config (uix.re-frame/use-subscribe [:app.template.frontend.subs.entity/entity-config entity-type])
@@ -165,15 +166,16 @@
         all-entities (uix.re-frame/use-subscribe [:app.template.frontend.subs.entity/entities entity-type])]
 
     (when (pos? filter-count)
-      ($ :div {:class (str "bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 mb-3 " (or class ""))}
+      ($ :div {:id (str "active-filters-" entity-id)
+               :class (str "bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 mb-3 " (or class ""))}
         ($ :div {:class "flex flex-wrap items-center gap-2"}
           ($ :span {:class "text-xs font-medium text-blue-700 mr-2"}
             (str (t :common/active-filters) " (" filter-count "):"))
 
           ;; Render filter chips
           (for [[field-id filter-value] active-filters]
-            (let [field-label (filter-utils/get-field-label entity-config field-id)
-                  value-text (filter-utils/format-filter-value entity-config all-entities field-id filter-value)]
+            (let [field-label (filter-utils/get-field-label entity-config field-id t)
+                  value-text (filter-utils/format-filter-value entity-config all-entities field-id filter-value t)]
               ($ filter-components/filter-chip
                 {:key (str field-id)
                  :field-id field-id

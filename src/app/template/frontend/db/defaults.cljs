@@ -19,8 +19,7 @@
                 ;; Unset here as well; components fall back to pagination/default-page-size
                 :per-page nil
                 :total-items 0}
-   :sort {:field :id
-          :direction :asc}
+   :sorts []
    :selected-ids #{}
    :filters {}
    :active-filters {}

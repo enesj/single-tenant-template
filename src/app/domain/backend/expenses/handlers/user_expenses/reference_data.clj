@@ -47,8 +47,7 @@
                 offset (h/parse-page-offset params)
                 search (or (h/get-param params :search)
                          (h/get-param params :display-name))
-                order-by (h/parse-order-by params)
-                order-dir (h/parse-order-dir params)
+                sort-opts (h/parse-sort-params params)
                 created-at-from (h/parse-instant-param (h/get-param params :created-at-from))
                 created-at-to (h/parse-instant-param (h/get-param params :created-at-to))
                 extra-filters (cond-> []
@@ -71,8 +70,7 @@
                 opts (cond-> {:limit limit
                               :offset offset}
                        (some? search) (assoc :search search)
-                       order-by (assoc :order-by order-by)
-                       order-dir (assoc :order-dir order-dir)
+                    (seq sort-opts) (merge sort-opts)
                        (seq extra-filters) (assoc :extra-filters extra-filters)
                        (some? normalized-key) (assoc :normalized-key normalized-key))
                 suppliers-svc (requiring-resolve 'app.domain.backend.expenses.services.suppliers/list-suppliers)
@@ -135,16 +133,14 @@
                   limit (h/parse-page-limit params 100)
                   offset (h/parse-page-offset params)
                   search (h/get-param params :search)
-                  order-by (h/parse-order-by params)
-                  order-dir (h/parse-order-dir params)
+                      sort-opts (h/parse-sort-params params)
                   include-inactive? (true? (h/parse-boolean-param params :include_inactive))
                   extra-filters (when-not include-inactive?
                                   [[:= :p/is_active true]])
                   opts (cond-> {:limit limit
                                 :offset offset}
                          (some? search) (assoc :search search)
-                         order-by (assoc :order-by order-by)
-                         order-dir (assoc :order-dir order-dir)
+                        (seq sort-opts) (merge sort-opts)
                          tenant-id (assoc :tenant-id tenant-id)
                          (seq extra-filters) (assoc :extra-filters extra-filters))
                   payers-svc (resolve-service-op-fn

@@ -147,13 +147,19 @@
                      [:ilike :ppl.provider (str "%" search* "%")]]))))
 
 (defn- build-list-query
-  [{:keys [limit offset order-by order-dir] :as opts}]
+  [{:keys [limit offset sorts order-by order-dir] :as opts}]
   (let [conditions (build-list-conditions opts)
-        order-column (get allowed-order-by order-by :ppl/created_at)
-        order-direction (shared-qb/normalize-order-direction order-dir {:default :desc})]
+        order-clauses (shared-qb/resolve-order-by-clauses
+                        {:sorts sorts
+                         :order-by order-by
+                         :order-dir order-dir
+                         :allowed-order-by allowed-order-by
+                         :default-order-by :ppl/created_at
+                         :default-order-dir :desc
+                         :tie-breaker [:ppl/id :asc]})]
     (cond-> {:select [:ppl.*]
              :from [[:payment_provider_account_links :ppl]]
-             :order-by [[order-column order-direction]]
+             :order-by order-clauses
              :limit (or limit 50)
              :offset (or offset 0)}
       (seq conditions) (assoc :where (into [:and] conditions)))))

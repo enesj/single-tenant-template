@@ -4,6 +4,7 @@
   NOTE: The countries table uses a string PK (`country`), not a UUID id column.
   For admin list compatibility, this service computes an `id` field equal to `country`."
   (:require
+    [app.shared.query-builders :as shared-qb]
     [clojure.string :as str]
     [honey.sql :as sql]
     [next.jdbc :as jdbc]
@@ -57,20 +58,32 @@
   (when row
     (assoc row :id (:country row))))
 
+(def ^:private allowed-country-order-by
+  {:country :country
+   :code :code
+   :created-at :created_at
+   :updated-at :updated_at})
+
 (defn list-countries
   "Return countries list.
 
   Routes factory provides opts like:
-  {:limit N :offset M :order-by :country :order-dir :asc}
+  {:limit N :offset M :sorts [...]}.
 
   Returns DB-shaped rows with computed :id."
-  [db {:keys [limit offset order-by order-dir]
+  [db {:keys [limit offset sorts order-by order-dir]
        :or {limit 500 offset 0 order-by :country order-dir :asc}}]
-  (let [order-by* (or order-by :country)
-        order-dir* (or order-dir :asc)
+  (let [order-clauses (shared-qb/resolve-order-by-clauses
+                        {:sorts sorts
+                         :order-by order-by
+                         :order-dir order-dir
+                         :allowed-order-by allowed-country-order-by
+                         :default-order-by :country
+                         :default-order-dir :asc
+                         :tie-breaker [:country :asc]})
         q {:select [:country :code :created_at :updated_at]
            :from [:countries]
-           :order-by [[order-by* order-dir*]]
+           :order-by order-clauses
            :limit limit
            :offset offset}
         rows (jdbc/execute! db (sql/format q) jdbc-opts)]

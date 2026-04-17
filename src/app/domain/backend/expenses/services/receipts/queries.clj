@@ -243,6 +243,43 @@
     query
     (receipt-date-filter-clauses opts)))
 
+(defn- parse-decimal-param
+  [raw]
+  (cond
+    (nil? raw) nil
+    (instance? java.math.BigDecimal raw) raw
+    (number? raw) (bigdec raw)
+    (string? raw)
+    (let [value (-> raw
+                  str/trim
+                  (str/replace #"[^0-9,\.\-]" ""))
+          value (cond
+                  (and (str/includes? value ",") (str/includes? value ".")) (str/replace value "," "")
+                  (str/includes? value ",") (str/replace value "," ".")
+                  :else value)]
+      (try
+        (bigdec value)
+        (catch Exception _ nil)))
+    :else nil))
+
+(defn- receipt-amount-filter-clauses
+  [{:keys [total-amount-guess-min total-amount-guess-max
+           total-display-min total-display-max]}]
+  (let [min-value (or (parse-decimal-param total-amount-guess-min)
+                    (parse-decimal-param total-display-min))
+        max-value (or (parse-decimal-param total-amount-guess-max)
+                    (parse-decimal-param total-display-max))]
+    (cond-> []
+      (some? min-value) (conj [:>= :receipts.total_amount_guess min-value])
+      (some? max-value) (conj [:<= :receipts.total_amount_guess max-value]))))
+
+(defn- apply-receipt-amount-filters
+  [query opts]
+  (reduce (fn [q clause]
+            (update q :where shared-qb/merge-where-and clause))
+    query
+    (receipt-amount-filter-clauses opts)))
+
 (def ^:private receipt-text-filter-columns
   "Mapping from text filter keys to SQL column identifiers for receipts."
   {:original-filename :receipts.original_filename
@@ -260,10 +297,36 @@
    "total_amount_guess" :total_amount_guess
    "total-amount-guess" :total_amount_guess
    "total-display" :total_amount_guess
+   "purchased_at_guess" :purchased_at_guess
+   "purchased-at-guess" :purchased_at_guess
    "created_at" :created_at
    "created-at" :created_at
    "updated_at" :updated_at
    "updated-at" :updated_at})
+
+(defn- build-receipt-order-clauses
+  [sorts order-by order-dir effective-status-sql]
+  (let [normalize-order-field (fn [field]
+                                (cond
+                                  (keyword? field) field
+                                  (string? field) (keyword (str/replace field "_" "-"))
+                                  :else field))
+        allowed-order-by (assoc (reduce-kv (fn [acc k v]
+                                             (assoc acc (keyword (str/replace k "_" "-")) v))
+                                  {}
+                                  sortable-receipt-columns)
+                           :status [:raw effective-status-sql])
+          normalized-sorts (mapv (fn [{:keys [field] :as sort-entry}]
+                                 (assoc sort-entry :field (normalize-order-field field)))
+                           (or sorts []))]
+    (shared-qb/resolve-order-by-clauses
+      {:sorts normalized-sorts
+       :order-by (normalize-order-field order-by)
+       :order-dir order-dir
+       :allowed-order-by allowed-order-by
+       :default-order-by :created-at
+       :default-order-dir :desc
+       :tie-breaker [:receipts.id :asc]})))
 
 (defn list-receipts
   "List receipts with optional status, text, and date filters.
@@ -271,21 +334,22 @@
   Returns a lightweight projection for list views (detail endpoints return
   raw_extract_json / parsed_markdown, etc.).
   Optional :tenant-id in opts scopes to a specific tenant.
-  Text filter keys: :original-filename, :supplier-guess, :created-by-name."
-  [db {:keys [status tenant-id limit offset order-dir order-by
+  Text filter keys: :original-filename, :supplier-guess, :created-by-name.
+  Numeric range filter keys: :total-amount-guess-min/max (alias: :total-display-min/max)."
+  [db {:keys [status tenant-id limit offset sorts order-dir order-by
               original-filename supplier-guess created-by-name show-purged?
               purchased-at-guess-from purchased-at-guess-to
               created-at-from created-at-to
-              updated-at-from updated-at-to]
+              updated-at-from updated-at-to
+              total-amount-guess-min total-amount-guess-max
+              total-display-min total-display-max]
        :or {limit 50 offset 0 order-dir :desc}}]
   (let [helpers (build-status-query-helpers)
         {:keys [lines-total-sql effective-status-sql]} helpers
         where-clause (build-receipts-where-clause status nil helpers
                        :tenant-id tenant-id
                        :show-purged? show-purged?)
-        order-col (if (= (some-> order-by name) "status")
-                    [:raw effective-status-sql]
-                    (or (get sortable-receipt-columns (some-> order-by name)) :created_at))
+        order-clauses (build-receipt-order-clauses sorts order-by order-dir effective-status-sql)
         text-filters {:original-filename original-filename
                       :supplier-guess supplier-guess
                       :created-by-name created-by-name}
@@ -308,7 +372,7 @@
                                 :receipts.updated_at]
                        :from [:receipts]
                        :left-join [[:users :cb] [:= :cb.id :receipts.created_by]]
-                       :order-by [[order-col order-dir]]
+                       :order-by order-clauses
                        :limit limit
                        :offset offset}
                 where-clause (assoc :where where-clause))
@@ -319,7 +383,11 @@
                                              :created-at-from created-at-from
                                              :created-at-to created-at-to
                                              :updated-at-from updated-at-from
-                                             :updated-at-to updated-at-to}))]
+                                             :updated-at-to updated-at-to})
+                (apply-receipt-amount-filters {:total-amount-guess-min total-amount-guess-min
+                                               :total-amount-guess-max total-amount-guess-max
+                                               :total-display-min total-display-min
+                                               :total-display-max total-display-max}))]
     (->> (jdbc/execute! db (sql/format query) {:builder-fn rs/as-unqualified-lower-maps})
       (mapv email-privacy/routine-created-by-view))))
 
@@ -333,14 +401,17 @@
   Supports optional status, text, and date filters.
   Optional :tenant-id in opts scopes to a specific tenant.
   Text filter keys: :original-filename, :supplier-guess, :created-by-name.
+  Numeric range filter keys: :total-amount-guess-min/max (alias: :total-display-min/max).
 
   Returns a lightweight projection for list views (detail endpoints return
   raw_extract_json / parsed_markdown, etc.)."
-  [db user-id {:keys [status tenant-id limit offset order-dir order-by
+  [db user-id {:keys [status tenant-id limit offset sorts order-dir order-by
                       original-filename supplier-guess created-by-name show-purged?
                       purchased-at-guess-from purchased-at-guess-to
                       created-at-from created-at-to
-                      updated-at-from updated-at-to]
+                      updated-at-from updated-at-to
+                      total-amount-guess-min total-amount-guess-max
+                      total-display-min total-display-max]
                :or {limit 50 offset 0 order-dir :desc}}]
   (when-not user-id
     (throw (ex-info "user-id is required" {:status 400})))
@@ -349,9 +420,7 @@
         where-clause (build-receipts-where-clause status user-id helpers
                        :tenant-id tenant-id
                        :show-purged? show-purged?)
-        order-col (if (= (some-> order-by name) "status")
-                    [:raw effective-status-sql]
-                    (or (get sortable-receipt-columns (some-> order-by name)) :created_at))
+        order-clauses (build-receipt-order-clauses sorts order-by order-dir effective-status-sql)
         text-filters {:original-filename original-filename
                       :supplier-guess supplier-guess
                       :created-by-name created-by-name}
@@ -374,7 +443,7 @@
                    :from [:receipts]
                    :left-join [[:users :cb] [:= :cb.id :receipts.created_by]]
                    :where where-clause
-                   :order-by [[order-col order-dir]]
+                   :order-by order-clauses
                    :limit limit
                    :offset offset}
                 (shared-qb/apply-text-filters receipt-text-filter-columns text-filters)
@@ -383,17 +452,24 @@
                                              :created-at-from created-at-from
                                              :created-at-to created-at-to
                                              :updated-at-from updated-at-from
-                                             :updated-at-to updated-at-to}))]
+                                             :updated-at-to updated-at-to})
+                (apply-receipt-amount-filters {:total-amount-guess-min total-amount-guess-min
+                                               :total-amount-guess-max total-amount-guess-max
+                                               :total-display-min total-display-min
+                                               :total-display-max total-display-max}))]
     (jdbc/execute! db (sql/format query) {:builder-fn rs/as-unqualified-lower-maps})))
 
 (defn count-receipts
   "Count receipts using the same status/text/date filter semantics as `list-receipts`.
-   Optional :tenant-id in opts scopes to a specific tenant.
-   Text filter keys: :original-filename, :supplier-guess, :created-by-name."
+  Optional :tenant-id in opts scopes to a specific tenant.
+  Text filter keys: :original-filename, :supplier-guess, :created-by-name.
+  Numeric range filter keys: :total-amount-guess-min/max (alias: :total-display-min/max)."
   [db {:keys [status tenant-id original-filename supplier-guess created-by-name show-purged?
               purchased-at-guess-from purchased-at-guess-to
               created-at-from created-at-to
-              updated-at-from updated-at-to]}]
+          updated-at-from updated-at-to
+          total-amount-guess-min total-amount-guess-max
+          total-display-min total-display-max]}]
   (let [helpers (build-status-query-helpers)
         where-clause (build-receipts-where-clause status nil helpers
                        :tenant-id tenant-id
@@ -411,18 +487,25 @@
                                              :created-at-from created-at-from
                                              :created-at-to created-at-to
                                              :updated-at-from updated-at-from
-                                             :updated-at-to updated-at-to}))
+                               :updated-at-to updated-at-to})
+                (apply-receipt-amount-filters {:total-amount-guess-min total-amount-guess-min
+                                 :total-amount-guess-max total-amount-guess-max
+                                 :total-display-min total-display-min
+                                 :total-display-max total-display-max}))
         row (jdbc/execute-one! db (sql/format query) {:builder-fn rs/as-unqualified-lower-maps})]
     (long (or (:total row) 0))))
 
 (defn count-user-receipts
   "Count receipts visible to `user-id` using the same filters as `list-user-receipts`.
-   Optional :tenant-id in opts scopes to a specific tenant.
-   Text filter keys: :original-filename, :supplier-guess, :created-by-name."
+  Optional :tenant-id in opts scopes to a specific tenant.
+  Text filter keys: :original-filename, :supplier-guess, :created-by-name.
+  Numeric range filter keys: :total-amount-guess-min/max (alias: :total-display-min/max)."
   [db user-id {:keys [status tenant-id original-filename supplier-guess created-by-name show-purged?
                       purchased-at-guess-from purchased-at-guess-to
                       created-at-from created-at-to
-                      updated-at-from updated-at-to]}]
+               updated-at-from updated-at-to
+               total-amount-guess-min total-amount-guess-max
+               total-display-min total-display-max]}]
   (when-not user-id
     (throw (ex-info "user-id is required" {:status 400})))
   (let [helpers (build-status-query-helpers)
@@ -442,16 +525,22 @@
                                              :created-at-from created-at-from
                                              :created-at-to created-at-to
                                              :updated-at-from updated-at-from
-                                             :updated-at-to updated-at-to}))
+                                             :updated-at-to updated-at-to})
+                (apply-receipt-amount-filters {:total-amount-guess-min total-amount-guess-min
+                                               :total-amount-guess-max total-amount-guess-max
+                                               :total-display-min total-display-min
+                                               :total-display-max total-display-max}))
         row (jdbc/execute-one! db (sql/format query) {:builder-fn rs/as-unqualified-lower-maps})]
     (long (or (:total row) 0))))
 
 (defn count-purged-receipts
-  "Count purged receipts using the same status/text/date filters as `list-receipts`."
+  "Count purged receipts using the same status/text/date/numeric filters as `list-receipts`."
   [db {:keys [status tenant-id original-filename supplier-guess created-by-name
               purchased-at-guess-from purchased-at-guess-to
               created-at-from created-at-to
-              updated-at-from updated-at-to]}]
+              updated-at-from updated-at-to
+              total-amount-guess-min total-amount-guess-max
+              total-display-min total-display-max]}]
   (let [helpers (build-status-query-helpers)
         where-clause (build-receipts-where-clause status nil helpers
                        :tenant-id tenant-id
@@ -469,7 +558,11 @@
                                              :created-at-from created-at-from
                                              :created-at-to created-at-to
                                              :updated-at-from updated-at-from
-                                             :updated-at-to updated-at-to}))
+                               :updated-at-to updated-at-to})
+                (apply-receipt-amount-filters {:total-amount-guess-min total-amount-guess-min
+                                 :total-amount-guess-max total-amount-guess-max
+                                 :total-display-min total-display-min
+                                 :total-display-max total-display-max}))
         row (jdbc/execute-one! db (sql/format query) {:builder-fn rs/as-unqualified-lower-maps})]
     (long (or (:total row) 0))))
 
@@ -478,7 +571,9 @@
   [db user-id {:keys [status tenant-id original-filename supplier-guess created-by-name
                       purchased-at-guess-from purchased-at-guess-to
                       created-at-from created-at-to
-                      updated-at-from updated-at-to]}]
+                      updated-at-from updated-at-to
+                      total-amount-guess-min total-amount-guess-max
+                      total-display-min total-display-max]}]
   (when-not user-id
     (throw (ex-info "user-id is required" {:status 400})))
   (let [helpers (build-status-query-helpers)
@@ -498,7 +593,11 @@
                                              :created-at-from created-at-from
                                              :created-at-to created-at-to
                                              :updated-at-from updated-at-from
-                                             :updated-at-to updated-at-to}))
+                               :updated-at-to updated-at-to})
+                (apply-receipt-amount-filters {:total-amount-guess-min total-amount-guess-min
+                                 :total-amount-guess-max total-amount-guess-max
+                                 :total-display-min total-display-min
+                                 :total-display-max total-display-max}))
         row (jdbc/execute-one! db (sql/format query) {:builder-fn rs/as-unqualified-lower-maps})]
     (long (or (:total row) 0))))
 

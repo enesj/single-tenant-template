@@ -135,15 +135,18 @@
                   expense-purchased-at-to (parse-instant-param (h/get-param params :expense-purchased-at-to))
                   created-at-from (parse-instant-param (h/get-param params :created-at-from))
                   created-at-to (parse-instant-param (h/get-param params :created-at-to))
-                  order-by (h/parse-order-by params)
-                  order-dir (or (h/parse-order-dir params) :desc)
-                  order-col (get allowed-expense-items-order-by order-by :ei.created_at)
+                  sort-opts (h/parse-sort-params params)
+                  order-clauses (shared-qb/resolve-order-by-clauses
+                                  {:sorts (:sorts sort-opts)
+                                   :order-by (:order-by sort-opts)
+                                   :order-dir (:order-dir sort-opts)
+                                   :allowed-order-by allowed-expense-items-order-by
+                                   :default-order-by :created-at
+                                   :default-order-dir :desc
+                                   :tie-breaker [:ei.id :asc]})
                   text-filters {:raw-label raw-label
                                 :raw-label-normalized raw-label-normalized
                                 :article-canonical-name article-canonical-name}
-                  ;; Stable tie-breaker to prevent jumping rows when values match.
-                  order-by-clause [[order-col order-dir]
-                                   [:ei.id :asc]]
                   search* (when (and (string? search) (not (str/blank? search)))
                             (str "%" search "%"))
                   ;; Elevated users (admin/owner) see all tenant items; others see only their own.
@@ -179,7 +182,7 @@
                               :where where}
                   query (-> base-query
                           (shared-qb/apply-text-filters expense-item-text-filter-columns text-filters)
-                          (assoc :order-by order-by-clause
+                          (assoc :order-by order-clauses
                             :limit limit
                             :offset offset))
                   count-query (-> {:select [[[:count :ei.id] :total]]

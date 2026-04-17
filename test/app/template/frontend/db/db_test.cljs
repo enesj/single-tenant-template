@@ -283,11 +283,11 @@
       :suppliers [:ui :lists :suppliers]
       :receipts [:ui :lists :receipts]))
 
-  (testing "list-sort-config path generation"
-    (are [entity-type expected] (= expected (paths/list-sort-config entity-type))
-      :expenses [:ui :lists :expenses :sort]
-      :suppliers [:ui :lists :suppliers :sort]
-      :receipts [:ui :lists :receipts :sort]))
+  (testing "list-sorts path generation"
+    (are [entity-type expected] (= expected (paths/list-sorts entity-type))
+      :expenses [:ui :lists :expenses :sorts]
+      :suppliers [:ui :lists :suppliers :sorts]
+      :receipts [:ui :lists :receipts :sorts]))
 
   (testing "list-current-page path generation"
     (are [entity-type expected] (= expected (paths/list-current-page entity-type))

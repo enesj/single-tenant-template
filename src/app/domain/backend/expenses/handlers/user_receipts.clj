@@ -86,6 +86,16 @@
         (catch Exception _ nil)))
     :else nil))
 
+(defn- extract-total-amount-range-filters
+  [params]
+  (let [min-value (or (some-> (h/get-param params :total-amount-guess-min) parse-money)
+                    (some-> (h/get-param params :total-display-min) parse-money))
+        max-value (or (some-> (h/get-param params :total-amount-guess-max) parse-money)
+                    (some-> (h/get-param params :total-display-max) parse-money))]
+    (cond-> {}
+      (some? min-value) (assoc :total-amount-guess-min min-value)
+      (some? max-value) (assoc :total-amount-guess-max max-value))))
+
 (defn- lines-total-amount-guess
   "Sum extracted line totals (from raw_extract_json.extraction.items[].line_total).
 
@@ -189,6 +199,7 @@
   - original-filename (text filter, ILIKE)
   - supplier-guess (text filter, ILIKE)
   - created-by-name (text filter, ILIKE)
+  - total-amount-guess-min/max or total-display-min/max (numeric filters)
   - purchased-at-guess-from/to, created-at-from/to, updated-at-from/to (date filters)"
   [db]
   (with-error-handling
@@ -202,6 +213,7 @@
                 show-purged? (parse-show-purged-param qp)
                 text-filters (h/extract-text-filter-params qp
                                [:original-filename :supplier-guess :created-by-name])
+                amount-filters (extract-total-amount-range-filters qp)
                 date-filters (into {}
                                (keep (fn [k]
                                        (when-let [v (h/get-param qp k)]
@@ -209,13 +221,14 @@
                                [:purchased-at-guess-from :purchased-at-guess-to
                                 :created-at-from :created-at-to
                                 :updated-at-from :updated-at-to])
+                sort-opts (h/parse-sort-params qp)
                 opts (cond-> (merge {:status status
                                      :show-purged? show-purged?
                                      :limit (parse-long-param qp :limit 50)
-                                     :offset (parse-long-param qp :offset 0)
-                                     :order-dir (keyword (or (:order-dir qp) (get qp "order-dir") "desc"))
-                                     :order-by (or (:order-by qp) (get qp "order-by"))}
+                                     :offset (parse-long-param qp :offset 0)}
+                               sort-opts
                                text-filters
+                                   amount-filters
                                date-filters)
                        tenant-id (assoc :tenant-id tenant-id))
                 {:keys [rows total purged-total limit offset]}

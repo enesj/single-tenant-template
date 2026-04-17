@@ -17,18 +17,18 @@
     [uix.core :as uix :refer [$ defui]]
     [uix.re-frame :refer [use-subscribe]]))
 
-(defui table-header [{:keys [label sortable? on-click sort-direction filter-on-click filter-active? show-filtering? is-field-filterable? header-id active-inline-filter? field-id column-width]}]
+(defui table-header [{:keys [label sortable? on-click sort-direction sort-priority filter-on-click filter-active? show-filtering? is-field-filterable? header-id active-inline-filter? field-id column-width]}]
   ($ :div
     {:class (str (when sortable? "cursor-pointer ")
-              "flex w-full min-w-0 flex-col items-start gap-1")
+              "flex h-full min-h-[4.5rem] w-full min-w-0 flex-col items-start")
      :on-click on-click
      :id header-id
      :style (when column-width {:width column-width :minWidth column-width})}
-    ($ :span {:class "min-w-0 whitespace-normal break-words leading-tight"}
+    ($ :span {:class "min-w-0 w-full whitespace-normal break-words leading-tight"}
       (if (or (string? label) (number? label))
         ($ :span {:class "font-bold"} (str label))
         label))
-    ($ :span {:class "flex items-center gap-2"}
+    ($ :span {:class "mt-auto flex items-center gap-2"}
       ($ :span {:class "flex w-4 justify-center"}
         (when (and show-filtering? is-field-filterable?)
           ($ filter-icon {:on-click filter-on-click
@@ -43,7 +43,11 @@
             :desc "↓"
             "")
           sortable? " "
-          :else "")))))
+          :else ""))
+      (when sort-priority
+        ($ :span {:class "rounded-full bg-base-200 px-2 py-0.5 text-[10px] font-semibold text-warning"
+                  :title (str "Sort priority " sort-priority)}
+          (str sort-priority))))))
 
 (defui action-header-buttons
   "Action buttons for the table header"
@@ -150,7 +154,7 @@
 
 (defn- make-table-headers-
   [{:keys [entity-spec entity-name show-filtering? show-batch-edit? show-batch-delete? on-batch-delete
-           sort-field sort-direction all-items selected-ids on-select-all active-filters
+           sorts all-items selected-ids on-select-all active-filters
            filterable-fields user-filterable-settings visible-columns column-order
            active-inline-filter on-inline-filter-click]}]
   (let [;; Start with base headers from entity spec fields
@@ -230,8 +234,16 @@
 
                          :else nil)
 
+        sort-state-by-field (into {}
+                              (keep-indexed (fn [idx {:keys [field direction]}]
+                                              (when-let [field-id (normalize-col field)]
+                                                [field-id {:direction direction
+                                                           :priority (inc idx)}])))
+                              (or sorts []))
+
         base-headers (mapv (fn [field]
                              (let [field-id (normalize-col (:id field))
+                                   sort-state (get sort-state-by-field field-id)
                                    ;; Use vector-config driven visibility map directly
                                    is-column-visible? (let [user-setting (get visible-columns field-id ::not-found)]
                                                         (if (not= user-setting ::not-found) user-setting true))
@@ -261,8 +273,9 @@
                                       :label (:label field)
                                       :sortable? is-sortable?
                                       :on-click (when is-sortable?
-                                                  #(rf/dispatch [::ui-events/set-sort-field entity-name field-id]))
-                                      :sort-direction (when (= sort-field field-id) sort-direction)
+                                                  #(rf/dispatch [::ui-events/set-sort-field entity-name field-id {:append? (.-shiftKey %)}]))
+                                      :sort-direction (:direction sort-state)
+                                      :sort-priority (:priority sort-state)
                                       :filter-on-click #(do
                                                           (.stopPropagation %)
                                                           (when on-inline-filter-click
@@ -319,9 +332,8 @@
                                                    (boolean
                                                      (some #(= active-inline-filter %)
                                                        (remove nil? [key legacy])))))
-                                namespaced (fn [key]
-                                             (keyword (kw/ensure-name entity-name)
-                                               (kw/ensure-name key)))
+                                created-sort-state (get sort-state-by-field created-key)
+                                updated-sort-state (get sort-state-by-field updated-key)
                                 has-created? (contains? timestamp-field-ids created-key)
                                 has-updated? (contains? timestamp-field-ids updated-key)]
                             [(fn []
@@ -331,8 +343,9 @@
                                     :header-id "header-created-at"
                                     :label (t :common/created)
                                     :sortable? true
-                                    :on-click #(rf/dispatch [::ui-events/set-sort-field entity-name (namespaced created-key)])
-                                    :sort-direction (when (= sort-field (namespaced created-key)) sort-direction)
+                                    :on-click #(rf/dispatch [::ui-events/set-sort-field entity-name created-key {:append? (.-shiftKey %)}])
+                                    :sort-direction (:direction created-sort-state)
+                                    :sort-priority (:priority created-sort-state)
                                     :filter-on-click #(do
                                                         (.stopPropagation %)
                                                         (when on-inline-filter-click
@@ -349,8 +362,9 @@
                                     :header-id "header-updated-at"
                                     :label (t :common/updated)
                                     :sortable? true
-                                    :on-click #(rf/dispatch [::ui-events/set-sort-field entity-name (namespaced updated-key)])
-                                    :sort-direction (when (= sort-field (namespaced updated-key)) sort-direction)
+                                    :on-click #(rf/dispatch [::ui-events/set-sort-field entity-name updated-key {:append? (.-shiftKey %)}])
+                                    :sort-direction (:direction updated-sort-state)
+                                    :sort-priority (:priority updated-sort-state)
                                     :filter-on-click #(do
                                                         (.stopPropagation %)
                                                         (when on-inline-filter-click
@@ -390,7 +404,7 @@
 
 (defn make-table-headers
   [{:keys [entity-spec entity-name show-filtering? show-batch-edit? show-batch-delete? on-batch-delete
-           sort-field sort-direction all-items selected-ids on-select-all active-filters
+           sorts sort-field sort-direction all-items selected-ids on-select-all active-filters
            filterable-fields user-filterable-settings visible-columns column-order
            active-inline-filter on-inline-filter-click]}]
   (make-table-headers- {:entity-spec entity-spec
@@ -399,8 +413,11 @@
                         :show-batch-edit? show-batch-edit?
                         :show-batch-delete? show-batch-delete?
                         :on-batch-delete on-batch-delete
-                        :sort-field sort-field
-                        :sort-direction sort-direction
+                        :sorts (or sorts
+                                 (cond-> []
+                                   (and sort-field sort-direction)
+                                   (conj {:field sort-field
+                                          :direction sort-direction})))
                         :all-items all-items
                         :selected-ids selected-ids
                         :on-select-all on-select-all

@@ -2,6 +2,7 @@
   (:require
     [app.backend.fixtures :as fixtures]
     [app.domain.backend.expenses.services.receipts.approval :as receipt-approval]
+    [app.domain.backend.expenses.services.receipts.queries :as receipt-queries]
     [app.domain.backend.expenses.services.receipts.status :as receipt-status]
     [app.domain.backend.expenses.services.suppliers :as suppliers]
     [app.domain.expenses.test-helpers :as th]
@@ -39,6 +40,16 @@
     (instance? org.postgresql.util.PGobject raw)
     (json/parse-string (.getValue ^org.postgresql.util.PGobject raw) true)
     :else nil))
+
+(deftest build-receipt-order-clauses-supports-purchased-at-guess
+  (testing "receipt sorting allowlist includes purchased-at-guess"
+    (is (= [[:purchased_at_guess :asc]
+            [:receipts.id :asc]]
+          (#'receipt-queries/build-receipt-order-clauses
+           [{:field :purchased-at-guess :direction :asc}]
+           nil
+           nil
+           "receipts.status::text")))))
 
 (deftest store-extraction-results-patch-style-and-casts
   (testing "does not wipe absent fields and uses jsonb/currency casts"
