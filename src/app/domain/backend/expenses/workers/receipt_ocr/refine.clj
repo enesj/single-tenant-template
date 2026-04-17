@@ -62,10 +62,10 @@
         items (get-in extract-result [:extraction :items])
         items-sum (double (reduce + 0M (keep #(some-> (:line_total %) bigdec) items)))
         total-guess (some-> (get-in extract-result [:extraction :totals :total]) double)
-        gap? (and total-guess
-               (pos? total-guess)
-               (> (/ (Math/abs (- total-guess items-sum)) total-guess) 0.10))
-        raw-tables (when gap?
+        total-diff (when total-guess
+                     (Math/abs (- total-guess items-sum)))
+        total-mismatch? (and total-diff (> total-diff 0.01))
+        raw-tables (when total-mismatch?
                      (some->> (:raw extract-result)
                        receipt-md/response->table-markdowns
                        not-empty))
@@ -108,7 +108,8 @@
                      :user-id user-id
                      :filename filename
                      :include-store-context? receipt-refine-include-store-context?
-                     :gap? gap?
+                     :total-mismatch? total-mismatch?
+                     :total-diff total-diff
                      :raw-tables-appended? (boolean (seq raw-tables))}
               supplier-key (assoc :supplier-key supplier-key)
               store-key (assoc :store-key store-key)

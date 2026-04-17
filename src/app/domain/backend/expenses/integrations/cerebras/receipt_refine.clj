@@ -87,11 +87,18 @@
     "- DO NOT include rows/sections about totals, payment methods, or tax summaries as items.\n"
     "  Examples to exclude: ukupno/total/ukupan iznos, uplaceno/primljeno, kartica/gotovina, povrat/razlika, PDV/VAT/porez.\n"
     "- Remove leading article/product codes from item names when present.\n"
+    "- Quantity-only or price-only fragments like '2,000x 7,56' are not valid standalone item names.\n"
+    "- Treat embedded size/volume markers like '0,25L', '0.25L', '1L', '330ML', and '500G' as part of the item name, not as prices.\n"
+    "- If a product line contains a size marker in the label and a later quantity/price line contains the actual price, keep the size marker in the item name and use the later numeric price values.\n"
+    "- Preserve explicit 100% discount rows like '-100,00%: 0,00' as discounts on the preceding item, not as standalone purchased items.\n"
     "\n"
     "Totals rules:\n"
     "- totals.total_cents is the receipt grand total for purchased items (TOTAL / UKUPNO in totals section), not the tendered payment amount.\n"
     "- Never use UPLAĆENO/PRIMLJENO/GOTOVINA/KARTICA/POVRAT as totals.total_cents.\n"
     "- Ignore totals that explicitly say 'without tax' (bez poreza / без пореза) or tax-only totals.\n"
+    "- Compare totals.total_cents against the sum of items[].line_total_cents.\n"
+    "- If they do not match, first look for a missed item row, bag/deposit/fee row, or discount row before changing totals.\n"
+    "- If evidence is inconsistent, do not invent phantom items; use nulls or keep the receipt for review.\n"
     "\n"
     "If a value is not present or not reliable, use null (do not invent values)."))
 
@@ -322,6 +329,8 @@
   - if subtotal matches sum(items)
   - and total does not match sum(items)
   - and tax does not explain the difference
+  - and the reported total is materially larger than the purchased-items subtotal
+    (more like a tendered payment amount than a missed line)
   then prefer subtotal as grand total.
 
   Also fills missing :total from items sum when possible."
@@ -333,12 +342,22 @@
         subtotal-matches-items? (and subtotal items-total (approx-eq-money? subtotal items-total))
         total-matches-items? (and total items-total (approx-eq-money? total items-total))
         tax-explains-diff? (and subtotal tax total
-                             (approx-eq-money? (.add subtotal tax) total))]
+                             (approx-eq-money? (.add subtotal tax) total))
+        total-gap (when (and subtotal total)
+                    (.subtract ^java.math.BigDecimal total ^java.math.BigDecimal subtotal))
+        total-gap-ratio (when (and subtotal total-gap (pos? (.compareTo subtotal 0M)))
+                          (safe-divide total-gap subtotal))
+        likely-payment-total? (boolean
+                                (and total-gap
+                                  total-gap-ratio
+                                  (pos? (.compareTo total-gap 0M))
+                                  (>= (.compareTo total-gap 1.00M) 0)
+                                  (>= (double total-gap-ratio) 0.20)))]
     (cond-> totals
       (and items-total (nil? total))
       (assoc :total items-total)
 
-      (and items-total subtotal-matches-items? (not total-matches-items?) (not tax-explains-diff?))
+      (and items-total subtotal-matches-items? (not total-matches-items?) (not tax-explains-diff?) likely-payment-total?)
       (assoc :total subtotal))))
 
 (defn llm-extraction->receipt-extraction

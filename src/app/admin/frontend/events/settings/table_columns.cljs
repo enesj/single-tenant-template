@@ -100,9 +100,53 @@
         :sortable-columns audit-sortable-columns
         :always-visible ["action"]))))
 
+(def ^:private legacy-admin-email-column "email-masked")
+(def ^:private canonical-admin-email-column "email")
+
+(defn- normalize-admin-email-column-id
+  [value]
+  (let [value-name (normalize-column-name value)]
+    (cond
+      (nil? value-name) nil
+      (= legacy-admin-email-column value-name)
+      (if (keyword? value)
+        :email
+        canonical-admin-email-column)
+      :else value)))
+
+(defn- normalize-admin-email-column-list
+  [columns]
+  (->> (or columns [])
+    (map normalize-admin-email-column-id)
+    (remove nil?)
+    distinct
+    vec))
+
+(defn- normalize-admin-email-column-map
+  [m]
+  (reduce-kv
+    (fn [acc k v]
+      (assoc acc (normalize-admin-email-column-id k) v))
+    {}
+    (or m {})))
+
+(defn- normalize-admin-config
+  [admin-config]
+  (cond-> (or admin-config {})
+    true (update :available-columns normalize-admin-email-column-list)
+    true (update :default-visible-columns normalize-admin-email-column-list)
+    true (update :filterable-columns normalize-admin-email-column-list)
+    true (update :sortable-columns normalize-admin-email-column-list)
+    true (update :always-visible normalize-admin-email-column-list)
+    true (update :computed-fields normalize-admin-email-column-map)
+    true (update :column-config normalize-admin-email-column-map)
+    true (update :column-metadata normalize-admin-email-column-map)))
+
 (defn normalize-table-columns
   [table-columns]
-  (update (or table-columns {}) :audit-logs normalize-audit-config))
+  (-> (or table-columns {})
+    (update :admins normalize-admin-config)
+    (update :audit-logs normalize-audit-config)))
 
 ;; =============================================================================
 ;; Load Table Columns Config

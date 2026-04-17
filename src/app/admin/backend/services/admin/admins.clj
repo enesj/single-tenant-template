@@ -23,13 +23,19 @@
    :namespaces #{"admins" "admin" "a"}
    :id-fields #{:id}})
 
+(defn- admin-management-view
+  "Prepare admin management payloads with full emails for privileged admin views."
+  [admin]
+  (let [email (email-privacy/resolve-email admin)]
+    (cond-> (email-privacy/routine-admin-view admin)
+      email (assoc :email email))))
+
 (defn- db-admin->app
   "Normalize an admin row from the database using shared utilities"
   [admin]
   (some-> admin
-    (norm/normalize-admin-result admin-config)
-    (dissoc :password_hash :password-hash)
-    email-privacy/routine-admin-view))
+    admin-management-view
+    (norm/normalize-admin-result admin-config)))
 
 (def ^:private valid-admin-roles
   #{"admin" "support" "owner"})
@@ -99,12 +105,13 @@
 ;; ============================================================================
 
 (defn- build-admin-list-filter-clauses
-  [{:keys [search status role full-name
+  [{:keys [search email status role full-name
            last-login-at-from last-login-at-to]}]
   (cond-> []
     search (conj [:or
                   [:ilike :a/full_name (str "%" search "%")]
                   [:ilike [:cast :a/id :text] (str "%" search "%")]])
+    email (conj (email-privacy/email-match-clause :a/email_lookup_hash :a/email email))
     status (conj [:= :a/status (tc/cast-for-database :admin-status status)])
     role (conj [:= :a/role (tc/cast-for-database :admin-role role)])
     full-name (conj [:ilike :a/full_name (str "%" full-name "%")])
@@ -447,7 +454,7 @@
        :ip-address ip-address
        :user-agent user-agent})
 
-     (log/info "Admin deleted"
+    (log/info "Admin deleted"
       {:admin-id admin-id
        :admin-ref (email-privacy/admin-ref admin-id)
        :email-masked (email-privacy/mask-email (:email admin))})

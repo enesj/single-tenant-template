@@ -90,6 +90,7 @@
     (is (re-find #"100% discount rows" prompt))
     (is (re-find #"-100,00%: 0,00" prompt))
     (is (re-find #"Quantity-only or price-only fragments like '2,000x 7,56' are not valid standalone item names" prompt))
+    (is (re-find #"0,25L" prompt))
     (is (re-find #"do not invent phantom items" prompt))))
 
 (deftest llm-extraction-reconciles-payment-total-to-items-total
@@ -106,6 +107,37 @@
       (is (= 9.95M (bigdec (get-in ex [:totals :subtotal]))))
       (is (= 9.95M (bigdec (get-in ex [:totals :total]))))
       (is (= 9.95M (bigdec (get-in ex [:items 0 :line_total])))))))
+
+(deftest llm-extraction-keeps-small-total-gap-when-it-looks-like-a-missed-line
+  (testing "When subtotal matches items but the total is only slightly larger, keep the reported total for review"
+    (let [raw {"merchant" {"name" "Konzum" "address" nil "tax_id" nil}
+               "purchased_at" "2026-04-07T19:35:00"
+               "currency" "BAM"
+               "totals" {"subtotal_cents" 1445 "tax_cents" nil "total_cents" 1550}
+               "items" [{"name" "SOK COCA COLA"
+                         "quantity" 1.0
+                         "unit_price_cents" 25
+                         "line_total_cents" 25}
+                        {"name" "BOMB MALINA&KUPI 100"
+                         "quantity" 1.0
+                         "unit_price_cents" 220
+                         "line_total_cents" 220}
+                        {"name" "SOK TONIC WATER 1L"
+                         "quantity" 1.0
+                         "unit_price_cents" 210
+                         "line_total_cents" 210}
+                        {"name" "STR SMOKVA XXL 400G"
+                         "quantity" 1.0
+                         "unit_price_cents" 595
+                         "line_total_cents" 595}
+                        {"name" "BOMB HAR JAG 175G"
+                         "quantity" 1.0
+                         "unit_price_cents" 395
+                         "line_total_cents" 395}]}
+          ex (receipt-refine/llm-extraction->receipt-extraction raw)]
+      (is (= 14.45M (bigdec (get-in ex [:totals :subtotal]))))
+      (is (= 15.50M (bigdec (get-in ex [:totals :total]))))
+      (is (= 14.45M (->> ex :items (map :line_total) (reduce +) bigdec))))))
 
 (deftest llm-extraction-keeps-total-when-tax-explains-difference
   (testing "When subtotal + tax explains total, keep total unchanged"

@@ -63,7 +63,7 @@
  {:available-columns
   ["id"
    "admin-ref"
-   "email-masked"
+   "email"
    "full-name"
    "role"
    "status"
@@ -74,7 +74,7 @@
   :default-visible-columns
   ["id"
    "admin-ref"
-   "email-masked"
+   "email"
    "full-name"
    "role"
    "status"
@@ -83,13 +83,13 @@
    "updated-at"
    "password-hash"],
   :filterable-columns
-  ["full-name" "role" "status" "last-login-at"],
+  ["email" "full-name" "role" "status" "last-login-at"],
   :sortable-columns ["full-name" "role" "status" "created-at"],
   :always-visible ["admin-ref"],
   :computed-fields {},
   :column-config
   {:admin-ref {:width "160px"},
-   :email-masked {:width "220px"},
+   :email {:width "220px"},
    :role {:width "100px", :formatter "admin-role-badge"},
    :updated-at {:width "140px", :formatter "date"},
    :last-login-at {:width "160px", :formatter "date"},

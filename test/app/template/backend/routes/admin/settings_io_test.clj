@@ -83,6 +83,26 @@
         (is (= ["id" "email" "custom-col"]
               (get-in resolved [:admins :default-visible-columns])))))))
 
+(deftest read-table-columns-migrates-legacy-admin-email-column
+  (testing "legacy persisted admin email-masked columns are upgraded to email"
+    (let [db fixtures/*test-db*]
+      (clear-runtime-overrides! db)
+      (seed-runtime-config! db "admin" :table-columns
+        {:admins {:available-columns ["id" "admin-ref" "email-masked" "full-name"]
+                  :default-visible-columns ["admin-ref" "email-masked"]
+                  :filterable-columns ["email-masked" "full-name"]
+                  :column-config {:email-masked {:width "220px"}}}})
+      (let [resolved (settings-io/read-table-columns db)]
+        (is (= ["id" "admin-ref" "email" "full-name"]
+              (get-in resolved [:admins :available-columns])))
+        (is (= ["admin-ref" "email"]
+              (get-in resolved [:admins :default-visible-columns])))
+        (is (= ["email" "full-name"]
+              (get-in resolved [:admins :filterable-columns])))
+        (is (= {:width "220px"}
+              (get-in resolved [:admins :column-config :email])))
+        (is (nil? (get-in resolved [:admins :column-config :email-masked])))))))
+
 ;; ---------------------------------------------------------------------------
 ;; Retired column pruning
 ;; ---------------------------------------------------------------------------

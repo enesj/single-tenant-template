@@ -1,6 +1,7 @@
 (ns app.domain.backend.expenses.workers.receipt-ocr-core-test
   (:require
     [app.domain.backend.expenses.integrations.cerebras :as cerebras]
+    [app.domain.backend.expenses.integrations.llamaparse.receipt-markdown :as receipt-md]
     [app.domain.backend.expenses.integrations.mistral-ocr :as mistral-ocr]
     [app.domain.backend.expenses.integrations.ocr-provider :as ocr-provider]
     [app.domain.backend.expenses.services.places-api :as places-api]
@@ -223,6 +224,48 @@
             :selected_total_confidence 0.41}
           (get-in res [:extraction :provider_confidence])))
     (is (= "test-model" (get-in res [:llm_refine :model])))))
+
+(deftest maybe-refine-with-cerebras-appends-raw-ocr-table-on-small-total-mismatch
+  (let [receipt-id (java.util.UUID/randomUUID)
+        user-id (java.util.UUID/randomUUID)
+        captured-markdown (atom nil)
+        extract-result {:parsed-markdown "KONZUM\n\nTOTAL: 15,50"
+                        :raw {:items {:pages []}}
+                        :extraction {:items [{:raw_label "SOK COCA COLA"
+                                              :qty 1.0
+                                              :unit_price 0.25
+                                              :line_total 14.45}]
+                                     :totals {:total 15.50}}}
+        raw-table "| Label | Qty | Price | Total |\n| --- | --- | --- | --- |\n| SOK COCA COLA 0,25L | 1,000x | 1,30 | 1,30E |"
+        _res (clojure.core/with-redefs-fn
+               {#'cerebras/refine-receipt-markdown!
+                (fn [_cfg markdown]
+                  (reset! captured-markdown markdown)
+                  {:model "test-model"
+                   :extraction {:merchant {:name "Store"}
+                                :items [{:raw_label "SOK COCA COLA 0,25L"
+                                         :qty 1.0
+                                         :unit_price 1.30
+                                         :line_total 1.30}]
+                                :totals {:total 15.50}}})
+                #'receipt-queries/get-receipt-refine-context
+                (fn [_db _rid]
+                  nil)
+                #'receipt-md/response->table-markdowns
+                (fn [_raw]
+                  [raw-table])}
+               (fn []
+                 (#'refine/maybe-refine-with-cerebras
+                  ::db
+                  {:id receipt-id
+                   :user_id user-id
+                   :original_filename "IMG_4161.jpeg"}
+                  extract-result
+                  {:cerebras-cfg {:api-key "k"}
+                   :force-refine? true})))]
+    (is (string? @captured-markdown))
+    (is (str/includes? @captured-markdown "Raw OCR table"))
+    (is (str/includes? @captured-markdown "SOK COCA COLA 0,25L"))))
 
 (deftest refine-review-required-results-times-out
   (let [opts {:cerebras-cfg {:refine-concurrency 1 :refine-timeout-ms 50}}

@@ -164,6 +164,48 @@
     (or table-columns {})
     retired-admin-table-columns))
 
+(def ^:private legacy-admin-email-column "email-masked")
+(def ^:private canonical-admin-email-column "email")
+
+(defn- normalize-admin-email-column-id
+  [value]
+  (let [value-name (some-> value name str/trim)]
+    (if (= legacy-admin-email-column value-name)
+      (if (keyword? value)
+        :email
+        canonical-admin-email-column)
+      value)))
+
+(defn- normalize-admin-email-column-list
+  [columns]
+  (->> (or columns [])
+    (map normalize-admin-email-column-id)
+    (remove nil?)
+    distinct
+    vec))
+
+(defn- normalize-admin-email-column-map
+  [m]
+  (reduce-kv
+    (fn [acc k v]
+      (assoc acc (normalize-admin-email-column-id k) v))
+    {}
+    (or m {})))
+
+(defn- normalize-admin-email-columns
+  [table-columns]
+  (update (or table-columns {}) :admins
+    (fn [entity-config]
+      (cond-> (or entity-config {})
+        true (update :available-columns normalize-admin-email-column-list)
+        true (update :default-visible-columns normalize-admin-email-column-list)
+        true (update :filterable-columns normalize-admin-email-column-list)
+        true (update :sortable-columns normalize-admin-email-column-list)
+        true (update :always-visible normalize-admin-email-column-list)
+        true (update :computed-fields normalize-admin-email-column-map)
+        true (update :column-config normalize-admin-email-column-map)
+        true (update :column-metadata normalize-admin-email-column-map)))))
+
 (def ^:private payer-type-filter-options
   [{:value "system" :label "system"}
    {:value "custom" :label "custom"}])
@@ -247,6 +289,7 @@
   "Read admin table-columns from the runtime store."
   [db]
   (-> (read-runtime-override db admin-scope :table-columns)
+    normalize-admin-email-columns
     promote-legacy-admin-table-columns-override
     retire-admin-table-columns
     (doto (->> (table-columns-spec/validate-table-columns-strict)
@@ -255,7 +298,9 @@
 (defn write-table-columns!
   "Persist admin table-columns in the runtime store."
   [db table-columns]
-  (let [sanitized-table-columns (retire-admin-table-columns table-columns)
+  (let [sanitized-table-columns (-> table-columns
+                                  normalize-admin-email-columns
+                                  retire-admin-table-columns)
         validation (table-columns-spec/validate-table-columns-strict sanitized-table-columns)]
     (validate-or-throw! "table-columns" validation
       {:errors (:errors validation)

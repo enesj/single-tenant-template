@@ -32,6 +32,7 @@
             pagination (utils/extract-pagination-params params)
             date-ranges (utils/extract-date-range-params params [:last-login-at])
             filters (merge {:search (:search params)
+                            :email (:email params)
                             :status (:status params)
                             :role (:role params)
                             :full-name (:full-name params)}

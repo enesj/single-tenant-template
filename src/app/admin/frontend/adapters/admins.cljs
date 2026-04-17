@@ -45,6 +45,47 @@
                                :on-success on-success
                                :on-failure on-failure})))
 
+(def ^:private legacy-admin-email-column :email-masked)
+(def ^:private canonical-admin-email-column :email)
+
+(defn- normalize-admin-column-pref
+  [column]
+  (let [column-key (some-> column name keyword)]
+    (cond
+      (= legacy-admin-email-column column-key) canonical-admin-email-column
+      (keyword? column-key) column-key
+      :else nil)))
+
+(defn- migrate-legacy-admin-email-visible-prefs
+  [db]
+  (let [prefs-key :admin/admins
+        visible-order-path (paths/entity-prefs-columns-visible-order prefs-key)
+        order-path (paths/entity-prefs-columns-order prefs-key)
+        visible-path (paths/entity-prefs-columns-visible prefs-key)
+        visible-order (get-in db visible-order-path)
+        visible-map (or (get-in db visible-path) {})
+        migrated-order (->> (or visible-order [])
+                         (keep normalize-admin-column-pref)
+                         distinct
+                         vec)
+        migrated-visible-map (reduce-kv
+                               (fn [acc k v]
+                                 (if-let [normalized-key (normalize-admin-column-pref k)]
+                                   (assoc acc normalized-key v)
+                                   acc))
+                               {}
+                               visible-map)
+        migration-needed? (or (some #{legacy-admin-email-column}
+                                (keep #(some-> % name keyword) visible-order))
+                            (some #{legacy-admin-email-column}
+                              (keep #(some-> % name keyword) (keys visible-map))))]
+    (if migration-needed?
+      (-> db
+        (assoc-in visible-order-path migrated-order)
+        (assoc-in order-path migrated-order)
+        (assoc-in visible-path migrated-visible-map))
+      db)))
+
 (adapters.core/register-admin-crud-bridge!
   {:entity-key :admins
    :context-pred (fn [_] true)
@@ -91,16 +132,17 @@
     (let [metadata-path (paths/entity-metadata :admins)
           ui-state-path (paths/list-ui-state :admins)
           selected-ids-path (paths/entity-selected-ids :admins)
-          db* (db-utils/assoc-paths db
-                [[(conj metadata-path :sort) {:field :created_at :direction :desc}]
-                 [(conj metadata-path :filters) {}]
-                 [ui-state-path {:sort {:field :created_at :direction :desc}
-                                 :pagination-mode :server
-                                 :refresh-event [:admin/load-admins]
-                                 :pagination (-> (merge {:current-page 1}
-                                                   (:pagination (get-in db ui-state-path)))
-                                               (assoc :mode :server))}]
-                 [selected-ids-path #{}]])
+          db* (-> (db-utils/assoc-paths db
+                    [[(conj metadata-path :sort) {:field :created_at :direction :desc}]
+                     [(conj metadata-path :filters) {}]
+                     [ui-state-path {:sort {:field :created_at :direction :desc}
+                                     :pagination-mode :server
+                                     :refresh-event [:admin/load-admins]
+                                     :pagination (-> (merge {:current-page 1}
+                                                       (:pagination (get-in db ui-state-path)))
+                                                   (assoc :mode :server))}]
+                     [selected-ids-path #{}]])
+                (migrate-legacy-admin-email-visible-prefs))
           fetch-config (db-utils/maybe-fetch-config db)]
       (cond-> {:db db*}
         fetch-config (assoc :dispatch-n [fetch-config])))))
