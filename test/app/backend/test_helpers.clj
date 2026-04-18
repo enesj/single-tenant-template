@@ -33,12 +33,11 @@
   ([overrides]
    (merge
      {:models-data {}
-      ;; crud-routes must be in the format that entities-routes returns
-      ;; which is what the DI container provides: [["/:entity" config subroutes...]]
-      :crud-routes [["/:entity"
-                     {:middleware []
-                      "" {:get {:handler (fn [_] {:status 200 :body "stub list"})}
-                          :post {:handler (fn [_] {:status 201 :body "stub create"})}}}
+      ;; crud-routes must match the DI container shape from app.template.backend.routes.crud
+      :crud-routes [["/api/:entity"
+                     {:swagger {:tags ["CRUD Operations"]}}
+                     ["" {:get {:handler (fn [_] {:status 200 :body "stub list"})}
+                          :post {:handler (fn [_] {:status 201 :body "stub create"})}}]
                      ["/:id" {:get {:handler (fn [_] {:status 200 :body "stub get"})}
                               :put {:handler (fn [_] {:status 200 :body "stub update"})}
                               :delete {:handler (fn [_] {:status 204})}}]]]

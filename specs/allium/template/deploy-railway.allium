@@ -6,7 +6,7 @@
 --         Docker two-stage build (builder → runtime uberjar);
 --         Railway container deploy; health-check readiness gate;
 --         required env var startup preconditions;
---         manual migration trigger (never automatic);
+--         automatic preDeploy migrations on every deploy;
 --         production inspection via Railway MCP and CLI.
 --
 -- Sources: .github/workflows/ci.yml, Dockerfile,
@@ -121,7 +121,7 @@ config {
     health_check_timeout:  Duration  = 5.seconds
     health_check_start_period: Duration = 30.seconds   -- JVM cold-start grace period
     health_check_retries:  Integer   = 3
-    default_port:          Integer   = 8080            -- Railway injects PORT at runtime
+    default_port:          Integer   = 8080            -- Runtime image falls back to 8080 when PORT is absent
 }
 
 -- ---------------------------------------------------------------------------
@@ -440,17 +440,21 @@ surface RailwayDeployBoundary {
         revision.health_check_failures
         revision.build.status
 
-    @guarantee PortIsRailwayInjectedAtRuntime
-        -- PORT is injected by Railway at runtime; the app must not fall back to a hardcoded default.
+    @guarantee RuntimePortPrefersRailwayInjectedValue
+        -- Railway injects PORT in production deploys.
+        -- When PORT is absent, the runtime image falls back to config.default_port (8080).
 
     @guarantee DatabaseUrlIsInjectedWhenPostgresIsLinked
         -- DATABASE_URL is injected automatically when a Railway Postgres service is linked.
 
-    @guarantee RequiredManualVariablesMustExistBeforeFirstDeploy
-        -- The following vars must be set manually in Railway → Variables before the first deploy:
-        -- BASE_URL, GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET,
-        -- GMAIL_REFRESH_TOKEN, SMTP_FROM_EMAIL, GOOGLE_OAUTH_REDIRECT_URI.
-        -- Any missing required var causes startup failure and triggers ServiceBecomesUnhealthy.
+    @guarantee StartupHardFailsOnlyForCoreSecrets
+        -- Startup hard-fails when database connectivity cannot be resolved
+        -- (DATABASE_URL or equivalent DB password config) and, in production,
+        -- when EMAIL_PRIVACY_ENCRYPTION_KEY_B64 or EMAIL_PRIVACY_LOOKUP_KEY_B64 are missing.
+
+    @guarantee OptionalIntegrationsWarnRatherThanAbortStartup
+        -- Missing GOOGLE_OAUTH_CLIENT_SECRET or outbound-email provider credentials
+        -- leave those integrations disabled and emit warnings rather than aborting startup.
 }
 
 surface HealthCheckBoundary {

@@ -4,6 +4,11 @@
 -- The hardcoded Currency enum is replaced by String type with a BAM constraint.
 -- For manual expenses, currency comes from EnabledCurrency (see settings-hierarchy.candidate.allium).
 -- For receipt-originated expenses, currency is always "BAM" — no conversion needed.
+--
+-- Observable receipt processing statuses in the current system include the
+-- intermediate parsing/parsed states, and the persisted schema still accepts an
+-- `approved` status value even though current approve handlers typically move
+-- directly to `posted`.
 
 use "./payer-and-defaults.candidate.allium" as defaults
 
@@ -58,7 +63,8 @@ entity Receipt {
     file_size_bytes: Integer?
 
     -- allium-ignore allium.status.noExit
-    status: uploaded | extracting | extracted | review_required | posted | failed
+    -- allium-ignore allium.status.unreachableValue
+    status: uploaded | parsing | parsed | extracting | extracted | review_required | approved | posted | failed
     retry_count: Integer
 
     raw_extract_json: String?
@@ -205,8 +211,46 @@ rule QueueSingleReceiptForOCR {
 rule QueuePendingReceiptsForOCRSweep {
     when: RunReceiptOCRSweep()
 
-    for receipt in Receipts where receipt.status in {uploaded, extracting}:
+    for receipt in Receipts where receipt.status in {uploaded, parsing, parsed, extracting}:
         ensures: ReceiptQueuedForProcessing(receipt: receipt)
+}
+
+rule StartReceiptParsing {
+    when: ReceiptQueuedForProcessing(receipt)
+
+    requires: receipt.status = parsing
+
+    ensures: OCRParsingRequested(receipt: receipt)
+}
+
+rule HandleOCRParseSuccess {
+    when: OCRParsingCompleted(receipt, parsed_markdown)
+
+    requires: receipt.status = parsing
+
+    ensures: receipt.parsed_markdown = parsed_markdown
+    ensures: receipt.status = parsed
+}
+
+rule HandleOCRParseFailure {
+    when: OCRParsingFailed(receipt, message, details?)
+
+    requires: receipt.status = parsing
+
+    ensures: receipt.status = failed
+    ensures: receipt.retry_count = receipt.retry_count + 1
+    ensures: receipt.error_message = message
+    ensures: receipt.error_details = details
+    ensures: receipt.refine_pending = false
+}
+
+rule StartReceiptExtractionFromParsed {
+    when: ReceiptQueuedForProcessing(receipt)
+
+    requires: receipt.status = parsed
+
+    ensures: receipt.status = extracting
+    ensures: OCRExtractionRequested(receipt: receipt)
 }
 
 rule StartReceiptExtractionFromUploaded {
@@ -390,6 +434,22 @@ rule PostReviewedReceipt {
     requires: receipt.status = review_required
 
     ensures: receipt.status = posted
+}
+
+rule FinalizeLegacyApprovedReceipt {
+    when: ApprovedReceiptPosted(receipt)
+
+    requires: receipt.status = approved
+
+    ensures: receipt.status = posted
+}
+
+rule ReopenPostedReceiptAfterExpenseUnlink {
+    when: LinkedExpenseRemoved(receipt)
+
+    requires: receipt.status = posted
+
+    ensures: receipt.status = extracted
 }
 
 rule SaveReceiptReview {

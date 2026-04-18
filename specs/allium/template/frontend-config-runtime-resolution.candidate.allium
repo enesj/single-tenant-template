@@ -1,15 +1,17 @@
 -- allium: 3
 -- frontend-config-runtime-resolution.candidate.allium
 --
--- Scope: operator-managed frontend list configuration for admin-facing and
+-- Scope: operator-managed runtime frontend configuration for admin-facing and
 --        user-facing pages.
 --
 -- Captures:
 --   - defaults exist for every mutable config channel
---   - operators can save runtime snapshots for a chosen scope and config kind
+--   - operators can save full-channel runtime snapshots for a chosen scope and config kind
+--   - operators can patch nested settings within an existing runtime channel
 --   - effective reads use defaults when no runtime snapshot exists
---   - the latest saved snapshot is the one that affects subsequent reads
---   - saved snapshots behave as replacements, so explicit removals persist
+--   - the latest successful write is the one that affects subsequent reads
+--   - full saves replace a channel snapshot, while scoped patches persist by
+--     rewriting the resulting channel snapshot
 --
 -- Excludes:
 --   - storage choice (files, database, generated code, etc.)
@@ -18,7 +20,7 @@
 
 entity ConfigChannel {
     scope: admin | user
-    kind: view_options | form_fields | table_columns
+    kind: entities | view_options | form_fields | table_columns
     has_runtime_snapshot: Boolean = false
 }
 
@@ -34,17 +36,29 @@ rule SaveRuntimeConfigSnapshot {
     ensures: ConfigChanged(channel.scope, channel.kind)
 }
 
+rule PatchRuntimeConfigSnapshot {
+    when: OperatorPatchesConfig(channel, patch)
+    ensures: channel.has_runtime_snapshot = true
+    ensures: ConfigChanged(channel.scope, channel.kind)
+}
+
 surface SettingsAdministrationBoundary {
     provides:
         OperatorSavesConfig(channel, snapshot)
+        OperatorPatchesConfig(channel, patch)
 
-    @guarantee SnapshotReplacement
-        -- Saving a channel replaces the entire previously saved runtime snapshot
-        -- for that channel rather than patching individual nested keys in place.
+    @guarantee FullChannelSavesReplaceThatChannel
+        -- Saving a full channel replaces the previously saved runtime snapshot
+        -- for that same channel.
 
-    @guarantee LatestSaveWins
-        -- The latest successful save for a channel is the snapshot that affects
-        -- subsequent reads for that same channel.
+    @guarantee ScopedPatchesRewriteOnlyTheirChannel
+        -- Patch operations read the current channel snapshot, update targeted
+        -- nested settings within that channel, and persist the resulting channel
+        -- snapshot without altering other channels.
+
+    @guarantee LatestWriteWins
+        -- The latest successful full save or patch for a channel is the one that
+        -- affects subsequent reads for that same channel.
 
     @guarantee ChannelIsolation
         -- Saving one channel does not alter any other scope or config kind.
@@ -62,7 +76,8 @@ surface EffectiveConfigReadBoundary {
 
     @guarantee LatestSnapshotShapesReads
         -- When channel.has_runtime_snapshot = true, reads return configuration
-        -- derived from the channel defaults and the latest saved runtime snapshot.
+        -- derived from the channel defaults and the latest persisted runtime
+        -- snapshot for that channel.
 
     @guarantee ExplicitRemovalPersists
         -- Explicit removals captured by the latest saved runtime snapshot remain
@@ -78,10 +93,13 @@ surface AdminSettingsPage {
 
     provides:
         OperatorSavesConfig(channel, snapshot)
-            when channel.scope = admin
+            when channel.scope = admin and channel.kind in {view_options, form_fields, table_columns}
+        OperatorPatchesConfig(channel, patch)
+            when channel.scope = admin and channel.kind in {view_options, form_fields, table_columns}
 
     @guarantee AdminScopeOnly
-        -- This surface only manages admin-scoped mutable config channels.
+        -- This surface manages admin-scoped mutable config channels for
+        -- view-options, form-fields, and table-columns.
 }
 
 surface UserSettingsPage {
@@ -90,9 +108,12 @@ surface UserSettingsPage {
     provides:
         OperatorSavesConfig(channel, snapshot)
             when channel.scope = user
+        OperatorPatchesConfig(channel, patch)
+            when channel.scope = user
 
     @guarantee UserScopeOnly
-        -- This surface only manages user-scoped mutable config channels.
+        -- This surface manages user-scoped mutable config channels, including
+        -- runtime-managed `entities` metadata.
 }
 
 surface ListPageConfigConsumer {
@@ -108,4 +129,3 @@ surface ListPageConfigConsumer {
         -- User-facing list pages consume user-scoped effective config.
 }
 
-open question "Should user-facing entities metadata remain source-controlled, or eventually join the runtime-managed config model?"

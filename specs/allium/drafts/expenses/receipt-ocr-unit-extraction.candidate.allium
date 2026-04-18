@@ -49,7 +49,6 @@ default UnitSuffix gram_full   = { raw_suffix: "g",    canonical_unit: "g" }
 default UnitSuffix liter       = { raw_suffix: "lit",  canonical_unit: "l" }
 default UnitSuffix liter_short = { raw_suffix: "l",    canonical_unit: "l" }
 default UnitSuffix pak         = { raw_suffix: "pak",  canonical_unit: "pak" }
-default UnitSuffix meter       = { raw_suffix: "m",    canonical_unit: "m" }
 
 rule ExtractUnitFromLabel {
     when: ParseArticleLabel(raw_label)
@@ -99,4 +98,4 @@ deferred match_trailing_unit_suffix(raw_label)
 -- allium-ignore allium.deferred.missingLocationHint
 deferred strip_suffix(raw_label, suffix_match)
 
-open question "Should single-letter units like /L and /M be extracted, or are they too ambiguous in Bosnian POS labels?"
+open question "Should single-letter /M be extracted in future, or should meter remain unsupported because it is too ambiguous in Bosnian POS labels?"

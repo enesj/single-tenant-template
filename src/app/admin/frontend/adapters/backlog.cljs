@@ -25,6 +25,13 @@
    :normalize-fn backlog->template-entity
    :log-prefix "[backlog] Syncing backlog items to template system:"})
 
+(def ^:private backlog-default-sorts
+  [{:field :status :direction :asc}
+   {:field :number :direction :asc}])
+
+(def ^:private backlog-primary-sort
+  (first backlog-default-sorts))
+
 (adapters.core/register-admin-crud-bridge!
   {:entity-key :backlog
    :context-pred (fn [_] true)
@@ -65,9 +72,10 @@
           ui-state-path (paths/list-ui-state :backlog)
           selected-ids-path (paths/entity-selected-ids :backlog)
           db* (db-utils/assoc-paths db
-                [[(conj metadata-path :sort) {:field :number :direction :asc}]
+                [[(conj metadata-path :sort) backlog-primary-sort]
                  [(conj metadata-path :filters) {}]
-                 [ui-state-path {:sort {:field :number :direction :asc}
+                 [ui-state-path {:sort backlog-primary-sort
+                                 :sorts backlog-default-sorts
                                  :pagination (merge {:current-page 1}
                                                (:pagination (get-in db ui-state-path)))}]
                  [selected-ids-path #{}]])

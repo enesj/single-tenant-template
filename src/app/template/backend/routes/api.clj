@@ -13,8 +13,10 @@
     [app.template.backend.routes.entities :as entities]
     [app.template.backend.routes.onboarding :as onboarding-routes]
     [app.template.backend.routes.tenant :as tenant-routes]
+    [app.template.backend.routes.utils :as route-utils]
     [app.admin.backend.services.admin.dashboard :as admin-dashboard]
     [app.template.backend.services.monitoring.login-events :as login-monitoring]
+    [app.template.backend.services.tenant :as tenant-svc]
     [app.shared.http :as http]
     [cheshire.core :as json]
     [java-time.api :as time]
@@ -178,6 +180,65 @@
                                 :by-principal-type {:admin admin-logins-24h
                                                     :user user-logins-24h}}}}))
 
+(defn- parse-int-param
+  [value default]
+  (cond
+    (integer? value) value
+    (string? value) (try
+                      (Integer/parseInt value)
+                      (catch NumberFormatException _
+                        default))
+    :else default))
+
+(defn- tenant-member->user-entity-row
+  [member]
+  {:id (or (:user_id member) (:user-id member))
+   :full_name (or (:user_full_name member) (:user-full-name member))
+   :email (or (:user_email member) (:user-email member))
+   :status (or (:user_status member) (:user-status member))
+   :membership_role (or (:role member)
+                      (:tenant_memberships/role member)
+                      (:membership-role member))
+   :membership_status (or (:status member)
+                        (:tenant_memberships/status member)
+                        (:membership-status member))})
+
+(defn- protected-users-list-handler
+  [db]
+  (fn [request]
+    (route-utils/with-error-handling "protected-users-list"
+      (let [tenant-id (or (get-in request [:session :auth-session :tenant :id])
+                        (get-in request [:session :auth-session :tenant :tenants/id])
+                        (get-in request [:session :tenant-id]))
+            user-id (or (get-in request [:session :auth-session :user :id])
+                      (get-in request [:session :user :id]))
+            _ (when-not tenant-id
+                (throw (ex-info "No active tenant"
+                         {:type :validation-error
+                          :errors {:tenant ["No active tenant in session"]}})))
+            actor-membership (tenant-svc/get-membership db tenant-id user-id)
+            _ (when-not actor-membership
+                (throw (ex-info "Not a member of this tenant"
+                         {:type :forbidden
+                          :errors {:tenant ["You are not a member of this tenant"]}})))
+            actor-role (let [role (or (:role actor-membership)
+                                    (:tenant_memberships/role actor-membership))]
+                         (cond
+                           (keyword? role) (name role)
+                           (some? role) (str role)
+                           :else nil))
+            include-suspended? (contains? #{"owner" "admin"} actor-role)
+            limit (parse-int-param (or (get-in request [:query-params :limit])
+                                     (get-in request [:params :limit])) nil)
+            offset (parse-int-param (or (get-in request [:query-params :offset])
+                                      (get-in request [:params :offset])) 0)
+            users (cond->> (tenant-svc/get-tenant-members db tenant-id {:include-suspended? include-suspended?})
+                    true (map tenant-member->user-entity-row)
+                    true (drop offset)
+                    limit (take limit)
+                    true vec)]
+        (route-utils/success-response users)))))
+
 (defn create-versioned-api-routes
   "Create versioned API routes with the given database, models-data, and
    version prefix like \"/v1\"."
@@ -317,22 +378,29 @@
      ;; Transform ["/:entity" config & subroutes] to ["/entities/:entity" config & subroutes]
      (let [entity-routes (entities/entities-routes db md service-container)
            [_entity-path route-config & subroutes] (first entity-routes)
-           ;; Create a custom handler that checks for users and delegates appropriately
+           list-route (some #(when (= "" (first %)) %) subroutes)
+           original-get-handler (get-in list-route [1 :get :handler])
+           users-get-handler (protected-users-list-handler db)
            custom-get-handler (fn [request]
-                                (let [entity (get-in request [:parameters :path :entity])]
-                                  (if (= entity "users")
-                                    ;; Delegate to admin API for users
-                                    (let [admin-handler (requiring-resolve 'app.backend.routes.admin-api/list-users-handler)]
-                                      ((admin-handler db) request))
-                                    ;; Use original handler for other entities
-                                    (let [original-get-handler (get-in route-config ["" :get :handler])]
-                                      (original-get-handler request)))))
-           ;; Update the route config to use our custom handler and require user auth for all CRUD ops
+                                (let [entity (or (get-in request [:path-params :entity])
+                                               (get-in request [:parameters :path :entity]))
+                                      entity-name (cond
+                                                    (keyword? entity) (name entity)
+                                                    (string? entity) entity
+                                                    (some? entity) (str entity)
+                                                    :else nil)]
+                                  (if (= entity-name "users")
+                                    (users-get-handler request)
+                                    (original-get-handler request))))
+           ;; Protect all generic CRUD endpoints under /entities/:entity
            updated-route-config (-> route-config
-                                  ;; Protect all generic CRUD endpoints under /entities/:entity
                                   (update :middleware (fnil conj []) #(user-middleware/wrap-user-authentication %))
-                                  (update :middleware (fnil conj []) #(user-middleware/wrap-entities-authorization %))
-                                  (assoc-in ["" :get :handler] custom-get-handler))]
+                                  (update :middleware (fnil conj []) #(user-middleware/wrap-entities-authorization %)))
+           updated-subroutes (mapv (fn [subroute]
+                                     (if (= "" (first subroute))
+                                       (assoc-in subroute [1 :get :handler] custom-get-handler)
+                                       subroute))
+                               subroutes)]
        ;; Replace "/:entity" with "/entities/:entity" in the path and use updated config
-       (into ["/entities/:entity" updated-route-config] subroutes))]))
+       (into ["/entities/:entity" updated-route-config] updated-subroutes))]))
 

@@ -78,12 +78,27 @@
               [field-id spec])))
     (entity-spec-fields entity-spec)))
 
+(def ^:private backlog-status-sort-ranks
+  {"in progress" 1
+   "in progres" 1
+   "waiting" 2
+   "need improvements" 3
+   "need improvments" 3
+   "completed" 4})
+
 (defn- normalize-sort-value
-  [field-spec value]
+  [entity-name field field-spec value]
   (let [date-field? (contains? #{"datetime-local" "date" "time"}
-                      (some-> field-spec :input-type name))]
+                      (some-> field-spec :input-type name))
+        entity-key (some-> entity-name model-naming/ensure-app-keyword)
+        field-key (some-> field model-naming/ensure-app-keyword)]
     (cond
       (nil? value) nil
+
+      (and (= entity-key :backlog)
+        (= field-key :status))
+      (get backlog-status-sort-ranks (-> value str str/trim str/lower-case) 5)
+
       (string? value)
       (if date-field?
         (let [d (try (js/Date. value) (catch :default _ nil))]
@@ -91,6 +106,7 @@
             (.getTime d)
             (str/lower-case value)))
         (str/lower-case value))
+
       (boolean? value) (if value 1 0)
       (instance? js/Date value) (.getTime value)
       :else value)))
@@ -140,8 +156,8 @@
                 (or
                   (some (fn [{:keys [field direction]}]
                           (let [field-spec (get specs-by-field field)
-                                left-value (normalize-sort-value field-spec (resolve-value left field))
-                                right-value (normalize-sort-value field-spec (resolve-value right field))
+                                left-value (normalize-sort-value entity-name field field-spec (resolve-value left field))
+                                right-value (normalize-sort-value entity-name field field-spec (resolve-value right field))
                                 cmp (compare-sort-values left-value right-value direction)]
                             (when (not= 0 cmp)
                               cmp)))

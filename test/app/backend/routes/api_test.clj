@@ -9,8 +9,10 @@
     [app.shared.frontend-config.template-user :as template-user]
     [app.template.backend.routes.admin.settings-io :as settings-io]
     [app.template.backend.routes.api :as api-routes]
+    [app.template.backend.services.tenant :as tenant-svc]
     [clojure.string :as str]
     [clojure.test :refer [deftest is testing]]
+
     [ring.mock.request :as mock]))
 
 ;; ============================================================================
@@ -119,6 +121,65 @@
                 (get-in body [:domain-ui-config :sales :table-columns :sales :available-columns])))
           (is (= {:tenant-members {:title "Tenant Members"}}
                 (get-in body [:domain-ui-config :template :entities]))))))))
+
+(deftest entities-users-route-uses-path-params-and-returns-tenant-scoped-users-test
+  (testing "GET /api/v1/entities/users uses protected tenant-scoped user handling"
+    (let [service-container (h/stub-service-container)
+          routes (api-routes/create-versioned-api-routes nil {} service-container "v1")
+          entity-route (some #(when (= "/entities/:entity" (first %)) %) (drop 2 routes))
+          list-route (some #(when (= "" (first %)) %) (drop 2 entity-route))
+          handler (get-in list-route [1 :get :handler])
+          tenant-id #uuid "11111111-1111-1111-1111-111111111111"
+          actor-id #uuid "22222222-2222-2222-2222-222222222222"
+          member-id #uuid "33333333-3333-3333-3333-333333333333"]
+      (is entity-route)
+      (is list-route)
+      (clojure.core/with-redefs-fn
+        {#'tenant-svc/get-membership
+         (fn [_db given-tenant-id given-user-id]
+           (is (= tenant-id given-tenant-id))
+           (is (= actor-id given-user-id))
+           {:role "owner"})
+         #'tenant-svc/get-tenant-members
+         (fn [_db given-tenant-id opts]
+           (is (= tenant-id given-tenant-id))
+           (is (= {:include-suspended? true} opts))
+           [{:user_id actor-id
+             :user_full_name "Tenant Owner"
+             :user_email "owner@example.com"
+             :user_status "active"
+             :role "owner"
+             :status "active"
+             :password_hash "do-not-expose"}
+            {:user_id member-id
+             :user_full_name "Tenant Member"
+             :user_email "member@example.com"
+             :user_status "active"
+             :role "member"
+             :status "suspended"
+             :password_hash "still-do-not-expose"}])}
+        (fn []
+          (let [request-base {:query-params {:limit "1"
+                                             :offset "1"}
+                              :params {:limit "1"
+                                       :offset "1"}
+                              :session {:auth-session {:tenant {:id tenant-id}
+                                                       :user {:id actor-id}}}}
+                resp (handler (assoc request-base :path-params {:entity "users"}))
+                body (:body resp)
+                body-str (pr-str body)
+                resp-from-coerced-path (handler (assoc request-base :parameters {:path {:entity :users}}))
+                body-from-coerced-path (:body resp-from-coerced-path)]
+            (is (h/ok? resp))
+            (is (= 1 (count body)))
+            (is (= member-id (:id (first body))))
+            (is (= "member@example.com" (:email (first body))))
+            (is (= "member" (:membershipRole (first body))))
+            (is (= "suspended" (:membershipStatus (first body))))
+            (is (h/ok? resp-from-coerced-path))
+            (is (= body body-from-coerced-path))
+            (is (not (.contains body-str "password_hash")))
+            (is (not (.contains body-str "passwordHash")))))))))
 
 ;; ============================================================================
 ;; Home Route Tests

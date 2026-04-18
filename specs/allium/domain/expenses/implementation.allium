@@ -97,12 +97,13 @@ surface ExpensesUserApiRouteFamilies {
         -- "/api/v1/expenses", including "/summary", "/by-month", and "/by-supplier".
 
     @guarantee SettingsEndpointsRemainGrouped
-        -- AccessSettingsEndpoints(actor) includes representative grouped routes such as
-        -- "/settings" (get/put), "/export" (get), and "/all" (delete).
+        -- AccessSettingsEndpoints(actor) includes the current user-expense profile/settings routes
+        -- under "/api/v1/profile": "" (get), "/defaults" (put), "/export" (get),
+        -- and "/all" (delete).
 
     @guarantee ReferenceDataEndpointsCoverCoreExpenseReferences
         -- AccessReferenceDataEndpoints(actor) includes representative grouped routes for suppliers,
-        -- payers, payer-types, stores, cities, manufacturers, categories, expense-categories,
+        -- payers, stores, cities, manufacturers, categories, expense-categories,
         -- subcategories, and reference aliases.
 
     @guarantee ReceiptEndpointsCoverUploadReviewAndBatchFlows
@@ -162,9 +163,9 @@ surface ExpensesAdminRouteFactoryBoundary {
         -- When `config.has_route_middleware`, both standard and extended builders apply route
         -- middleware at the entity route root.
 
-    @guarantee PayerTypesRequireAdminRoleMiddleware
-        -- Payer-types admin config uses route-level middleware requiring at least admin role via
-        -- `wrap-admin-role ... :admin`.
+    @guarantee PayerRoutesUseConfiguredEntityBuilder
+        -- Payer admin routes are assembled from the payer route config through the generic
+        -- entity-route builder and expose the standard payer CRUD subtree.
 }
 
 surface ExpensesAdminDuplicatesBoundary {
