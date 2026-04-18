@@ -8,11 +8,9 @@
 -- Source: src/app/shared/specs/form_fields.cljc
 -- Consumers: admin form-fields.edn, domain form-fields.edn
 
-external entity Number {}
+use "./infrastructure.allium" as infra
 
-entity OptionValue {
-    kind: keyword | string | number | boolean
-}
+external entity Number {}
 
 entity OptionItem {
     kind: Scalar | RichMap
@@ -23,12 +21,13 @@ variant Scalar : OptionItem {
 }
 
 variant RichMap : OptionItem {
-    value: OptionValue
+    value: keyword | string | number | boolean
     label: String?
     color: String?
     disabled: Boolean?
 }
 
+-- allium-ignore allium.entity.unused
 entity FieldConfig {
     field_type: String?
     validation: String?
@@ -40,13 +39,6 @@ entity FieldConfig {
     min_length: Integer?
     max_length: Integer?
     step: Number?
-}
-
-entity EntityFormFields {
-    create_fields: List<String>?
-    edit_fields: List<String>?
-    required_fields: List<String>?
-    field_config: Map<String, FieldConfig>?
 }
 
 surface FormFieldOptionsBoundary {

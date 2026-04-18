@@ -13,6 +13,8 @@
 --   - Admin expense list (separate surface)
 --   - Receipt, OCR, and approval flows (separate spec)
 
+use "./expense-entry.candidate.allium" as entry
+
 
 -- ─────────────────────────────────────────────
 -- External entities

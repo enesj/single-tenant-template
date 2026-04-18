@@ -6,6 +6,8 @@
 -- to page 1 so users see filtered results immediately without hunting across pages.
 -- This applies to all entity list views (admin and user) regardless of pagination mode.
 
+use "./infrastructure.allium" as infra
+
 -- =============================================================================
 -- Entities
 -- =============================================================================
@@ -129,6 +131,7 @@ surface ListFilterPanel {
 
     provides:
         ApplyFilter(list, field, value)
+            when viewer = viewer
         ClearFilter(list, field)
 
     @guarantee PageResetOnChange

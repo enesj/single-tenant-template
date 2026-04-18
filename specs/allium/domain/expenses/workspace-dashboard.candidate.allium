@@ -11,28 +11,11 @@
 --   - Expense CRUD (separate specs)
 -- Dependencies: Expense, Supplier, Store, Article, ExpenseItem, Tenant, TenantMembership
 
+use "./implementation.allium" as impl
+
 ------------------------------------------------------------
 -- External Entities
 ------------------------------------------------------------
-
-external entity Expense {
-    purchased_at: Timestamp
-    total_amount: Decimal
-    currency: String
-    bam_amount: Decimal
-    supplier_id: String?
-    store_id: String?
-    tenant_id: String
-    is_posted: Boolean
-}
-
-external entity ExpenseItem {
-    expense_id: String
-    article_id: String?
-    unit_price: Decimal?
-    qty: Decimal?
-    line_total: Decimal
-}
 
 external entity Supplier {
     id: String
@@ -44,32 +27,8 @@ external entity Store {
     name: String
 }
 
-external entity Article {
-    id: String
-    canonical_name: String
-}
-
-external entity ArticleAlias {
-    id: String
-    article_id: String?              -- null = unmapped
-    supplier_id: String?
-    raw_label: String
-}
-
-external entity ExpenseCategory {
-    id: String
-    name: String
-    tenant_id: String
-}
-
 external entity Tenant {
     id: String
-}
-
-external entity TenantMembership {
-    tenant_id: String
-    user_id: String
-    role: owner | admin | member | viewer
 }
 
 ------------------------------------------------------------

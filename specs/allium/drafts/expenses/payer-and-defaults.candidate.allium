@@ -40,6 +40,8 @@
 --       Manual expense category prefill and submit fallback use the
 --       tenant default category
 
+use "./../../template/multi-tenancy.candidate.allium" as mt
+
 
 -- ─────────────────────────────────────────────
 -- External entities

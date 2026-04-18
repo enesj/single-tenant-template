@@ -182,11 +182,6 @@ external entity ExpenseItem {
 -- EnabledCurrency list (see settings-hierarchy.candidate.allium).
 -- References to Currency in this spec use String (ISO 4217 code).
 
-value MoneyAmount {
-    value: Decimal
-    requires: value > 0
-}
-
 value ItemDraft {
     -- In-form representation. article_id captured when item originates from search.
     article_id: UUID?
@@ -246,14 +241,6 @@ value ContextSuggestions {
     stores: List<SearchResult>
     categories: List<SearchResult>
 }
-
-value LastPriceInfo {
-    article: Article
-    unit_price: Decimal
-    source: supplier_specific | global
-    supplier_display_name: String?
-}
-
 
 -- ─────────────────────────────────────────────
 -- Config
@@ -495,6 +482,7 @@ rule ResolveLineItemAliases {
                     item.alias_id = alias.id
 }
 
+-- allium-ignore allium.deferred.missingLocationHint
 deferred normalize    -- label normalization (trim, lowercase, collapse whitespace)
 
 
@@ -1215,6 +1203,7 @@ surface MobileSmartExpenseForm {
 -- DEFERRED
 -- ═════════════════════════════════════════════
 
+-- allium-ignore allium.deferred.missingLocationHint
 deferred SmartSuggestions    -- see: manual-expense-entry-suggestions.candidate.allium
 
 -- Guidance:

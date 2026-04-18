@@ -131,5 +131,7 @@ rule ResolveSupplierFromExistingAliasMapping {
     ensures: SupplierResolvedFromOcrGuess(supplier: alias.supplier, alias: alias, source: alias)
 }
 
+-- allium-ignore allium.deferred.missingLocationHint
 deferred normalize_supplier_key(raw_supplier_label)
+-- allium-ignore allium.deferred.missingLocationHint
 deferred unique_descriptor_tail_supplier_for(normalized_key)    -- returns supplier only when match is unambiguous

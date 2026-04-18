@@ -163,6 +163,54 @@ rule ResendAdminInvitation {
         -- Audit-logged.
 }
 
+rule ReopenAcceptedAdminInvitation {
+    when: AdminInvitationAcceptedInviteReopened(adminInvitation)
+
+    requires: adminInvitation.status = accepted
+
+    ensures: adminInvitation.status = pending
+}
+
+rule ReissueExpiredAdminInvitation {
+    when: AdminInvitationExpiredInviteReissued(adminInvitation)
+
+    requires: adminInvitation.status = expired
+
+    ensures: adminInvitation.status = pending
+}
+
+rule ReissueRevokedAdminInvitation {
+    when: AdminInvitationRevokedInviteReissued(adminInvitation)
+
+    requires: adminInvitation.status = revoked
+
+    ensures: adminInvitation.status = pending
+}
+
+rule AcceptAdminInvitationStatus {
+    when: AdminInvitationAccepted(adminInvitation)
+
+    requires: adminInvitation.status = pending
+
+    ensures: adminInvitation.status = accepted
+}
+
+rule ExpireAdminInvitation {
+    when: AdminInvitationExpired(adminInvitation)
+
+    requires: adminInvitation.status = pending
+
+    ensures: adminInvitation.status = expired
+}
+
+rule RevokeAdminInvitationStatus {
+    when: AdminInvitationStatusRevoked(adminInvitation)
+
+    requires: adminInvitation.status = pending
+
+    ensures: adminInvitation.status = revoked
+}
+
 -- ============================================================
 -- SURFACES
 -- ============================================================
@@ -211,7 +259,7 @@ surface AdminInvitationAcceptPage {
 
     provides:
         AdminAcceptsInvitation(token, full_name, password)
-            when token_valid
+            when token_valid and (visitor = null or visitor != null)
 
     @guidance
         -- Route: /admin/invitation/accept?token=...

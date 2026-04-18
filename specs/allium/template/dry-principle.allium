@@ -55,6 +55,7 @@ surface FrontendListViewReuseBoundary {
 
     provides:
         ResolveTableEntitySpec(entity)
+            when templates = templates
         ComposeListViewProps(entity)
         RenderListView(entity)
 
@@ -83,6 +84,7 @@ surface FrontendEntitySpecAndAdapterUtilitiesBoundary {
 
     provides:
         NormalizeEntityName(entity_name)
+            when toolkit = toolkit
         BuildEntitySpec(entity_name)
         NormalizeEntity(entity, options)
         RegisterEntitySpecSub(options)
@@ -116,6 +118,7 @@ surface FrontendCrudBridgeAndSuccessBoundary {
 
     provides:
         RegisterCrudBridge(options)
+            when runtime = runtime
         RunBridgeOperation(operation, handler_type, entity_type, args)
         BuildDefaultCrudRequest(entity_type, payload)
         HandleCreateSuccess(entity_type, response)
@@ -173,6 +176,7 @@ surface BackendGenericCrudReuseBoundary {
 
     provides:
         BuildGenericCrudHandlers(crud_service)
+            when boundary = boundary
         BuildGenericCrudRouteTree(crud_service)
         ResolveEntityRoutesFromContainer(db, models_data, service_container)
         ComposeVersionedEntityCrudRoutes(db, models_data, service_container)
@@ -209,6 +213,7 @@ surface GenericCrudSecurityConstraintBoundary {
 
     provides:
         CheckGenericCrudEntityAccess(entity_key, is_admin)
+            when policy = policy
         BuildBlockedEntityResponse(entity_key, reason)
         ReadAllowedUserEntities()
 
@@ -234,6 +239,7 @@ surface DIContainerAndFactoryReuseBoundary {
 
     provides:
         RegisterTemplateServices(di_container, config, db_connection, metadata, domain_config)
+            when graph = graph
         InitializeContainer(di_container)
         StartContainer(di_container)
         BuildServiceContainer(config, db_connection, metadata, domain_config)
@@ -261,6 +267,7 @@ surface DomainRegistryPluginReuseBoundary {
 
     provides:
         CollectAdminDomainRoutes(db, service_container)
+            when manifests = manifests
         CollectUserDomainRoutes(db, wrap_user_auth, app_config)
         CollectDomainSpaFallbackRoutes()
         ComposeAdminApiWithDomains(db, service_container)

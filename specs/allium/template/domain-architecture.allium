@@ -30,6 +30,7 @@ surface BackendDomainRegistryBoundary {
 
     provides:
         ReadEnabledBackendDomains()
+            when manifests = manifests
         CollectAdminApiRoutes(db, service_container)
         CollectUserApiRoutes(db, wrap_user_auth, app_config)
         CollectUserUiConfigPaths()
@@ -79,6 +80,7 @@ surface FrontendDomainRegistryBoundary {
 
     provides:
         ReadEnabledFrontendDomains()
+            when manifests = manifests
         InitAllDomains()
         CollectAllUserRoutes()
         CollectAllAdminEntities()

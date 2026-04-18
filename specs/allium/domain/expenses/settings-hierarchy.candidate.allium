@@ -45,6 +45,8 @@
 --   - receipt-ocr.candidate.allium:
 --       Receipt-created expenses: currency always BAM, no conversion needed
 
+use "./../../drafts/expenses/payer-and-defaults.candidate.allium" as payer_defaults
+
 
 -- ─────────────────────────────────────────────
 -- External entities
@@ -80,12 +82,6 @@ external entity Payer {
     tenant_id: UUID
     label: String
     is_active: Boolean
-}
-
-external entity ExpenseCategory {
-    id: UUID
-    tenant_id: UUID
-    name: String
 }
 
 external entity UserExpenseDefaults {

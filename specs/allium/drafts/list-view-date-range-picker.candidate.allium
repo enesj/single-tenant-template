@@ -16,6 +16,8 @@
 -- - list-view-filtering.candidate.allium for general list filter apply/clear semantics
 -- - shared/list-filter-pagination-reset.allium for page reset on filter change
 
+use "../shared/infrastructure.allium" as infra
+
 external entity User { id: String }
 external entity FieldKey { name: String }
 external entity Timezone { name: String }

@@ -99,6 +99,7 @@ surface UserExpensesListFilters {
 
     provides:
         ApplyExpenseListCurrencyFilter(list, currency_code)
+            when viewer = viewer
         ApplyExpenseListTotalAmountRange(list, min_amount, max_amount)
 
     @guarantee CurrencyFilterIsServerBacked
@@ -123,6 +124,7 @@ surface ExpenseItemsPowerListFilters {
 
     provides:
         ApplyExpenseItemsUnitFilter(list, unit_code)
+            when viewer = viewer
         ApplyExpenseItemsUnitPriceRange(list, min_price, max_price)
 
     @guarantee UnitFilterNarrowsByCanonicalUnit
@@ -134,7 +136,11 @@ surface ExpenseItemsPowerListFilters {
         -- server-backed result set accordingly.
 }
 
+-- allium-ignore allium.deferred.missingLocationHint
 deferred ExpenseListCurrencyQueryProduced
+-- allium-ignore allium.deferred.missingLocationHint
 deferred ExpenseListTotalAmountQueryProduced
+-- allium-ignore allium.deferred.missingLocationHint
 deferred ExpenseItemsUnitQueryProduced
+-- allium-ignore allium.deferred.missingLocationHint
 deferred ExpenseItemsUnitPriceQueryProduced

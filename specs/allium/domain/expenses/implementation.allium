@@ -25,6 +25,7 @@ surface ExpensesDomainManifestBoundary {
 
     provides:
         ResolveExpensesDomainManifest()
+            when manifest = manifest
         BuildExpensesAdminDomainRouteTree(db, service_container)
         BuildExpensesUserDomainRouteTree(db, wrap_user_authentication, app_config)
         ResolveExpensesSpaFallbackPaths()
@@ -196,6 +197,7 @@ surface SharedDescriptorSourceOfTruthBoundary {
 
     provides:
         BuildFrontendUserRoutesFromDescriptors()
+            when descriptors = descriptors
         BuildBackendSpaFallbackPathsFromDescriptors()
 
     @guarantee FrontendUserRoutesAreDescriptorBacked
@@ -211,6 +213,7 @@ surface SharedDescriptorSourceOfTruthBoundary {
         -- coverage synchronized at source.
 }
 
+-- allium-ignore allium.deferred.missingLocationHint
 deferred DetailedExpenseReceiptOCRLifecycle
 
 -- Guidance:

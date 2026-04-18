@@ -225,6 +225,116 @@ rule AutoSetSessionAfterProvisioning {
         -- handles session setup.
 }
 
+-- ============================================================
+-- STATUS LIFECYCLE WITNESSES
+-- ============================================================
+
+rule SuspendTenant {
+    when: TenantSuspended(tenant)
+
+    requires: tenant.status = active
+
+    ensures: tenant.status = suspended
+}
+
+rule ReactivateTenant {
+    when: TenantReactivated(tenant)
+
+    requires: tenant.status = suspended
+
+    ensures: tenant.status = active
+}
+
+rule ArchiveTenant {
+    when: TenantArchived(tenant)
+
+    requires: tenant.status in {active, suspended}
+
+    ensures: tenant.status = archived
+}
+
+rule SuspendTenantMembership {
+    when: TenantMembershipSuspended(tenantMembership)
+
+    requires: tenantMembership.status = active
+
+    ensures: tenantMembership.status = suspended
+}
+
+rule ReactivateTenantMembership {
+    when: TenantMembershipReactivated(tenantMembership)
+
+    requires: tenantMembership.status = suspended
+
+    ensures: tenantMembership.status = active
+}
+
+rule ReopenAcceptedTenantInvitation {
+    when: TenantInvitationAcceptedInviteReopened(tenantInvitation)
+
+    requires: tenantInvitation.status = accepted
+
+    ensures: tenantInvitation.status = pending
+}
+
+rule ReissueExpiredTenantInvitation {
+    when: TenantInvitationExpiredInviteReissued(tenantInvitation)
+
+    requires: tenantInvitation.status = expired
+
+    ensures: tenantInvitation.status = pending
+}
+
+rule ReissueRevokedTenantInvitation {
+    when: TenantInvitationRevokedInviteReissued(tenantInvitation)
+
+    requires: tenantInvitation.status = revoked
+
+    ensures: tenantInvitation.status = pending
+}
+
+rule AcceptTenantInvitation {
+    when: TenantInvitationAccepted(tenantInvitation)
+
+    requires: tenantInvitation.status = pending
+
+    ensures: tenantInvitation.status = accepted
+}
+
+rule ExpireTenantInvitation {
+    when: TenantInvitationExpired(tenantInvitation)
+
+    requires: tenantInvitation.status = pending
+
+    ensures: tenantInvitation.status = expired
+}
+
+rule RevokeTenantInvitationStatus {
+    when: TenantInvitationStatusRevoked(tenantInvitation)
+
+    requires: tenantInvitation.status = pending
+
+    ensures: tenantInvitation.status = revoked
+}
+
+rule ActivateImpersonationGrant {
+    when: ImpersonationGrantActivated(impersonationGrant)
+
+    requires: impersonationGrant.status = revoked
+
+    ensures: impersonationGrant.status = active
+    ensures: impersonationGrant.revoked_by_admin = null
+    ensures: impersonationGrant.revoked_by_user = null
+}
+
+rule RevokeImpersonationGrant {
+    when: ImpersonationGrantRevoked(impersonationGrant)
+
+    requires: impersonationGrant.status = active
+
+    ensures: impersonationGrant.status = revoked
+}
+
 rule JoinTenantFromInvitation {
     when: UserAcceptsInvitation(user, invitation_token)
 
@@ -357,16 +467,6 @@ rule RemoveUserFromTenant {
 -- ============================================================
 -- TENANT-SCOPED DATA ACCESS RULES
 -- ============================================================
-
-entity TenantDataRequest {
-    user: auth/User
-    tenant: Tenant
-    resource: String
-    action: read | write
-
-    -- Derived (looked up, not passed in)
-    membership: TenantMembership{tenant: tenant, user: user}
-}
 
 -- Resource classification.
 -- Tenant-scoped resources have tenant_id FK; queries filter by tenant_id.
@@ -604,12 +704,6 @@ rule DenyGeoReadForRegularMembers {
 -- ============================================================
 -- PLATFORM ADMIN ACCESS RULES
 -- ============================================================
-
-entity PlatformAdminDataRequest {
-    admin: auth/Admin
-    resource: String
-    action: read | write
-}
 
 rule AllowPlatformAdminAccessOutsideBlockedResources {
     when: PlatformAdminDataRequested(request)

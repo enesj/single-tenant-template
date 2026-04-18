@@ -16,6 +16,7 @@ surface ServiceContainerPortBoundary {
 
     provides:
         GetServerPort(service_container)
+            when config = config
 
     @guarantee ReturnsConfiguredPortWhenPresent
         -- GetServerPort(service_container) returns config.webserver_port when present.

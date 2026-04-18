@@ -26,6 +26,8 @@
 --   - list-view-date-range-picker.candidate.allium  (DateRangePickerState)
 --   - shared/list-filter-pagination-reset.allium  (page reset semantics)
 
+use "../shared/infrastructure.allium" as infra
+
 ------------------------------------------------------------
 -- External Entities
 ------------------------------------------------------------
@@ -69,16 +71,6 @@ value FieldOptions {
 value SelectOption {
     value: String
     label: String
-}
-
-value NumberRange {
-    min: Decimal?
-    max: Decimal?
-}
-
-value DateRange {
-    from: Timestamp?
-    to: Timestamp?
 }
 
 value FieldStatistics {
@@ -249,7 +241,7 @@ rule InitializeFormBlankWhenNoExistingFilter {
     requires: form.filter_kind != number_range
 
     ensures: form.text_value = ""
-    ensures: form.selected_options = []
+    ensures: form.selected_options = empty_select_options()
 }
 
 -- =============================================
@@ -353,7 +345,7 @@ rule SelectAllOptions {
 
 rule ClearAllSelectedOptions {
     when: ViewerClearsAllOptions(form)
-    ensures: form.selected_options = []
+    ensures: form.selected_options = empty_select_options()
     ensures: FilterAutoApplied(form, null)
 }
 
@@ -441,7 +433,7 @@ rule ClearFilterFromForm {
     ensures: form.number_max = null
     ensures: form.date_from = null
     ensures: form.date_to = null
-    ensures: form.selected_options = []
+    ensures: form.selected_options = empty_select_options()
     ensures: FilterCleared(form.entity_type, form.field_spec.id)
 }
 
@@ -503,21 +495,32 @@ invariant MatchingCountNullWhenNoInputOrServerMode {
 -- Deferred Specifications
 ------------------------------------------------------------
 
-deferred ForeignKeyOptionsComputed
-deferred DynamicOptionsComputed
-deferred CountMatchingItems
-deferred EntityFetchDispatched
-deferred FieldStatisticsFetchDispatched
-deferred FilterAutoApplied
-deferred FilterCleared
-deferred FieldLabelResolved
-deferred FilterValueFormatted
+-- allium-ignore allium.deferred.missingLocationHint
+deferred ForeignKeyOptionsComputed        -- see: src/app/template/frontend/components/filter.cljs
+-- allium-ignore allium.deferred.missingLocationHint
+deferred DynamicOptionsComputed           -- see: src/app/template/frontend/components/filter.cljs
+-- allium-ignore allium.deferred.missingLocationHint
+deferred CountMatchingItems               -- see: src/app/template/frontend/components/filter.cljs
+-- allium-ignore allium.deferred.missingLocationHint
+deferred EntityFetchDispatched            -- see: src/app/template/frontend/events/list/filters.cljs
+-- allium-ignore allium.deferred.missingLocationHint
+deferred FieldStatisticsFetchDispatched   -- see: src/app/template/frontend/events/list/filters.cljs
+-- allium-ignore allium.deferred.missingLocationHint
+deferred FilterAutoApplied                -- see: src/app/template/frontend/events/list/filters.cljs
+-- allium-ignore allium.deferred.missingLocationHint
+deferred FilterCleared                    -- see: src/app/template/frontend/events/list/filters.cljs
+-- allium-ignore allium.deferred.missingLocationHint
+deferred FieldLabelResolved               -- see: src/app/template/frontend/components/filter.cljs
+-- allium-ignore allium.deferred.missingLocationHint
+deferred FilterValueFormatted             -- see: src/app/template/frontend/components/filter.cljs
 
 ------------------------------------------------------------
 -- Actor Declarations
 ------------------------------------------------------------
 
-actor Viewer : User
+actor Viewer {
+    identified_by: User
+}
 
 ------------------------------------------------------------
 -- Surfaces
@@ -542,6 +545,7 @@ surface InlineFilterForm {
 
     provides:
         ViewerEditsTextFilter(form, new_text)
+            when viewer = viewer
         ViewerEditsNumberRange(form, min, max)
         ViewerTogglesSelectOption(form, option)
         ViewerSelectsAllOptions(form)
@@ -572,10 +576,15 @@ surface ActiveFilterChipBar {
     facing viewer: Viewer
 
     exposes:
-        active_chips: List<ActiveFilterChip>
+        for chip in ActiveFilterChip:
+            chip.entity_type
+            chip.field_id
+            chip.display_label
+            chip.display_value
 
     provides:
         ViewerRemovesFilterChip(chip)
+            when viewer = viewer
         ViewerClearsAllFilterChips(entity_type)
 
     @guarantee ChipsReflectActiveFilters

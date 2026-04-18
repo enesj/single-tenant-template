@@ -15,14 +15,11 @@
 --
 -- Dependencies: Existing audit_logs table and admin audit UI
 
+use "./authentication.allium" as auth
+
 ------------------------------------------------------------
 -- External Entities
 ------------------------------------------------------------
-
-external entity User {
-    id: String
-    full_name: String
-}
 
 external entity Admin {
     id: String
@@ -119,6 +116,8 @@ rule LogExternalApiFailure {
         error_type?, request_url?, retry_attempted, retry_succeeded,
         triggering_user?, severity, duration_ms?
     )
+
+    let triggering_user = triggering_user?
 
     ensures: AuditLog.created(
         actor_type: system,

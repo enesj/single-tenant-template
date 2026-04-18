@@ -17,6 +17,8 @@
 -- - filter panel rendering and option loading
 -- - domain-specific backend query clauses
 
+use "./infrastructure.allium" as infra
+
 external entity EntityType { name: String }
 external entity ColumnId { name: String }
 
@@ -145,6 +147,7 @@ surface ServerListFilterForwarding {
 
     provides:
         ApplyTextFilter(state, filter)
+            when viewer = viewer
         ApplyNumberRangeFilter(state, filter)
         ApplyDateRangeFilter(state, filter)
         ApplySelectFilter(state, filter)
@@ -162,9 +165,15 @@ surface ServerListFilterForwarding {
         -- labels, so the server sees canonical identifiers.
 }
 
-deferred TextFilterQueryParamProduced
-deferred UnmappedTextFilterIgnored
-deferred NumberRangeQueryParamsProduced
-deferred DateRangeQueryParamsProduced
-deferred SelectFilterQueryParamsProduced
-deferred ServerListRefreshRequested
+-- allium-ignore allium.deferred.missingLocationHint
+deferred TextFilterQueryParamProduced     -- see: src/app/template/frontend/events/list/filter_serialization.cljs
+-- allium-ignore allium.deferred.missingLocationHint
+deferred UnmappedTextFilterIgnored        -- see: src/app/template/frontend/events/list/filter_serialization.cljs
+-- allium-ignore allium.deferred.missingLocationHint
+deferred NumberRangeQueryParamsProduced   -- see: src/app/template/frontend/events/list/filter_serialization.cljs
+-- allium-ignore allium.deferred.missingLocationHint
+deferred DateRangeQueryParamsProduced     -- see: src/app/template/frontend/events/list/filter_serialization.cljs
+-- allium-ignore allium.deferred.missingLocationHint
+deferred SelectFilterQueryParamsProduced  -- see: src/app/template/frontend/events/list/filter_serialization.cljs
+-- allium-ignore allium.deferred.missingLocationHint
+deferred ServerListRefreshRequested       -- see: src/app/template/frontend/events/list/filters.cljs

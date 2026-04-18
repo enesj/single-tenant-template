@@ -18,6 +18,8 @@
 -- - Column visibility and table width controls
 -- - Domain-specific backend query implementation details
 
+use "../shared/infrastructure.allium" as infra
+
 -- Reference-data entities use client-side pagination (small, static datasets).
 -- Transactional entities (receipts, expenses) use server-side pagination.
 external entity EntityType { name: String }
@@ -40,16 +42,6 @@ entity CanonicalListPage {
     is_admin: route_scope = admin
     is_user: route_scope = user
     is_reference_data: data_profile.kind = reference_data
-}
-
-entity FieldFilterability {
-    entity_type: EntityType
-    field_id: ColumnId
-    allowed_by_config: Boolean
-    enabled_by_user: Boolean
-    locked: Boolean
-
-    interactive: allowed_by_config and enabled_by_user and not locked
 }
 
 entity ListViewFilterState {
@@ -205,15 +197,21 @@ rule ClientModeRefreshRequestIsPageOwned {
         -- for server pagination.
 }
 
-deferred NormalizeAndStoreFilter
-deferred RemoveFilter
-deferred ClearAllFilters
-deferred ClientRowsFiltered
-deferred ServerFilterRefetch
-deferred ClientModeRefreshRequestBuilt    -- see: src/app/domain/frontend/expenses/events/user_expenses/list_support.cljs and entity-specific refresh handlers
+    -- allium-ignore allium.deferred.missingLocationHint
+    deferred NormalizeAndStoreFilter          -- see: src/app/template/frontend/events/list/filters.cljs
+    -- allium-ignore allium.deferred.missingLocationHint
+    deferred RemoveFilter                     -- see: src/app/template/frontend/events/list/filters.cljs
+    -- allium-ignore allium.deferred.missingLocationHint
+    deferred ClearAllFilters                  -- see: src/app/template/frontend/events/list/filters.cljs
+    -- allium-ignore allium.deferred.missingLocationHint
+    deferred ClientRowsFiltered               -- see: src/app/template/frontend/events/list/filters.cljs
+    -- allium-ignore allium.deferred.missingLocationHint
+    deferred ServerFilterRefetch              -- see: src/app/template/frontend/events/list/filters.cljs
+    -- allium-ignore allium.deferred.missingLocationHint
+    deferred ClientModeRefreshRequestBuilt    -- see: src/app/domain/frontend/expenses/events/user_expenses/list_support.cljs
 
 surface CanonicalListFilterControls {
-    facing viewer: User
+    facing _viewer: User
 
     context list: ListViewFilterState
 
@@ -226,6 +224,7 @@ surface CanonicalListFilterControls {
 
     provides:
         UserClicksColumnFilterIcon(list, field)
+            when _viewer = _viewer
         UserAppliesFilter(list, field_id, raw_value, keep_open)
         UserClearsFilter(list, field_id)
         UserTogglesFieldFiltering(list, field)

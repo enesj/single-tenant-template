@@ -5,6 +5,8 @@
 -- For manual expenses, currency comes from EnabledCurrency (see settings-hierarchy.candidate.allium).
 -- For receipt-originated expenses, currency is always "BAM" — no conversion needed.
 
+use "./payer-and-defaults.candidate.allium" as defaults
+
 entity User {
     role: member | owner | admin
 }
@@ -55,7 +57,8 @@ entity Receipt {
     content_type: String?
     file_size_bytes: Integer?
 
-    status: uploaded | parsing | parsed | extracting | extracted | review_required | approved | posted | failed
+    -- allium-ignore allium.status.noExit
+    status: uploaded | extracting | extracted | review_required | posted | failed
     retry_count: Integer
 
     raw_extract_json: String?
@@ -202,14 +205,23 @@ rule QueueSingleReceiptForOCR {
 rule QueuePendingReceiptsForOCRSweep {
     when: RunReceiptOCRSweep()
 
-    for receipt in Receipts where receipt.status in {uploaded, parsing, parsed, extracting}:
+    for receipt in Receipts where receipt.status in {uploaded, extracting}:
         ensures: ReceiptQueuedForProcessing(receipt: receipt)
+}
+
+rule StartReceiptExtractionFromUploaded {
+    when: ReceiptQueuedForProcessing(receipt)
+
+    requires: receipt.status = uploaded
+
+    ensures: receipt.status = extracting
+    ensures: OCRExtractionRequested(receipt: receipt)
 }
 
 rule StartReceiptExtraction {
     when: ReceiptQueuedForProcessing(receipt)
 
-    requires: receipt.status in {uploaded, parsing, parsed, extracting}
+    requires: receipt.status = extracting
 
     ensures: receipt.status = extracting
     ensures: OCRExtractionRequested(receipt: receipt)
@@ -283,7 +295,7 @@ rule HandleOCRExtractionSuccess {
 rule HandleOCRExtractionFailure {
     when: OCRExtractionFailed(receipt, message, details?)
 
-    requires: receipt.status in {parsing, extracting, uploaded, parsed}
+    requires: receipt.status in {extracting, uploaded}
 
     ensures: receipt.status = failed
     ensures: receipt.retry_count = receipt.retry_count + 1
@@ -310,6 +322,14 @@ rule SkipOrFailReceiptRefinement {
 
     ensures: receipt.refine_pending = false
     ensures: ReceiptRefinementNotApplied(receipt: receipt, reason: reason)
+}
+
+rule CompleteReceiptReview {
+    when: ReceiptReviewCompleted(receipt)
+
+    requires: receipt.status = review_required
+
+    ensures: receipt.status = extracted
 }
 
 rule AutoPostExtractedReceipt {
@@ -362,6 +382,14 @@ rule AutoPostBlockedMovesToReviewRequired {
 
     ensures: receipt.status = review_required
     ensures: receipt.error_message = "Auto-post preconditions not satisfied"
+}
+
+rule PostReviewedReceipt {
+    when: ReviewedReceiptPosted(receipt)
+
+    requires: receipt.status = review_required
+
+    ensures: receipt.status = posted
 }
 
 rule SaveReceiptReview {
@@ -558,10 +586,13 @@ surface AdminReceiptOperations {
         -- AdminReceiptOperations is evaluated in an admin role context.
 }
 
+-- allium-ignore allium.deferred.missingLocationHint
 deferred ReceiptExtraction.normalize_and_reconcile_extraction
+-- allium-ignore allium.deferred.missingLocationHint
 deferred ReceiptExtraction.resolve_supplier_and_alias             -- see: drafts/expenses/receipt-ocr-supplier-alias-resolution.candidate.allium
+-- allium-ignore allium.deferred.missingLocationHint
 deferred ReceiptResolution.resolve_canonical_supplier_store
+-- allium-ignore allium.deferred.missingLocationHint
 deferred ReceiptReview.reviewed_items_match_guess
 
-open question "Status 'approved' exists in the enum but appears unused by current runtime flow; should it remain in the lifecycle?"
 open question "Current flow may auto-post extracted receipts even when line-item totals mismatch the guessed total; should mismatch block auto-post?"

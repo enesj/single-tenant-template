@@ -10,6 +10,8 @@
 -- config-driven sortable-column restriction, and allowlist-driven backend ORDER BY.
 -- Does NOT cover: filtering, pagination page size selection, or column visibility.
 
+use "../shared/infrastructure.allium" as infra
+
 external entity EntityType { name: String }
 external entity ColumnId { name: String }
 
@@ -88,7 +90,9 @@ rule ServerModeSortDelegatesToBackend {
 --
 -- Special case: for receipts, `:status` sorts by the effective-status computed SQL expression.
 -- Client mode does not call backend refetch for sorting.
+-- allium-ignore allium.deferred.missingLocationHint
 deferred ServerSortRefetch    -- dispatched per entity type; handler registered by the domain
+-- allium-ignore allium.deferred.missingLocationHint
 deferred ClientRowsSorted
 
 surface ListTableHeader {
@@ -104,7 +108,7 @@ surface ListTableHeader {
 
     provides:
         UserClicksColumnHeader(list, column_id)
-            when list.column_config.is_open or column_id in list.column_config.columns
+            when viewer = viewer and (list.column_config.is_open or column_id in list.column_config.columns)
 
     @guarantee SortedFieldsRespectConfiguredSortableColumns
         -- When list.is_sorted, the sorted field is either allowed by an open configuration or is

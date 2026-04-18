@@ -14,10 +14,10 @@ enum BacklogStatus { waiting | in_progress | completed | need_improvements }
 
 -- Sort weight determines default list ordering (lower = appears first)
 enum BacklogStatusWeight {
-    in_progress = 1,
-    waiting = 2,
-    need_improvements = 3,
-    completed = 4
+    in_progress
+    | waiting
+    | need_improvements
+    | completed
 }
 
 enum BacklogType { issue | feature | refactoring | review | improvement }
@@ -44,12 +44,9 @@ entity BacklogItem {
 
 -- Priority field removal
 rule RemovePriorityColumn {
-    when: SchemaChange
+    when: SchemaChange()
 
-    ensures:
-        -- DB: DROP COLUMN priority from backlog table
-        -- DB: remove CHECK constraint (priority BETWEEN 1 AND 5)
-        BacklogItem has no priority field
+    ensures: BacklogPriorityColumnRemoved()
 
     @guidance
         -- Migration must be backward-compatible: drop column only,
@@ -58,16 +55,11 @@ rule RemovePriorityColumn {
 
 -- Enum spelling corrections (bundled in same migration)
 rule CorrectEnumTypos {
-    when: SchemaChange
+    when: SchemaChange()
 
     ensures:
-        -- backlog_status enum:
-        --   'In progres'        → 'In progress'
-        --   'Need improvments'  → 'Need improvements'
-        -- backlog_type enum:
-        --   'Improvment'        → 'Improvement'
-        BacklogStatus values are correctly spelled
-        BacklogType values are correctly spelled
+        BacklogStatusSpellingsCorrected()
+        BacklogTypeSpellingsCorrected()
 
     @guidance
         -- PostgreSQL supports ALTER TYPE ... RENAME VALUE (PG 10+):
@@ -104,11 +96,9 @@ rule CorrectEnumTypos {
 
 -- Default list ordering changes from priority-based to status-based
 rule DefaultListOrder {
-    when: ListBacklogItems
+    when: ListBacklogItems()
 
-    ensures:
-        -- Items ordered by status workflow position, then creation order
-        BacklogItems ordered_by {status_weight asc, number asc}
+    ensures: BacklogItemsOrderedByStatusWeight()
 
     @guidance
         -- Status weight mapping for SQL ORDER BY:
@@ -127,15 +117,14 @@ rule DefaultListOrder {
 rule CreateBacklogItem {
     when: AdminCreatesBacklogItem(description, type, status?)
 
-    requires:
-        description is present and non-blank
-        type in BacklogType
+    requires: description.trim().length > 0
+    requires: type in {issue, feature, refactoring, review, improvement}
 
     ensures:
         BacklogItem.created(
             description: description,
             type: type,
-            status: status or waiting
+            status: if status != null: status else: waiting
         )
 }
 
@@ -143,18 +132,27 @@ rule CreateBacklogItem {
 rule UpdateBacklogItem {
     when: AdminUpdatesBacklogItem(number, description?, status?, type?)
 
-    requires:
-        at least one field supplied
-        if description supplied: description is present and non-blank
-        if status supplied: status in BacklogStatus
-        if type supplied: type in BacklogType
+    let item = BacklogItem{number: number}
+
+    requires: exists item
+    requires: description != null or status != null or type != null
+
+    if description != null:
+        requires: description.trim().length > 0
+
+    if status != null:
+        requires: status in {waiting, in_progress, completed, need_improvements}
+
+    if type != null:
+        requires: type in {issue, feature, refactoring, review, improvement}
 
     ensures:
-        BacklogItem(number).updated(
-            description: description,
-            status: status,
-            type: type
-        )
+        if description != null:
+            item.description = description
+        if status != null:
+            item.status = status
+        if type != null:
+            item.type = type
 }
 
 ------------------------------------------------------------

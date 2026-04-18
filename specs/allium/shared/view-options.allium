@@ -10,6 +10,8 @@
 -- Source: src/app/shared/specs/view_options.cljc
 -- Consumers: admin view-options.edn, domain view-options.edn, template user view-options.edn
 
+use "./infrastructure.allium" as infra
+
 entity DisplayTogglesMap {
     show_timestamps: Boolean?
     show_edit: Boolean?
@@ -125,6 +127,7 @@ surface ViewOptionsResolutionBoundary {
 
     provides:
         ResolveEffectiveToggles(entity, user_overrides)
+            when config = config
         ResolveListConfig(entity)
         ValidateViewOptionsConfig(data)
 

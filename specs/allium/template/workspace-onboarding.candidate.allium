@@ -14,6 +14,8 @@
 --   - Receipt OCR processing (see receipt-ocr.candidate.allium)
 -- Dependencies: User, Tenant, TenantMembership from authentication/multi-tenancy specs
 
+use "./multi-tenancy.candidate.allium" as mt
+
 ------------------------------------------------------------
 -- External Entities
 ------------------------------------------------------------
@@ -41,13 +43,6 @@ external entity ExpenseCategory {
     name: String
     tenant_id: String
     is_default: Boolean
-}
-
-external entity PayerType {
-    id: String
-    label: String
-    tenant_id: String
-    is_system: Boolean
 }
 
 ------------------------------------------------------------

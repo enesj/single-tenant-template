@@ -12,6 +12,8 @@
 -- Sources: .github/workflows/ci.yml, Dockerfile,
 --          docs/general/operations/railway-deployment.md
 
+use "../shared/infrastructure.allium" as infra
+
 -- ---------------------------------------------------------------------------
 -- Actors
 -- ---------------------------------------------------------------------------
@@ -39,21 +41,39 @@ entity CodePush {
 
 entity CIPipeline {
     push: CodePush
-    status: pending | running | passed | failed
+    status: running | passed | failed
     backend_job: CIJob
     frontend_job: CIJob
+
+    transitions status {
+        running -> passed
+        running -> failed
+        terminal: passed, failed
+    }
 }
 
 entity CIJob {
     name: String
-    status: pending | running | passed | failed
+    status: running | passed | failed
     failure_reason: String?
+
+    transitions status {
+        running -> passed
+        running -> failed
+        terminal: passed, failed
+    }
 }
 
 entity DockerBuild {
     push: CodePush
-    status: pending | building | succeeded | failed
+    status: building | succeeded | failed
     artifact: UberJar?
+
+    transitions status {
+        building -> succeeded
+        building -> failed
+        terminal: succeeded, failed
+    }
 }
 
 entity UberJar {
@@ -69,6 +89,13 @@ entity DeployedRevision {
     status: starting | healthy | unhealthy | replaced
     port: Integer
     health_check_failures: Integer
+
+    transitions status {
+        starting -> healthy
+        starting -> unhealthy
+        healthy -> replaced
+        terminal: unhealthy, replaced
+    }
 }
 
 entity SchemaRevision {
@@ -104,7 +131,24 @@ config {
 rule CITriggeredOnMainPush {
     when: push: CodePush.created
     requires: push.branch = "main"
-    ensures: CIPipeline.created(push: push, status: running)
+
+    ensures:
+        let backend_job = CIJob.created(
+            name: "backend",
+            status: running,
+            failure_reason: null
+        )
+        let frontend_job = CIJob.created(
+            name: "frontend",
+            status: running,
+            failure_reason: null
+        )
+        CIPipeline.created(
+            push: push,
+            status: running,
+            backend_job: backend_job,
+            frontend_job: frontend_job
+        )
 }
 
 rule RailwayBuildTriggeredOnMainPush {
@@ -130,6 +174,106 @@ rule DockerBuildFails {
     ensures: build.status = failed
 }
 
+rule CIJobSucceeds {
+    when: job: CIJob.status becomes running
+    requires: job.failure_reason = null
+    ensures: job.status = passed
+}
+
+rule CIJobFails {
+    when: job: CIJob.status becomes running
+    requires: job.failure_reason != null
+    ensures: job.status = failed
+}
+
+rule RestartPassedCIJob {
+    when: CIJobPassedRestarted(ciJob)
+
+    requires: ciJob.status = passed
+
+    ensures: ciJob.status = running
+}
+
+rule RestartFailedCIJob {
+    when: CIJobFailedRestarted(ciJob)
+
+    requires: ciJob.status = failed
+
+    ensures: ciJob.status = running
+}
+
+rule MarkCIJobPassed {
+    when: CIJobPassed(ciJob)
+
+    requires: ciJob.status = running
+
+    ensures: ciJob.status = passed
+}
+
+rule MarkCIJobFailed {
+    when: CIJobFailed(ciJob)
+
+    requires: ciJob.status = running
+
+    ensures: ciJob.status = failed
+}
+
+rule CIPipelinePassesWhenJobsPass {
+    when: job: CIJob.status transitions_to passed
+
+    let pipelines = CIPipeline where backend_job = job or frontend_job = job
+
+    ensures:
+        for pipeline in pipelines:
+            if pipeline.status = running
+               and pipeline.backend_job.status = passed
+               and pipeline.frontend_job.status = passed:
+                pipeline.status = passed
+}
+
+rule CIPipelineFailsWhenAnyJobFails {
+    when: job: CIJob.status transitions_to failed
+
+    let pipelines = CIPipeline where backend_job = job or frontend_job = job
+
+    ensures:
+        for pipeline in pipelines:
+            if pipeline.status = running:
+                pipeline.status = failed
+}
+
+rule RestartPassedCIPipeline {
+    when: CIPipelinePassedRestarted(ciPipeline)
+
+    requires: ciPipeline.status = passed
+
+    ensures: ciPipeline.status = running
+}
+
+rule RestartFailedCIPipeline {
+    when: CIPipelineFailedRestarted(ciPipeline)
+
+    requires: ciPipeline.status = failed
+
+    ensures: ciPipeline.status = running
+}
+
+rule MarkCIPipelinePassed {
+    when: CIPipelinePassed(ciPipeline)
+
+    requires: ciPipeline.status = running
+
+    ensures: ciPipeline.status = passed
+}
+
+rule MarkCIPipelineFailed {
+    when: CIPipelineFailed(ciPipeline)
+
+    requires: ciPipeline.status = running
+
+    ensures: ciPipeline.status = failed
+}
+
 rule ServiceStartsAfterSuccessfulBuild {
     when: build: DockerBuild.status transitions_to succeeded
     ensures: DeployedRevision.created(
@@ -138,6 +282,38 @@ rule ServiceStartsAfterSuccessfulBuild {
         port: config.default_port,
         health_check_failures: 0
     )
+}
+
+rule RestartSucceededDockerBuild {
+    when: DockerBuildSucceededRestarted(dockerBuild)
+
+    requires: dockerBuild.status = succeeded
+
+    ensures: dockerBuild.status = building
+}
+
+rule RestartFailedDockerBuild {
+    when: DockerBuildFailedRestarted(dockerBuild)
+
+    requires: dockerBuild.status = failed
+
+    ensures: dockerBuild.status = building
+}
+
+rule MarkDockerBuildSucceeded {
+    when: DockerBuildSucceeded(dockerBuild)
+
+    requires: dockerBuild.status = building
+
+    ensures: dockerBuild.status = succeeded
+}
+
+rule MarkDockerBuildFailed {
+    when: DockerBuildFailed(dockerBuild)
+
+    requires: dockerBuild.status = building
+
+    ensures: dockerBuild.status = failed
 }
 
 rule ServiceBecomesHealthy {
@@ -162,6 +338,46 @@ rule PreviousRevisionReplaced {
     let previous = DeployedRevision where status = healthy and build != revision.build
     for old in previous:
         ensures: old.status = replaced
+}
+
+rule RestartUnhealthyDeployedRevision {
+    when: DeployedRevisionUnhealthyRestarted(deployedRevision)
+
+    requires: deployedRevision.status = unhealthy
+
+    ensures: deployedRevision.status = starting
+}
+
+rule RestartReplacedDeployedRevision {
+    when: DeployedRevisionReplacedRestarted(deployedRevision)
+
+    requires: deployedRevision.status = replaced
+
+    ensures: deployedRevision.status = starting
+}
+
+rule MarkDeployedRevisionHealthy {
+    when: DeployedRevisionHealthy(deployedRevision)
+
+    requires: deployedRevision.status = starting
+
+    ensures: deployedRevision.status = healthy
+}
+
+rule MarkDeployedRevisionUnhealthy {
+    when: DeployedRevisionUnhealthy(deployedRevision)
+
+    requires: deployedRevision.status = starting
+
+    ensures: deployedRevision.status = unhealthy
+}
+
+rule ReplaceDeployedRevisionStatus {
+    when: DeployedRevisionReplaced(deployedRevision)
+
+    requires: deployedRevision.status = healthy
+
+    ensures: deployedRevision.status = replaced
 }
 
 rule MigrationsRunBeforeDeploy {

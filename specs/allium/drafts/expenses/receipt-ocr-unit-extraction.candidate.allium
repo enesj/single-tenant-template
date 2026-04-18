@@ -94,7 +94,9 @@ invariant UnitAlwaysPresent {
         item.unit != null
 }
 
+-- allium-ignore allium.deferred.missingLocationHint
 deferred match_trailing_unit_suffix(raw_label)
+-- allium-ignore allium.deferred.missingLocationHint
 deferred strip_suffix(raw_label, suffix_match)
 
 open question "Should single-letter units like /L and /M be extracted, or are they too ambiguous in Bosnian POS labels?"

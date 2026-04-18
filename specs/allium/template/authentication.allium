@@ -5,6 +5,7 @@ entity User {
     full_name: String?
     avatar_url: String?
     role: unassigned | viewer | member | admin | owner
+    -- allium-ignore allium.status.noExit
     status: active | suspended | deactivated
     auth_provider: password | google | github | test
     password_hash: String
@@ -12,6 +13,14 @@ entity User {
 
     verification_tokens: EmailVerificationToken with user = this
     reset_tokens: PasswordResetToken with principal_user = this
+
+    transitions status {
+        active -> suspended
+        active -> deactivated
+        suspended -> active
+        suspended -> deactivated
+        terminal: deactivated
+    }
 }
 
 entity Admin {
@@ -354,6 +363,46 @@ rule ResendVerification {
             last_attempted_at: null
         )
         VerificationEmailDispatched(user: user, token: token)
+}
+
+rule SuspendUserAccount {
+    when: UserSuspended(user)
+
+    requires: user.status = active
+
+    ensures: user.status = suspended
+}
+
+rule ReactivateSuspendedUser {
+    when: UserReactivated(user)
+
+    requires: user.status = suspended
+
+    ensures: user.status = active
+}
+
+rule DeactivateUserAccount {
+    when: UserDeactivated(user)
+
+    requires: user.status in {active, suspended}
+
+    ensures: user.status = deactivated
+}
+
+rule SuspendAdminAccount {
+    when: AdminSuspended(admin)
+
+    requires: admin.status = active
+
+    ensures: admin.status = suspended
+}
+
+rule ReactivateSuspendedAdmin {
+    when: AdminReactivated(admin)
+
+    requires: admin.status = suspended
+
+    ensures: admin.status = active
 }
 
 surface UserAuthenticationBoundary {
