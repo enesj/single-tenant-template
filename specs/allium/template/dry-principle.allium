@@ -1,3 +1,5 @@
+-- allium: 3
+
 entity FrontendEntityTemplate {
     entity_id: String
     uses_shared_list_view: Boolean
@@ -56,24 +58,24 @@ surface FrontendListViewReuseBoundary {
         ComposeListViewProps(entity)
         RenderListView(entity)
 
-    guarantee:
-        ResolveTableEntitySpec(entity) reads from shared `:entity-specs/by-name` subscription
-        and resolves route-aware table config (`:admin` or `:domain` table-columns),
-        including computed field metadata when present.
+    @guarantee TableEntitySpecResolutionUsesSharedSubscriptionAndRouteAwareConfig
+        -- ResolveTableEntitySpec(entity) reads from shared `:entity-specs/by-name` subscription
+        -- and resolves route-aware table config (`:admin` or `:domain` table-columns),
+        -- including computed field metadata when present.
 
-    guarantee:
-        ComposeListViewProps(entity) always includes `:entity-name` + `:entity-spec`,
-        then merges caller-provided props including form display mode, permission flags,
-        and custom form renderers.
+    @guarantee ListViewPropsAlwaysSeedEntityNameAndSpecBeforeCallerOverrides
+        -- ComposeListViewProps(entity) always includes `:entity-name` + `:entity-spec`,
+        -- then merges caller-provided props including form display mode, permission flags,
+        -- and custom form renderers.
 
-    guarantee:
-        RenderListView(entity) centralizes table/filter/pagination/selection/form behavior
-        in one `list-view` component, with form mode selected by `:form-display`
-        (`:inline` or `:modal`).
+    @guarantee SharedListViewCentralizesCoreListBehaviors
+        -- RenderListView(entity) centralizes table/filter/pagination/selection/form behavior
+        -- in one `list-view` component, with form mode selected by `:form-display`
+        -- (`:inline` or `:modal`).
 
-    guidance:
-        DRY at this layer is configuration-driven: each page directly composes `list-view`
-        with subscription-resolved entity specs instead of routing through a shared page wrapper.
+    @guidance
+        -- DRY at this layer is configuration-driven: each page directly composes `list-view`
+        -- with subscription-resolved entity specs instead of routing through a shared page wrapper.
 }
 
 surface FrontendEntitySpecAndAdapterUtilitiesBoundary {
@@ -87,20 +89,26 @@ surface FrontendEntitySpecAndAdapterUtilitiesBoundary {
         RegisterSyncEvent(options)
         RegisterUpsertEvent(options)
 
-    guarantee:
-        `:entity-specs/by-name` normalizes identifiers with `normalize-entity-name` so snake_case and kebab-case inputs resolve consistently.
+    @guarantee EntitySpecLookupNormalizesSnakeAndKebabIdentifiers
+        -- `:entity-specs/by-name` normalizes identifiers with `normalize-entity-name` so
+        -- snake_case and kebab-case inputs resolve consistently.
 
-    guarantee:
-        `:entity-specs/by-name` merges backend/model fields with route-aware table config (`:admin` or `:domain` table-columns), including computed field metadata when present.
+    @guarantee EntitySpecLookupMergesBackendFieldsWithRouteAwareColumns
+        -- `:entity-specs/by-name` merges backend/model fields with route-aware table config
+        -- (`:admin` or `:domain` table-columns), including computed field metadata when present.
 
-    guarantee:
-        `normalize-entity` centralizes ID coercion to strings, namespaced alias generation, optional alias mirroring, fallback ID synthesis, and post-transform hooks.
+    @guarantee NormalizeEntityCentralizesIdAliasAndPostTransformRules
+        -- `normalize-entity` centralizes ID coercion to strings, namespaced alias generation,
+        -- optional alias mirroring, fallback ID synthesis, and post-transform hooks.
 
-    guarantee:
-        `register-entity-spec-sub!`, `register-sync-event!`, and `register-upsert-event!` provide reusable adapter registration primitives instead of per-entity subscription/event boilerplate.
+    @guarantee AdapterRegistrationHelpersReplacePerEntityBoilerplate
+        -- `register-entity-spec-sub!`, `register-sync-event!`, and `register-upsert-event!`
+        -- provide reusable adapter registration primitives instead of per-entity
+        -- subscription/event boilerplate.
 
-    guidance:
-        Adapter reuse is intentionally data-shape focused; HTTP event ownership remains outside these utility helpers.
+    @guidance
+        -- Adapter reuse is intentionally data-shape focused; HTTP event ownership remains outside
+        -- these utility helpers.
 }
 
 surface FrontendCrudBridgeAndSuccessBoundary {
@@ -113,20 +121,25 @@ surface FrontendCrudBridgeAndSuccessBoundary {
         HandleCreateSuccess(entity_type, response)
         HandleUpdateSuccess(entity_type, id, response)
 
-    guarantee:
-        `register-crud-bridge!` stores bridge overrides per entity and merges nested operation configs, enabling additive customization without replacing entire handlers.
+    @guarantee CrudBridgeRegistrationMergesNestedOperationOverrides
+        -- `register-crud-bridge!` stores bridge overrides per entity and merges nested operation
+        -- configs, enabling additive customization without replacing entire handlers.
 
-    guarantee:
-        `run-bridge-operation` computes a default effect first, then applies only context-eligible bridges ordered by descending priority.
+    @guarantee BridgeOperationStartsFromDefaultEffectThenAppliesEligibleOverrides
+        -- `run-bridge-operation` computes a default effect first, then applies only context-eligible
+        -- bridges ordered by descending priority.
 
-    guarantee:
-        Default create/update/delete request handlers route to admin or public endpoints via `in-admin-context?` (route-name/path based, token presence ignored).
+    @guarantee DefaultCrudHandlersChooseEndpointFromAdminContext
+        -- Default create/update/delete request handlers route to admin or public endpoints via
+        -- `in-admin-context?` (route-name/path based, token presence ignored).
 
-    guarantee:
-        Shared success handling is centralized in `app.template.frontend.shared.crud.success` (`extract-entity-id`, recently-created/recently-updated tracking, form success-state merge).
+    @guarantee SharedCrudSuccessHandlingLivesInOneNamespace
+        -- Shared success handling is centralized in `app.template.frontend.shared.crud.success`
+        -- (`extract-entity-id`, recently-created/recently-updated tracking, form success-state merge).
 
-    guidance:
-        DRY here standardizes success/failure semantics while still permitting domain/admin-specific bridge overrides.
+    @guidance
+        -- DRY here standardizes success/failure semantics while still permitting domain/admin-
+        -- specific bridge overrides.
 }
 
 surface DomainLocalListEventSupportBoundary {
@@ -137,22 +150,22 @@ surface DomainLocalListEventSupportBoundary {
         BuildEntityListFetchEffect(namespace, entity_type, params)
         BuildEntityListSuccessEffect(namespace, entity_type, response)
 
-    guarantee:
-        Domain-owned list stacks may extract a local helper namespace for request-param
-        derivation, loading/error state, and narrow entity-backed fetch/success effects
-        without coupling that reuse to global admin event factories.
+    @guarantee DomainListStacksCanReuseLocalHelperNamespacesWithoutGlobalFactoryCoupling
+        -- Domain-owned list stacks may extract a local helper namespace for request-param
+        -- derivation, loading/error state, and narrow entity-backed fetch/success effects
+        -- without coupling that reuse to global admin event factories.
 
-    guarantee:
-        Shared list-effect helpers stay intentionally narrow: they apply only where rows
-        come from `:data`, totals fall back to row count, optional highlight metadata is
-        stored uniformly, and the success path needs one sync dispatch plus standard list
-        metadata writes.
+    @guarantee SharedListEffectHelpersStayIntentionallyNarrow
+        -- Shared list-effect helpers stay intentionally narrow: they apply only where rows
+        -- come from `:data`, totals fall back to row count, optional highlight metadata is
+        -- stored uniformly, and the success path needs one sync dispatch plus standard list
+        -- metadata writes.
 
-    guidance:
-        User-expenses list events now use this boundary via a local helper namespace.
-        Bespoke flows such as receipts, recent pages, lookup lists with extra local state,
-        and entity families that maintain additional caches remain outside the narrow helper
-        until their contracts genuinely match.
+    @guidance
+        -- User-expenses list events now use this boundary via a local helper namespace.
+        -- Bespoke flows such as receipts, recent pages, lookup lists with extra local state,
+        -- and entity families that maintain additional caches remain outside the narrow helper
+        -- until their contracts genuinely match.
 }
 
 surface BackendGenericCrudReuseBoundary {
@@ -164,23 +177,31 @@ surface BackendGenericCrudReuseBoundary {
         ResolveEntityRoutesFromContainer(db, models_data, service_container)
         ComposeVersionedEntityCrudRoutes(db, models_data, service_container)
 
-    guarantee:
-        `routes/crud.clj` exposes reusable handler constructors (`get-items-handler`, `get-item-handler`, `create-item-handler`, `update-item-handler`, `delete-item-handler`, batch handlers, validation handler`) that delegate to `crud-protocols/*`.
+    @guarantee CrudRouteNamespaceExposesReusableProtocolBackedHandlers
+        -- `routes/crud.clj` exposes reusable handler constructors (`get-items-handler`,
+        -- `get-item-handler`, `create-item-handler`, `update-item-handler`, `delete-item-handler`,
+        -- batch handlers, validation handler`) that delegate to `crud-protocols/*`.
 
-    guarantee:
-        `crud-routes` defines one metadata-driven route template (`/api/:entity` + subroutes) instead of duplicating per-entity backend route definitions.
+    @guarantee CrudRoutesUseSingleMetadataDrivenRouteTemplate
+        -- `crud-routes` defines one metadata-driven route template (`/api/:entity` + subroutes)
+        -- instead of duplicating per-entity backend route definitions.
 
-    guarantee:
-        `entities-routes` requires a non-nil service container and reuses container-provided `:crud-routes` rather than rebuilding route trees per caller.
+    @guarantee EntitiesRoutesReuseContainerProvidedCrudRoutes
+        -- `entities-routes` requires a non-nil service container and reuses container-provided
+        -- `:crud-routes` rather than rebuilding route trees per caller.
 
-    guarantee:
-        `create-versioned-api-routes` remaps the generic path to `/entities/:entity`, adds user-auth + entities-authorization middleware, and mounts it inside the versioned API composition.
+    @guarantee VersionedEntityRoutesAddUserAuthAndEntitiesAuthorization
+        -- `create-versioned-api-routes` remaps the generic path to `/entities/:entity`, adds
+        -- user-auth + entities-authorization middleware, and mounts it inside the versioned API
+        -- composition.
 
-    guarantee:
-        `create-versioned-api-routes` keeps an explicit users-read exception: GET `/entities/users` delegates to `app.backend.routes.admin-api/list-users-handler`.
+    @guarantee VersionedEntityRoutesKeepExplicitUsersReadException
+        -- `create-versioned-api-routes` keeps an explicit users-read exception: GET
+        -- `/entities/users` delegates to `app.backend.routes.admin-api/list-users-handler`.
 
-    guidance:
-        Generic CRUD reuse is intentionally broad for mechanical CRUD, but explicit exceptions are kept where existing behavior requires tighter coupling.
+    @guidance
+        -- Generic CRUD reuse is intentionally broad for mechanical CRUD, but explicit exceptions
+        -- are kept where existing behavior requires tighter coupling.
 }
 
 surface GenericCrudSecurityConstraintBoundary {
@@ -191,17 +212,21 @@ surface GenericCrudSecurityConstraintBoundary {
         BuildBlockedEntityResponse(entity_key, reason)
         ReadAllowedUserEntities()
 
-    guarantee:
-        `entity-allowed-for-generic-crud?` is fail-safe deny-by-default: unknown entities are blocked.
+    @guarantee GenericCrudAllowlistIsFailSafeDenyByDefault
+        -- `entity-allowed-for-generic-crud?` is fail-safe deny-by-default: unknown entities are
+        -- blocked.
 
-    guarantee:
-        Admin-only entities (`:admins`, `:admin-sessions`, `:audit-logs`) are blocked from generic CRUD regardless of request context.
+    @guarantee AdminOnlyEntitiesRemainBlockedFromGenericCrud
+        -- Admin-only entities (`:admins`, `:admin-sessions`, `:audit-logs`) are blocked from
+        -- generic CRUD regardless of request context.
 
-    guarantee:
-        Protected entities (`:users`) are allowed only through protected handling paths; public-entity set is currently empty.
+    @guarantee ProtectedUsersEntityRequiresProtectedHandlingPath
+        -- Protected entities (`:users`) are allowed only through protected handling paths;
+        -- public-entity set is currently empty.
 
-    guidance:
-        This is a deliberate DRY boundary: shared generic handlers exist, but security policy intentionally narrows what can reuse them.
+    @guidance
+        -- This is a deliberate DRY boundary: shared generic handlers exist, but security policy
+        -- intentionally narrows what can reuse them.
 }
 
 surface DIContainerAndFactoryReuseBoundary {
@@ -213,17 +238,22 @@ surface DIContainerAndFactoryReuseBoundary {
         StartContainer(di_container)
         BuildServiceContainer(config, db_connection, metadata, domain_config)
 
-    guarantee:
-        `register-template-services!` registers shared constructors once (`:db-adapter`, metadata/type-casting/validation/query services, `:crud-service`, auth/email services, route services including `:crud-routes`).
+    @guarantee TemplateServiceRegistrationDefinesSharedConstructorsOnce
+        -- `register-template-services!` registers shared constructors once (`:db-adapter`,
+        -- metadata/type-casting/validation/query services, `:crud-service`, auth/email services,
+        -- route services including `:crud-routes`).
 
-    guarantee:
-        `initialize-services!` and `start-services!` execute service lifecycle in topological dependency order, preventing duplicate manual boot ordering across callers.
+    @guarantee ServiceLifecycleExecutesInDependencyOrder
+        -- `initialize-services!` and `start-services!` execute service lifecycle in topological
+        -- dependency order, preventing duplicate manual boot ordering across callers.
 
-    guarantee:
-        `create-service-container` reuses the DI container and exposes a compatibility map (`:crud-service`, `:crud-routes`, `:get-service`, etc.) for downstream route composition.
+    @guarantee ServiceContainerFactoryExposesCompatibilityMap
+        -- `create-service-container` reuses the DI container and exposes a compatibility map
+        -- (`:crud-service`, `:crud-routes`, `:get-service`, etc.) for downstream route composition.
 
-    guidance:
-        DRY at this layer removes repeated service wiring while preserving explicit service IDs and dependency declarations.
+    @guidance
+        -- DRY at this layer removes repeated service wiring while preserving explicit service IDs
+        -- and dependency declarations.
 }
 
 surface DomainRegistryPluginReuseBoundary {
@@ -236,59 +266,69 @@ surface DomainRegistryPluginReuseBoundary {
         ComposeAdminApiWithDomains(db, service_container)
         ComposeUserApiWithDomains(db, service_container)
 
-    guarantee:
-        `enabled-domains` is the single plugin list; each manifest contributes optional `:routes :admin-api`, optional `:routes :user-api`, and SPA fallback paths.
+    @guarantee EnabledDomainsIsTheSinglePluginManifestList
+        -- `enabled-domains` is the single plugin list; each manifest contributes optional
+        -- `:routes :admin-api`, optional `:routes :user-api`, and SPA fallback paths.
 
-    guarantee:
-        `all-admin-api-routes` and `all-user-api-routes` map enabled manifests in order and permit nil entries when a domain omits a route builder.
+    @guarantee DomainRouteCollectorsPreserveManifestOrderAndAllowNilBuilders
+        -- `all-admin-api-routes` and `all-user-api-routes` map enabled manifests in order and
+        -- permit nil entries when a domain omits a route builder.
 
-    guarantee:
-        Both API composers filter nil domain route trees before mounting (`admin_api.clj` and `api.clj`), enabling plugin-style reuse without route duplication.
+    @guarantee ApiComposersFilterNilDomainTreesBeforeMounting
+        -- Both API composers filter nil domain route trees before mounting (`admin_api.clj` and
+        -- `api.clj`), enabling plugin-style reuse without route duplication.
 
-    guarantee:
-        `all-spa-routes` concatenates domain SPA paths, drops nils, and de-duplicates in stable first-seen order.
+    @guarantee SpaFallbackCollectorDeduplicatesStableFirstSeenPaths
+        -- `all-spa-routes` concatenates domain SPA paths, drops nils, and de-duplicates in stable
+        -- first-seen order.
 
-    guidance:
-        Domain reuse is composition-first: template route shells stay stable while domain modules plug in route trees.
+    @guidance
+        -- Domain reuse is composition-first: template route shells stay stable while domain modules
+        -- plug in route trees.
 }
 
 rule FrontendCrudReuseIsSpecDriven {
     when: PageComposesListView(entity)
 
-    ensures: ComposeListViewProps(entity) includes `:entity-name` and `:entity-spec`.
-    ensures: ResolveTableEntitySpec(entity) is sourced from shared `:entity-specs/by-name` subscription.
-    ensures: RenderListView(entity) reuses one list implementation for filtering/sorting/pagination/selection/forms.
+    ensures:
+        FrontendCrudReuseConfirmed(entity: entity)
+        SharedEntitySpecResolutionConfirmed(entity: entity)
+        SharedListViewReuseConfirmed(entity: entity)
 }
 
 rule AdapterUtilitiesEliminatePerEntityGlueDuplication {
     when: DomainOrAdminAdapterRegisters(entity)
 
-    ensures: NormalizeEntity(entity, options) applies one reusable normalization pipeline.
-    ensures: RegisterEntitySpecSub(options) avoids per-entity subscription boilerplate.
-    ensures: RegisterSyncEvent(options) and RegisterUpsertEvent(options) avoid repeated entity-store sync event templates.
+    ensures:
+        EntityNormalizationReuseConfirmed(entity: entity)
+        EntitySpecSubscriptionReuseConfirmed(entity: entity)
+        SharedSyncAndUpsertRegistrationConfirmed(entity: entity)
 }
 
 rule BridgeAndSuccessReuseKeepsCrudSemanticsConsistent {
     when: CrudOperationDispatched(operation, entity)
 
-    ensures: RunBridgeOperation(operation, handler_type, entity, args) starts from default effect and applies context-eligible bridge overrides.
-    ensures: HandleCreateSuccess(entity, response) and HandleUpdateSuccess(entity, id, response) use shared ID extraction + highlight tracking semantics.
+    ensures:
+        CrudBridgeOperationConsistencyConfirmed(operation: operation, entity: entity)
+        SharedCrudSuccessHandlingConfirmed(entity: entity)
 }
 
 rule GenericCrudReuseIsConstrainedBySecurityBoundaries {
     when: GenericCrudRequestReceived(entity)
 
-    ensures: CheckGenericCrudEntityAccess(entity, is_admin) denies unknown and admin-only entities by default.
-    ensures: Protected entity handling remains explicit (`:users`) rather than broad allowlisting.
-    ensures: Domain-specific business operations should prefer domain APIs when generic semantics are insufficient.
+    ensures:
+        GenericCrudAccessPolicyApplied(entity: entity)
+        ProtectedEntityHandlingRemainsExplicit(entity: entity)
+        DomainSpecificCrudFallbackPreserved(entity: entity)
 }
 
 rule DIAndRegistryReuseMinimizeRouteAndServiceDuplication {
     when: BackendComposesApisAndServices()
 
-    ensures: BuildServiceContainer(config, db_connection, metadata, domain_config) reuses DI registration/lifecycle rather than ad-hoc service construction.
-    ensures: ComposeAdminApiWithDomains(db, service_container) and ComposeUserApiWithDomains(db, service_container) append registry-provided domain route trees.
-    ensures: CollectDomainSpaFallbackRoutes() provides one shared domain fallback list for backend SPA route composition.
+    ensures:
+        ServiceContainerReuseConfirmed()
+        DomainRouteCompositionReuseConfirmed()
+        SharedSpaFallbackCollectionConfirmed()
 }
 
 open question "GET /entities/users currently delegates to `app.backend.routes.admin-api/list-users-handler` as an explicit coupling point. Should this eventually move to a dedicated user-boundary endpoint while preserving existing behavior?"

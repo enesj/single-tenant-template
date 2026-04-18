@@ -4,7 +4,25 @@
     [app.template.frontend.components.common :as common]
     [app.template.frontend.components.form.fields.date-picker :refer [date-picker]]
     [app.template.frontend.components.form.validation :as validation]
+    [clojure.string :as str]
     [uix.core :refer [$ defui]]))
+
+(defn- coerce-datetime-local-value
+  "HTML datetime-local inputs require `YYYY-MM-DDTHH:mm` (no seconds, no TZ).
+   API timestamps arrive as ISO-Z strings; strip the seconds and any trailing
+   `Z`/offset so the browser will populate the control."
+  [v]
+  (cond
+    (not (string? v)) v
+    (str/blank? v) v
+    :else (let [no-tz (-> v
+                        (str/replace #"Z$" "")
+                        (str/replace #"[+-]\d{2}:?\d{2}$" ""))
+                ;; keep only up to minutes: YYYY-MM-DDTHH:mm
+                [date time] (str/split no-tz #"T" 2)]
+            (if (and date time)
+              (str date "T" (subs time 0 (min (count time) 5)))
+              no-tz))))
 
 (def input-width
   {:text "w-1/2"
@@ -60,16 +78,23 @@
                          :required required
                          :class (str label-class (when inline " mb-0 min-w-[150px] text-left"))})
         ($ :div {:class (when inline "flex-1 text-left")}
-          ($ common/input
-            (cond-> props
-              (:input-type all-props)
-              (assoc :type (or input-type "text"))
-              (:step all-props)
-              (assoc :step (or (:step all-props) "0.01"))
-              (:min all-props)
-              (assoc :min (:min all-props))
-              (:max all-props)
-              (assoc :max (:max all-props))))
+          (let [normalized-input-type (cond
+                                        (keyword? input-type) (name input-type)
+                                        (string? input-type) input-type
+                                        :else "text")
+                datetime-local? (= "datetime-local" normalized-input-type)]
+            ($ common/input
+              (cond-> props
+                (:input-type all-props)
+                (assoc :type (or input-type "text"))
+                datetime-local?
+                (assoc :value (coerce-datetime-local-value value))
+                (:step all-props)
+                (assoc :step (or (:step all-props) "0.01"))
+                (:min all-props)
+                (assoc :min (:min all-props))
+                (:max all-props)
+                (assoc :max (:max all-props)))))
           (when field-error
             ($ :div {:class error-class
                      :id error-id

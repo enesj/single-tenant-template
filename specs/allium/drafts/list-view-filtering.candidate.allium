@@ -20,6 +20,9 @@
 
 -- Reference-data entities use client-side pagination (small, static datasets).
 -- Transactional entities (receipts, expenses) use server-side pagination.
+external entity EntityType { name: String }
+external entity ColumnId { name: String }
+
 value EntityDataProfile {
     kind: reference_data | transactional
 

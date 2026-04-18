@@ -18,6 +18,8 @@
 -- External entities
 -- ─────────────────────────────────────────────
 
+external entity UUID {}
+
 external entity User {
     id: UUID
     tenant_id: UUID
@@ -87,29 +89,29 @@ entity ExpenseRowView {
 -- ─────────────────────────────────────────────
 
 rule UserExpandsExpenseRow {
-    when: ToggleExpenseRow(viewer: PowerUser, row: ExpenseRowView, to: expanded)
+    when: ToggleExpenseRow(viewer, expense_row, to: expanded)
 
-    requires: row.expand_state = collapsed
-    requires: row.can_expand
+    requires: expense_row.expand_state = collapsed
+    requires: expense_row.can_expand
 
     ensures:
-        if row.loaded_items.count > 0:
+        if expense_row.loaded_items.count > 0:
             -- Items already cached from a prior expand this session.
             -- Expand instantly with no network request.
-            row.expand_state = expanded
+            expense_row.expand_state = expanded
         else:
-            row.expand_state = loading
+            expense_row.expand_state = loading
 
     ensures:
-        if row.loaded_items.count = 0:
-            FetchExpenseItems(viewer, row)
+        if expense_row.loaded_items.count = 0:
+            FetchExpenseItems(viewer, expense_row)
 }
 
 rule ExpenseItemsLoaded {
-    when: ExpenseItemsLoaded(row: ExpenseRowView, items: List<ExpenseItem>)
+    when: ExpenseItemsLoaded(expense_row, items)
 
-    ensures: row.loaded_items = items
-    ensures: row.expand_state = expanded
+    ensures: expense_row.loaded_items = items
+    ensures: expense_row.expand_state = expanded
 }
 
 
@@ -118,11 +120,11 @@ rule ExpenseItemsLoaded {
 -- ─────────────────────────────────────────────
 
 rule UserCollapsesExpenseRow {
-    when: ToggleExpenseRow(viewer: PowerUser, row: ExpenseRowView, to: collapsed)
+    when: ToggleExpenseRow(viewer, expense_row, to: collapsed)
 
-    requires: row.expand_state = expanded
+    requires: expense_row.expand_state = expanded
 
-    ensures: row.expand_state = collapsed
+    ensures: expense_row.expand_state = collapsed
     -- loaded_items remain cached; a subsequent expand is instant.
 }
 

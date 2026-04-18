@@ -1,6 +1,7 @@
 (ns app.template.frontend.subs.core
   "Subscription registration entrypoint; ensure subs are loaded."
   (:require
+    [app.template.frontend.db.paths :as paths]
     [re-frame.core :as rf]))
 
 (rf/reg-sub
@@ -11,7 +12,9 @@
 (rf/reg-sub
   :locale
   (fn [db _]
-    (get db :locale :bs)))
+    (if (paths/admin-route? db)
+      :en
+      (get db :locale :bs))))
 
 ;; Auth status subscription
 ;; Auth status subscription - updated for multi-tenant support

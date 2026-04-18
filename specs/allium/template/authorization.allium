@@ -1,3 +1,5 @@
+-- allium: 3
+
 use "./authentication.allium" as auth
 
 entity GenericCrudRequest {
@@ -174,13 +176,13 @@ surface UserApiAuthorizationBoundary {
         UserProtectedRouteRequested(request)
         GenericCrudRequested(request)
 
-    guarantee:
-        request.entity in {"admins", "admin-sessions", "audit-logs"}
-        implies AuthorizationDenied(scope: generic_crud, reason: admin_only_entity)
+    @guarantee AdminOnlyEntitiesAreDeniedThroughUserGenericCrud
+        -- Requests for "admins", "admin-sessions", or "audit-logs" through the user generic
+        -- CRUD path result in AuthorizationDenied(scope: generic_crud, reason: admin_only_entity).
 
-    guidance:
-        Generic CRUD access is deny-by-default.
-        Protected entity "users" requires tenant context.
+    @guidance
+        -- Generic CRUD access is deny-by-default.
+        -- Protected entity "users" requires tenant context.
 }
 
 surface AdminApiAuthorizationBoundary {
@@ -195,8 +197,9 @@ surface AdminApiAuthorizationBoundary {
         AdminRouteRequested(request)
         AdminRoleGateChecked(request)
 
-    guidance:
-        Admin auth accepts token from header, session or cookie upstream; this boundary models the normalized result.
+    @guidance
+        -- Admin auth accepts token from header, session, or cookie upstream; this boundary models
+        -- the normalized result.
 }
 
 surface ExpensesAuthorizationBoundary {
@@ -210,8 +213,8 @@ surface ExpensesAuthorizationBoundary {
     provides:
         ExpensesActionRequested(request)
 
-    guarantee:
-        request.action = power implies request.session.user.role in {admin, owner}
+    @guarantee PowerActionsRequireAdminOrOwnerRole
+        -- When request.action is power, request.session.user.role is admin or owner.
 }
 
 -- resolved: `handle-tenants-entity-access` (dead branch) was removed.

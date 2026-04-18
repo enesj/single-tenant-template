@@ -1,3 +1,5 @@
+-- allium: 3
+
 entity BackendDomainManifest {
     id: String
     has_admin_api_route: Boolean
@@ -27,20 +29,22 @@ surface ExpensesDomainManifestBoundary {
         BuildExpensesUserDomainRouteTree(db, wrap_user_authentication, app_config)
         ResolveExpensesSpaFallbackPaths()
 
-    guarantee:
-        ResolveExpensesDomainManifest().id = "expenses"
+    @guarantee ExpensesManifestUsesStableId
+        -- ResolveExpensesDomainManifest().id = "expenses".
 
-    guarantee:
-        BuildExpensesAdminDomainRouteTree(db, service_container) is rooted at "/expenses".
+    @guarantee AdminRouteTreeUsesExpensesRoot
+        -- BuildExpensesAdminDomainRouteTree(db, service_container) is rooted at "/expenses".
 
-    guarantee:
-        BuildExpensesUserDomainRouteTree(db, wrap_user_authentication, app_config) is rooted at "/expenses".
+    @guarantee UserRouteTreeUsesExpensesRoot
+        -- BuildExpensesUserDomainRouteTree(db, wrap_user_authentication, app_config) is rooted at "/expenses".
 
-    guarantee:
-        BuildExpensesUserDomainRouteTree(db, wrap_user_authentication, app_config) applies injected `wrap_user_authentication` middleware at the "/expenses" route root.
+    @guarantee UserRouteTreeAppliesInjectedAuthAtRoot
+        -- BuildExpensesUserDomainRouteTree(db, wrap_user_authentication, app_config) applies injected
+        -- `wrap_user_authentication` middleware at the "/expenses" route root.
 
-    guarantee:
-        ResolveExpensesSpaFallbackPaths() delegates to shared descriptor-derived `expenses-user-route-contract/spa-fallback-paths`.
+    @guarantee SpaFallbackPathsDelegateToSharedDescriptorContract
+        -- ResolveExpensesSpaFallbackPaths() delegates to shared descriptor-derived
+        -- `expenses-user-route-contract/spa-fallback-paths`.
 }
 
 surface TemplateCompositionBoundaryForExpenses {
@@ -49,26 +53,33 @@ surface TemplateCompositionBoundaryForExpenses {
         ComposeVersionedUserApiRoutes(db, service_container)
         ComposeSpaFallbackRoutes()
 
-    guarantee:
-        ComposeAdminApiRoutes(db, service_container) mounts domain admin trees under template root "/admin/api".
+    @guarantee AdminRoutesMountUnderTemplateAdminRoot
+        -- ComposeAdminApiRoutes(db, service_container) mounts domain admin trees under template root
+        -- "/admin/api".
 
-    guarantee:
-        Expenses admin domain route tree rooted at "/expenses" composes to stable subtree "/admin/api/expenses".
+    @guarantee ExpensesAdminSubtreeRemainsStable
+        -- Expenses admin domain route tree rooted at "/expenses" composes to stable subtree
+        -- "/admin/api/expenses".
 
-    guarantee:
-        ComposeVersionedUserApiRoutes(db, service_container) mounts domain user trees under template root "/api/v1".
+    @guarantee UserRoutesMountUnderTemplateVersionedRoot
+        -- ComposeVersionedUserApiRoutes(db, service_container) mounts domain user trees under
+        -- template root "/api/v1".
 
-    guarantee:
-        Expenses user domain route tree rooted at "/expenses" composes to stable subtree "/api/v1/expenses".
+    @guarantee ExpensesUserSubtreeRemainsStable
+        -- Expenses user domain route tree rooted at "/expenses" composes to stable subtree
+        -- "/api/v1/expenses".
 
-    guarantee:
-        ComposeVersionedUserApiRoutes(db, service_container) passes optional `app_config` from service container into `all-user-api-routes` before domain route invocation.
+    @guarantee UserRoutesReceiveOptionalAppConfig
+        -- ComposeVersionedUserApiRoutes(db, service_container) passes optional `app_config` from
+        -- service container into `all-user-api-routes` before domain route invocation.
 
-    guarantee:
-        ComposeVersionedUserApiRoutes(db, service_container) filters null domain user route trees before insertion.
+    @guarantee NullDomainUserRouteTreesAreFiltered
+        -- ComposeVersionedUserApiRoutes(db, service_container) filters null domain user route trees
+        -- before insertion.
 
-    guarantee:
-        ComposeSpaFallbackRoutes() maps backend SPA GET handlers from `domain-registry/all-spa-routes`; expenses contributes paths via shared canonical descriptors.
+    @guarantee SpaFallbackCompositionUsesDomainRegistryOutput
+        -- ComposeSpaFallbackRoutes() maps backend SPA GET handlers from
+        -- `domain-registry/all-spa-routes`; expenses contributes paths via shared canonical descriptors.
 }
 
 surface ExpensesUserApiRouteFamilies {
@@ -80,43 +91,38 @@ surface ExpensesUserApiRouteFamilies {
         AccessArticleAndAliasEndpoints(actor)
         AccessExpenseCrudAndBatchEndpoints(actor)
 
-    guarantee:
-        AccessSummaryEndpoints(actor) includes representative grouped routes under "/api/v1/expenses":
-        - "/summary"
-        - "/by-month"
-        - "/by-supplier"
+    @guarantee SummaryEndpointsRemainGroupedUnderExpensesPrefix
+        -- AccessSummaryEndpoints(actor) includes representative grouped routes under
+        -- "/api/v1/expenses", including "/summary", "/by-month", and "/by-supplier".
 
-    guarantee:
-        AccessSettingsEndpoints(actor) includes representative grouped routes:
-        - "/settings" (get/put)
-        - "/export" (get)
-        - "/all" (delete)
+    @guarantee SettingsEndpointsRemainGrouped
+        -- AccessSettingsEndpoints(actor) includes representative grouped routes such as
+        -- "/settings" (get/put), "/export" (get), and "/all" (delete).
 
-    guarantee:
-        AccessReferenceDataEndpoints(actor) includes representative grouped routes for suppliers, payers, payer-types, stores, cities, manufacturers, categories, expense-categories, subcategories, and reference aliases.
+    @guarantee ReferenceDataEndpointsCoverCoreExpenseReferences
+        -- AccessReferenceDataEndpoints(actor) includes representative grouped routes for suppliers,
+        -- payers, payer-types, stores, cities, manufacturers, categories, expense-categories,
+        -- subcategories, and reference aliases.
 
-    guarantee:
-        AccessReceiptEndpoints(actor) includes representative grouped routes:
-        - "/upload"
-        - "/receipts"
-        - "/receipts/:id"
-        - "/receipts/:id/approve"
-        - "/receipts/:id/review"
-        - "/receipts/:id/ocr"
-        - "/receipts/batch"
+    @guarantee ReceiptEndpointsCoverUploadReviewAndBatchFlows
+        -- AccessReceiptEndpoints(actor) includes representative grouped routes such as
+        -- "/upload", "/receipts", "/receipts/:id", "/receipts/:id/approve",
+        -- "/receipts/:id/review", "/receipts/:id/ocr", and "/receipts/batch".
 
-    guarantee:
-        AccessArticleAndAliasEndpoints(actor) includes representative grouped routes for "/articles", "/articles/unmapped-aliases", alias mapping, and alias batch/update surfaces.
+    @guarantee ArticleAndAliasEndpointsCoverMappingFlows
+        -- AccessArticleAndAliasEndpoints(actor) includes representative grouped routes for
+        -- "/articles", "/articles/unmapped-aliases", alias mapping, and alias batch/update surfaces.
 
-    guarantee:
-        AccessExpenseCrudAndBatchEndpoints(actor) includes representative grouped routes:
-        - "" (expenses list/create at root)
-        - "/:id" (get/put)
-        - "/batch" (put/delete)
-        - "/batch-delete" (post)
+    @guarantee ExpenseCrudAndBatchEndpointsRemainAvailable
+        -- AccessExpenseCrudAndBatchEndpoints(actor) includes representative grouped routes such as
+        -- the root list/create surface, "/:id" (get/put), "/batch" (put/delete), and
+        -- "/batch-delete" (post).
 
-    guidance:
-        User route comments mark practical role-gated intent (for example: power-user-only and admin/owner-only semantics on selected mutation routes). Enforcement for these semantics is implemented in handlers and route-specific middleware, not by a single global role gate on the route table.
+    @guidance
+        -- User route comments mark practical role-gated intent (for example: power-user-only and
+        -- admin/owner-only semantics on selected mutation routes). Enforcement for these semantics
+        -- is implemented in handlers and route-specific middleware, not by a single global role
+        -- gate on the route table.
 }
 
 surface ExpensesAdminRouteFactoryBoundary {
@@ -129,34 +135,35 @@ surface ExpensesAdminRouteFactoryBoundary {
         BuildStandardEntityRoutes(db, config)
         BuildExtendedEntityRoutes(db, config)
 
-    guarantee:
-        ReadJsonBody(request) fallback order is:
-        1) pre-parsed map in `:body`
-        2) map in `:body-params`
-        3) map in `[:parameters :body]`
-        4) raw body JSON parse (InputStream/String)
-        5) `{}` when body is nil or parse fails.
+    @guarantee JsonBodyReaderUsesFiveStageFallback
+        -- ReadJsonBody(request) fallback order is: pre-parsed map in `:body`, map in
+        -- `:body-params`, map in `[:parameters :body]`, raw body JSON parse (InputStream/String),
+        -- and `{}` when body is nil or parse fails.
 
-    guarantee:
-        NormalizeKeysToAppBoundary(data) converts boundary map keys into canonical app keys (snake_case/string accepted, app kebab-case keywords produced).
+    @guarantee KeyNormalizationProducesCanonicalAppKeys
+        -- NormalizeKeysToAppBoundary(data) converts boundary map keys into canonical app keys
+        -- (snake_case/string accepted, app kebab-case keywords produced).
 
-    guarantee:
-        ConvertToDbBoundary(data) converts app keys back to DB snake_case keys and performs conservative UUID coercion for `id` and `*_id` string values (blank => null, valid UUID string => UUID object).
+    @guarantee DbBoundaryConversionPerformsConservativeUuidCoercion
+        -- ConvertToDbBoundary(data) converts app keys back to DB snake_case keys and performs
+        -- conservative UUID coercion for `id` and `*_id` string values (blank => null, valid UUID
+        -- string => UUID object).
 
-    guarantee:
-        BuildStandardEntityRoutes(db, config) assembles route root `"/" + route_segment` with standard surfaces:
-        - "" (get/post)
-        - "/batch" (delete)
-        - "/:id" (get/put)
+    @guarantee StandardEntityRoutesExposeCoreCrudSurfaces
+        -- BuildStandardEntityRoutes(db, config) assembles route root `"/" + route_segment` with
+        -- standard surfaces: root get/post, "/batch" delete, and "/:id" get/put.
 
-    guarantee:
-        BuildExtendedEntityRoutes(db, config) includes standard surfaces and may add "/count", "/search", and configured additional routes.
+    @guarantee ExtendedEntityRoutesMayAddOptionalSurfaces
+        -- BuildExtendedEntityRoutes(db, config) includes standard surfaces and may add "/count",
+        -- "/search", and configured additional routes.
 
-    guarantee:
-        When `config.has_route_middleware`, both standard and extended builders apply route middleware at the entity route root.
+    @guarantee RouteMiddlewareAppliesAtEntityRootWhenConfigured
+        -- When `config.has_route_middleware`, both standard and extended builders apply route
+        -- middleware at the entity route root.
 
-    guarantee:
-        Payer-types admin config uses route-level middleware requiring at least admin role via `wrap-admin-role ... :admin`.
+    @guarantee PayerTypesRequireAdminRoleMiddleware
+        -- Payer-types admin config uses route-level middleware requiring at least admin role via
+        -- `wrap-admin-role ... :admin`.
 }
 
 surface ExpensesAdminDuplicatesBoundary {
@@ -168,14 +175,20 @@ surface ExpensesAdminDuplicatesBoundary {
         UnignoreDuplicateCluster(actor, entity_type, cluster_id)
         ListIgnoredDuplicateClusters(actor, filters)
 
-    guarantee:
-        PreviewDuplicateMerge(actor, entity_type, primary_id, secondary_ids) and ExecuteDuplicateMerge(actor, entity_type, primary_id, secondary_ids) require elevated admin role tier (`admin`, `owner`, or `super_admin`), returning 403 for lower tiers.
+    @guarantee DuplicateMergeRequiresElevatedAdminTier
+        -- PreviewDuplicateMerge(actor, entity_type, primary_id, secondary_ids) and
+        -- ExecuteDuplicateMerge(actor, entity_type, primary_id, secondary_ids) require elevated
+        -- admin role tier (`admin`, `owner`, or `super_admin`), returning 403 for lower tiers.
 
-    guarantee:
-        DetectDuplicates(actor, entity_type, :prefix, options) supports optional `fetch-limit`; the effective value is bounded to [1, 20000] with default 5000 when omitted or invalid.
+    @guarantee PrefixDuplicateDetectionBoundsFetchLimit
+        -- DetectDuplicates(actor, entity_type, :prefix, options) supports optional `fetch-limit`;
+        -- the effective value is bounded to [1, 20000] with default 5000 when omitted or invalid.
 
-    guarantee:
-        IgnoreDuplicateCluster(actor, entity_type, cluster_id, member_ids), UnignoreDuplicateCluster(actor, entity_type, cluster_id), and ListIgnoredDuplicateClusters(actor, filters) require authenticated admin session and do not require elevated role tier.
+    @guarantee IgnoreDuplicateClusterFlowsNeedOnlyAuthenticatedAdminSession
+        -- IgnoreDuplicateCluster(actor, entity_type, cluster_id, member_ids),
+        -- UnignoreDuplicateCluster(actor, entity_type, cluster_id), and
+        -- ListIgnoredDuplicateClusters(actor, filters) require authenticated admin session and do
+        -- not require elevated role tier.
 }
 
 surface SharedDescriptorSourceOfTruthBoundary {
@@ -185,17 +198,21 @@ surface SharedDescriptorSourceOfTruthBoundary {
         BuildFrontendUserRoutesFromDescriptors()
         BuildBackendSpaFallbackPathsFromDescriptors()
 
-    guarantee:
-        Frontend user route declarations for expenses are generated from shared expenses route descriptors.
+    @guarantee FrontendUserRoutesAreDescriptorBacked
+        -- Frontend user route declarations for expenses are generated from shared expenses route
+        -- descriptors.
 
-    guarantee:
-        Backend expenses SPA fallback paths are extracted from the same descriptor set through `route-contract/spa-fallback-paths`.
+    @guarantee BackendSpaFallbacksUseSameDescriptorSet
+        -- Backend expenses SPA fallback paths are extracted from the same descriptor set through
+        -- `route-contract/spa-fallback-paths`.
 
-    guarantee:
-        Descriptor-backed wiring keeps frontend navigable user paths and backend SPA fallback coverage synchronized at source.
+    @guarantee DescriptorWiringKeepsFrontendAndBackendInSync
+        -- Descriptor-backed wiring keeps frontend navigable user paths and backend SPA fallback
+        -- coverage synchronized at source.
 }
 
 deferred DetailedExpenseReceiptOCRLifecycle
 
-guidance:
-    Detailed receipt OCR lifecycle/state-machine behavior is intentionally deferred to candidate spec `specs/allium/drafts/expenses/receipt-ocr.candidate.allium`.
+-- Guidance:
+-- Detailed receipt OCR lifecycle/state-machine behavior is intentionally deferred to
+-- candidate spec `specs/allium/drafts/expenses/receipt-ocr.candidate.allium`.

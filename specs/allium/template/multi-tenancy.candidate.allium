@@ -1,3 +1,5 @@
+-- allium: 3
+
 -- Multi-Tenancy: Shared-Schema, Tenant-Scoped Access
 -- Status: candidate (initial elicitation — to be refined)
 --
@@ -7,6 +9,12 @@
 -- Two identity pools: platform admins (admins table) and tenant users (users table).
 
 use "./authentication.allium" as auth
+
+external entity TenantSessionContext {
+    user: auth/User
+    active_tenant: Tenant?
+    active_membership: TenantMembership?
+}
 
 -- ============================================================
 -- ENTITIES
@@ -69,7 +77,7 @@ entity ImpersonationGrant {
 -- Note: auth/BrowserSession is extended with:
 --   active_tenant: Tenant?
 --   active_membership: TenantMembership?
--- These fields are written by tenant context rules below.
+-- This spec models that extension as TenantSessionContext.
 
 -- ============================================================
 -- DATA SCOPING CLASSIFICATION
@@ -200,19 +208,21 @@ rule AutoSetSessionAfterProvisioning {
     when: TenantProvisioned(tenant, owner)
 
     let membership = TenantMembership{tenant: tenant, user: owner}
+    let session = TenantSessionContext{user: owner}
 
     requires: exists membership
+    requires: exists session
 
     ensures:
         session.active_tenant = tenant
         session.active_membership = membership
         TenantContextSet(user: owner, tenant: tenant)
 
-    guidance:
-        This rule chains from TenantProvisioned (not UserAuthenticated) to
-        guarantee the membership row exists before setting the session.
-        For returning users with existing memberships, AutoSetTenantAfterLogin
-        handles session setup.
+    @guidance
+        -- This rule chains from TenantProvisioned (not UserAuthenticated) to
+        -- guarantee the membership row exists before setting the session.
+        -- For returning users with existing memberships, AutoSetTenantAfterLogin
+        -- handles session setup.
 }
 
 rule JoinTenantFromInvitation {
@@ -323,10 +333,10 @@ rule TransferTenantOwnership {
     ensures: target_membership.role = owner
     ensures: owner_membership.role = admin               -- demote old owner to admin
 
-    guidance:
-        The old owner becomes an admin, not removed. This ensures the tenant always
-        has at least one owner (the new one) and the old owner retains admin access.
-        To fully leave, the old owner can be removed separately after transfer.
+    @guidance
+        -- The old owner becomes an admin, not removed. This ensures the tenant always
+        -- has at least one owner (the new one) and the old owner retains admin access.
+        -- To fully leave, the old owner can be removed separately after transfer.
 }
 
 rule RemoveUserFromTenant {
@@ -508,13 +518,13 @@ rule AllowGlobalCatalogReadForAllTenantMembers {
 
     ensures: TenantDataGranted(request: request, scope: global)
 
-    guidance:
-        Global catalog tables have no tenant_id column, but user-facing list
-        endpoints filter suppliers and stores to those relevant to the current
-        tenant.  The bridge is:
-            receipts (tenant-scoped) → supplier_aliases / store_aliases → suppliers / stores
-        with a secondary union through expenses for manual entries.
-        Articles, categories, subcategories, and manufacturers remain unfiltered.
+    @guidance
+        -- Global catalog tables have no tenant_id column, but user-facing list
+        -- endpoints filter suppliers and stores to those relevant to the current
+        -- tenant. The bridge is:
+        --   receipts (tenant-scoped) → supplier_aliases / store_aliases → suppliers / stores
+        -- with a secondary union through expenses for manual entries.
+        -- Articles, categories, subcategories, and manufacturers remain unfiltered.
 }
 
 rule AllowGlobalCatalogCreateForMembersAndAbove {
@@ -528,10 +538,10 @@ rule AllowGlobalCatalogCreateForMembersAndAbove {
 
     ensures: TenantDataGranted(request: request, scope: global)
 
-    guidance:
-        Members can create new suppliers and stores (via OCR extraction or
-        manual expense creation). Articles, categories, subcategories, and
-        manufacturers are managed by platform admins via /create-articles skill.
+    @guidance
+        -- Members can create new suppliers and stores (via OCR extraction or
+        -- manual expense creation). Articles, categories, subcategories, and
+        -- manufacturers are managed by platform admins via /create-articles skill.
 }
 
 rule AllowGeoReadForTenantAdminsAndOwners {
@@ -609,11 +619,11 @@ rule AllowPlatformAdminAccessOutsideBlockedResources {
 
     ensures: PlatformAdminDataGranted(request: request)
 
-    guidance:
-        Platform admins have full CRUD on: global product catalog (suppliers, stores,
-        articles, categories, subcategories, manufacturers), global geographic (cities,
-        countries), platform tables, users records, tenant_memberships, and tenants.
-        Users/memberships CRUD is a superpower — bypasses tenant rule chains.
+    @guidance
+        -- Platform admins have full CRUD on: global product catalog (suppliers, stores,
+        -- articles, categories, subcategories, manufacturers), global geographic (cities,
+        -- countries), platform tables, users records, tenant_memberships, and tenants.
+        -- Users/memberships CRUD is a superpower — bypasses tenant rule chains.
 }
 
 rule DenyPlatformAdminAccessToBlockedResources {
@@ -702,10 +712,10 @@ rule ImpersonatedAccessGranted {
         effective_role: grant.role
     )
 
-    guidance:
-        Implementation creates a synthetic TenantMembership-like context
-        from the grant's role and evaluates tenant data rules against it.
-        All actions audit-logged as: admin X (impersonating tenant Y at role Z).
+    @guidance
+        -- Implementation creates a synthetic TenantMembership-like context
+        -- from the grant's role and evaluates tenant data rules against it.
+        -- All actions audit-logged as: admin X (impersonating tenant Y at role Z).
 }
 
 -- ============================================================
@@ -765,8 +775,10 @@ rule AutoSetTenantAfterLogin {
     when: UserAuthenticated(user)
 
     let memberships = TenantMembership with user = user and status = active
+    let session = TenantSessionContext{user: user}
 
     requires: memberships.count > 0
+    requires: exists session
 
     ensures:
         if memberships.count = 1:
@@ -874,7 +886,7 @@ surface TenantSwitcher {
     facing viewer: auth/User
 
     exposes:
-        for m in TenantMembership with user = viewer and status = active:
+        for m in TenantMembership where user = viewer and status = active:
             m.tenant.name
             m.tenant.slug
             m.role
@@ -897,13 +909,13 @@ surface PlatformTenantAdminView {
     provides:
         ImpersonationRevokedByAdmin(admin, grant)
 
-    guidance:
-        Platform admins can view all tenants.
-        Platform admins can access expenses and receipts directly.
-        Tenant expense reference data (expense_items, payers, payer_types, aliases)
-        still requires impersonation with tenant owner approval.
-        Platform admins have superpower CRUD on users and tenant_memberships
-        across all tenants (bypasses tenant rule chains).
+    @guidance
+        -- Platform admins can view all tenants.
+        -- Platform admins can access expenses and receipts directly.
+        -- Tenant expense reference data (expense_items, payers, payer_types, aliases)
+        -- still requires impersonation with tenant owner approval.
+        -- Platform admins have superpower CRUD on users and tenant_memberships
+        -- across all tenants (bypasses tenant rule chains).
 }
 
 -- ============================================================

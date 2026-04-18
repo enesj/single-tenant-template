@@ -179,10 +179,10 @@ enum CaptureSource { camera | gallery }
 ------------------------------------------------------------
 
 config {
-    supported_currencies: List<String> = ["BAM", "EUR", "USD", "GBP", "CHF", "HRK", "RSD"]
+    supported_currencies: Set<String> = {"BAM", "EUR", "USD", "GBP", "CHF", "HRK", "RSD"}
     -- Currency options shown in mobile forms
 
-    supported_locales: List<String> = ["bs", "en"]
+    supported_locales: Set<String> = {"bs", "en"}
     -- Bosnian (default) and English
 }
 
@@ -398,20 +398,14 @@ invariant MobileNoAdminFeatures {
     -- no member management, reference data editing, alias mapping,
     -- impersonation, or workspace onboarding.
 
-    @guidance
-        -- Enforced by the mobile route tree simply not including
-        -- admin routes. No runtime check needed.
-        -- All user roles (owner, admin, member, viewer) have the
-        -- same mobile experience.
+    true
 }
 
 invariant ApiSharedAcrossSurfaces {
     -- The /api/v1/* endpoints serve both desktop and mobile clients.
     -- No mobile-specific API endpoints exist.
 
-    @guidance
-        -- Mobile differences are purely in the frontend presentation layer.
-        -- This keeps the backend simple and avoids API fragmentation.
+    true
 }
 
 invariant ReceiptReviewFieldScope {
@@ -419,18 +413,16 @@ invariant ReceiptReviewFieldScope {
     -- supplier, date, total_amount, currency, payer, notes.
     -- Line items from OCR extraction are read-only.
 
-    @guidance
-        -- This matches the desktop approval flow where line items
-        -- can be edited. Mobile simplifies by making them read-only
-        -- since editing individual OCR line items on a small screen
-        -- is error-prone and low-value.
+    true
 }
 
 ------------------------------------------------------------
 -- Actor Declarations
 ------------------------------------------------------------
 
-actor MobileUser : auth/User {
+actor MobileUser {
+    identified_by: auth/User
+
     -- Any authenticated user accessing from a phone.
     -- All roles (owner, admin, member, viewer) have the same
     -- mobile experience — admin features are desktop-only.
@@ -447,18 +439,18 @@ surface MobileDetectionBoundary {
         DetectDevice(request)
         RedirectToMobile(request)
 
-    guarantee:
-        DetectDevice(request) classifies phones via user-agent heuristics.
-        Tablets and desktops are NOT redirected.
+    @guarantee MobileDetectionOnlyClassifiesPhoneUserAgentsForRedirect
+        -- DetectDevice(request) classifies phones via user-agent heuristics.
+        -- Tablets and desktops are NOT redirected.
 
-    guarantee:
-        RedirectToMobile(request) issues HTTP 302 from desktop paths
-        to /m/* equivalents for phone user-agents.
-        Only GET requests are redirected.
+    @guarantee MobileRedirectsIssueGetOnly302sToMatchingMobilePaths
+        -- RedirectToMobile(request) issues HTTP 302 from desktop paths
+        -- to /m/* equivalents for phone user-agents.
+        -- Only GET requests are redirected.
 
-    guarantee:
-        API routes (/api/*), admin routes (/admin/*), static assets
-        (/js/*, /assets/*), and already-mobile paths (/m/*) are never redirected.
+    @guarantee MobileRedirectExcludesApiAdminAssetAndExistingMobilePaths
+        -- API routes (/api/*), admin routes (/admin/*), static assets
+        -- (/js/*, /assets/*), and already-mobile paths (/m/*) are never redirected.
 }
 
 surface MobileAuthBoundary {
@@ -470,17 +462,17 @@ surface MobileAuthBoundary {
         MobileUserSelectsTenant(user, tenant, session)
         MobileUserLogsOut(user, session)
 
-    guarantee:
-        Login, forgot-password, tenant selection, and logout are
-        the only auth flows available on mobile.
+    @guarantee MobileAuthExposesOnlyLoginResetTenantSelectionAndLogout
+        -- Login, forgot-password, tenant selection, and logout are
+        -- the only auth flows available on mobile.
 
-    guarantee:
-        Registration, email verification, and onboarding are not
-        accessible from mobile routes.
+    @guarantee MobileRoutesDoNotExposeRegistrationVerificationOrOnboarding
+        -- Registration, email verification, and onboarding are not
+        -- accessible from mobile routes.
 
-    guarantee:
-        On app load, session is validated via /auth/status.
-        Expired sessions redirect to /m/login.
+    @guarantee MobileAppValidatesSessionOnLoadAndRedirectsExpiredUsers
+        -- On app load, session is validated via /auth/status.
+        -- Expired sessions redirect to /m/login.
 
     @guidance
         -- Auth pages render without the tab bar layout (full-screen forms).
@@ -505,20 +497,20 @@ surface MobileCaptureBoundary {
         Receipt.count where is_reviewable = true
             -- Badge count on the upload tab
 
-    guarantee:
-        Upload page presents three sections:
-        1. Capture Receipt (camera + gallery buttons)
-        2. Manual Entry (link to manual expense form)
-        3. Pending Reviews (list of reviewable receipts with tap-to-review)
+    @guarantee MobileUploadPageHasCaptureManualEntryAndPendingReviewSections
+        -- Upload page presents three sections:
+        -- 1. Capture Receipt (camera + gallery buttons)
+        -- 2. Manual Entry (link to manual expense form)
+        -- 3. Pending Reviews (list of reviewable receipts with tap-to-review)
 
-    guarantee:
-        Receipt review shows: receipt image, editable supplier/date/total/currency/payer/notes,
-        read-only line items, and a confirm button.
+    @guarantee MobileReceiptReviewShowsEditableSummaryFieldsAndReadOnlyItems
+        -- Receipt review shows: receipt image, editable supplier/date/total/currency/payer/notes,
+        -- read-only line items, and a confirm button.
 
-    guarantee:
-        Manual entry form has full field parity with desktop:
-        supplier, store, date, amount, currency, payer, category, notes, line items.
-        All reference fields use search/autocomplete.
+    @guarantee MobileManualEntryMatchesDesktopFieldCoverage
+        -- Manual entry form has full field parity with desktop:
+        -- supplier, store, date, amount, currency, payer, category, notes, line items.
+        -- All reference fields use search/autocomplete.
 }
 
 surface MobileReviewBoundary {
@@ -538,24 +530,24 @@ surface MobileReviewBoundary {
         ViewReports(user)
             -- By-category bars, monthly spending bars, day-of-week bars
 
-    guarantee:
-        Receipt detail view is NOT available on mobile.
-        Receipt list shows status, supplier guess, total guess, date.
+    @guarantee MobileReviewOmitsReceiptDetailView
+        -- Receipt detail view is NOT available on mobile.
+        -- Receipt list shows status, supplier guess, total guess, date.
 
-    guarantee:
-        All review surfaces consume the same /api/v1/* endpoints as desktop.
+    @guarantee MobileReviewReusesDesktopVersionedApiEndpoints
+        -- All review surfaces consume the same /api/v1/* endpoints as desktop.
 
-    guarantee:
-        Expense list supports search by supplier name with debounced input.
-        Results use offset-based pagination with explicit "Load more" button.
+    @guarantee MobileExpenseListUsesDebouncedSupplierSearchAndLoadMorePagination
+        -- Expense list supports search by supplier name with debounced input.
+        -- Results use offset-based pagination with explicit "Load more" button.
 
-    guarantee:
-        Dashboard data is fetched in a single request to /api/v1/expenses/dashboard.
-        All monetary aggregations are normalized to BAM for cross-currency consistency.
+    @guarantee MobileDashboardUsesSingleNormalizedExpensesEndpoint
+        -- Dashboard data is fetched in a single request to /api/v1/expenses/dashboard.
+        -- All monetary aggregations are normalized to BAM for cross-currency consistency.
 
-    guarantee:
-        Reports fetch three datasets in parallel: by-category, monthly spending,
-        day-of-week spending. Each renders independently as data arrives.
+    @guarantee MobileReportsFetchThreeDatasetsInParallel
+        -- Reports fetch three datasets in parallel: by-category, monthly spending,
+        -- day-of-week spending. Each renders independently as data arrives.
 }
 
 surface MobileNavigationBoundary {
@@ -570,26 +562,26 @@ surface MobileNavigationBoundary {
         Receipt.count where is_reviewable = true
             -- Badge on upload tab
 
-    guarantee:
-        Navigation is a bottom tab bar with 5 items:
-        Dashboard, Expenses, Upload (center/prominent), Reports, More.
+    @guarantee MobileNavigationUsesFiveItemBottomTabBar
+        -- Navigation is a bottom tab bar with 5 items:
+        -- Dashboard, Expenses, Upload (center/prominent), Reports, More.
 
-    guarantee:
-        Upload tab is visually prominent: center position, larger icon,
-        raised above the tab bar, accent color background.
-        This reinforces capture as the primary action.
+    @guarantee UploadTabRemainsThePrimaryVisualAction
+        -- Upload tab is visually prominent: center position, larger icon,
+        -- raised above the tab bar, accent color background.
+        -- This reinforces capture as the primary action.
 
-    guarantee:
-        Search is accessible via a search bar at the top of the Expenses tab,
-        not as a separate navigation item.
+    @guarantee SearchLivesInsideTheExpensesTab
+        -- Search is accessible via a search bar at the top of the Expenses tab,
+        -- not as a separate navigation item.
 
-    guarantee:
-        More menu contains: Receipt list link, Search (redirects to expenses),
-        Language indicator (read-only, shows current locale), Logout.
+    @guarantee MoreMenuContainsReceiptSearchLocaleAndLogoutUtilities
+        -- More menu contains: Receipt list link, Search (redirects to expenses),
+        -- Language indicator (read-only, shows current locale), Logout.
 
-    guarantee:
-        Language indicator shows current locale (synced from user preference).
-        Changing language is done on desktop.
+    @guarantee MobileLanguageIndicatorReflectsDesktopManagedPreference
+        -- Language indicator shows current locale (synced from user preference).
+        -- Changing language is done on desktop.
 }
 
 ------------------------------------------------------------

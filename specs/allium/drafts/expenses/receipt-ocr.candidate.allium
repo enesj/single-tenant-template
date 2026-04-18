@@ -1,3 +1,5 @@
+-- allium: 3
+
 -- Currency enum removed. Receipts are always in BAM (Bosnian market).
 -- The hardcoded Currency enum is replaced by String type with a BAM constraint.
 -- For manual expenses, currency comes from EnabledCurrency (see settings-hierarchy.candidate.allium).
@@ -6,6 +8,8 @@
 entity User {
     role: member | owner | admin
 }
+
+external entity UUID {}
 
 external entity Supplier { name: String }
 external entity Store { name: String, supplier: Supplier, address: String? }
@@ -521,8 +525,9 @@ surface UserReceiptOperations {
         -- The receipt can still be approved (the amount is treated as BAM)
         -- but the user must explicitly acknowledge the mismatch.
 
-    guarantee:
-        receipt.effective_status = if receipt.status = extracted and not receipt.totals_match: review_required else: receipt.status
+    @guarantee EffectiveStatusElevatesMismatchedExtractedReceiptsToReviewRequired
+        -- receipt.effective_status becomes review_required when receipt.status is extracted and
+        -- receipt.totals_match is false; otherwise it matches receipt.status.
 }
 
 surface AdminReceiptOperations {
@@ -549,8 +554,8 @@ surface AdminReceiptOperations {
             when receipt.status != posted
         RunReceiptOCRSweep()
 
-    guarantee:
-        admin.role = admin
+    @guarantee AdminOperationsSurfaceModelsAdminRoleContext
+        -- AdminReceiptOperations is evaluated in an admin role context.
 }
 
 deferred ReceiptExtraction.normalize_and_reconcile_extraction

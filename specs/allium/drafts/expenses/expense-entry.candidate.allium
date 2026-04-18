@@ -1,17 +1,21 @@
 -- allium: 2
 -- expense-entry.candidate.allium
 --
--- Scope: Manual expense entry — Smart Input flow (modal-based, two-phase)
+-- Scope: Manual expense entry — Smart Input flow (two-phase) on web AND mobile
 -- Includes:
 --   - Expense + ExpenseItem creation (shared domain rules)
---   - Smart Input form surface (modal from dashboard or list page)
+--   - Desktop Smart Input form surface (modal from dashboard or list page)
 --     Phase 1: unified search across entity types, progressive item entry with price data
 --     Phase 2: context (supplier/store/category), payer chips, date, currency, notes
+--   - Mobile Smart Input form surface (dedicated page from upload tab)
+--     Same two-phase structure; diverges on entry point, per-entity autocomplete
+--     in Phase 2, payer dropdown, hardcoded currency list, no article_mode,
+--     no inline entity creation, no keyboard shortcuts
 --   - Unified search endpoint (all | supplier | store | category | article)
---   - Co-occurring article suggestions during item entry
---   - Context suggestions (history-based) during context phase
---   - Quick picks (top entities as clickable chips when input is empty)
---   - Inline entity creation via type picker
+--   - Co-occurring article suggestions during item entry (both surfaces)
+--   - Context suggestions (history-based) during context phase (both surfaces)
+--   - Quick picks (top entities as clickable chips when input is empty; desktop only)
+--   - Inline entity creation via type picker (desktop only)
 --   - Store→supplier inference, article alias resolution on save
 --   - Last-price lookup for articles (supplier-specific preferred, global fallback)
 --   - Payer/currency/date defaults, validation rules
@@ -22,16 +26,21 @@
 --   - Smart suggestions / hybrid ranking (deferred)
 --   - Expense list / dashboard (except entry-point actions)
 --   - Currency management & exchange rate fetching (settings-hierarchy.candidate.allium)
+--   - Mobile device detection & routing (mobile-web.candidate.allium)
 -- Dependencies:
 --   - settings-hierarchy.candidate.allium: GlobalSettings, EnabledCurrency, DailyExchangeRate
 --   - payer-and-defaults.candidate.allium: UserExpenseDefaults.default_payer,
 --     tenant ExpenseCategory.is_default
--- Note: No dedicated /expenses/new page — entry flow is a modal.
---       A single Smart Input form serves both dashboard and list page.
+--   - mobile-web.candidate.allium: device detection, tab navigation (entry point only)
+-- Note: Desktop uses a modal; mobile uses a dedicated /m/upload/manual page.
+--       A single SmartExpenseDraft entity and a single CreateExpenseFromSmartInput
+--       rule serve both surfaces — divergence is UX-only, not domain-level.
 -- Supersedes:
 --   - quick-add-expense.candidate.allium
 --   - manual-expense-entry.candidate.allium (v2)
 --   - Previous two-form design (Quick Add + Standard) in this file
+--   - MobileManualExpenseEntry rule + ManualExpenseData value in
+--     mobile-web.candidate.allium (to be removed in follow-up)
 
 use "./../../domain/expenses/implementation.allium" as impl
 
@@ -39,6 +48,9 @@ use "./../../domain/expenses/implementation.allium" as impl
 -- ─────────────────────────────────────────────
 -- External entities
 -- ─────────────────────────────────────────────
+
+external entity UUID {}
+external entity Date {}
 
 external entity User {
     id: UUID
@@ -310,14 +322,13 @@ entity SmartExpenseDraft {
     has_items: items.count > 0
     computed_total: items.sum(i => i.line_total)
     has_any_context: supplier != null or store != null or expense_category != null
-    article_ids: items where article_id != null |> map(i => i.article_id)
+    article_ids: map(items where article_id != null, i => i.article_id)
 
     -- ── Search type narrowing ──
     -- Phase 1 before article_mode: search all types (missing context + article)
     -- Phase 1 in article_mode: search articles only
     -- Phase 2: search only missing context types (no articles)
-    missing_context_types: [supplier, store, expense_category]
-        where not has(this)
+    missing_context_types: {supplier, store, expense_category}
 
     -- ── Submission readiness ──
     is_submittable: phase = context
@@ -348,16 +359,16 @@ invariant StoreRequiresSupplier {
 -- ─────────────────────────────────────────────
 
 rule CreateExpenseFromSmartInput {
-    when: SubmitSmartExpense(writer: ExpenseWriter, draft: SmartExpenseDraft)
+    when: SubmitSmartExpense(writer, draft)
 
     requires: draft.is_submittable
     requires: exists EnabledCurrency where code = draft.currency
         -- Currency must be in the admin-enabled list.
 
     -- Store→supplier inference (server-side safety net)
-    let final_supplier_id = if draft.store != null and draft.supplier = null
-        then Store(id: draft.store.id).supplier.id
-        else draft.supplier?.id
+    let final_supplier_id =
+        if draft.store != null and draft.supplier = null: Store{id: draft.store.id}.supplier.id
+        else: draft.supplier?.id
 
     -- Prepare submit items from drafts
     let submit_items = for item in draft.items where item.line_total > 0:
@@ -370,36 +381,35 @@ rule CreateExpenseFromSmartInput {
 
     -- Exchange rate resolution (see settings-hierarchy.candidate.allium)
     -- FetchDailyRatesIfMissing fires first if today's rates aren't cached.
+    let today = to_date(draft.purchased_at)
     let bam_conversion = if draft.currency = "BAM":
         {bam_amount: draft.computed_total, exchange_rate: null, rate_fetched_at: null}
     else:
-        let daily_rate = DailyExchangeRate
-            where currency_code = draft.currency and rate_date = today
+        let daily_rate = DailyExchangeRate{currency_code: draft.currency, rate_date: today}
         {
             bam_amount: draft.computed_total * daily_rate.rate,
             exchange_rate: daily_rate.rate,
             rate_fetched_at: daily_rate.fetched_at
         }
 
-    ensures: expense: Expense.created(
-        tenant_id: writer.tenant_id,
-        user_id: writer.id,
-        created_by: writer.id,
-        supplier_id: final_supplier_id,
-        store_id: draft.store?.id,
-        payer_id: draft.payer.id,
-        expense_category_id: draft.expense_category?.id,
-        purchased_at: draft.purchased_at,
-        total_amount: draft.computed_total,
-        currency: draft.currency,
-        original_amount: draft.computed_total,
-        bam_amount: bam_conversion.bam_amount,
-        exchange_rate: bam_conversion.exchange_rate,
-        rate_fetched_at: bam_conversion.rate_fetched_at,
-        notes: draft.notes
-    )
-
     ensures:
+        let expense = Expense.created(
+            tenant_id: writer.tenant_id,
+            user_id: writer.id,
+            created_by: writer.id,
+            supplier_id: final_supplier_id,
+            store_id: draft.store?.id,
+            payer_id: draft.payer.id,
+            expense_category_id: draft.expense_category?.id,
+            purchased_at: draft.purchased_at,
+            total_amount: draft.computed_total,
+            currency: draft.currency,
+            original_amount: draft.computed_total,
+            bam_amount: bam_conversion.bam_amount,
+            exchange_rate: bam_conversion.exchange_rate,
+            rate_fetched_at: bam_conversion.rate_fetched_at,
+            notes: draft.notes
+        )
         for item in submit_items:
             ExpenseItem.created(
                 tenant_id: writer.tenant_id,
@@ -431,30 +441,31 @@ rule CreateExpenseFromSmartInput {
 -- ─────────────────────────────────────────────
 
 rule ValidateSmartExpenseReferences {
-    when: SubmitSmartExpense(writer: ExpenseWriter, draft: SmartExpenseDraft)
+    when: SubmitSmartExpense(writer, draft)
+
+    let payer = Payer{id: draft.payer.id}
+    let category = if draft.expense_category != null: ExpenseCategory{id: draft.expense_category.id} else: null
+    let supplier = if draft.supplier != null: Supplier{id: draft.supplier.id} else: null
+    let store = if draft.store != null: Store{id: draft.store.id} else: null
 
     -- Payer is tenant-scoped: must belong to the user's tenant
-    requires: Payer where id = draft.payer.id
-        and tenant_id = writer.tenant_id
-        exists
+    requires: exists payer
+    requires: payer.tenant_id = writer.tenant_id
 
     -- Category is tenant-scoped
     if draft.expense_category != null:
-        requires: ExpenseCategory where id = draft.expense_category.id
-            and tenant_id = writer.tenant_id
-            exists
+        requires: exists category
+        requires: category.tenant_id = writer.tenant_id
 
     -- Global catalog entities: verify existence
     if draft.supplier != null:
-        requires: Supplier where id = draft.supplier.id exists
+        requires: exists supplier
 
     if draft.store != null:
-        requires: Store where id = draft.store.id exists
+        requires: exists store
         -- Store must belong to selected supplier (enforced by UI but verified)
         requires: draft.supplier != null
-        requires: Store where id = draft.store.id
-            and supplier.id = draft.supplier.id
-            exists
+        requires: store.supplier.id = draft.supplier.id
 }
 
 
@@ -466,21 +477,22 @@ rule ResolveLineItemAliases {
     when: ExpenseCreated(expense)
     requires: expense.supplier_id != null
 
-    for item in ExpenseItem where expense_id = expense.id and raw_label != null:
-        let normalized = normalize(item.raw_label)
-        if normalized.length >= config.alias_min_normalized_length:
-            let existing = ArticleAlias where supplier.id = expense.supplier_id
-                and raw_label_normalized = normalized
-            if existing != null:
-                ensures: item.alias_id = existing.id
-                ensures: item.article_id = existing.article?.id
-            else:
-                ensures: alias: ArticleAlias.created(
-                    supplier: Supplier(id: expense.supplier_id),
-                    raw_label: item.raw_label,
-                    raw_label_normalized: normalized
-                )
-                ensures: item.alias_id = alias.id
+    ensures:
+        for item in ExpenseItem where expense_id = expense.id and raw_label != null:
+            let normalized = normalize(item.raw_label)
+            if normalized.length >= config.alias_min_normalized_length:
+                let existing = ArticleAlias where supplier.id = expense.supplier_id
+                    and raw_label_normalized = normalized
+                if existing != null:
+                    item.alias_id = existing.id
+                    item.article_id = existing.article?.id
+                else:
+                    let alias = ArticleAlias.created(
+                        supplier: Supplier{id: expense.supplier_id},
+                        raw_label: item.raw_label,
+                        raw_label_normalized: normalized
+                    )
+                    item.alias_id = alias.id
 }
 
 deferred normalize    -- label normalization (trim, lowercase, collapse whitespace)
@@ -528,8 +540,7 @@ rule UnifiedSearch {
 -- ─────────────────────────────────────────────
 
 rule FetchCoOccurringArticles {
-    when: ArticleAddedToItems(writer: ExpenseWriter,
-                              article_ids: List<UUID>, supplier_id: UUID?)
+    when: ArticleAddedToItems(writer, article_ids, supplier_id)
 
     requires: article_ids.count > 0
 
@@ -553,7 +564,7 @@ rule FetchCoOccurringArticles {
 -- ─────────────────────────────────────────────
 
 rule FetchContextSuggestions {
-    when: ItemsPhaseComplete(writer: ExpenseWriter, article_ids: List<UUID>)
+    when: ItemsPhaseComplete(writer, article_ids)
 
     requires: article_ids.count > 0
 
@@ -921,23 +932,302 @@ surface SmartExpenseForm {
 }
 
 
+-- ─────────────────────────────────────────────
+-- Mobile upload-tab entry point
+-- ─────────────────────────────────────────────
+
+surface MobileUploadTab {
+    facing viewer: User
+
+    provides:
+        OpenSmartExpenseForm(viewer)
+            when viewer.can_write_expenses
+
+    @guarantee WriteRoleVisibility
+        -- The "Add Expense Manually" button is visible only to users with
+        -- expense-write capability (member, admin, owner).
+
+    @guarantee FormOpensAsPage
+        -- OpenSmartExpenseForm navigates to a dedicated page
+        -- (/m/upload/manual). It is NOT a modal — the mobile tab shell
+        -- remains, with the form filling the content area.
+        -- On successful submit, the user is navigated to /m/expenses.
+        -- The upload tab also hosts receipt capture and pending review
+        -- entry points, which are out of scope here.
+}
+
+
+-- ─────────────────────────────────────────────
+-- Smart Expense Form (mobile, two-phase)
+-- ─────────────────────────────────────────────
+
+surface MobileSmartExpenseForm {
+    facing writer: ExpenseWriter
+
+    context draft: SmartExpenseDraft
+        -- Same draft entity as desktop. Same CreateExpenseFromSmartInput
+        -- rule fires on submit. Divergence is UX-only.
+
+    -- ═══ Phase 1: Items ═══
+
+    exposes:
+        draft.phase
+        draft.items
+            when draft.phase = items
+        draft.computed_total
+            when draft.phase = items and draft.has_items
+
+    -- Context and default metadata are visible as removable chips in Phase 1.
+    exposes:
+        draft.supplier
+            when draft.phase = items and draft.supplier != null
+        draft.store
+            when draft.phase = items and draft.store != null
+        draft.expense_category
+            when draft.phase = items and draft.expense_category != null
+        draft.payer
+            when draft.phase = items and draft.payer != null
+        draft.purchased_at
+            when draft.phase = items
+        draft.currency
+            when draft.phase = items
+
+    -- Phase 1 unified search (all entity types)
+    provides:
+        SearchSmartExpense(writer, query: String, type: "all", supplier_id: UUID?)
+            when draft.phase = items
+
+    -- Item management
+    provides:
+        SelectArticleItem(draft, result: SearchResult)
+            when draft.phase = items and result.entity_type = article
+        RemoveItem(draft, item: ItemDraft)
+            when draft.phase = items
+        UpdateItemQty(draft, item: ItemDraft, qty: Decimal)
+            when draft.phase = items
+        UpdateItemPrice(draft, item: ItemDraft, unit_price: Decimal)
+            when draft.phase = items
+
+    -- Context selection via Phase 1 search
+    provides:
+        SelectContextFromSearch(draft, result: SearchResult)
+            when draft.phase = items and result.entity_type != article
+        RemoveContext(draft, entity_type: String)
+            when draft.phase = items
+
+    -- Phase transition
+    provides:
+        FinishItemsPhase(draft)
+            when draft.phase = items and draft.has_items
+
+    -- ═══ Phase 2: Context & Metadata ═══
+
+    exposes:
+        draft.items
+            when draft.phase = context     -- read-only summary
+        draft.computed_total
+            when draft.phase = context
+        draft.supplier
+            when draft.phase = context
+        draft.store
+            when draft.phase = context and draft.supplier != null
+        draft.expense_category
+            when draft.phase = context
+        draft.payer
+            when draft.phase = context
+        draft.purchased_at
+            when draft.phase = context
+        draft.currency
+            when draft.phase = context
+        draft.notes
+            when draft.phase = context
+
+    -- Phase 2 uses THREE per-entity autocomplete fields (not a unified search).
+    -- Each field is shown only when its context slot is empty.
+    provides:
+        SearchSupplier(writer, query: String)
+            when draft.phase = context and draft.supplier = null
+        SearchStore(writer, query: String, supplier_id: UUID)
+            when draft.phase = context
+                and draft.store = null
+                and draft.supplier != null
+        SearchCategory(writer, query: String)
+            when draft.phase = context and draft.expense_category = null
+        SelectContextFromSearch(draft, result: SearchResult)
+            when draft.phase = context and result.entity_type != article
+        RemoveContext(draft, entity_type: String)
+            when draft.phase = context
+
+    -- Metadata fields
+    provides:
+        SelectPayer(draft, payer: Payer)
+            when draft.phase = context
+        SelectCurrency(draft, currency: String)
+            when draft.phase = context
+        SetPurchasedAt(draft, purchased_at: Timestamp)
+            when draft.phase = context
+        SetNotes(draft, notes: String)
+            when draft.phase = context
+
+    -- Navigation
+    provides:
+        BackToItemsPhase(draft)
+            when draft.phase = context
+
+    -- Submit / Cancel
+    provides:
+        CancelSmartExpense(writer)
+        SubmitSmartExpense(writer, draft)
+            when draft.is_submittable
+
+    -- ═══ Guarantees shared with desktop ═══
+
+    @guarantee TwoPhaseFlow
+        -- Same phase progression as SmartExpenseForm (items → context).
+        -- Items are read-only in Phase 2; "Back" returns to Phase 1.
+        -- Difference from desktop: Phase 1 → Phase 2 is an EXPLICIT button
+        -- ("Add store"/Next); there is no Enter-on-empty keyboard shortcut.
+
+    @guarantee SearchDebouncing
+        -- Phase 1 unified search is debounced at config.search_debounce_ms.
+
+    @guarantee SearchMinQueryLength
+        -- Queries shorter than config.search_min_query_length return
+        -- empty results without hitting the server.
+
+    @guarantee FuzzyMatching
+        -- Shares backend pg_trgm word_similarity + ILIKE matching with
+        -- config.fuzzy_similarity_threshold.
+
+    @guarantee ContextConstrainedSearch
+        -- Phase 2 store autocomplete narrows by selected supplier_id.
+        -- Supplier and category autocomplete are tenant-scoped.
+
+    @guarantee ArticlePriceInSearchResults
+        -- Article search results carry last_price data for user context.
+
+    @guarantee ArticlePriceAutofill
+        -- Selecting an article auto-fills unit_price from the article's
+        -- last known price (supplier-specific preferred, global fallback).
+
+    @guarantee CoOccurringSuggestions
+        -- Phase 1 renders "Frequently added together" article pills when
+        -- the search input is empty. Re-fetched after each article is added;
+        -- cleared when all items are removed.
+
+    @guarantee HistoryBasedContextSuggestions
+        -- On entering Phase 2, the system fetches suppliers/stores/categories
+        -- historically associated with the selected articles. These appear
+        -- as chips above the autocomplete fields. Store suggestions carry
+        -- supplier info for automatic store→supplier inference.
+
+    @guarantee DefaultSelections
+        -- Defaults match desktop:
+        --   payer: from UserExpenseDefaults.default_payer
+        --   expense_category: from tenant ExpenseCategory where is_default
+        --   notes: from GlobalSettings.default_note
+        --   currency: from GlobalSettings.default_currency
+        --   purchased_at: today
+        -- Mobile exposes all defaults as removable chips in Phase 1 so the
+        -- user can clear any of them before continuing to Phase 2.
+
+    @guarantee CategoryFallbackAppliedAtSubmit
+        -- Shared: when submit reaches the backend without an expense
+        -- category, the tenant default is resolved server-side.
+
+    @guarantee StoreInfersSupplier
+        -- Selecting a store fills supplier from the store's relationship.
+
+    @guarantee SupplierChangeClearsConflictingStore
+        -- Removing supplier also removes store; changing supplier clears
+        -- stores that don't belong to the new supplier.
+
+    @guarantee LineTotalComputed
+        -- Each item's line_total = qty × unit_price. Total is always
+        -- computed, never user-entered.
+
+    @guarantee AtLeastOneItemRequired
+        -- The form requires at least one item with a positive line total.
+
+    @guarantee AtLeastOneContextRequired
+        -- At least one of supplier, store, or category must be selected.
+
+    @guarantee SuccessfulSubmitOutcome
+        -- Successful submit navigates to /m/expenses. The new expense
+        -- appears in the list on next load.
+
+    @guarantee FailedSubmitOutcome
+        -- Validation failures and API errors keep the user on the form
+        -- with an inline error banner. No data is lost.
+
+    -- ═══ Mobile-specific divergences ═══
+
+    @guarantee DedicatedPageNotModal
+        -- The form renders as a full page within the mobile tab shell
+        -- (route /m/upload/manual), not as a modal overlay.
+        -- Back navigation uses the mobile header back button.
+
+    @guarantee Phase2UsesPerEntityAutocomplete
+        -- Unlike desktop's unified search in Phase 2, mobile Phase 2
+        -- renders three SEPARATE autocomplete fields — one each for
+        -- supplier, store and category — visible only while the matching
+        -- context slot is empty. This replaces the unified
+        -- missing_context_types search model used on desktop.
+
+    @guarantee PayerIsDropdownNotChips
+        -- Phase 2 payer selection uses a native <select> listing all active
+        -- payers. The config.payer_chip_limit quick-chip UI from desktop
+        -- does NOT apply on mobile.
+
+    @guarantee CurrencyDropdownUsesFixedList
+        -- Mobile currency dropdown is populated from a hardcoded list
+        -- ["BAM", "EUR", "USD", "GBP", "CHF", "HRK", "RSD"], NOT from
+        -- EnabledCurrency. This diverges from desktop and from the
+        -- settings-hierarchy spec. KNOWN DRIFT — tracked for reconciliation.
+
+    @guarantee NoInlineEntityCreation
+        -- Mobile Phase 1 does not offer a "Create [text]" option at the
+        -- bottom of search dropdowns. Store creation is reachable via a
+        -- separate /m/entity-add/store page outside this surface; other
+        -- entity types cannot be created from within the form.
+
+    @guarantee NoArticleMode
+        -- Mobile does not narrow Phase 1 search to articles-only after the
+        -- first article is selected. Search remains unified across all
+        -- entity types for the duration of Phase 1. The draft.article_mode
+        -- field is unused on mobile.
+
+    @guarantee NoKeyboardShortcuts
+        -- Mobile is touch-only. None of the following apply:
+        -- ArrowUp/ArrowDown dropdown navigation, Enter-to-select,
+        -- Enter-on-empty phase transition, Backspace-remove-last,
+        -- Escape-to-close.
+
+    @guarantee NoCrossTypeQuickPickGrid
+        -- Mobile Phase 1 shows history-based quick picks only for articles
+        -- and categories when search is empty. It does NOT render the
+        -- desktop grid of top suppliers/stores/articles/categories together.
+        -- Context suggestions (Phase 2) are still shown as chips.
+}
+
+
 -- ═════════════════════════════════════════════
 -- DEFERRED
 -- ═════════════════════════════════════════════
 
 deferred SmartSuggestions    -- see: manual-expense-entry-suggestions.candidate.allium
 
-guidance:
-    Smart suggestions use hybrid ranking: recency-weighted frequency.
-    Recent entries count more, but frequently used references always surface.
+-- Guidance:
+-- Smart suggestions use hybrid ranking: recency-weighted frequency.
+-- Recent entries count more, but frequently used references always surface.
 
-guidance:
-    Suggestions should pre-fill payer + category combos based on supplier history.
-    e.g., "last time you bought from Bingo you used Cash and categorized as Groceries."
+-- Guidance:
+-- Suggestions should pre-fill payer + category combos based on supplier history.
+-- e.g., "last time you bought from Bingo you used Cash and categorized as Groceries."
 
-guidance:
-    Store inline creation requires supplier context (store belongs to supplier).
-    Orphan stores are not allowed.
+-- Guidance:
+-- Store inline creation requires supplier context (store belongs to supplier).
+-- Orphan stores are not allowed.
 
 
 -- ═════════════════════════════════════════════

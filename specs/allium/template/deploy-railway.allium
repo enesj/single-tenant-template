@@ -1,3 +1,5 @@
+-- allium: 3
+
 -- Railway production deployment workflow.
 --
 -- Covers: CI pipeline (GitHub Actions, parallel backend + frontend jobs);
@@ -14,9 +16,13 @@
 -- Actors
 -- ---------------------------------------------------------------------------
 
-actor Developer { identified_by: github_username: String }
+entity Developer {
+    github_username: String
+}
 
-actor Operator { identified_by: railway_account: String }
+entity Operator {
+    railway_account: String
+}
 
 external entity Railway {}
 
@@ -110,9 +116,7 @@ rule RailwayBuildTriggeredOnMainPush {
 -- CI and Railway build are triggered in parallel by the same GitHub push.
 -- Railway does NOT wait for CI to pass before building and deploying.
 
-open question "Should Railway deployment be gated on CI passing? Currently both
-are triggered independently by the same push to main. A failed CI run does not
-prevent the build from reaching production."
+open question "Should Railway deployment be gated on CI passing, given that CI and Railway are currently triggered independently by the same push to main and a failed CI run does not prevent the build from reaching production?"
 
 rule DockerBuildSucceeds {
     when: build: DockerBuild.status becomes building
@@ -194,19 +198,19 @@ surface CIPipelineBoundary {
         pipeline.backend_job.failure_reason
         pipeline.frontend_job.failure_reason
 
-    guarantee:
-        pipeline.backend_job runs Java 21 + Clojure CLI + Babashka
-            against a Postgres 13 test DB on port 55433.
+    @guarantee BackendJobUsesExpectedToolchainAndTestDb
+        -- pipeline.backend_job runs Java 21 + Clojure CLI + Babashka against a Postgres 13
+        -- test DB on port 55433.
 
-    guarantee:
-        pipeline.frontend_job runs Java 21 + Node 25 + npm + Clojure CLI + Babashka.
+    @guarantee FrontendJobUsesExpectedToolchain
+        -- pipeline.frontend_job runs Java 21 + Node 25 + npm + Clojure CLI + Babashka.
 
-    guarantee:
-        pipeline.backend_job and pipeline.frontend_job execute in parallel.
+    @guarantee BackendAndFrontendJobsRunInParallel
+        -- pipeline.backend_job and pipeline.frontend_job execute in parallel.
 
-    guidance:
-        CI results appear as GitHub commit and PR status checks.
-        A passing CI pipeline does not gate Railway deployment — it is an independent signal.
+    @guidance
+        -- CI results appear as GitHub commit and PR status checks.
+        -- A passing CI pipeline does not gate Railway deployment — it is an independent signal.
 }
 
 surface RailwayDeployBoundary {
@@ -220,17 +224,17 @@ surface RailwayDeployBoundary {
         revision.health_check_failures
         revision.build.status
 
-    guarantee:
-        PORT is injected by Railway at runtime; the app must not fall back to a hardcoded default.
+    @guarantee PortIsRailwayInjectedAtRuntime
+        -- PORT is injected by Railway at runtime; the app must not fall back to a hardcoded default.
 
-    guarantee:
-        DATABASE_URL is injected automatically when a Railway Postgres service is linked.
+    @guarantee DatabaseUrlIsInjectedWhenPostgresIsLinked
+        -- DATABASE_URL is injected automatically when a Railway Postgres service is linked.
 
-    guarantee:
-        The following vars must be set manually in Railway → Variables before the first deploy:
-        BASE_URL, GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET,
-        GMAIL_REFRESH_TOKEN, SMTP_FROM_EMAIL, GOOGLE_OAUTH_REDIRECT_URI.
-        Any missing required var causes startup failure and triggers ServiceBecomesUnhealthy.
+    @guarantee RequiredManualVariablesMustExistBeforeFirstDeploy
+        -- The following vars must be set manually in Railway → Variables before the first deploy:
+        -- BASE_URL, GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET,
+        -- GMAIL_REFRESH_TOKEN, SMTP_FROM_EMAIL, GOOGLE_OAUTH_REDIRECT_URI.
+        -- Any missing required var causes startup failure and triggers ServiceBecomesUnhealthy.
 }
 
 surface HealthCheckBoundary {
@@ -241,20 +245,20 @@ surface HealthCheckBoundary {
     provides:
         CheckHealth(platform, revision)
 
-    guarantee:
-        CheckHealth succeeds when GET /health returns HTTP 200.
+    @guarantee HealthCheckSucceedsOnHttp200
+        -- CheckHealth succeeds when GET /health returns HTTP 200.
 
-    guarantee:
-        CheckHealth is polled every config.health_check_interval with a
-        config.health_check_timeout response deadline.
+    @guarantee HealthCheckUsesConfiguredPollingIntervalAndDeadline
+        -- CheckHealth is polled every config.health_check_interval with a
+        -- config.health_check_timeout response deadline.
 
-    guarantee:
-        Failures within the first config.health_check_start_period do not count
-        toward config.health_check_retries (JVM cold-start grace).
+    @guarantee StartPeriodFailuresDoNotCountTowardRetryBudget
+        -- Failures within the first config.health_check_start_period do not count
+        -- toward config.health_check_retries (JVM cold-start grace).
 
-    guarantee:
-        After config.health_check_retries consecutive failures outside the grace
-        period, the container is restarted.
+    @guarantee RepeatedFailuresOutsideGraceRestartContainer
+        -- After config.health_check_retries consecutive failures outside the grace
+        -- period, the container is restarted.
 
     timeout: ServiceBecomesUnhealthy
 }
@@ -269,25 +273,25 @@ surface ProductionInspectionBoundary {
         InspectVariables(operator, revision)
         RunCommandWithProdEnv(operator, revision, command)
 
-    guarantee:
-        RunCommandWithProdEnv executes command locally on the operator's machine
-        with all Railway env vars (including DATABASE_URL) injected.
-        It does NOT execute inside the running container.
+    @guarantee ProdEnvCommandsRunLocallyWithInjectedVariables
+        -- RunCommandWithProdEnv executes command locally on the operator's machine
+        -- with all Railway env vars (including DATABASE_URL) injected.
+        -- It does NOT execute inside the running container.
 
-    guarantee:
-        The runtime container image is JRE-only: no Clojure CLI, bb, or npm.
-        All interactive tooling must run via RunCommandWithProdEnv.
+    @guarantee RuntimeContainerRemainsJreOnly
+        -- The runtime container image is JRE-only: no Clojure CLI, bb, or npm.
+        -- All interactive tooling must run via RunCommandWithProdEnv.
 
-    guarantee:
-        RunCommandWithProdEnv with command = "clj -M:nrepl" opens a live nREPL
-        session connected to the production database.
-        Writes via that session are production mutations.
+    @guarantee NreplCommandsTargetTheProductionDatabase
+        -- RunCommandWithProdEnv with command = "clj -M:nrepl" opens a live nREPL
+        -- session connected to the production database.
+        -- Writes via that session are production mutations.
 
-    guidance:
-        Preferred path: Railway MCP tools (get-logs, list-variables, list-services)
-            — structured output, queryable by AI agents.
-            Install: claude mcp add Railway npx @railway/mcp-server
-        Fallback:  railway logs, railway variables, railway run clj -M:nrepl (CLI).
-        During triage, prefer read-only queries. Wrap any mutations in explicit
-        transactions that can be rolled back before committing.
+    @guidance
+        -- Preferred path: Railway MCP tools (get-logs, list-variables, list-services)
+        -- — structured output, queryable by AI agents.
+        -- Install: claude mcp add Railway npx @railway/mcp-server
+        -- Fallback: railway logs, railway variables, railway run clj -M:nrepl (CLI).
+        -- During triage, prefer read-only queries. Wrap any mutations in explicit
+        -- transactions that can be rolled back before committing.
 }

@@ -1,3 +1,5 @@
+-- allium: 3
+
 -- Admin Invitation: Email-based onboarding for platform administrators
 -- Status: candidate (initial elicitation)
 --
@@ -59,9 +61,9 @@ rule InviteAdmin {
         AdminInvitationEmailDispatched(email: email, role: role, inviter: inviter)
 
     @guidance
-        Email sending is non-blocking (fire-and-forget via future).
-        Failure to send email does not fail the HTTP response.
-        All invitation actions are audit-logged.
+        -- Email sending is non-blocking (fire-and-forget via future).
+        -- Failure to send email does not fail the HTTP response.
+        -- All invitation actions are audit-logged.
 }
 
 rule AcceptAdminInvitation {
@@ -94,10 +96,10 @@ rule AcceptAdminInvitation {
         AdminAccountCreatedViaInvitation(admin: admin, invitation: invitation)
 
     @guidance
-        Admin creation and invitation status update happen atomically
-        in a single transaction. The admin is auto-logged in (session
-        created) so they land on the admin dashboard immediately.
-        Audit-logged as: "admin created via invitation by {invited_by}".
+        -- Admin creation and invitation status update happen atomically
+        -- in a single transaction. The admin is auto-logged in (session
+        -- created) so they land on the admin dashboard immediately.
+        -- Audit-logged as: "admin created via invitation by {invited_by}".
 }
 
 rule RejectExpiredAdminInvitation {
@@ -137,7 +139,7 @@ rule RevokeAdminInvitation {
     ensures: invitation.status = revoked
 
     @guidance
-        Audit-logged. Revoked tokens cannot be accepted.
+        -- Audit-logged. Revoked tokens cannot be accepted.
 }
 
 rule ResendAdminInvitation {
@@ -156,9 +158,9 @@ rule ResendAdminInvitation {
         )
 
     @guidance
-        Extends the expiry window by a fresh 7 days.
-        Re-sends the invitation email with the same token.
-        Audit-logged.
+        -- Extends the expiry window by a fresh 7 days.
+        -- Re-sends the invitation email with the same token.
+        -- Audit-logged.
 }
 
 -- ============================================================
@@ -191,9 +193,9 @@ surface AdminInvitationManagement {
         AdminInvitationAcceptPage(token)
 
     @guidance
-        Rendered within the existing admin management page
-        (/admin/admins). Pending invitations shown alongside
-        the existing admin list. Only visible to owners.
+        -- Rendered within the existing admin management page
+        -- (/admin/admins). Pending invitations shown alongside
+        -- the existing admin list. Only visible to owners.
 }
 
 surface AdminInvitationAcceptPage {
@@ -212,14 +214,14 @@ surface AdminInvitationAcceptPage {
             when token_valid
 
     @guidance
-        Route: /admin/invitation/accept?token=...
-        This is a public page (no admin auth required — the invitee
-        doesn't have an account yet). The page:
-        1. Validates the token server-side on load (shows error if invalid/expired)
-        2. Displays the invitation details (email, role, inviter)
-        3. Collects full_name and password (with confirmation field)
-        4. On success: creates admin account, auto-logs in, redirects to /admin/dashboard
-        The email field is shown but not editable — it comes from the invitation.
+        -- Route: /admin/invitation/accept?token=...
+        -- This is a public page (no admin auth required — the invitee
+        -- doesn't have an account yet). The page:
+        -- 1. Validates the token server-side on load (shows error if invalid/expired)
+        -- 2. Displays the invitation details (email, role, inviter)
+        -- 3. Collects full_name and password (with confirmation field)
+        -- 4. On success: creates admin account, auto-logs in, redirects to /admin/dashboard
+        -- The email field is shown but not editable — it comes from the invitation.
 }
 
 -- ============================================================

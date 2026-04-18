@@ -5,8 +5,39 @@
     [app.template.frontend.components.modal-wrapper :refer [modal-wrapper]]
     [app.template.frontend.events.form :as form-events]
     [app.template.frontend.utils.id :as id-utils]
+    [clojure.string :as str]
     [re-frame.core :as rf]
     [uix.core :refer [$]]))
+
+(defn- kebab->snake [s] (str/replace s #"-" "_"))
+(defn- snake->kebab [s] (str/replace s #"_" "-"))
+
+(defn- key-variants
+  "Given a simple keyword, return both its snake_case and kebab-case keyword forms.
+   Field-spec ids authored in either style will then resolve into :values."
+  [k]
+  (if (keyword? k)
+    (let [n (name k)]
+      (cond-> #{k}
+        (re-find #"-" n) (conj (keyword (kebab->snake n)))
+        (re-find #"_" n) (conj (keyword (snake->kebab n)))))
+    #{k}))
+
+(defn- normalize-edit-initial-values
+  "Strip namespaces from item keys and expose every value under BOTH snake_case
+   and kebab-case keys so form field lookups succeed regardless of the
+   convention used in the field-spec :id."
+  [item]
+  (reduce-kv
+    (fn [acc k v]
+      (let [simple-key (if (and (keyword? k) (namespace k))
+                         (keyword (name k))
+                         k)]
+        (reduce (fn [m variant] (assoc m variant v))
+          acc
+          (key-variants simple-key))))
+    {}
+    item))
 
 (defn render-add-modal
   [{:keys [add-modal-open?
@@ -72,13 +103,7 @@
                      edit-modal-item
                      (js->clj edit-modal-item :keywordize-keys true))
           item-id (id-utils/extract-entity-id item-clj)
-          initial-values (into {}
-                           (map (fn [[k v]]
-                                  (let [simple-key (if (and (keyword? k) (namespace k))
-                                                     (keyword (name k))
-                                                     k)]
-                                    [simple-key v]))
-                             item-clj))
+          initial-values (normalize-edit-initial-values item-clj)
           effective-form-spec (or form-entity-spec-edit
                                 form-entity-spec
                                 entity-spec)

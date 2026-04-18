@@ -50,6 +50,9 @@
 -- External entities
 -- ─────────────────────────────────────────────
 
+external entity UUID {}
+external entity Date {}
+
 external entity Tenant {
     id: UUID
     name: String
@@ -198,12 +201,12 @@ entity TenantSettings {
 
 invariant SingletonGlobalSettings {
     -- Exactly one GlobalSettings record exists in the system.
-    GlobalSettings |> count = 1
+    GlobalSettings.count = 1
 }
 
 invariant OneTenantSettingsPerTenant {
     for tenant in Tenant:
-        (TenantSettings where tenant = tenant) |> count <= 1
+        (TenantSettings where tenant = tenant).count <= 1
 }
 
 invariant OneDailyRatePerCurrencyPerDate {
@@ -254,7 +257,7 @@ invariant BAMExpenseNoRate {
 
 config {
     -- Initial currencies seeded on system init. Admin can add/remove later.
-    seed_currencies: List<{code: String, name: String}> = [
+    seed_currencies: Set<{code: String, name: String}> = {
         {code: "BAM", name: "Konvertibilna marka"},
         {code: "EUR", name: "Euro"},
         {code: "USD", name: "Američki dolar"},
@@ -263,7 +266,7 @@ config {
         {code: "HRK", name: "Hrvatska kuna"},
         {code: "RSD", name: "Srpski dinar"},
         {code: "TRY", name: "Turska lira"}
-    ]
+    }
     default_currency_initial: String = "BAM"
     base_currency: String = "BAM"
         -- The system's base currency. All reports aggregate in this currency.
@@ -306,7 +309,7 @@ rule InitializeGlobalSettings {
     -- and seed the enabled currencies list.
     when: SystemInitialized()
 
-    requires: (GlobalSettings |> count) = 0
+    requires: GlobalSettings.count = 0
 
     ensures:
         GlobalSettings.created(
@@ -324,7 +327,7 @@ rule InitializeGlobalSettings {
 }
 
 rule UpdateGlobalCurrency {
-    when: AdminSetsCurrency(admin: PlatformAdmin, currency: String)
+    when: AdminSetsCurrency(admin, currency)
 
     let settings = GlobalSettings.first
 
@@ -335,7 +338,7 @@ rule UpdateGlobalCurrency {
 }
 
 rule UpdateGlobalDefaultNote {
-    when: AdminSetsDefaultNote(admin: PlatformAdmin, note: String?)
+    when: AdminSetsDefaultNote(admin, note)
 
     let settings = GlobalSettings.first
 
@@ -343,7 +346,7 @@ rule UpdateGlobalDefaultNote {
 }
 
 rule UpdateGlobalAutoPublish {
-    when: AdminSetsAutoPublish(admin: PlatformAdmin, enabled: Boolean)
+    when: AdminSetsAutoPublish(admin, enabled)
 
     let settings = GlobalSettings.first
 
@@ -351,7 +354,7 @@ rule UpdateGlobalAutoPublish {
 }
 
 rule UpdateGlobalAIEnhancement {
-    when: AdminSetsAIEnhancement(admin: PlatformAdmin, enabled: Boolean)
+    when: AdminSetsAIEnhancement(admin, enabled)
 
     let settings = GlobalSettings.first
 
@@ -360,7 +363,7 @@ rule UpdateGlobalAIEnhancement {
 
 
 rule AcknowledgeRateAlert {
-    when: AdminAcknowledgesRateAlert(admin: PlatformAdmin, alert: ExchangeRateFetchAlert)
+    when: AdminAcknowledgesRateAlert(admin, alert)
 
     requires: not alert.acknowledged
 
@@ -373,7 +376,7 @@ rule AcknowledgeRateAlert {
 -- ═════════════════════════════════════════════
 
 rule AddEnabledCurrency {
-    when: AdminAddsCurrency(admin: PlatformAdmin, code: String, name: String)
+    when: AdminAddsCurrency(admin, code, name)
 
     requires: code.trim().length >= 3
     requires: not exists EnabledCurrency where code = code.trim()
@@ -386,7 +389,7 @@ rule AddEnabledCurrency {
 }
 
 rule RemoveEnabledCurrency {
-    when: AdminRemovesCurrency(admin: PlatformAdmin, currency: EnabledCurrency)
+    when: AdminRemovesCurrency(admin, currency)
 
     requires: not currency.is_base
         -- BAM cannot be removed.
@@ -423,7 +426,7 @@ rule FetchDailyRatesIfMissing {
     let enabled_non_bam = EnabledCurrency where is_base = false
     let todays_rates = DailyExchangeRate where rate_date = today
 
-    requires: todays_rates |> count < enabled_non_bam |> count
+    requires: todays_rates.count < enabled_non_bam.count
         -- Not all enabled currencies have rates for today yet.
 
     let cbbh_rates = SerperAPI.search(
@@ -447,7 +450,7 @@ rule FetchDailyRatesIfMissing {
             DailyRatesFetched(date: today, source: "CBBH")
         else:
             -- Fallback: copy most recent rates and alert admins.
-            let latest_date = DailyExchangeRate |> max(rate_date)
+            let latest_date = max_by(DailyExchangeRate, r => r.rate_date).rate_date
             for currency in enabled_non_bam:
                 let fallback = DailyExchangeRate
                     where currency_code = currency.code
@@ -486,9 +489,11 @@ rule FetchDailyRatesIfMissing {
 
 rule ApplyExchangeRateToExpense {
     -- After daily rates are cached, apply the rate to a non-BAM expense.
-    when: ManualExpenseCreated(expense: Expense)
+    when: ManualExpenseCreated(expense)
 
     requires: expense.currency != config.base_currency
+
+    let today = to_date(now)
 
     let daily_rate = DailyExchangeRate
         where currency_code = expense.currency
@@ -505,7 +510,7 @@ rule ApplyExchangeRateToExpense {
 
 rule SetBAMAmountForBAMExpense {
     -- BAM expenses need no conversion — bam_amount equals original_amount.
-    when: ManualExpenseCreated(expense: Expense)
+    when: ManualExpenseCreated(expense)
 
     requires: expense.currency = config.base_currency
 
@@ -523,7 +528,7 @@ rule SetBAMAmountForBAMExpense {
 rule ProvisionTenantSettings {
     -- When a new tenant is provisioned, create its TenantSettings
     -- with defaults.
-    when: TenantProvisioned(tenant: Tenant, owner: User)
+    when: TenantProvisioned(tenant, owner)
 
     ensures: TenantSettings.created(
         tenant: tenant,
@@ -532,7 +537,7 @@ rule ProvisionTenantSettings {
 }
 
 rule UpdateEmailNotifications {
-    when: OwnerSetsEmailNotifications(owner: TenantOwner, enabled: Boolean)
+    when: OwnerSetsEmailNotifications(owner, enabled)
 
     let settings = TenantSettings where tenant.id = owner.tenant_id
 
@@ -542,7 +547,7 @@ rule UpdateEmailNotifications {
 }
 
 rule UpdateWorkspaceName {
-    when: OwnerUpdatesWorkspaceName(owner: TenantOwner, name: String)
+    when: OwnerUpdatesWorkspaceName(owner, name)
 
     let tenant = Tenant{id: owner.tenant_id}
 
@@ -565,7 +570,7 @@ rule UpdateWorkspaceName {
 
 rule ExportTenantExpenses {
     -- Owner exports all tenant expenses as a CSV file.
-    when: OwnerExportsTenantExpenses(owner: TenantOwner)
+    when: OwnerExportsTenantExpenses(owner)
 
     let tenant = Tenant{id: owner.tenant_id}
     let expenses = Expense where tenant_id = tenant.id
@@ -573,7 +578,7 @@ rule ExportTenantExpenses {
     ensures: TenantExpenseExportGenerated(
         tenant: tenant,
         requested_by: owner,
-        expense_count: expenses |> count
+        expense_count: expenses.count
     )
 
     @guidance
@@ -585,7 +590,7 @@ rule ExportTenantExpenses {
 rule DeleteAllTenantExpenses {
     -- Owner deletes all expenses and receipts for the tenant.
     -- This is a destructive, irreversible action.
-    when: OwnerDeletesAllTenantExpenses(owner: TenantOwner, confirmation: String)
+    when: OwnerDeletesAllTenantExpenses(owner, confirmation)
 
     let tenant = Tenant{id: owner.tenant_id}
 
@@ -631,11 +636,10 @@ surface AdminGlobalSettingsPanel {
     facing admin: PlatformAdmin
 
     exposes:
-        GlobalSettings.first
-            |> default_currency
-            |> default_note
-            |> auto_publish_after_upload
-            |> ai_receipt_enhancement
+        GlobalSettings.first.default_currency
+        GlobalSettings.first.default_note
+        GlobalSettings.first.auto_publish_after_upload
+        GlobalSettings.first.ai_receipt_enhancement
         for c in EnabledCurrency:
             c.code
             c.name
@@ -710,8 +714,7 @@ surface UserProfilePage {
         user.full_name
 
         -- Per-user default payer
-        UserExpenseDefaults where user = user
-            |> default_payer
+        UserExpenseDefaults{user: user}.default_payer
 
         -- Available options for dropdowns
         for p in Payer where tenant_id = user.tenant_id and is_active = true:
@@ -744,8 +747,7 @@ surface OwnerProfileSection {
         tenant.name
 
         -- Tenant settings
-        TenantSettings where tenant = tenant
-            |> email_notifications
+        TenantSettings{tenant: tenant}.email_notifications
 
     provides:
         OwnerUpdatesWorkspaceName(owner, name: String)
@@ -786,9 +788,8 @@ surface ExpenseConversionDetail {
         expense.exchange_rate
         expense.rate_fetched_at
         -- Lookup whether this expense's rate was a fallback
-        DailyExchangeRate where currency_code = expense.currency
-            and rate_date = expense.rate_fetched_at |> to_date
-            |> is_fallback
+        DailyExchangeRate{currency_code: expense.currency,
+                          rate_date: to_date(expense.rate_fetched_at)}.is_fallback
 
     @guarantee ConversionBreakdownForNonBAM
         -- For non-BAM expenses, the detail view shows a conversion line:

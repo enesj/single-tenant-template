@@ -1,3 +1,5 @@
+-- allium: 3
+
 -- Sorting on canonical list pages (list-view control)
 --
 -- Distilled from shared list-view behavior across canonical expenses pages:
@@ -7,6 +9,9 @@
 -- Covers: sort-state toggle, page reset, client/server mode split,
 -- config-driven sortable-column restriction, and allowlist-driven backend ORDER BY.
 -- Does NOT cover: filtering, pagination page size selection, or column visibility.
+
+external entity EntityType { name: String }
+external entity ColumnId { name: String }
 
 value SortConfig {
     field: ColumnId
@@ -101,18 +106,15 @@ surface ListTableHeader {
         UserClicksColumnHeader(list, column_id)
             when list.column_config.is_open or column_id in list.column_config.columns
 
-    guarantee:
-        not list.is_sorted
-        or list.column_config.is_open
-        or list.sort.field in list.column_config.columns
+    @guarantee SortedFieldsRespectConfiguredSortableColumns
+        -- When list.is_sorted, the sorted field is either allowed by an open configuration or is
+        -- included in list.column_config.columns.
 
-    guarantee:
-        if list.pagination_mode = server:
-            ServerSortRefetch(list)
+    @guarantee ServerModeSortingTriggersRefetch
+        -- In server pagination mode, clicking a sortable header results in ServerSortRefetch(list).
 
-    guarantee:
-        if list.pagination_mode = client:
-            ClientRowsSorted(list)
+    @guarantee ClientModeSortingStaysLocal
+        -- In client pagination mode, clicking a sortable header results in ClientRowsSorted(list).
 }
 
 open question "Should sort state persist across page refresh (e.g. stored in localStorage alongside column-visibility and per-page prefs)?"

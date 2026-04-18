@@ -100,11 +100,13 @@ invariant PriceHistoryEligibility {
 -- ─────────────────────────────────────────────
 
 rule SetPriceModifiedOnManualExpense {
-    when: entry/CreateExpenseFromSmartInput(writer, draft)
+    when: ManualExpenseCreated(writer, draft)
 
     -- Manual expenses have no receipt_id, so price_modified is irrelevant.
     -- All items are excluded from price history by the receipt_id IS NULL check.
     -- price_modified defaults to false (no action needed).
+
+    ensures: ManualExpensePriceTrackingSkipped(draft: draft)
 
     @guidance
         -- No special handling required. The PriceHistoryEligibility invariant
@@ -112,21 +114,12 @@ rule SetPriceModifiedOnManualExpense {
 }
 
 rule SetPriceModifiedOnReceiptApproval {
-    when: ocr/ApproveReceipt(actor, receipt, supplier, payer, purchased_at,
-                              total_amount, items, expense_category_id?, notes?)
+    when: ReceiptApprovedWithItems(actor, receipt, items)
 
     -- Compare each approved item's unit_price against the OCR-extracted
     -- unit_price from receipt.extraction.items (matched by position/index).
 
-    for i, approved_item in enumerate(items):
-        let ocr_item = receipt.extraction.items[i]
-        let price_changed = ocr_item != null
-            and approved_item.unit_price != ocr_item.unit_price
-
-        ensures: ExpenseItem.created(
-            ...
-            price_modified: price_changed
-        )
+    ensures: ReceiptApprovalPriceTrackingApplied(receipt: receipt, items: items)
 
     @guidance
         -- Item matching between approved items and OCR extraction items is
@@ -142,16 +135,12 @@ rule SetPriceModifiedOnReceiptApproval {
 }
 
 rule SetPriceModifiedOnAutoPost {
-    when: ocr/AutoPostExtractedReceipt(receipt)
+    when: ExtractedReceiptAutoPosted(receipt)
 
     -- Auto-posted receipts have no user intervention.
     -- All prices are OCR-extracted, unmodified.
 
-    for item in receipt.extraction.items:
-        ensures: ExpenseItem.created(
-            ...
-            price_modified: false
-        )
+    ensures: AutoPostedReceiptPriceTrackingApplied(receipt: receipt)
 
     @guidance
         -- Auto-post creates items directly from OCR extraction without
@@ -169,30 +158,11 @@ rule ArticleLastPriceDerivation {
     -- Derive the most recent unit_price for each article from qualifying
     -- expense items only.
 
-    let eligible_items = ExpenseItem
-        where tenant_id = tenant_id
-        and article_alias.article_id in article_ids
-        and Expense(id: expense_id).receipt_id != null
-        and price_modified = false
-
-    -- Optional supplier filter
-    if supplier_id != null:
-        let eligible_items = eligible_items
-            where Expense(id: expense_id).supplier_id = supplier_id
-
-    -- Window: most recent per article
-    for article_id in article_ids:
-        let latest = eligible_items
-            where article_alias.article_id = article_id
-            order by Expense.purchased_at DESC, created_at DESC, id DESC
-            first
-
-        if latest != null:
-            ensures: LastPriceResult(
-                article_id: article_id,
-                unit_price: latest.unit_price,
-                supplier_display_name: latest.expense.supplier.display_name
-            )
+    ensures: LastPriceQueryUsesEligibleItems(
+        tenant_id: tenant_id,
+        article_ids: article_ids,
+        supplier_id: supplier_id
+    )
 
     @guidance
         -- Implementation: add two WHERE conditions to the existing
@@ -211,28 +181,28 @@ rule ArticleLastPriceDerivation {
 -- Accepted consequences
 -- ─────────────────────────────────────────────
 
-guidance:
-    An article purchased exclusively via manual entry will have no price
-    history. The search dropdown will not show a suggested price for it.
-    This is the intended behavior — manual prices are considered unreliable
-    for suggestion purposes.
+-- Guidance:
+-- An article purchased exclusively via manual entry will have no price
+-- history. The search dropdown will not show a suggested price for it.
+-- This is the intended behavior — manual prices are considered unreliable
+-- for suggestion purposes.
 
-guidance:
-    Co-occurring article suggestions are a separate concern. The co-occurrence
-    query (which articles appear together on the same expenses) considers ALL
-    expenses regardless of source. Only the price enrichment step on those
-    results respects the price history filter.
+-- Guidance:
+-- Co-occurring article suggestions are a separate concern. The co-occurrence
+-- query (which articles appear together on the same expenses) considers ALL
+-- expenses regardless of source. Only the price enrichment step on those
+-- results respects the price history filter.
 
 
 -- ─────────────────────────────────────────────
 -- Migration
 -- ─────────────────────────────────────────────
 
-guidance:
-    New column: expense_items.price_modified BOOLEAN NOT NULL DEFAULT false.
-    All existing expense items get false (the default). This is conservative:
-    existing OCR items are treated as unmodified. Since there was no prior
-    tracking, this is the best available assumption.
-
-    For existing manual expenses (receipt_id IS NULL on parent expense),
-    price_modified is irrelevant — the receipt_id check excludes them anyway.
+-- Guidance:
+-- New column: expense_items.price_modified BOOLEAN NOT NULL DEFAULT false.
+-- All existing expense items get false (the default). This is conservative:
+-- existing OCR items are treated as unmodified. Since there was no prior
+-- tracking, this is the best available assumption.
+--
+-- For existing manual expenses (receipt_id IS NULL on parent expense),
+-- price_modified is irrelevant — the receipt_id check excludes them anyway.

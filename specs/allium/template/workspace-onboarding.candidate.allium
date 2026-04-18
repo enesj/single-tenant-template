@@ -126,7 +126,7 @@ config {
     -- Per-role step definitions. Each role has an ordered list of steps.
     -- Steps are created from these definitions when onboarding begins.
 
-    owner_steps: List<StepDefinition> = [
+    owner_steps: Set<StepDefinition> = {
         StepDefinition(kind: name_workspace,       order: 1, title: "Imenujte radni prostor",         description: "Dajte svom radnom prostoru prepoznatljivo ime"),
         StepDefinition(kind: setup_profile,         order: 2, title: "Postavite profil",               description: "Dodajte svoje ime i postavke"),
         StepDefinition(kind: rename_default_category, order: 3, title: "Preimenujte podrazumijevanu kategoriju", description: "Prilagodite naziv kategorije koja ce se koristiti kao podrazumijevana"),
@@ -135,23 +135,23 @@ config {
         StepDefinition(kind: invite_members,        order: 6, title: "Pozovite clanove tima",          description: "Dodajte kolege u radni prostor"),
         StepDefinition(kind: management_intro,      order: 7, title: "Upoznajte upravljacke alate",   description: "Kratki pregled admin funkcija"),
         StepDefinition(kind: upload_first_receipt,   order: 8, title: "Ucitajte prvi racun",            description: "Isprobajte unos racuna uz vodene upute")
-    ]
+    }
 
-    admin_steps: List<StepDefinition> = [
+    admin_steps: Set<StepDefinition> = {
         StepDefinition(kind: setup_profile,         order: 1, title: "Postavite profil",               description: "Dodajte svoje ime i postavke"),
         StepDefinition(kind: management_intro,      order: 2, title: "Upoznajte upravljacke alate",   description: "Kratki pregled admin funkcija"),
         StepDefinition(kind: upload_first_receipt,   order: 3, title: "Ucitajte prvi racun",            description: "Isprobajte unos racuna uz vodene upute")
-    ]
+    }
 
-    member_steps: List<StepDefinition> = [
+    member_steps: Set<StepDefinition> = {
         StepDefinition(kind: setup_profile,         order: 1, title: "Postavite profil",               description: "Dodajte svoje ime i postavke"),
         StepDefinition(kind: upload_first_receipt,   order: 2, title: "Ucitajte prvi racun",            description: "Isprobajte unos racuna uz vodene upute")
-    ]
+    }
 
-    viewer_steps: List<StepDefinition> = [
+    viewer_steps: Set<StepDefinition> = {
         StepDefinition(kind: setup_profile,         order: 1, title: "Postavite profil",               description: "Dodajte svoje ime i postavke"),
         StepDefinition(kind: browse_intro,          order: 2, title: "Pregledajte troskove",           description: "Naucite kako pregledati troskove i izvjestaje")
-    ]
+    }
 }
 
 ------------------------------------------------------------

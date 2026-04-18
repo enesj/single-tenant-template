@@ -1,3 +1,5 @@
+-- allium: 3
+
 entity User {
     email: String
     full_name: String?
@@ -374,9 +376,9 @@ surface UserAuthenticationBoundary {
         AuthenticatedUserChangesPassword(session.user, current_password, new_password)
             when session.user != null
 
-    guidance:
-        Password-based register/login merge into existing HTTP session state.
-        OAuth callback currently sets user auth session directly.
+    @guidance
+        -- Password-based register/login merge into existing HTTP session state.
+        -- OAuth callback currently sets user auth session directly.
 }
 
 surface AdminAuthenticationBoundary {
@@ -394,8 +396,8 @@ surface AdminAuthenticationBoundary {
         PasswordResetSubmitted(token_value, new_password)
         AuthenticatedAdminChangesPassword(admin, current_password, new_password)
 
-    guidance:
-        Admin logout removes only admin token and keeps any user auth session.
+    @guidance
+        -- Admin logout removes only admin token and keeps any user auth session.
 }
 
 open question "OAuth callback currently writes a fresh session map instead of merging existing session keys. Should it preserve :admin-token like password login/register do?"

@@ -45,6 +45,8 @@
 -- External entities
 -- ─────────────────────────────────────────────
 
+external entity UUID {}
+
 external entity Tenant { id: UUID }
 
 external entity User {
@@ -136,21 +138,19 @@ invariant UserDefaultsBelongToSameTenant {
 invariant SystemPayerTypePerTenantIsUnique {
     -- Each tenant has exactly one system PayerType.
     for tenant in Tenant:
-        (PayerType where tenant_id = tenant.id and is_system = true)
-            |> count = 1
+        (PayerType where tenant_id = tenant.id and is_system = true).count = 1
 }
 
 invariant OneDefaultsRecordPerUser {
     -- Each user has exactly one UserExpenseDefaults record per tenant membership.
     for user in User:
-        (UserExpenseDefaults where user = user) |> count <= 1
+    (UserExpenseDefaults where user = user).count <= 1
 }
 
 invariant TenantHasAtMostOneDefaultExpenseCategory {
     -- Every tenant must have exactly one default expense category.
     for tenant in Tenant:
-        (ExpenseCategory where tenant_id = tenant.id and is_default = true)
-            |> count = 1
+        (ExpenseCategory where tenant_id = tenant.id and is_default = true).count = 1
 }
 
 
@@ -184,7 +184,7 @@ actor TenantMember {
 
 rule ProvisionSystemPayerType {
     -- Creates the immutable "user" PayerType when a new tenant is provisioned.
-    when: TenantProvisioned(tenant: Tenant)
+    when: TenantProvisioned(tenant)
 
     ensures: PayerType.created(
         tenant_id: tenant.id,
@@ -202,21 +202,21 @@ rule ProvisionUserPayer {
     -- When a user joins a tenant, auto-create a Payer of the system "user"
     -- type using the first segment of their email address as the label,
     -- then set it as their default payer via a UserExpenseDefaults record.
-    when: UserJoinedTenant(user: User, tenant: Tenant)
+    when: UserJoinedTenant(user, tenant)
 
-    let system_type = PayerType where tenant_id = tenant.id and is_system = true
-    let email_prefix = user.email |> split_at("@") |> first
+    let system_type = PayerType{tenant_id: tenant.id, is_system: true}
+    let email_prefix = split_at(user.email, "@").first
 
-    ensures: payer: Payer.created(
-        tenant_id: tenant.id,
-        label: email_prefix,
-        payer_type: system_type
-    )
-
-    ensures: UserExpenseDefaults.created(
-        user: user,
-        default_payer: payer
-    )
+    ensures:
+        let payer = Payer.created(
+            tenant_id: tenant.id,
+            label: email_prefix,
+            payer_type: system_type
+        )
+        UserExpenseDefaults.created(
+            user: user,
+            default_payer: payer
+        )
 
     @guidance
         -- email_prefix = everything before the first '@' in the email address.
@@ -237,7 +237,7 @@ rule UpdateDefaultPayerOnExpenseSubmit {
     -- if they used a different payer than their current default, the
     -- new payer becomes their default going forward.
     -- Fires at submit time so a cancelled form never mutates the default.
-    when: ExpenseCreated(expense: Expense)
+    when: ExpenseCreated(expense)
 
     requires: expense.user_id != null
 
@@ -263,7 +263,7 @@ rule UpdateDefaultPayerOnExpenseSubmit {
 rule SetTenantDefaultExpenseCategory {
     -- Admins and owners can mark exactly one expense category as the
     -- tenant-wide fallback used whenever a flow omits an explicit category.
-    when: SetTenantDefaultExpenseCategory(admin: TenantAdmin, category: ExpenseCategory)
+    when: SetTenantDefaultExpenseCategory(admin, category)
 
     requires: category.tenant_id = admin.tenant_id
 
@@ -278,7 +278,7 @@ rule SetTenantDefaultExpenseCategory {
 
 rule RejectDeleteDefaultExpenseCategory {
     -- The active tenant default category cannot be deleted.
-    when: DeleteExpenseCategory(admin: TenantAdmin, category: ExpenseCategory)
+    when: DeleteExpenseCategory(admin, category)
 
     requires: category.tenant_id = admin.tenant_id
     requires: category.is_default
@@ -306,7 +306,7 @@ rule RejectDeleteDefaultExpenseCategory {
 rule CreatePayerType {
     -- Admins and owners can introduce new PayerType classifications
     -- beyond the immutable system "user" type (e.g. "Company card", "Cash").
-    when: CreatePayerType(admin: TenantAdmin, name: String)
+    when: CreatePayerType(admin, name)
 
     requires: name.trim().length >= 1
     requires: not exists PayerType where tenant_id = admin.tenant_id
@@ -320,7 +320,7 @@ rule CreatePayerType {
 }
 
 rule RenamePayerType {
-    when: RenamePayerType(admin: TenantAdmin, payer_type: PayerType, name: String)
+    when: RenamePayerType(admin, payer_type, name)
 
     requires: payer_type.tenant_id = admin.tenant_id
     requires: not payer_type.is_system
@@ -333,7 +333,7 @@ rule RenamePayerType {
 }
 
 rule DeletePayerType {
-    when: DeletePayerType(admin: TenantAdmin, payer_type: PayerType)
+    when: DeletePayerType(admin, payer_type)
 
     requires: payer_type.tenant_id = admin.tenant_id
     requires: not payer_type.is_system
@@ -351,7 +351,7 @@ rule DeletePayerType {
 rule CreatePayer {
     -- Admins and owners can create named Payers of any non-system type.
     -- System "user" type Payers are created only by ProvisionUserPayer.
-    when: CreatePayer(admin: TenantAdmin, label: String, payer_type: PayerType)
+    when: CreatePayer(admin, label, payer_type)
 
     requires: payer_type.tenant_id = admin.tenant_id
     requires: not payer_type.is_system
@@ -365,7 +365,7 @@ rule CreatePayer {
 }
 
 rule DeletePayer {
-    when: DeletePayer(admin: TenantAdmin, payer: Payer)
+    when: DeletePayer(admin, payer)
 
     requires: payer.tenant_id = admin.tenant_id
     requires: not payer.payer_type.is_system
@@ -386,11 +386,11 @@ rule DeactivatePayerOnUserRemoval {
     -- When a user is removed from a tenant, their auto-provisioned Payer
     -- is retained for historical expense integrity but marked inactive.
     -- The UserExpenseDefaults record is deleted since the user is gone.
-    when: UserRemovedFromTenant(user: User, tenant: Tenant)
+    when: UserRemovedFromTenant(user, tenant)
 
     let user_payer = Payer where tenant_id = tenant.id
         and payer_type.is_system
-        and label = user.email |> split_at("@") |> first
+        and label = split_at(user.email, "@").first
     let defaults = UserExpenseDefaults where user = user
 
     if user_payer != null:
@@ -452,11 +452,9 @@ surface ReceiptUploadDialog {
     facing actor: TenantMember
 
     exposes:
-        UserExpenseDefaults where user = actor
-            |> default_payer
-        ExpenseCategory where tenant_id = actor.tenant_id and is_default = true
-        GlobalSettings.first
-            |> default_note
+        UserExpenseDefaults{user: actor}.default_payer
+        ExpenseCategory{tenant_id: actor.tenant_id, is_default: true}
+        GlobalSettings.first.default_note
 
     provides:
         UploadReceipt(

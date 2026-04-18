@@ -299,19 +299,10 @@ rule ComputeTopArticles {
     -- Rank articles by purchase frequency (count of expense_item rows)
     -- Show average unit_price in the primary currency of the tenant
 
-    ensures: top_articles = top(config.top_n,
-        ExpenseItems
-            where expense.tenant_id = tenant.id
-            and expense.purchased_at >= now - config.long_period_months.months
-            and article_id != null
-        grouped by article_id
-        ranked by count descending
-        mapped to RankedArticle(
-            name: Article.canonical_name,
-            purchase_count: count,
-            avg_unit_price: avg(unit_price),
-            currency: most_common(expense.currency)
-        )
+    ensures: top_articles = compute_top_articles(
+        tenant,
+        config.top_n,
+        config.long_period_months
     )
 }
 
@@ -325,17 +316,12 @@ rule ComputePriceChanges {
     -- Only include articles with at least min_observations_for_price_change
     -- observations in BOTH windows.
 
-    ensures: price_changes = top(config.top_n,
-        articles with observations in both windows
-        ranked by absolute(change_percent) descending
-        mapped to PriceChange(
-            article_name: Article.canonical_name,
-            previous_avg_price: avg(unit_price) in baseline window,
-            current_avg_price: avg(unit_price) in recent window,
-            change_percent: percent_change(current_avg_price, previous_avg_price),
-            direction: if change_percent > 0 then up else down,
-            currency: most_common(expense.currency) for that article
-        )
+    ensures: price_changes = compute_price_changes(
+        tenant,
+        config.top_n,
+        config.price_comparison_recent_days,
+        config.price_comparison_baseline_days,
+        config.min_observations_for_price_change
     )
 }
 
@@ -351,18 +337,10 @@ rule ComputeCategoryBreakdown {
     -- under a synthetic "Nekategorizirano" / "Uncategorised" label.
     -- Ordered by total_spend_bam descending.
 
-    ensures: category_breakdown =
-        Expenses
-            where tenant_id = tenant.id
-            and purchased_at >= now - config.long_period_months.months
-        grouped by expense_category_id
-        mapped to CategoryShare(
-            category_name: ExpenseCategory.name or "Nekategorizirano",
-            total_spend_bam: sum(bam_amount),
-            expense_count: count,
-            percentage: sum(bam_amount) / total_period_spend * 100
-        )
-        ordered by total_spend_bam descending
+    ensures: category_breakdown = compute_category_breakdown(
+        tenant,
+        config.long_period_months
+    )
 }
 
 -- Spending averages
@@ -370,10 +348,10 @@ rule ComputeCategoryBreakdown {
 rule ComputeSpendingAverages {
     when: DashboardLoaded(tenant)
 
-    ensures: averages = SpendingAverages(
-        daily_avg_30d: last_30_days.total_spend_bam / config.short_period_days,
-        weekly_avg_30d: last_30_days.total_spend_bam / (config.short_period_days / 7),
-        monthly_avg_6m: last_6_months.total_spend_bam / config.long_period_months
+    ensures: averages = compute_spending_averages(
+        tenant,
+        config.short_period_days,
+        config.long_period_months
     )
 }
 
@@ -386,16 +364,10 @@ rule ComputeMonthlyTrend {
     -- Each bucket aggregates all tenant expenses whose purchased_at
     -- falls within that calendar month.
 
-    ensures: monthly_trend =
-        for month_offset in [0, 1, 2, 3, 4, 5]:
-            MonthlySpend(
-                month_label: abbreviated_month_name(now - month_offset.months),
-                month_index: month_offset,
-                total_bam: sum of bam_amount from Expenses
-                    where tenant_id = tenant.id
-                    and purchased_at within calendar_month(now - month_offset.months),
-                expense_count: count of those Expenses
-            )
+    ensures: monthly_trend = compute_monthly_trend(
+        tenant,
+        config.long_period_months
+    )
 }
 
 -- Biggest expense this month
@@ -406,38 +378,22 @@ rule ComputeBiggestExpense {
     -- Single largest expense by bam_amount in the current calendar month.
     -- Null if no expenses exist this month.
 
-    ensures: biggest_expense =
-        Expenses
-            where tenant_id = tenant.id
-            and purchased_at within current_calendar_month
-        ordered by bam_amount descending
-        first
-        mapped to BiggestExpense(
-            total_amount: total_amount,
-            currency: currency,
-            bam_amount: bam_amount,
-            supplier_name: Supplier.display_name,
-            store_name: Store.name,
-            purchased_at: purchased_at
-        )
-        or null if none
+    ensures: biggest_expense = compute_biggest_expense(tenant)
 }
 
 -- Pending expenses (admin/owner only)
 
 rule ComputePendingCount {
-    when: DashboardLoaded(tenant)
+    when: DashboardLoaded(tenant, viewer_role)
     requires: viewer_role in {owner, admin}
 
-    ensures: pending_count = count of Expenses
-        where tenant_id = tenant.id
-        and is_posted = false
+    ensures: pending_count = compute_pending_count(tenant)
 }
 
 -- Unmapped alias count (admin/owner only)
 
 rule ComputeUnmappedAliasCount {
-    when: DashboardLoaded(tenant)
+    when: DashboardLoaded(tenant, viewer_role)
     requires: viewer_role in {owner, admin}
 
     -- Count article_aliases that have no article_id assigned.
@@ -445,11 +401,7 @@ rule ComputeUnmappedAliasCount {
     -- Not tenant-scoped (aliases are global), but filtered via
     -- expense_items that belong to this tenant's expenses.
 
-    ensures: unmapped_alias_count = count of distinct ArticleAliases
-        where article_id = null
-        and exists ExpenseItem
-            where alias_id = ArticleAlias.id
-            and expense.tenant_id = tenant.id
+    ensures: unmapped_alias_count = compute_unmapped_alias_count(tenant)
 }
 
 -- Team overview
@@ -457,15 +409,7 @@ rule ComputeUnmappedAliasCount {
 rule ComputeTeamOverview {
     when: DashboardLoaded(tenant)
 
-    ensures: team = TeamOverview(
-        total_members: count of TenantMemberships
-            where tenant_id = tenant.id,
-        role_breakdown: TenantMemberships
-            where tenant_id = tenant.id
-            grouped by role
-            mapped to RoleCount(role, count),
-        tenant_name: tenant.name
-    )
+    ensures: team = compute_team_overview(tenant)
 }
 
 ------------------------------------------------------------
@@ -548,7 +492,7 @@ surface DashboardPage {
         -- Each widget shows a skeleton placeholder while data loads.
         -- The page is usable immediately, not blocked by a full-page spinner.
 
-    @guidance WidgetLayout
+    @guidance
         -- Row 1: Two summary cards (Zadnjih 30 dana, Zadnjih 6 mjeseci)
         --         Each card includes inline avg (daily/weekly) and % comparison
         -- Row 2: Monthly trend bar chart (6 months, full width)
@@ -560,12 +504,12 @@ surface DashboardPage {
         -- Row 7: Prečice (shortcuts) — horizontal, role-gated
         --         Unmapped alias shortcut shows count badge for admins
 
-    @guidance TrendArrows
+    @guidance
         -- Trend arrows: ↑ green for increase, ↓ red for decrease, — grey for flat.
         -- For price changes: ↑/↓ arrows with percentage, colored by direction.
         -- "Flat" = less than 1% change.
 
-    @guidance CategoryVisualization
+    @guidance
         -- Category breakdown renders as a horizontal stacked bar or simple
         -- ranked list with percentage bars. Not a pie chart — hard to read
         -- with many small slices.

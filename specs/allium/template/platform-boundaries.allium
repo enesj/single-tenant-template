@@ -1,3 +1,5 @@
+-- allium: 3
+
 entity DomainModule {
     id: String
     admin_api_capabilities: Set<String>
@@ -30,15 +32,14 @@ surface AdminApiBoundary {
         AuthenticateAdmin(admin_client)
         ExecuteAdminCapability(admin_client, capability)
 
-    guarantee:
-        platform.admin_api_prefix = "/admin/api"
+    @guarantee AdminApiPrefixIsFixed
+        -- platform.admin_api_prefix = "/admin/api"
 
-    guarantee:
-        for d in platform.enabled_domains:
-            d.admin_api_capabilities.count >= 0
+    @guarantee DomainAdminCapabilitiesParticipateInComposition
+        -- For each enabled domain, admin_api_capabilities.count >= 0.
 
-    guidance:
-        Admin API composes template-owned admin capabilities with domain-contributed admin capabilities.
+    @guidance
+        -- Admin API composes template-owned admin capabilities with domain-contributed admin capabilities.
 }
 
 surface UserApiBoundary {
@@ -53,19 +54,18 @@ surface UserApiBoundary {
         ExecuteUserCapability(user_client, capability)
         ReadUsersCollection(user_client)
 
-    guarantee:
-        platform.user_api_prefix = "/api/v1"
+    @guarantee UserApiPrefixIsFixed
+        -- platform.user_api_prefix = "/api/v1"
 
-    guarantee:
-        for d in platform.enabled_domains:
-            d.user_api_capabilities.count >= 0
+    @guarantee DomainUserCapabilitiesParticipateInComposition
+        -- For each enabled domain, user_api_capabilities.count >= 0.
 
-    guarantee:
-        ReadUsersCollection(user_client) delegates_to ExecuteAdminCapability(user_client, "list-users")
+    @guarantee UserReadDelegationRemainsExplicit
+        -- ReadUsersCollection(user_client) delegates to ExecuteAdminCapability(user_client, "list-users").
 
-    guidance:
-        The users-read delegation from User API to Admin capability is temporary and explicit coupling.
-        Keep it documented and isolated until replaced by a dedicated user-boundary capability.
+    @guidance
+        -- The users-read delegation from User API to Admin capability is temporary and explicit coupling.
+        -- Keep it documented and isolated until replaced by a dedicated user-boundary capability.
 }
 
 surface SpaNavigationBoundary {
@@ -79,12 +79,12 @@ surface SpaNavigationBoundary {
     provides:
         NavigateTo(browser_client, path)
 
-    guarantee:
-        catalog.backend_spa_fallback_paths = catalog.frontend_navigable_paths
+    @guarantee FallbackPathsMatchFrontendRoutes
+        -- catalog.backend_spa_fallback_paths = catalog.frontend_navigable_paths.
 
-    guidance:
-        Backend SPA fallback paths and frontend routes must share one authoritative route catalog.
-        Route additions or removals must update that single source so deep links resolve consistently.
+    @guidance
+        -- Backend SPA fallback paths and frontend routes must share one authoritative route catalog.
+        -- Route additions or removals must update that single source so deep links resolve consistently.
 }
 
 rule ComposeTemplateAndDomainBoundaries {
