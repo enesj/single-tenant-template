@@ -573,9 +573,115 @@
             (is (some? header) "Expected the list header to render")
             (is (some? active-filters) "Expected the compact active filters section to render")
             (is (pos? (bit-and (.compareDocumentPosition header active-filters)
-                             (.-DOCUMENT_POSITION_FOLLOWING js/Node)))
+                        (.-DOCUMENT_POSITION_FOLLOWING js/Node)))
               "Active filter chips should render below the list header/title, not above it")
             (done)))))))
+
+(deftest list-view-keeps-existing-rows-mounted-while-loading
+  (async done
+    (with-redefs [rf/dispatch (fn [_] nil)
+                  column-config/vector-config? (constantly false)
+                  list-table/make-table-headers (fn [_] [])
+                  list-ui/header-section (fn [_] ($ :div {:id "list-header-stub"} "Users"))
+                  table/table (fn [_] ($ :div {:id "table-content-stub"}))
+                  i18n/use-t (fn []
+                               (fn [k & _]
+                                 (case k
+                                   :common/loading "Učitavanje..."
+                                   :common/record-singular "zapis"
+                                   :common/record-plural "zapisa"
+                                   :common/selected "odabrano"
+                                   :common/hidden "skriveno"
+                                   nil)))
+                  uix-rf/use-subscribe (fn [query]
+                                         (cond
+                                           (= query [:admin/config-loaded?]) false
+                                           (= (first query) :app.template.frontend.subs.entity/paginated-entities) [{:id 1 :name "Row 1"}]
+                                           (= (first query) :app.template.frontend.subs.entity/loading?) true
+                                           (= (first query) :app.template.frontend.subs.entity/error) nil
+                                           (= (first query) :app.template.frontend.subs.list/total-pages) 1
+                                           (= (first query) :app.template.frontend.subs.entity/current-page) 1
+                                           (= (first query) :app.template.frontend.subs.list/selected-ids) #{}
+                                           (= (first query) :app.template.frontend.subs.ui/editing) nil
+                                           (= (first query) :app.template.frontend.subs.ui/show-add-form) false
+                                           (= (first query) :app.template.frontend.subs.ui/recently-updated-entities) #{}
+                                           (= (first query) :app.template.frontend.subs.ui/recently-created-entities) #{}
+                                           (= (first query) :app.template.frontend.subs.ui/hardcoded-view-options) {}
+                                           (= (first query) :app.template.frontend.subs.ui/entity-display-settings) {}
+                                           (= (first query) :app.template.frontend.subs.ui/filterable-fields) []
+                                           (= (first query) :app.template.frontend.events.list.settings/filterable-fields) {}
+                                           (= (first query) :app.template.frontend.subs.list/sorts) []
+                                           (= (first query) :app.template.frontend.subs.list/active-filters) {}
+                                           (= (first query) :app.template.frontend.subs.list/batch-edit-inline) {:open? false}
+                                           (= (first query) :app.template.frontend.subs.list/entity-ui-state) {}
+                                           (= (first query) :app.template.frontend.events.list.settings/table-width) 1200
+                                           (= (first query) :app.template.frontend.subs.ui/entity-display-prefs) {}
+                                           (= (first query) :form-entity-specs/by-name) {:fields []}
+                                           (= (first query) :app.template.frontend.subs.ui/visible-columns) {}
+                                           :else nil))]
+      (mount-component!
+        ($ list/list-view
+          {:entity-name :users
+           :entity-spec {:fields []}
+           :title "Users"})
+        (fn [container]
+          (is (some? (.querySelector container "#table-shell-users"))
+            "Existing rows should keep the table shell mounted while a refresh is in flight")
+          (is (some? (.querySelector container "#table-content-stub"))
+            "Existing rows should keep the table content mounted while loading")
+          (is (not (str/includes? (.-textContent container) "Učitavanje..."))
+            "Loading refreshes with existing rows should not replace the list with a loading placeholder")
+          (done))))))
+
+(deftest list-view-shows-loading-placeholder-when-no-rows-exist
+  (async done
+    (with-redefs [rf/dispatch (fn [_] nil)
+                  column-config/vector-config? (constantly false)
+                  list-table/make-table-headers (fn [_] [])
+                  list-ui/header-section (fn [_] ($ :div {:id "list-header-stub"} "Users"))
+                  table/table (fn [_] ($ :div {:id "table-content-stub"}))
+                  i18n/use-t (fn []
+                               (fn [k & _]
+                                 (case k
+                                   :common/loading "Učitavanje..."
+                                   nil)))
+                  uix-rf/use-subscribe (fn [query]
+                                         (cond
+                                           (= query [:admin/config-loaded?]) false
+                                           (= (first query) :app.template.frontend.subs.entity/paginated-entities) []
+                                           (= (first query) :app.template.frontend.subs.entity/loading?) true
+                                           (= (first query) :app.template.frontend.subs.entity/error) nil
+                                           (= (first query) :app.template.frontend.subs.list/total-pages) 1
+                                           (= (first query) :app.template.frontend.subs.entity/current-page) 1
+                                           (= (first query) :app.template.frontend.subs.list/selected-ids) #{}
+                                           (= (first query) :app.template.frontend.subs.ui/editing) nil
+                                           (= (first query) :app.template.frontend.subs.ui/show-add-form) false
+                                           (= (first query) :app.template.frontend.subs.ui/recently-updated-entities) #{}
+                                           (= (first query) :app.template.frontend.subs.ui/recently-created-entities) #{}
+                                           (= (first query) :app.template.frontend.subs.ui/hardcoded-view-options) {}
+                                           (= (first query) :app.template.frontend.subs.ui/entity-display-settings) {}
+                                           (= (first query) :app.template.frontend.subs.ui/filterable-fields) []
+                                           (= (first query) :app.template.frontend.events.list.settings/filterable-fields) {}
+                                           (= (first query) :app.template.frontend.subs.list/sorts) []
+                                           (= (first query) :app.template.frontend.subs.list/active-filters) {}
+                                           (= (first query) :app.template.frontend.subs.list/batch-edit-inline) {:open? false}
+                                           (= (first query) :app.template.frontend.subs.list/entity-ui-state) {}
+                                           (= (first query) :app.template.frontend.events.list.settings/table-width) 1200
+                                           (= (first query) :app.template.frontend.subs.ui/entity-display-prefs) {}
+                                           (= (first query) :form-entity-specs/by-name) {:fields []}
+                                           (= (first query) :app.template.frontend.subs.ui/visible-columns) {}
+                                           :else nil))]
+      (mount-component!
+        ($ list/list-view
+          {:entity-name :users
+           :entity-spec {:fields []}
+           :title "Users"})
+        (fn [container]
+          (is (nil? (.querySelector container "#table-shell-users"))
+            "Empty initial loads should still use the loading placeholder instead of an empty table shell")
+          (is (str/includes? (.-textContent container) "Učitavanje...")
+            "Loading placeholder text should still render when there are no rows to keep mounted")
+          (done))))))
 
 (deftest table-header-cells-stick-to-top-of-scroll-viewport
   (async done

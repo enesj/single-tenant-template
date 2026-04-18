@@ -180,7 +180,7 @@
                                               :else (kw/ensure-name field-id))))
                                         acc))
                               {}
-                                          entity-spec-fields))
+                              entity-spec-fields))
         active-filters (use-subscribe [::list-subs/active-filters entity-name])
         batch-edit-inline-state (use-subscribe [::list-subs/batch-edit-inline entity-name])
         ui-state (use-subscribe [::list-subs/entity-ui-state entity-name])
@@ -390,10 +390,11 @@
     ;; still unset or represent only max constraints.
     (use-effect
       (fn []
-        (let [request-frame (or js/requestAnimationFrame
+        (let [global js/globalThis
+              request-frame (or (some-> global .-requestAnimationFrame)
                               (fn [callback]
                                 (js/setTimeout callback 0)))
-              cancel-frame (or js/cancelAnimationFrame
+              cancel-frame (or (some-> global .-cancelAnimationFrame)
                              (fn [handle]
                                (js/clearTimeout handle)))
               frame-id (request-frame
@@ -455,7 +456,10 @@
     (use-effect
       (fn []
         (reset! skip-first-ref true)
-        (let [el @shell-ref
+        (let [global js/globalThis
+              ResizeObserverCtor (some-> global .-ResizeObserver)
+              MutationObserverCtor (some-> global .-MutationObserver)
+              el @shell-ref
               measure-rect (fn [node]
                              (when node
                                (.getBoundingClientRect node)))
@@ -476,8 +480,8 @@
                               (set-measured-table-width!
                                 (fn [current]
                                   (if (= current w) current w)))))
-              observer (when el
-                         (js/ResizeObserver.
+              observer (when (and el ResizeObserverCtor)
+                         (ResizeObserverCtor.
                            (fn [entries]
                              (let [entry (aget entries 0)
                                    rect (measure-rect (.-target entry))
@@ -489,8 +493,8 @@
                                    (sync-height! h false)
                                    (reset! skip-first-ref false))
                                  (sync-height! h true))))))
-              style-observer (when el
-                               (js/MutationObserver.
+              style-observer (when (and el MutationObserverCtor)
+                               (MutationObserverCtor.
                                  (fn [_mutations _observer]
                                    (when-let [rect (measure-rect el)]
                                      (sync-width! (js/Math.round (.-width rect)))
@@ -653,9 +657,9 @@
               {:error error
                :entity-name entity-name}))
           (cond
-            loading?                                        ;; Display loading message if loading
+            (and loading? (empty? raw-items) (not show-inline-add-form?))
             ($ :div ($ :span (t :common/loading)))
-            :else                                           ;; Otherwise, display the list
+            :else
             ($ :div
               (if show-inline-add-form?
                 ;; If show-add-form? is true (inline mode), display the add item section

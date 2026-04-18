@@ -144,6 +144,11 @@
     :common/max                  "Max"
     :common/from                 "Od"
     :common/to                   "Do"
+    :common/date-range-tip-default "Odaberite početni datum, zatim završni datum. Datumi sa zapisima su označeni."
+    :common/date-range-filtering-from "Filtriranje od"
+    :common/date-range-to        "do"
+    :common/date-range-today     "danas"
+    :common/date-range-pick-end-date "Odaberite završni datum da dovršite raspon."
 
     ;; Form validation
     :validation/email-required      "E-mail je obavezan"
@@ -299,6 +304,11 @@
     :common/max                  "Max"
     :common/from                 "From"
     :common/to                   "To"
+    :common/date-range-tip-default "Select a start date, then an end date. Dates with records are shaded."
+    :common/date-range-filtering-from "Filtering from"
+    :common/date-range-to        "to"
+    :common/date-range-today     "today"
+    :common/date-range-pick-end-date "Pick an end date to complete the range."
 
     ;; Form validation
     :validation/email-required      "Email is required"

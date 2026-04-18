@@ -114,3 +114,34 @@
 
     (testing "multiple matching rows on the same day produce one highlighted day"
       (is (= 2 (count result))))))
+
+(deftest selection-summary-uses-localized-date-range-copy
+  (let [t (fn [translation-key]
+            (case translation-key
+              :common/date-range-tip-default "Odaberite početni datum, zatim završni datum. Datumi sa zapisima su označeni."
+              :common/date-range-filtering-from "Filtriranje od"
+              :common/date-range-to "do"
+              :common/date-range-today "danas"
+              :common/date-range-pick-end-date "Odaberite završni datum da dovršite raspon."))
+        partial-filter {:from (filter-helpers/local-start-of-day (js/Date. 2026 2 10 0 0 0))
+                        :to (filter-helpers/local-end-of-day (js/Date. 2026 2 20 0 0 0))
+                        :anchor (filter-helpers/local-start-of-day (js/Date. 2026 2 10 0 0 0))
+                        :selection-state :partial}
+        complete-filter {:from (filter-helpers/local-start-of-day (js/Date. 2026 2 10 0 0 0))
+                         :to (filter-helpers/local-end-of-day (js/Date. 2026 2 18 0 0 0))
+                         :selection-state :complete}]
+    (testing "empty state copy is localized"
+      (is (= "Odaberite početni datum, zatim završni datum. Datumi sa zapisima su označeni."
+            (date-range-picker/selection-summary t nil))))
+
+    (testing "partial range copy is localized"
+      (let [summary (date-range-picker/selection-summary t partial-filter)]
+        (is (.startsWith summary "Filtriranje od "))
+        (is (.includes summary " do danas."))
+        (is (.includes summary "Odaberite završni datum da dovršite raspon."))))
+
+    (testing "complete range copy is localized"
+      (let [summary (date-range-picker/selection-summary t complete-filter)]
+        (is (.startsWith summary "Filtriranje od "))
+        (is (.includes summary " do "))
+        (is (.endsWith summary "."))))))

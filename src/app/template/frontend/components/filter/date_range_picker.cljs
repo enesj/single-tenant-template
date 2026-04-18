@@ -4,6 +4,7 @@
     [app.template.frontend.components.filter.helpers :as filter-helpers]
     [app.template.frontend.components.filter.utils :as filter-utils]
     [app.template.frontend.events.list.filters :as filter-events]
+    [app.template.frontend.i18n :refer [use-t]]
     [re-frame.core :as rf]
     [uix.core :refer [$ defui use-effect use-ref use-state]]))
 
@@ -184,27 +185,37 @@
     nil))
 
 (defn selection-summary
-  [filter-value]
+  [t filter-value]
   (cond
     (partial-filter? filter-value)
-    (str "Filtering from "
+    (str (t :common/date-range-filtering-from)
+      " "
       (filter-utils/format-local-date (:from filter-value))
-      " to today. Pick an end date to complete the range.")
+      " "
+      (t :common/date-range-to)
+      " "
+      (t :common/date-range-today)
+      ". "
+      (t :common/date-range-pick-end-date))
 
     (complete-filter? filter-value)
-    (str "Filtering "
+    (str (t :common/date-range-filtering-from)
+      " "
       (filter-utils/format-local-date (:from filter-value))
-      " to "
+      " "
+      (t :common/date-range-to)
+      " "
       (filter-utils/format-local-date (:to filter-value))
       ".")
 
     :else
-    "Select a start date, then an end date. Dates with records are shaded."))
+    (t :common/date-range-tip-default)))
 
 (defui date-range-picker
   [{:keys [field-id entity-type active-filters items matching-count list-ui-state
            set-filter-from-date set-filter-to-date]}]
   (let [today (js/Date.)
+        t (use-t)
         field-key (if (keyword? field-id) field-id (keyword field-id))
         filter-value (current-filter-value {:active-filters active-filters
                                             :field-id field-id})
@@ -265,7 +276,7 @@
     ($ :div {:class "p-4 space-y-3"}
       ($ :div {:class "text-xs text-base-content/70"
                :id (str "filter-date-range-summary-" (name field-key))}
-        (selection-summary filter-value))
+        (selection-summary t filter-value))
       ($ :div {:class "rounded-lg border border-base-300 bg-base-100 p-2"
                :id (str "filter-date-range-picker-" (name field-key))}
         ($ DayPicker
