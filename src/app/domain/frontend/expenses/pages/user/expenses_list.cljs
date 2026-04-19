@@ -7,10 +7,10 @@
    always server-side across the full dataset (not just the currently loaded
    page)."
   (:require
+    [app.domain.frontend.expenses.components.manual-expense-form.core :as manual-form]
     [app.domain.frontend.expenses.components.user-expense-form :refer [user-expense-edit-form-modal]]
     [app.domain.frontend.expenses.events.expense-items :as expense-items-events]
     app.domain.frontend.expenses.events.user-expenses.receipts
-    [app.domain.frontend.expenses.pages.user.expense-new :refer [standard-expense-form]]
     [app.domain.frontend.expenses.pages.user.expense-detail :refer [expense-detail-page]]
     [app.domain.frontend.expenses.pages.user.receipts-list :as receipts-list-page]
     [app.domain.frontend.expenses.subs.expense-items :as expense-items-subs]
@@ -45,9 +45,12 @@
 
 (defn- render-add-form
   [{:keys [on-success on-cancel]}]
-  ($ standard-expense-form
-    {:on-success on-success
-     :on-cancel on-cancel}))
+  ($ manual-form/manual-expense-form
+    {:on-cancel on-cancel
+     :on-submit (fn [form-data]
+                  (rf/dispatch [:user-expenses/create-expense-modal
+                                form-data
+                                on-success]))}))
 
 (defn- render-edit-form
   [item {:keys [on-success on-cancel]}]

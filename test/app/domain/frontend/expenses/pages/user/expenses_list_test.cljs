@@ -3,6 +3,7 @@
     ["react-dom/client" :as rdom]
     ["react-dom/test-utils" :as test-utils]
     [app.admin.frontend.test-setup :as setup]
+    [app.domain.frontend.expenses.components.manual-expense-form.core :as manual-form]
     [app.domain.frontend.expenses.pages.user.expenses-list :as expenses-page]
     [app.template.frontend.utils.test-utils :as test-utils-common]
     [cljs.test :refer [async deftest is testing]]
@@ -35,7 +36,7 @@
         (with-redefs [rf/dispatch (fn [event]
                                     (swap! dispatches conj event))]
           (mount!
-            (#'app.domain.frontend.expenses.pages.user.expenses-list/render-actions
+            (#'expenses-page/render-actions
              (fn [k] (name k))
              expense
              {:power-user? false})
@@ -66,7 +67,7 @@
         (with-redefs [rf/dispatch (fn [event]
                                     (swap! dispatches conj event))]
           (mount!
-            (#'app.domain.frontend.expenses.pages.user.expenses-list/render-actions
+            (#'expenses-page/render-actions
              (fn [k] (name k))
              expense
              {:power-user? false
@@ -85,3 +86,33 @@
                     (cleanup!)
                     (done))
                   0)))))))))
+
+(deftest render-add-form-uses-smart-input-and-dispatches-create
+  (testing "expense list add flow returns the smart input form and dispatches the modal create event"
+    (setup/reset-db!)
+    (let [dispatches (atom [])
+          success-callback (fn [])
+          form-data {:payer_id "payer-1"
+                     :currency "BAM"
+                     :items [{:raw_label "Milk" :line_total 12.5}]}
+          element (#'expenses-page/render-add-form
+                   {:on-success success-callback
+                    :on-cancel (fn [])})
+          passed-props (unchecked-get (unchecked-get element "props") "argv")
+          submit-fn (:on-submit passed-props)]
+      (with-redefs [rf/dispatch (fn [event]
+                                  (swap! dispatches conj event))]
+        (is (identical? (.-type element) manual-form/manual-expense-form)
+          "render-add-form should return the smart input component")
+        (is (fn? submit-fn)
+          "render-add-form should provide the smart form submit callback")
+        (submit-fn form-data)
+        (is (= 1 (count @dispatches))
+          "smart input submit should dispatch exactly one create event")
+        (let [[event-id submitted-data submitted-success] (first @dispatches)]
+          (is (= :user-expenses/create-expense-modal event-id)
+            "smart input submit should target the user-expenses modal create event")
+          (is (= form-data submitted-data)
+            "smart input submit should forward the prepared smart form payload unchanged")
+          (is (identical? success-callback submitted-success)
+            "smart input submit should preserve the list-view success callback"))))))
