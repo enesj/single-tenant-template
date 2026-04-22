@@ -407,6 +407,86 @@
         extraction (receipt-extract/response->extraction resp)]
     (is (= "UNI-EXPERT" (get-in extraction [:merchant :name])))))
 
+(deftest receipt-extraction-prefers-pre-table-heading-over-descriptive-text
+  (let [resp {:items {:pages [{:items [{:type "heading"
+                                        :value "STEP d.o.o."}
+                                       {:type "text"
+                                        :value (str "ZA UNUTRAŠNJU I SPOLJNU TRGOVINU,\n"
+                                                 "UGOSTITELJSTVO I TURIZAM\n"
+                                                 "Mis Irbina 8\n"
+                                                 "71000 Sarajevo")}
+                                       {:type "text"
+                                        :value (str "BF: 126534\n"
+                                                 "12.04.2026. 13:48")}
+                                       {:type "table"
+                                        :rows [["ESPRESSO KAFA/ko" "2,000x" "2,00" "4,00E"]]}]}]}}
+        extraction (receipt-extract/response->extraction resp)
+        receipt (receipt-extract/response->receipt resp)]
+    (is (= "STEP" (get-in extraction [:merchant :name])))
+    (is (= "STEP" (first (str/split-lines (:parsed-markdown receipt)))))))
+
+(deftest receipt-extraction-prefers-quoted-heading-over-owner-text
+  (let [resp {:items {:pages [{:items [{:type "heading"
+                                        :value "TR CVJEĆARA \"BY AJJA\""}
+                                       {:type "text"
+                                        :value (str "vl. Pećar Jasna\n"
+                                                 "ul. Azize Šaćirbegović bb\n"
+                                                 "71000 Sarajevo")}
+                                       {:type "text"
+                                        :value (str "BF: 186\n"
+                                                 "17.04.2026. 11:40")}
+                                       {:type "table"
+                                        :rows [["Orhideja 25/kom" "25,00A"]]}]}]}}
+        extraction (receipt-extract/response->extraction resp)
+        receipt (receipt-extract/response->receipt resp)]
+    (is (= "BY AJJA" (get-in extraction [:merchant :name])))
+    (is (= "BY AJJA" (first (str/split-lines (:parsed-markdown receipt)))))
+    (is (= "ul. Azize Šaćirbegović bb, 71000 Sarajevo"
+          (get-in extraction [:merchant :address])))))
+
+(deftest receipt-extraction-ignores-generic-heading-when-header-identifies-merchant
+  (let [resp {:items {:pages [{:items [{:type "header"
+                                        :md (str "\"BINGO\" d.o.o. EXPORT-IMPORT TUZLA\n"
+                                              "PJ 219 \"Supermarket Alta\" Sarajevo\n"
+                                              "Bulevar Franca Lehara br. 2\n"
+                                              "71000 Sarajevo\n")}
+                                       {:type "text"
+                                        :value (str "JIB: 4209253454360\n"
+                                                 "PIB: 209253450003")}
+                                       {:type "heading"
+                                        :value "FISKALNI RAČUN"}
+                                       {:type "table"
+                                        :rows [["ITEM" "1,00E"]]}]}]}}
+        extraction (receipt-extract/response->extraction resp)
+        merchant (:merchant extraction)]
+    (is (= "BINGO" (:name merchant)))
+    (is (= "PJ 219 \"Supermarket Alta\" Sarajevo" (:store_name merchant)))))
+
+(deftest receipt-extraction-ignores-agentic-merchant-information-heading
+  (let [resp {:text {:pages [{:text (str "\"Pepco B-H\" d.o.o.\n"
+                                      "Podružnica Sarajevo 2\n"
+                                      "ul. Kolodvorska br.12\n"
+                                      "71000 Sarajevo\n"
+                                      "JIB: 4203144510090\n")}]}
+              :items {:pages [{:items [{:type "heading"
+                                        :value "Merchant Information"}
+                                       {:type "list"
+                                        :value (str "* **merchant.name**: \"Pepco B-H\" d.o.o.\n"
+                                                 "* **merchant.store_name**: Podružnica Sarajevo 2\n"
+                                                 "* **merchant.address**: ul. Kolodvorska br.12 71000 Sarajevo")}
+                                       {:type "code"
+                                        :value (str "=================================================================\n"
+                                                 "              \"Pepco B-H\" d.o.o.\n"
+                                                 "            Podružnica Sarajevo 2\n"
+                                                 "            ul. Kolodvorska br.12\n"
+                                                 "            71000 Sarajevo\n")}
+                                       {:type "table"
+                                        :rows [["ITEM" "1,00E"]]}]}]}}
+        extraction (receipt-extract/response->extraction resp)
+        receipt (receipt-extract/response->receipt resp)]
+    (is (= "Pepco B-H" (get-in extraction [:merchant :name])))
+    (is (= "Pepco B-H" (first (str/split-lines (:parsed-markdown receipt)))))))
+
 (deftest receipt-extraction-prefers-quoted-or-legal-over-branch-line
   (let [itx {:items {:pages [{:items [{:type "header"
                                        :md (str "ITX BH d.o.o.\n"

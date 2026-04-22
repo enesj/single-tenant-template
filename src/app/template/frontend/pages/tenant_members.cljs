@@ -345,6 +345,8 @@
         {:member member
          :can-transfer? can-transfer?}))))
 
+(declare invite-form)
+
 (defn- render-invite-add-form
   [{:keys [on-success on-cancel]}]
   ($ :div {:class "space-y-4"}

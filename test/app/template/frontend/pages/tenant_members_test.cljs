@@ -99,7 +99,7 @@
       (is (= false (:can-transfer? inactive-account-state))))))
 
 (deftest tenant-member-list-props-use-canonical-list-view-contract
-  (testing "tenant members page passes canonical list-view props with modal edit/delete controls and member rows as overrides"
+  (testing "tenant members page passes canonical list-view props with modal add/edit controls and member rows as overrides"
     (let [t (partial i18n/translate :en)
           props (tenant-members-page/tenant-member-list-props
                   [{:id "m-1"
@@ -116,11 +116,11 @@
       (is (= "Current Members" (:title props)))
       (is (= 25 (:per-page props)))
       (is (= :modal (:form-display props)))
-      (is (= false (:allow-add? props)))
+      (is (= true (:allow-add? props)))
+      (is (= (t :tenant/send-invite) (:add-button-label props)))
       (is (= true (:allow-edit? props)))
       (is (= true (:allow-delete? props)))
-      (is (= {:show-add-button? false
-              :show-filtering? false
+      (is (= {:show-filtering? false
               :show-select? false
               :show-batch-edit? false
               :show-batch-delete? false}
@@ -129,5 +129,6 @@
       (is (= "ada@example.com" (:member_email row)))
       (is (= "admin" (:member_role row)))
       (is (= "2026-03-03" (:joined_on row)))
+      (is (fn? (:render-add-form props)))
       (is (fn? (:render-edit-form props)))
       (is (fn? (:render-actions props))))))

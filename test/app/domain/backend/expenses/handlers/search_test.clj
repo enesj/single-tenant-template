@@ -277,7 +277,7 @@
                   jdbc/execute! (fn [_db query _opts]
                                   (reset! captured-query query)
                                   [])]
-      (#'qa/manual-history-top-stores :mock-db tenant-id 10 supplier-id)
+      (#'qa/history-top-stores :mock-db tenant-id 10 supplier-id true)
       (let [query-str (pr-str @captured-query)]
         (is (str/includes? query-str ":e.tenant_id"))
         (is (str/includes? query-str ":e.receipt_id nil"))
@@ -293,7 +293,7 @@
                   jdbc/execute! (fn [_db query _opts]
                                   (reset! captured-query query)
                                   [])]
-      (#'qa/manual-history-top-articles :mock-db tenant-id 10 supplier-id)
+      (#'qa/history-top-articles :mock-db tenant-id 10 supplier-id true)
       (let [query-str (pr-str @captured-query)]
         (is (str/includes? query-str "expense_items"))
         (is (str/includes? query-str "article_aliases"))
@@ -312,18 +312,20 @@
                      #'h/ensure-role (constantly nil)
                      #'h/get-tenant-id (constantly tenant-id)
                      #'h/json-response (fn [body & [status]] {:status (or status 200) :body body})
-                     #'qa/manual-history-top-stores (fn [db* tenant-id* limit* supplier-id*]
-                                                      (is (= db db*))
-                                                      (is (= tenant-id tenant-id*))
-                                                      (is (= 10 limit*))
-                                                      (is (= supplier-id supplier-id*))
-                                                      [{:id 1 :display_name "Bingo PJ 91"}])
-                     #'qa/manual-history-top-articles (fn [db* tenant-id* limit* supplier-id*]
-                                                        (is (= db db*))
-                                                        (is (= tenant-id tenant-id*))
-                                                        (is (= 10 limit*))
-                                                        (is (= supplier-id supplier-id*))
-                                                        [{:id 2 :canonical_name "Mlijeko"}])}
+                     #'qa/history-top-stores (fn [db* tenant-id* limit* supplier-id* manual-only?]
+                                               (is (= db db*))
+                                               (is (= tenant-id tenant-id*))
+                                               (is (= 10 limit*))
+                                               (is (= supplier-id supplier-id*))
+                                               (is (= true manual-only?))
+                                               [{:id 1 :display_name "Bingo PJ 91"}])
+                     #'qa/history-top-articles (fn [db* tenant-id* limit* supplier-id* manual-only?]
+                                                 (is (= db db*))
+                                                 (is (= tenant-id tenant-id*))
+                                                 (is (= 10 limit*))
+                                                 (is (= supplier-id supplier-id*))
+                                                 (is (= true manual-only?))
+                                                 [{:id 2 :canonical_name "Mlijeko"}])}
       (fn []
         (let [response (handler {:query-params {"supplier_id" (str supplier-id)}})]
           (is (= 200 (:status response)))

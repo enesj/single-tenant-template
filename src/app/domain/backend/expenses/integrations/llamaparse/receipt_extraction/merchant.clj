@@ -8,7 +8,8 @@
    "ve" "osn" "pdv" "vat" "total" "ukupno" "ukupna" "ukupan" "uplac" "upl" "gotovina" "kartica" "povrat"])
 
 (def merchant-ignore-exact
-  #{"fiskalni racun" "fiskalni račun" "racun" "račun" "фискални рачун" "рачун"})
+  #{"fiskalni racun" "fiskalni račun" "racun" "račun" "фискални рачун" "рачун"
+    "merchant information"})
 
 (def item-like-leading-code-re
   #"(?iu)^(?:[A-Z]?\d{4,})(?:\s+|\b).*$")

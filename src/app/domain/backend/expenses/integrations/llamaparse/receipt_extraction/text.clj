@@ -109,7 +109,7 @@
           (take-while (fn [{:keys [type]}]
                         (not= "table" (some-> type str/lower-case))))
           (filter (fn [{:keys [type]}]
-                    (contains? #{"header" "text"} (some-> type str/lower-case)))))
+                    (contains? #{"header" "heading" "text"} (some-> type str/lower-case)))))
         header-items
         (filter (fn [{:keys [type]}]
                   (= "header" (some-> type str/lower-case)))

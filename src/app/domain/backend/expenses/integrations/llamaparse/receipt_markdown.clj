@@ -31,7 +31,8 @@
   ["jib" "pib" "ibfm" "ibem" "tbfm" "bf" "ve" "osn" "pdv" "vat" "total" "ukupno" "uplac" "upl" "gotovina" "kartica"])
 
 (def ^:private ignore-merchant-exact
-  #{"fiskalni racun" "fiskalni račun" "racun" "račun"})
+  #{"fiskalni racun" "fiskalni račun" "racun" "račun"
+    "merchant information"})
 
 (defn- separator-line?
   [line]
