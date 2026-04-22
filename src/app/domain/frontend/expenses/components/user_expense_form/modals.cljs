@@ -9,6 +9,7 @@
     [app.domain.frontend.expenses.components.user-expense-form.normalization :as norm]
     [app.domain.frontend.expenses.components.user-expense-form.specs :as specs]
     [app.domain.frontend.expenses.ui.currencies :as currency-ui]
+    [app.template.frontend.i18n :as i18n]
     [app.template.frontend.components.form.master-detail :refer [master-detail-form]]
     [clojure.string :as str]
     [re-frame.core :as rf]
@@ -131,7 +132,9 @@
 (defui user-expense-edit-form-modal
   "Edit user expense modal using master-detail-form wrapper for detail orchestration."
   [{:keys [expense-id initial-data on-success on-cancel]}]
-  (let [expense-id-str (some-> expense-id str)
+  (let [t (i18n/use-t)
+        locale (or (use-subscribe [:locale]) :bs)
+        expense-id-str (some-> expense-id str)
         ;; Subscribe to detail state
         current-expense (use-subscribe [:user-expenses/current-expense])
         detail-loading? (boolean (use-subscribe [:user-expenses/current-expense-loading?]))
@@ -145,9 +148,10 @@
         ;; Memoize entity-spec
         entity-spec (use-memo
                       #(specs/get-expense-form-spec suppliers payers
-                         {:expense-categories expense-categories
+                 {:locale locale
+                  :expense-categories expense-categories
                           :enabled-currencies enabled-currencies})
-                      [suppliers payers expense-categories enabled-currencies])
+                [suppliers payers expense-categories enabled-currencies locale])
 
         ;; Default values for expense form
         ;; Memoized to keep identity stable across renders (prevents fork resets).
@@ -194,4 +198,4 @@
        ;; Optional
        :initial-row-data initial-data
        :default-values default-values
-       :button-text "Update Expense"})))
+      :button-text (t :common/update)})))

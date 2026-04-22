@@ -6,6 +6,7 @@
     [app.domain.frontend.expenses.components.user-expense-form.normalization :as norm]
     [app.domain.frontend.expenses.components.user-expense-form.specs :as specs]
     [app.domain.frontend.expenses.ui.currencies :as currency-ui]
+    [app.template.frontend.i18n :as i18n]
     [app.template.frontend.components.form :refer [form-fields]]
     [app.template.frontend.components.form.base :as base]
     [re-frame.core :as rf]
@@ -25,42 +26,39 @@
   - :split-layout? - If true, render fields in right column and line items get separate container"
   [{:keys [receipt-id receipt initial-data on-cancel on-expense-saved on-review-saved
            split-layout?]}]
-  (let [suppliers (or (use-subscribe [:user-expenses/suppliers]) [])
+  (let [t (i18n/use-t)
+        locale (or (use-subscribe [:locale]) :bs)
+        suppliers (or (use-subscribe [:user-expenses/suppliers]) [])
         payers (or (use-subscribe [:user-expenses/payers]) [])
         expense-categories (or (use-subscribe [:user-expenses/expense-categories]) [])
         profile (or (use-subscribe [:profile/data]) {})
         enabled-currencies (currency-ui/enabled-currency-options profile)
         form-error (use-subscribe [:user-expenses/form-error])
         [validation-error set-validation-error!] (use-state nil)
-
-        ;; Full spec for the form
         full-entity-spec (use-memo
                            #(specs/get-expense-form-spec suppliers payers
                               {:receipt-approval? true
+                               :locale locale
                                :supplier-guess (some-> receipt :supplier-guess)
                                :receipt receipt
                                :receipt-id receipt-id
                                :expense-categories expense-categories
                                :enabled-currencies enabled-currencies})
-                           [suppliers payers expense-categories enabled-currencies receipt receipt-id])
-
-        ;; Spec without line items for split layout
+                           [suppliers payers expense-categories enabled-currencies receipt receipt-id locale])
         fields-only-spec (use-memo
                            #(specs/get-expense-form-spec suppliers payers
                               {:receipt-approval? true
+                               :locale locale
                                :supplier-guess (some-> receipt :supplier-guess)
                                :receipt receipt
                                :receipt-id receipt-id
                                :expense-categories expense-categories
                                :enabled-currencies enabled-currencies
                                :exclude-line-items? true})
-                           [suppliers payers expense-categories enabled-currencies receipt receipt-id])
-
-        ;; Line items spec
+                           [suppliers payers expense-categories enabled-currencies receipt receipt-id locale])
         line-items-spec (use-memo
-                          #(vector specs/line-items-field-spec)
-                          [])
-
+                          #(vector (specs/build-line-items-field-spec locale))
+                          [locale])
         form-initial-values (use-memo
                               (fn []
                                 (let [default-values {:currency (currency-ui/default-currency profile)
@@ -68,14 +66,12 @@
                                                       :items [(new-line-item)]}]
                                   (merge default-values initial-data)))
                               [initial-data profile])
-
         rid-str (or (some-> receipt-id str) "unknown")
         posted? (= "posted" (:status receipt))
         clear-errors! (fn [e]
                         (.preventDefault e)
                         (set-validation-error! nil)
                         (rf/dispatch [:user-expenses/clear-form-error]))]
-
     (use-effect
       (fn []
         (rf/dispatch [:user-expenses/fetch-suppliers {:limit 100 :offset 0}])
@@ -103,7 +99,6 @@
          :initial-values form-initial-values
          :prevent-default? true
          :keywordize-keys true
-
          :on-submit (fn [{:keys [values]}]
                       (let [validation-result (norm/validate-expense-values values)]
                         (if (:ok? validation-result)
@@ -121,74 +116,70 @@
                                  (norm/prepare-expense-submit-values values)
                                  on-expense-saved])))
                           (set-validation-error! (:error validation-result)))))
+         :render-fn (fn [{:keys [form-id handle-submit submitting? values] :as form-props}]
+                      (let [expense-valid-now? (:ok? (norm/validate-expense-values values))
+                            receipt-valid-now? (:ok? (norm/validate-receipt-review-values values))
+                            can-save-receipt? (and receipt-valid-now?
+                                                (norm/receipt-review-changed? form-initial-values values))]
+                        ($ :form {:id form-id
+                                  :on-submit handle-submit}
+                          ($ form-fields
+                            (merge form-props
+                              {:entity-name "user-expense"
+                               :legend ""
+                               :editing false
+                               :values values
+                               :form-id form-id
+                               :entity-spec (if split-layout? fields-only-spec full-entity-spec)}))
 
-         :render-fn
-         (fn [{:keys [form-id handle-submit submitting? values] :as form-props}]
-           (let [expense-valid-now? (:ok? (norm/validate-expense-values values))
-                 receipt-valid-now? (:ok? (norm/validate-receipt-review-values values))
-                 can-save-receipt? (and receipt-valid-now? (norm/receipt-review-changed? form-initial-values values))]
-             ($ :form {:id form-id
-                       :on-submit handle-submit}
-               ;; Fields section (without line items if split layout)
-               ($ form-fields
-                 (merge form-props
-                   {:entity-name "user-expense"
-                    :editing false
-                    :values values
-                    :form-id form-id
-                    :entity-spec (if split-layout? fields-only-spec full-entity-spec)}))
+                          ($ :div {:class "flex justify-end gap-2 mt-4"}
+                            (when on-cancel
+                              ($ :button {:id (str "btn-cancel-receipt-approve-" rid-str)
+                                          :type "button"
+                                          :class "ds-btn"
+                                          :disabled submitting?
+                                          :on-click (fn [e]
+                                                      (.preventDefault e)
+                                                      (when (fn? on-cancel) (on-cancel)))}
+                                (t :common/cancel)))
+                            (if posted?
+                              ($ :button {:id (str "btn-update-posted-" rid-str)
+                                          :type "submit"
+                                          :class "ds-btn ds-btn-primary"
+                                          :disabled (or submitting? (not expense-valid-now?))}
+                                (t :common/update))
+                              ($ :<>
+                                ($ :button {:id (str "btn-save-receipt-" rid-str)
+                                            :type "button"
+                                            :class "ds-btn ds-btn-outline"
+                                            :disabled (or submitting? (not can-save-receipt?))
+                                            :on-click (fn [e]
+                                                        (.preventDefault e)
+                                                        (.stopPropagation e)
+                                                        (let [validation-result (norm/validate-receipt-review-values values)]
+                                                          (if (:ok? validation-result)
+                                                            (do
+                                                              (set-validation-error! nil)
+                                                              (rf/dispatch
+                                                                [:user-expenses/save-receipt-review
+                                                                 receipt-id
+                                                                 (norm/prepare-expense-submit-values values)
+                                                                 on-review-saved]))
+                                                            (set-validation-error! (:error validation-result)))))}
+                                  (t :common/save-receipt))
+                                ($ :button {:id (str "btn-save-expense-" rid-str)
+                                            :type "submit"
+                                            :class "ds-btn ds-btn-primary"
+                                            :disabled (or submitting? (not expense-valid-now?))}
+                                  (t :common/save-expense)))))
 
-               ;; Buttons
-               ($ :div {:class "flex justify-end gap-2 mt-4"}
-                 (when on-cancel
-                   ($ :button {:id (str "btn-cancel-receipt-approve-" rid-str)
-                               :type "button"
-                               :class "ds-btn"
-                               :disabled submitting?
-                               :on-click (fn [e]
-                                           (.preventDefault e)
-                                           (when (fn? on-cancel) (on-cancel)))}
-                     "Cancel"))
-                 (if posted?
-                   ;; Posted receipt: single Update button
-                   ($ :button {:id (str "btn-update-posted-" rid-str)
-                               :type "submit"
-                               :class "ds-btn ds-btn-primary"
-                               :disabled (or submitting? (not expense-valid-now?))}
-                     "Update")
-                   ;; Unposted receipt: Save receipt + Save expense
-                   ($ :<>
-                     ($ :button {:id (str "btn-save-receipt-" rid-str)
-                                 :type "button"
-                                 :class "ds-btn ds-btn-outline"
-                                 :disabled (or submitting? (not can-save-receipt?))
-                                 :on-click (fn [e]
-                                             (.preventDefault e)
-                                             (.stopPropagation e)
-                                             (let [validation-result (norm/validate-receipt-review-values values)]
-                                               (if (:ok? validation-result)
-                                                 (do
-                                                   (set-validation-error! nil)
-                                                   (rf/dispatch
-                                                     [:user-expenses/save-receipt-review
-                                                      receipt-id
-                                                      (norm/prepare-expense-submit-values values)
-                                                      on-review-saved]))
-                                                 (set-validation-error! (:error validation-result)))))}
-                       "Save receipt")
-                     ($ :button {:id (str "btn-save-expense-" rid-str)
-                                 :type "submit"
-                                 :class "ds-btn ds-btn-primary"
-                                 :disabled (or submitting? (not expense-valid-now?))}
-                       "Save expense"))))
-
-               ;; Line items section for split layout (rendered after buttons, full width)
-               (when split-layout?
-                 ($ :div {:class "mt-6 -mx-4 px-4 pt-4 border-t border-base-300"}
-                   ($ form-fields
-                     (merge form-props
-                       {:entity-name "user-expense"
-                        :editing false
-                        :values values
-                        :form-id form-id
-                        :entity-spec line-items-spec})))))))}))))
+                          (when split-layout?
+                            ($ :div {:class "mt-6 -mx-4 px-4 pt-4 border-t border-base-300"}
+                              ($ form-fields
+                                (merge form-props
+                                  {:entity-name "user-expense"
+                                   :legend ""
+                                   :editing false
+                                   :values values
+                                   :form-id form-id
+                                   :entity-spec line-items-spec})))))))}))))

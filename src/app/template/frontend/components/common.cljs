@@ -1,5 +1,6 @@
 (ns app.template.frontend.components.common
   (:require
+    [app.template.frontend.i18n :as i18n]
     [app.template.frontend.events.list.crud :as crud-events]
     [re-frame.core :as rf]
     [uix.core :refer [$ defui] :as uix]
@@ -87,113 +88,98 @@
 (defui select
   {:prop-types select-props}
   [{:keys [options id form-id show-mixed-values?] :as props}]
-  (letfn [(->string [v]
-            (cond
-              (keyword? v) (name v)
-              (string? v) v
-              (nil? v) ""
-              :else (str v)))
-          (normalize-option [opt]
-            (if (map? opt)
-              (let [v (->string (:value opt))
-                    l (:label opt)]
-                {:value v
-                 :label (if (some? l) (->string l) v)
-                 :color (:color opt)
-                 :class (:class opt)})
-              (let [v (->string opt)]
-                {:value v :label v})))]
-    (let [[entity-name field-name] (if (and (vector? options)
-                                         (= 2 (count options))
-                                         (every? #(or (keyword? %) (string? %)) options))
-                                     options
-                                     [nil nil])
-          ;; Normalize entity-name to keyword for consistent app-db lookups
-          entity-name-kw (when entity-name
-                           (if (keyword? entity-name) entity-name (keyword entity-name)))
-        ;; Get current entity type to avoid circular fetches
-          current-entity-type (urf/use-subscribe [:app.template.frontend.subs.list/current-entity-type])
-          entity-subscription (seq (urf/use-subscribe [::select-options
-                                                       (or entity-name-kw :default)
-                                                       (or field-name :default)]))
-          final-options (or
-                          entity-subscription
-                          options)
-          normalized-options (mapv normalize-option (or final-options []))
-        ;; Fix 1: Ensure value is never null, use empty string instead
-          value-prop (:value props)
-          safe-value-prop (if (nil? value-prop) "" value-prop)
+  (let [t (i18n/use-t)]
+    (letfn [(->string [v]
+              (cond
+                (keyword? v) (name v)
+                (string? v) v
+                (nil? v) ""
+                :else (str v)))
+            (normalize-option [opt]
+              (if (map? opt)
+                (let [v (->string (:value opt))
+                      l (:label opt)]
+                  {:value v
+                   :label (if (some? l) (->string l) v)
+                   :color (:color opt)
+                   :class (:class opt)})
+                (let [v (->string opt)]
+                  {:value v :label v})))]
+      (let [[entity-name field-name] (if (and (vector? options)
+                                           (= 2 (count options))
+                                           (every? #(or (keyword? %) (string? %)) options))
+                                       options
+                                       [nil nil])
+            entity-name-kw (when entity-name
+                             (if (keyword? entity-name) entity-name (keyword entity-name)))
+            current-entity-type (urf/use-subscribe [:app.template.frontend.subs.list/current-entity-type])
+            entity-subscription (seq (urf/use-subscribe [::select-options
+                                                         (or entity-name-kw :default)
+                                                         (or field-name :default)]))
+            final-options (or entity-subscription options)
+            normalized-options (mapv normalize-option (or final-options []))
+            value-prop (:value props)
+            safe-value-prop (if (nil? value-prop) "" value-prop)
+            mixed-values-label (t :common/mixed-values)
+            select-label (str (t :common/select) "...")
+            is-foreign-key? (and entity-name-kw field-name)
+            entity-data (urf/use-subscribe [:app.template.frontend.subs.entity/entities entity-name-kw])
+            matching-items (when (and is-foreign-key?
+                                   (string? safe-value-prop)
+                                   (not (re-matches #"^\d+$" safe-value-prop)))
+                             (filter (fn [[_ item]]
+                                       (= (get item field-name) safe-value-prop))
+                               (:data entity-data)))
+            entity-id-by-name (when (seq matching-items)
+                                (first (first matching-items)))
+            resolved-value (if entity-id-by-name entity-id-by-name safe-value-prop)
+            resolved-value-str (->string resolved-value)
+            selected-option (some (fn [opt]
+                                    (when (= (->string (:value opt)) resolved-value-str)
+                                      opt))
+                              normalized-options)
+            selected-style (when (and (seq resolved-value-str)
+                                   (seq (:color selected-option)))
+                             {:color (:color selected-option)
+                              :font-weight 600})
+            base-style (:style props)
+            effective-style (cond
+                              (and (map? base-style) (map? selected-style))
+                              (merge base-style selected-style)
+                              (map? selected-style)
+                              selected-style
+                              :else base-style)
+            resolved-props (cond-> (-> props
+                                     (assoc :value resolved-value)
+                                     (dissoc :error :disabled? :validate-server? :form-id :formId :show-mixed-values?)
+                                     (assoc :class "ds-select")
+                                     (assoc :id (or id (when form-id (str form-id "-select")))))
+                             effective-style
+                             (assoc :style effective-style))]
 
-          is-foreign-key? (and entity-name-kw field-name)
-          entity-data (urf/use-subscribe [:app.template.frontend.subs.entity/entities entity-name-kw])
+        (uix/use-effect
+          (fn []
+            (when (and entity-name-kw
+                    (not (= entity-name-kw current-entity-type)))
+              (rf/dispatch [::crud-events/fetch-entities entity-name-kw]))
+            js/undefined)
+          [entity-name-kw current-entity-type])
 
-        ;; Check for entity with matching name
-          matching-items (when (and is-foreign-key?
-                                 (string? safe-value-prop)
-                                 (not (re-matches #"^\d+$" safe-value-prop))) ; If value looks like a name, not an ID
-                           (filter (fn [[_ item]]
-                                     (= (get item field-name) safe-value-prop))
-                             (:data entity-data)))
-
-          entity-id-by-name (when (seq matching-items)
-                              (first (first matching-items)))
-
-          resolved-value (if entity-id-by-name
-                           entity-id-by-name                ; Use the ID we found by name lookup
-                           safe-value-prop)                 ; Use the safe value (never null)
-          resolved-value-str (->string resolved-value)
-          selected-option (some (fn [opt]
-                                  (when (= (->string (:value opt)) resolved-value-str)
-                                    opt))
-                            normalized-options)
-          selected-style (when (and (seq resolved-value-str)
-                                 (seq (:color selected-option)))
-                           {:color (:color selected-option)
-                            :font-weight 600})
-          base-style (:style props)
-          effective-style (cond
-                            (and (map? base-style) (map? selected-style))
-                            (merge base-style selected-style)
-                            (map? selected-style)
-                            selected-style
-                            :else base-style)
-
-        ;; Fix 2: Always ensure the value prop is not null
-          resolved-props (cond-> (-> props
-                                   (assoc :value resolved-value)
-                                   (dissoc :error :disabled? :validate-server? :form-id :formId :show-mixed-values?)
-                                   (assoc :class "ds-select")
-                                   (assoc :id (or id (when form-id (str form-id "-select")))))
-                           effective-style
-                           (assoc :style effective-style))]
-
-      (uix/use-effect
-        (fn []
-        ;; Fetch FK entities using keyword entity name for consistent app-db storage
-          (when (and entity-name-kw
-                  (not (= entity-name-kw current-entity-type)))
-            (rf/dispatch [::crud-events/fetch-entities entity-name-kw]))
-          js/undefined)
-        [entity-name-kw current-entity-type])
-
-      ($ :div
-        ($ :select resolved-props
-          (concat
-          ;; Show different default option based on mixed values state
-            [($ :option {:key "default-empty-option" :value ""}
-               (if show-mixed-values? "(Mixed values)" "Select..."))]
-          ;; Fix 3: Use unique ID-based keys and ensure they're never empty
-            (map-indexed
-              (fn [idx {:keys [value label color class]}]
-                ($ :option
-                ;; Use index to ensure uniqueness even when value/label are empty
-                  (cond-> {:key (str "option-" idx "-" (or value "") "-" (or label ""))
-                           :value (or value "")}
-                    (seq color) (assoc :style {:color color
-                                               :font-weight 600})
-                    (seq class) (assoc :class class))
-                  (or label "")))
-              normalized-options)))))))
+        ($ :div
+          ($ :select resolved-props
+            (concat
+              [($ :option {:key "default-empty-option" :value ""}
+                 (if show-mixed-values? mixed-values-label select-label))]
+              (map-indexed
+                (fn [idx {:keys [value label color class]}]
+                  ($ :option
+                    (cond-> {:key (str "option-" idx "-" (or value "") "-" (or label ""))
+                             :value (or value "")}
+                      (seq color) (assoc :style {:color color
+                                                 :font-weight 600})
+                      (seq class) (assoc :class class))
+                    (or label "")))
+                normalized-options))))))))
 
 (def text-area-props
   {:error {:type :string :required false}

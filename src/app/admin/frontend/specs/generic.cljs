@@ -259,22 +259,22 @@
 (defn- build-field-spec-from-config
   "Build a field spec from form-fields.edn field configuration.
 
-  Supports keys: :type, :label, :options, :placeholder, :default,
+  Supports keys: :type, :label, :label-key, :options, :placeholder, :default,
   :min-length, :max-length, :validation, :min, :max, :step
 
   :options supports two shapes:
   - Static options (e.g. [:a :b] or [{:value \"a\" :label \"A\"} ...])
   - Foreign-key options vector: [entity-name label-field]
     (e.g. [:suppliers :display_name])"
-  [entity-key field-key field-config _editing?]
+  [locale entity-key field-key field-config _editing?]
   (let [component (form-components/get-form-field-component entity-key field-key)
         field-type (normalize-field-type (or (cfg-get field-config :type) :text))
         base {:id field-key
-              :label (or (cfg-get field-config :label)
-                       (-> (name field-key)
-                         (str/replace "-" " ")
-                         (str/replace "_" " ")
-                         str/capitalize))
+              :label (resolver/resolve-field-label
+                       locale
+                       field-key
+                       {:label (cfg-get field-config :label)
+                        :label-key (cfg-get field-config :label-key)})
               :type field-type
               :input-type (field-type->input-type field-type)}
         options (cfg-get field-config :options)
@@ -334,7 +334,7 @@
 
   `mode-or-editing` accepts nil/false for create mode, true for edit mode,
   and :batch-edit for batch updates."
-  [entity-keyword form-config mode-or-editing]
+  [locale entity-keyword form-config mode-or-editing]
   (when (map? form-config)
     (let [{:keys [create-fields edit-fields batch-edit-fields required-fields field-config]} form-config
           mode (cond
@@ -364,7 +364,7 @@
         (mapv (fn [field-key]
                 (let [field-key (->kw field-key)
                       config (or (get field-config field-key) {})
-                      spec (build-field-spec-from-config entity-keyword field-key config mode-or-editing)]
+                      spec (build-field-spec-from-config locale entity-keyword field-key config mode-or-editing)]
                   (if (contains? required-set field-key)
                     (assoc spec :required true)
                     spec)))
@@ -392,12 +392,15 @@
                         ->kw
                         model-naming/db-keyword->app)
           admin-route? (paths/admin-route? db)
+          locale (if admin-route?
+                   :en
+                   (or (:locale db) :bs))
           form-config (resolver/resolve-config-source
                         admin-route?
                         (get-in db [:admin :config :form-fields entity-name])
                         (get-in db [:domain :config :form-fields entity-name]))
           spec-from-config (when form-config
-                             (generate-form-entity-spec-from-config entity-name form-config mode-or-editing))
+                             (generate-form-entity-spec-from-config locale entity-name form-config mode-or-editing))
           spec-from-models (when-let [md (:models-data db)]
                              (get (field-specs/form-entity-specs md) entity-name))
           spec-from-models* (if admin-route?

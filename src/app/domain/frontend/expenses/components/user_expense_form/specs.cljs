@@ -6,53 +6,78 @@
     [app.domain.frontend.expenses.components.user-expense-form.inline-supplier-select :refer [user-supplier-select-with-inline-create]]
     [app.domain.frontend.expenses.ui.currencies :as currency-ui]
     [app.domain.frontend.expenses.ui.select-options :as select-options]
+    [app.template.frontend.settings.resolver :as settings-resolver]
     [clojure.string :as str]))
 
-(def ^:private line-item-columns
+(defn- translated-copy
+  [locale translation-key fallback]
+  (or (settings-resolver/translate-label-key (or locale :en) translation-key)
+    fallback))
+
+(defn- localized-field-label
+  [locale field-key fallback-label]
+  (settings-resolver/resolve-field-label
+    (or locale :en)
+    field-key
+    {:label fallback-label
+     :fallback-label fallback-label}))
+
+(defn build-line-item-columns
+  [locale]
   [{:id :raw_label
-    :label "Label"
+    :label (translated-copy locale :common/description "Description")
     :type :text
-    :placeholder "e.g. Milk, Bread"
+    :placeholder (translated-copy locale :expense-new/item-description-ph "Item description")
     :width "min-w-[180px]"}
    {:id :qty
-    :label "Qty"
+    :label (translated-copy locale :common/qty "Qty")
     :type :number
     :step "0.001"
     :min "0"
+    :placeholder (translated-copy locale :expense-new/item-qty-ph "Qty")
     :width "w-[100px]"}
    {:id :unit_price
-    :label "Price"
+    :label (translated-copy locale :common/unit-price "Unit price")
     :type :number
     :step "0.01"
     :min "0"
+    :placeholder (translated-copy locale :expense-new/item-unit-price-ph "Unit price")
     :width "w-[100px]"}
    {:id :line_total
-    :label "Total"
+    :label (translated-copy locale :common/total "Total")
     :type :number
     :step "0.01"
     :min "0"
+    :placeholder (translated-copy locale :expense-new/item-total-ph "Total")
     :width "w-[100px]"}])
+
+(defn build-line-items-field-spec
+  ([locale]
+   (build-line-items-field-spec locale {}))
+  ([locale {:keys [max-height]}]
+   {:id :items
+    :component line-items-input
+    :label (translated-copy locale :common/line-items "Line Items")
+    :columns (build-line-item-columns locale)
+    :style {:maxHeight (or max-height "300px")}
+    :overflow-y-class "overflow-y-auto"
+    :scrollbar-gutter-stable? true}))
 
 (def line-items-field-spec
   "Standalone line items field spec for use outside of the main form spec."
-  {:id :items
-   :component line-items-input
-   :label "Line Items"
-   :columns line-item-columns
-   :style {:maxHeight "300px"}
-   :overflow-y-class "overflow-y-auto"
-   :scrollbar-gutter-stable? true})
+  (build-line-items-field-spec :en))
 
 (defn get-expense-form-spec
   "Return a field spec vector for the user expense form.
 
   Optional opts support the receipt-approval UX."
   ([suppliers payers]
-   (get-expense-form-spec suppliers payers nil))
-  ([suppliers payers {:keys [receipt-approval? supplier-guess receipt receipt-id exclude-line-items? expense-categories enabled-currencies]
+   (get-expense-form-spec suppliers payers {}))
+  ([suppliers payers {:keys [locale receipt-approval? supplier-guess receipt receipt-id exclude-line-items? expense-categories enabled-currencies]
                       :as opts}]
    (let [receipt-id* (or receipt-id (:id receipt))
          receipt-id-str (some-> receipt-id* str)
+         locale (or locale :en)
          currency-options (if (seq enabled-currencies)
                             enabled-currencies
                             currency-ui/fallback-currency-options)
@@ -68,9 +93,9 @@
          base-fields
          [(cond-> {:id :supplier_id
                    :type :select
-                   :label "Supplier"
+                   :label (localized-field-label locale :supplier_id "Supplier")
                    :required true
-                   :placeholder "Select supplier"
+                   :placeholder (translated-copy locale :expense-new/supplier-select "Select supplier")
                    :create-default-display-name (when receipt-approval?
                                                   receipt-supplier-guess)
                    :receipt-id receipt-id-str
@@ -83,9 +108,9 @@
             (assoc :component supplier-component))
           {:id :payer_id
            :type :select
-           :label "Payer"
+           :label (localized-field-label locale :payer_id "Payer")
            :required true
-           :placeholder "Select payer"
+           :placeholder (translated-copy locale :expense-new/payer-select "Select payer")
            :options (map (fn [p]
                            {:value (:id p)
                             :label (str (:label p)
@@ -94,20 +119,21 @@
                       payers)}
           {:id :expense_category_id
            :type :select
-           :label "Expense Category"
+           :label (localized-field-label locale :expense_category_id "Expense category")
            :required false
-           :placeholder "Optional"
+           :placeholder (translated-copy locale :common/optional "Optional")
            :options (map (fn [c]
                            {:value (:id c)
                             :label (:name c)})
                       (or expense-categories []))}
           {:id :purchased_at
            :type :datetime-local
-           :label "Purchased at"
+           :label (localized-field-label locale :purchased_at "Purchased at")
            :required true}
           {:id :total_amount
            :component (if receipt-approval? totals-display total-amount-input)
-           :label (when-not receipt-approval? "Total amount")
+           :label (when-not receipt-approval?
+                    (localized-field-label locale :total_amount "Total amount"))
            :required true
            ;; Receipt-approval UX: total is auto-derived.
            :show-use-total? (not receipt-approval?)
@@ -115,22 +141,16 @@
            :totals-match? totals-match?}
           {:id :currency
            :type :select
-           :label "Currency"
+           :label (localized-field-label locale :currency "Currency")
            :required true
            :options currency-options}
           {:id :notes
            :type :textarea
-           :label "Notes"
+           :label (localized-field-label locale :notes "Notes")
            :required false
-           :placeholder "Optional notes"
+           :placeholder (translated-copy locale :expense-new/notes-placeholder "Optional notes")
            :layout (when receipt-approval? :stacked)}]]
      (if exclude-line-items?
        base-fields
        (conj base-fields
-         {:id :items
-          :component line-items-input
-          :label "Line Items"
-          :columns line-item-columns
-          :style (if receipt-approval? {:maxHeight "260px"} {:maxHeight "300px"})
-          :overflow-y-class "overflow-y-auto"
-          :scrollbar-gutter-stable? true})))))
+         (build-line-items-field-spec locale {:max-height (if receipt-approval? "260px" "300px")}))))))

@@ -297,6 +297,53 @@
               (not= translated-str (str translation-key)))
         translated-str))))
 
+(defn field-label-key-candidates
+  "Return plausible common i18n keys for a form field label.
+
+   For foreign keys, prefer the base entity label (e.g. :supplier over
+   :supplier-id) so forms read naturally while still allowing exact matches as
+   a fallback."
+  [field-key]
+  (when-let [app-kw (some-> field-key model-naming/ensure-app-keyword)]
+    (let [field-name (name app-kw)
+          base-name (str/replace field-name #"-id$" "")]
+      (->> [(keyword "common" base-name)
+            (keyword "common" field-name)]
+        distinct
+        vec))))
+
+(defn- translate-first-label-key
+  [locale label-keys]
+  (some #(translate-label-key locale %) label-keys))
+
+(defn resolve-field-label
+  "Resolve a localized label for a form field.
+
+   Precedence:
+   1. explicit :label-key translation
+   2. explicit :label when it looks custom
+   3. common translated label inferred from field-key
+   4. explicit :label
+   5. fallback-label
+   6. generated label from field-name"
+  [locale field-key {:keys [label label-key fallback-label]}]
+  (let [resolved-locale (or locale :en)
+        label-keys (field-label-key-candidates field-key)
+        explicit-label (some-> label str str/trim)
+        translated-label (translate-label-key resolved-locale label-key)
+        translated-common (translate-first-label-key resolved-locale label-keys)
+        english-common (translate-first-label-key :en label-keys)
+        generated-default (some-> field-key labels/field-name->label)
+        default-explicit? (contains? (set (remove str/blank? [english-common generated-default])) explicit-label)
+        fallback-label (some-> fallback-label str str/trim)]
+    (or translated-label
+      (when (and (seq explicit-label) (not default-explicit?))
+        explicit-label)
+      translated-common
+      explicit-label
+      fallback-label
+      (labels/field-name->label field-key))))
+
 (defn resolve-column-label-override
   "Resolve a display label override for a column from table-columns metadata.
 

@@ -4,6 +4,7 @@
     [app.template.frontend.components.common :as common]
     [app.template.frontend.components.form.fields.date-picker :refer [date-picker]]
     [app.template.frontend.components.form.validation :as validation]
+    [app.template.frontend.i18n :as i18n]
     [clojure.string :as str]
     [uix.core :refer [$ defui]]))
 
@@ -42,9 +43,10 @@
    :default "w-full"})
 
 (defui input
-  [{:keys [id label input-type error required class inline on-change value fork-errors formId] :as all-props}]
+  [{:keys [id label input-type error required class inline on-change value fork-errors formId mixed-value?] :as all-props}]
 
-  (let [;; Generate ID from formId if not explicitly provided
+  (let [t (i18n/use-t)
+        ;; Generate ID from formId if not explicitly provided
         field-id (or id (when formId (str formId "-input")))
         error-id (when field-id (str field-id "-error"))
         base-class "ds-input ds-input-primary"
@@ -52,11 +54,18 @@
         error-class "text-error"
         ;; Get errors from either the direct error prop or from Fork validation errors
         field-error (or error (when fork-errors (validation/get-field-errors fork-errors (keyword id))))
+        normalized-input-type (cond
+                                (keyword? input-type) (name input-type)
+                                (string? input-type) input-type
+                                :else "text")
+        datetime-like-input? (contains? #{"datetime-local" "date" "time"} normalized-input-type)
+        mixed-values-label (t :common/mixed-values)
+        localized-placeholder (when mixed-value? mixed-values-label)
         props (-> all-props
                 (assoc
                   :class (str base-class " " class)
                   :id field-id)
-                (dissoc :error :input-type :disabled? :validate-server? :inline :fork-errors :formId :label :required))]
+                (dissoc :error :input-type :disabled? :validate-server? :inline :fork-errors :formId :label :required :mixed-value?))]
 
     ;; For date type inputs, use the date-picker component
     (if (= (or input-type "text") "date")
@@ -78,13 +87,11 @@
                          :required required
                          :class (str label-class (when inline " mb-0 min-w-[150px] text-left"))})
         ($ :div {:class (when inline "flex-1 text-left")}
-          (let [normalized-input-type (cond
-                                        (keyword? input-type) (name input-type)
-                                        (string? input-type) input-type
-                                        :else "text")
-                datetime-local? (= "datetime-local" normalized-input-type)]
+          (let [datetime-local? (= "datetime-local" normalized-input-type)]
             ($ common/input
               (cond-> props
+                localized-placeholder
+                (assoc :placeholder localized-placeholder)
                 (:input-type all-props)
                 (assoc :type (or input-type "text"))
                 datetime-local?
@@ -95,6 +102,12 @@
                 (assoc :min (:min all-props))
                 (:max all-props)
                 (assoc :max (:max all-props)))))
+          (when (and mixed-value?
+                  datetime-like-input?
+                  (or (nil? value)
+                    (and (string? value) (str/blank? value))))
+            ($ :div {:class "text-xs text-base-content/60 mt-1"}
+              mixed-values-label))
           (when field-error
             ($ :div {:class error-class
                      :id error-id

@@ -126,6 +126,7 @@
                ($ form-fields
                  (merge form-props
                    {:entity-name "admin-receipt"
+                    :legend ""
                     :editing false
                     :values values
                     :form-id form-id
@@ -178,6 +179,7 @@
                    ($ form-fields
                      (merge form-props
                        {:entity-name "admin-receipt"
+                        :legend ""
                         :editing false
                         :values values
                         :form-id form-id

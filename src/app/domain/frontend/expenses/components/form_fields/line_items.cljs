@@ -2,12 +2,14 @@
   "Line items input component for expense form"
   (:require
     [app.domain.frontend.expenses.components.form-fields.helpers :as h]
+    [app.template.frontend.i18n :as i18n]
     [app.template.frontend.components.common :as common]
     [uix.core :refer [$ defui]]))
 
 (defui line-items-input
   [{:keys [value on-change error field-spec]}]
-  (let [items (if (seq value) value [(h/new-line-item)])
+  (let [t (i18n/use-t)
+        items (if (seq value) value [(h/new-line-item)])
         columns (:columns field-spec)
         field-key (let [id (:id field-spec)]
                     (cond
@@ -34,7 +36,7 @@
                     :class "ds-btn ds-btn-ghost ds-btn-sm"
                     :type "button"
                     :on-click add-item}
-          "Add line item"))
+          (t :common/add-line-item)))
       (let [overflow-y-class (or (:overflow-y-class field-spec) "overflow-y-auto")
             stable-gutter? (true? (:scrollbar-gutter-stable? field-spec))
             style (merge {:maxHeight "300px"}
@@ -79,7 +81,7 @@
                     ($ :button {:id (str "btn-remove-" field-key "-line-item-" item-id)
                                 :class "text-error hover:text-error/80 p-1"
                                 :type "button"
-                                :title "Remove line item"
+                                :title (t :common/remove-line-item)
                                 :on-click #(remove-item item-id)}
                       ($ :svg {:class "w-4 h-4" :fill "none" :stroke "currentColor" :viewBox "0 0 24 24"}
                         ($ :path {:stroke-linecap "round" :stroke-linejoin "round" :stroke-width "2"

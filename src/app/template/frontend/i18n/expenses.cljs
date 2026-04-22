@@ -289,7 +289,7 @@
     :expense-detail/breadcrumb-expenses   "Troškovi"
     :expense-detail/breadcrumb-all        "Svi troškovi"
     :expense-detail/btn-edit              "Uredi"
-    :expense-detail/status-pending        "Na čekanju"
+
     :expense-detail/created               "Kreirano"
     :expense-detail/label-supplier        "Dobavljač"
     :expense-detail/label-payer           "Kupac"
@@ -608,7 +608,7 @@
     :expense-detail/breadcrumb-expenses   "Expenses"
     :expense-detail/breadcrumb-all        "All Expenses"
     :expense-detail/btn-edit              "Edit"
-    :expense-detail/status-pending        "Pending"
+
     :expense-detail/created               "Created"
     :expense-detail/label-supplier        "Supplier"
     :expense-detail/label-payer           "Payer"

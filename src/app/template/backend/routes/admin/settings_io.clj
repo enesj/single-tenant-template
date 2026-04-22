@@ -130,39 +130,95 @@
     (or table-columns {})
     legacy-admin-default-visible-columns))
 
+(defn- canonical-config-id
+  [value]
+  (some-> value
+    name
+    str/trim
+    not-empty
+    (str/replace "_" "-")))
+
+(defn- retired-id-set
+  [ids]
+  (into #{} (keep canonical-config-id) ids))
+
+(defn- prune-retired-id-list
+  [xs retired-ids]
+  (let [retired (retired-id-set retired-ids)]
+    (->> (or xs [])
+      (remove #(contains? retired (canonical-config-id %)))
+      vec)))
+
+(defn- prune-retired-id-map
+  [m retired-ids]
+  (let [retired (retired-id-set retired-ids)]
+    (reduce-kv
+      (fn [acc k v]
+        (if (contains? retired (canonical-config-id k))
+          acc
+          (assoc acc k v)))
+      {}
+      (or m {}))))
+
+(def ^:private retired-expense-config-ids
+  #{"is-posted"})
+
 (def ^:private retired-admin-table-columns
   {:article-aliases #{"confidence"}
-   :users #{"avatar-url"}})
+   :users #{"avatar-url"}
+   :expenses retired-expense-config-ids})
 
-(defn- remove-retired-admin-columns
+(def ^:private retired-user-table-columns
+  {:expenses retired-expense-config-ids})
+
+(defn- remove-retired-table-columns
   [entity-config retired-columns]
-  (let [retired-columns (set retired-columns)
-        retired-keys (into #{} (keep #(when (string? %) (keyword %))) retired-columns)
-        prune-columns (fn [columns]
-                        (->> (or columns [])
-                          (remove retired-columns)
-                          vec))
-        prune-map (fn [m]
-                    (reduce dissoc (or m {}) retired-keys))]
-    (cond-> (or entity-config {})
-      true (update :available-columns prune-columns)
-      true (update :default-visible-columns prune-columns)
-      true (update :filterable-columns prune-columns)
-      true (update :sortable-columns prune-columns)
-      true (update :always-visible prune-columns)
-      true (update :computed-fields prune-map)
-      true (update :column-config prune-map)
-      true (update :column-metadata prune-map))))
+  (let [entity-config (or entity-config {})]
+    (cond-> entity-config
+      (contains? entity-config :available-columns)
+      (update :available-columns prune-retired-id-list retired-columns)
 
-(defn- retire-admin-table-columns
-  [table-columns]
+      (contains? entity-config :default-visible-columns)
+      (update :default-visible-columns prune-retired-id-list retired-columns)
+
+      (contains? entity-config :filterable-columns)
+      (update :filterable-columns prune-retired-id-list retired-columns)
+
+      (contains? entity-config :sortable-columns)
+      (update :sortable-columns prune-retired-id-list retired-columns)
+
+      (contains? entity-config :always-visible)
+      (update :always-visible prune-retired-id-list retired-columns)
+
+      (contains? entity-config :visible-columns)
+      (update :visible-columns prune-retired-id-list retired-columns)
+
+      (contains? entity-config :computed-fields)
+      (update :computed-fields prune-retired-id-map retired-columns)
+
+      (contains? entity-config :column-config)
+      (update :column-config prune-retired-id-map retired-columns)
+
+      (contains? entity-config :column-metadata)
+      (update :column-metadata prune-retired-id-map retired-columns))))
+
+(defn- retire-table-columns
+  [table-columns retired-columns-by-entity]
   (reduce-kv
     (fn [acc entity-key retired-columns]
       (if (contains? acc entity-key)
-        (update acc entity-key remove-retired-admin-columns retired-columns)
+        (update acc entity-key remove-retired-table-columns retired-columns)
         acc))
     (or table-columns {})
-    retired-admin-table-columns))
+    retired-columns-by-entity))
+
+(defn- retire-admin-table-columns
+  [table-columns]
+  (retire-table-columns table-columns retired-admin-table-columns))
+
+(defn- retire-user-table-columns
+  [table-columns]
+  (retire-table-columns table-columns retired-user-table-columns))
 
 (def ^:private legacy-admin-email-column "email-masked")
 (def ^:private canonical-admin-email-column "email")
@@ -244,7 +300,90 @@
 (defn- normalize-user-table-columns
   [table-columns]
   (-> (or table-columns {})
-    ensure-user-payer-type-select-filter))
+    ensure-user-payer-type-select-filter
+    retire-user-table-columns))
+
+(def ^:private retired-admin-form-fields
+  {:expenses retired-expense-config-ids})
+
+(def ^:private retired-user-form-fields
+  {:expenses retired-expense-config-ids})
+
+(defn- remove-retired-form-fields
+  [entity-config retired-fields]
+  (let [entity-config (or entity-config {})]
+    (cond-> entity-config
+      (contains? entity-config :create-fields)
+      (update :create-fields prune-retired-id-list retired-fields)
+
+      (contains? entity-config :edit-fields)
+      (update :edit-fields prune-retired-id-list retired-fields)
+
+      (contains? entity-config :field-config)
+      (update :field-config prune-retired-id-map retired-fields)
+
+      (contains? entity-config :removed-fields)
+      (update :removed-fields
+        (fn [removed-fields]
+          (let [removed-fields (or removed-fields {})]
+            (cond-> removed-fields
+              (contains? removed-fields :create-fields)
+              (update :create-fields prune-retired-id-list retired-fields)
+
+              (contains? removed-fields :edit-fields)
+              (update :edit-fields prune-retired-id-list retired-fields))))))))
+
+(defn- retire-form-fields
+  [form-fields retired-fields-by-entity]
+  (reduce-kv
+    (fn [acc entity-key retired-fields]
+      (if (contains? acc entity-key)
+        (update acc entity-key remove-retired-form-fields retired-fields)
+        acc))
+    (or form-fields {})
+    retired-fields-by-entity))
+
+(defn- retire-admin-form-fields
+  [form-fields]
+  (retire-form-fields form-fields retired-admin-form-fields))
+
+(defn- retire-user-form-fields
+  [form-fields]
+  (retire-form-fields form-fields retired-user-form-fields))
+
+(def ^:private retired-admin-view-option-columns
+  {:expenses retired-expense-config-ids})
+
+(def ^:private retired-user-view-option-columns
+  {:expenses retired-expense-config-ids})
+
+(defn- remove-retired-view-option-columns
+  [entity-config retired-columns]
+  (let [entity-config (or entity-config {})]
+    (cond-> entity-config
+      (contains? entity-config :column-defaults)
+      (update :column-defaults prune-retired-id-map retired-columns)
+
+      (contains? entity-config :column-locks)
+      (update :column-locks prune-retired-id-map retired-columns))))
+
+(defn- retire-view-options
+  [view-options retired-columns-by-entity]
+  (reduce-kv
+    (fn [acc entity-key retired-columns]
+      (if (contains? acc entity-key)
+        (update acc entity-key remove-retired-view-option-columns retired-columns)
+        acc))
+    (or view-options {})
+    retired-columns-by-entity))
+
+(defn- retire-admin-view-options
+  [view-options]
+  (retire-view-options view-options retired-admin-view-option-columns))
+
+(defn- retire-user-view-options
+  [view-options]
+  (retire-view-options view-options retired-user-view-option-columns))
 
 ;; ---------------------------------------------------------------------------
 ;; Admin config — read / write
@@ -253,7 +392,8 @@
 (defn read-view-options
   "Read admin view-options from the runtime store."
   [db]
-  (let [data (read-runtime-override db admin-scope :view-options)]
+  (let [data (-> (read-runtime-override db admin-scope :view-options)
+               retire-admin-view-options)]
     (warn-on-invalid "admin view-options"
       (view-options-spec/validate-view-options-strict data))
     data))
@@ -261,17 +401,19 @@
 (defn write-view-options!
   "Persist admin view-options in the runtime store."
   [db view-options]
-  (let [validation (view-options-spec/validate-view-options-strict view-options)]
+  (let [sanitized-view-options (retire-admin-view-options view-options)
+        validation (view-options-spec/validate-view-options-strict sanitized-view-options)]
     (validate-or-throw! "view-options" validation
       {:errors (:errors validation)
-       :nested-locks-errors (:nested-locks-errors validation)}))
-  (write-runtime-override! db admin-scope :view-options view-options))
+       :nested-locks-errors (:nested-locks-errors validation)})
+    (write-runtime-override! db admin-scope :view-options sanitized-view-options)))
 
 (defn read-form-fields
   "Read admin form-fields from the runtime store."
   [db]
   (let [data (-> (read-runtime-override db admin-scope :form-fields)
-               form-fields-spec/sanitize-form-fields)]
+               form-fields-spec/sanitize-form-fields
+               retire-admin-form-fields)]
     (warn-on-invalid "admin form-fields"
       (form-fields-spec/validate-form-fields-strict data))
     data))
@@ -279,11 +421,14 @@
 (defn write-form-fields!
   "Persist admin form-fields in the runtime store."
   [db form-fields]
-  (let [validation (form-fields-spec/validate-form-fields-strict form-fields)]
+  (let [sanitized-form-fields (-> form-fields
+                                form-fields-spec/sanitize-form-fields
+                                retire-admin-form-fields)
+        validation (form-fields-spec/validate-form-fields-strict sanitized-form-fields)]
     (validate-or-throw! "form-fields" validation
       {:errors (:errors validation)
-       :warnings (:warnings validation)}))
-  (write-runtime-override! db admin-scope :form-fields form-fields))
+       :warnings (:warnings validation)})
+    (write-runtime-override! db admin-scope :form-fields sanitized-form-fields)))
 
 (defn read-table-columns
   "Read admin table-columns from the runtime store."
@@ -329,35 +474,41 @@
 (defn read-user-view-options
   "Read user-facing view-options from the runtime store."
   [db]
-  (let [data (read-runtime-override db user-scope :view-options)]
+  (let [data (-> (read-runtime-override db user-scope :view-options)
+               retire-user-view-options)]
     (warn-on-invalid "user view-options"
       (view-options-spec/validate-view-options-strict data))
     data))
 
 (defn write-user-view-options!
   [db view-options]
-  (let [validation (view-options-spec/validate-view-options-strict view-options)]
+  (let [sanitized-view-options (retire-user-view-options view-options)
+        validation (view-options-spec/validate-view-options-strict sanitized-view-options)]
     (validate-or-throw! "user view-options" validation
       {:errors (:errors validation)
-       :nested-locks-errors (:nested-locks-errors validation)}))
-  (write-runtime-override! db user-scope :view-options view-options))
+       :nested-locks-errors (:nested-locks-errors validation)})
+    (write-runtime-override! db user-scope :view-options sanitized-view-options)))
 
 (defn read-user-form-fields
   "Read user-facing form-fields from the runtime store."
   [db]
   (let [data (-> (read-runtime-override db user-scope :form-fields)
-               form-fields-spec/sanitize-form-fields)]
+               form-fields-spec/sanitize-form-fields
+               retire-user-form-fields)]
     (warn-on-invalid "user form-fields"
       (form-fields-spec/validate-form-fields-strict data))
     data))
 
 (defn write-user-form-fields!
   [db form-fields]
-  (let [validation (form-fields-spec/validate-form-fields-strict form-fields)]
+  (let [sanitized-form-fields (-> form-fields
+                                form-fields-spec/sanitize-form-fields
+                                retire-user-form-fields)
+        validation (form-fields-spec/validate-form-fields-strict sanitized-form-fields)]
     (validate-or-throw! "user form-fields" validation
       {:errors (:errors validation)
-       :warnings (:warnings validation)}))
-  (write-runtime-override! db user-scope :form-fields form-fields))
+       :warnings (:warnings validation)})
+    (write-runtime-override! db user-scope :form-fields sanitized-form-fields)))
 
 (defn read-user-table-columns
   "Read user-facing table-columns from the runtime store."

@@ -34,6 +34,10 @@
   [db]
   (jdbc/execute! db ["DELETE FROM frontend_runtime_configs"]))
 
+(defn- contains-value?
+  [xs expected]
+  (boolean (some #{expected} xs)))
+
 ;; ---------------------------------------------------------------------------
 ;; Legacy admin table-columns promotion
 ;; ---------------------------------------------------------------------------
@@ -104,11 +108,11 @@
         (is (nil? (get-in resolved [:admins :column-config :email-masked])))))))
 
 ;; ---------------------------------------------------------------------------
-;; Retired column pruning
+;; Retired column/field pruning
 ;; ---------------------------------------------------------------------------
 
 (deftest read-table-columns-retires-known-columns
-  (testing "retired columns (article-aliases/confidence, users/avatar-url) are pruned from reads"
+  (testing "retired columns are pruned from admin table-column reads"
     (let [db fixtures/*test-db*]
       (clear-runtime-overrides! db)
       (seed-runtime-config! db "admin" :table-columns
@@ -116,15 +120,116 @@
                            :default-visible-columns ["id" "alias" "confidence"]
                            :filterable-columns ["alias" "confidence"]}
          :users {:available-columns ["id" "email" "avatar-url" "status"]
-                 :default-visible-columns ["id" "email" "avatar-url"]}})
+                 :default-visible-columns ["id" "email" "avatar-url"]}
+         :expenses {:available-columns ["purchased_at" "is_posted" "created_at"]
+                    :default-visible-columns ["purchased_at" "is_posted"]
+                    :filterable-columns ["purchased_at" "is_posted"]
+                    :sortable-columns ["purchased_at" "is_posted"]
+                    :visible-columns ["purchased_at" "is_posted"]
+                    :column-config {:is_posted {:label "Is posted"}}}})
       (let [resolved (settings-io/read-table-columns db)]
         ;; "confidence" should be removed from article-aliases
-        (is (not (some #{"confidence"} (get-in resolved [:article-aliases :available-columns]))))
-        (is (not (some #{"confidence"} (get-in resolved [:article-aliases :default-visible-columns]))))
-        (is (not (some #{"confidence"} (get-in resolved [:article-aliases :filterable-columns]))))
+        (is (not (contains-value? (get-in resolved [:article-aliases :available-columns]) "confidence")))
+        (is (not (contains-value? (get-in resolved [:article-aliases :default-visible-columns]) "confidence")))
+        (is (not (contains-value? (get-in resolved [:article-aliases :filterable-columns]) "confidence")))
         ;; "avatar-url" should be removed from users
-        (is (not (some #{"avatar-url"} (get-in resolved [:users :available-columns]))))
-        (is (not (some #{"avatar-url"} (get-in resolved [:users :default-visible-columns]))))))))
+        (is (not (contains-value? (get-in resolved [:users :available-columns]) "avatar-url")))
+        (is (not (contains-value? (get-in resolved [:users :default-visible-columns]) "avatar-url")))
+        ;; "is_posted" should be removed from expenses
+        (is (not (contains-value? (get-in resolved [:expenses :available-columns]) "is_posted")))
+        (is (not (contains-value? (get-in resolved [:expenses :default-visible-columns]) "is_posted")))
+        (is (not (contains-value? (get-in resolved [:expenses :filterable-columns]) "is_posted")))
+        (is (not (contains-value? (get-in resolved [:expenses :sortable-columns]) "is_posted")))
+        (is (not (contains-value? (get-in resolved [:expenses :visible-columns]) "is_posted")))
+        (is (nil? (get-in resolved [:expenses :column-config :is_posted])))))))
+
+(deftest read-admin-expense-runtime-config-retires-is-posted
+  (testing "admin expense runtime config drops retired is_posted field across settings surfaces"
+    (let [db fixtures/*test-db*]
+      (clear-runtime-overrides! db)
+      (seed-runtime-config! db "admin" :table-columns
+        {:expenses {:available-columns ["purchased_at" "is_posted" "created_at"]
+                    :default-visible-columns ["purchased_at" "is_posted"]
+                    :filterable-columns ["purchased_at" "is_posted"]
+                    :sortable-columns ["purchased_at" "is_posted"]
+                    :column-config {:is_posted {:label "Is posted"}}}})
+      (seed-runtime-config! db "admin" :form-fields
+        {:expenses {:create-fields ["purchased_at" "supplier_id" "is_posted" "notes"]
+                    :edit-fields ["is_posted" "notes"]
+                    :field-config {:is_posted {:type "checkbox"}
+                                   :notes {:type "textarea"}}}})
+      (seed-runtime-config! db "admin" :view-options
+        {:expenses {:column-defaults {:is_posted true
+                                      :purchased_at true}
+                    :column-locks {:is_posted false
+                                   :created_at true}}})
+      (let [table-columns (settings-io/read-table-columns db)
+            form-fields (settings-io/read-form-fields db)
+            view-options (settings-io/read-view-options db)]
+        (is (= ["purchased_at" "created_at"]
+              (get-in table-columns [:expenses :available-columns])))
+        (is (= ["purchased_at"]
+              (get-in table-columns [:expenses :default-visible-columns])))
+        (is (= ["purchased_at"]
+              (get-in table-columns [:expenses :filterable-columns])))
+        (is (= ["purchased_at"]
+              (get-in table-columns [:expenses :sortable-columns])))
+        (is (nil? (get-in table-columns [:expenses :column-config :is_posted])))
+        (is (= ["purchased_at" "supplier_id" "notes"]
+              (get-in form-fields [:expenses :create-fields])))
+        (is (= ["notes"]
+              (get-in form-fields [:expenses :edit-fields])))
+        (is (nil? (get-in form-fields [:expenses :field-config :is_posted])))
+        (is (= {:purchased_at true}
+              (get-in view-options [:expenses :column-defaults])))
+        (is (= {:created_at true}
+              (get-in view-options [:expenses :column-locks])))))))
+
+(deftest read-and-write-user-expense-runtime-config-retires-is-posted
+  (testing "user expense runtime config drops retired is_posted field on read and write"
+    (let [db fixtures/*test-db*
+          table-columns {:expenses {:available-columns ["purchased_at" "is_posted" "created_at"]
+                                    :default-visible-columns ["purchased_at" "is_posted"]
+                                    :filterable-columns ["purchased_at" "is_posted"]
+                                    :sortable-columns ["purchased_at" "is_posted"]
+                                    :column-config {:is_posted {:label "Is posted"}}}}
+          form-fields {:expenses {:create-fields ["purchased_at" "is_posted" "notes"]
+                                  :edit-fields ["is_posted" "notes"]
+                                  :field-config {:is_posted {:type "checkbox"}
+                                                 :notes {:type "textarea"}}}}
+          view-options {:expenses {:column-defaults {:is_posted true
+                                                     :purchased_at true}
+                                   :column-locks {:is_posted false
+                                                  :created_at true}}}]
+      (clear-runtime-overrides! db)
+      (seed-runtime-config! db "user" :table-columns table-columns)
+      (seed-runtime-config! db "user" :form-fields form-fields)
+      (seed-runtime-config! db "user" :view-options view-options)
+
+      (is (= ["purchased_at" "created_at"]
+            (get-in (settings-io/read-user-table-columns db) [:expenses :available-columns])))
+      (is (= ["purchased_at" "notes"]
+            (get-in (settings-io/read-user-form-fields db) [:expenses :create-fields])))
+      (is (= {:created_at true}
+            (get-in (settings-io/read-user-view-options db) [:expenses :column-locks])))
+
+      (clear-runtime-overrides! db)
+      (is (= ["purchased_at" "created_at"]
+            (get-in (settings-io/write-user-table-columns! db table-columns)
+              [:expenses :available-columns])))
+      (is (= ["purchased_at" "notes"]
+            (get-in (settings-io/write-user-form-fields! db form-fields)
+              [:expenses :create-fields])))
+      (is (= {:purchased_at true}
+            (get-in (settings-io/write-user-view-options! db view-options)
+              [:expenses :column-defaults])))
+
+      (is (= ["purchased_at" "created_at"]
+            (get-in (settings-io/read-user-table-columns db) [:expenses :available-columns])))
+      (is (= ["purchased_at" "notes"]
+            (get-in (settings-io/read-user-form-fields db) [:expenses :create-fields])))
+      (is (= {:created_at true}
+            (get-in (settings-io/read-user-view-options db) [:expenses :column-locks]))))))
 
 (deftest user-table-columns-normalize-legacy-payer-type-filter
   (testing "legacy user payer type columns are upgraded to a select filter with explicit options"

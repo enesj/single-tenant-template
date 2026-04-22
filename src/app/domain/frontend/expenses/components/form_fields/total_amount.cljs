@@ -2,13 +2,15 @@
   "Total amount input component for expense form"
   (:require
     [app.domain.frontend.expenses.components.form-fields.helpers :as h]
+    [app.template.frontend.i18n :as i18n]
     [uix.core :refer [$ defui use-effect use-state]]))
 
 (def ^:private amount-tolerance 0.01)
 
 (defui total-amount-input
   [{:keys [id value on-change values error field-spec]}]
-  (let [field-key (let [id* id]
+  (let [t (i18n/use-t)
+        field-key (let [id* id]
                     (cond
                       (keyword? id*) (name id*)
                       (string? id*) id*
@@ -52,16 +54,17 @@
                       :on-click (fn []
                                   (set-auto-total! true)
                                   (on-change computed-total))}
-            "Use total")))
+            (t :common/use-total))))
       (when (pos? computed-total)
         ($ :div {:class "flex items-center justify-between gap-3 text-xs text-base-content/60"}
           ($ :div {:class (str "truncate " (when totals-match? "text-success"))}
-            (str "Line items total: " (or (h/format-decimal computed-total) "0.00"))
+            (str (t :common/line-items-total) ": " (or (h/format-decimal computed-total) "0.00"))
             (when total-mismatch?
-              ($ :span {:class "text-error ml-2"} "(does not match total)")))
+              ($ :span {:class "text-error ml-2"}
+                (str "(" (t :common/does-not-match-total) ")"))))
           (when (number? receipt-total-guess)
             ($ :div {:class (str "truncate " (when totals-match? "text-success"))}
-              (str "Total guess: " (h/format-decimal receipt-total-guess))))))
+              (str (t :common/total-guess) ": " (h/format-decimal receipt-total-guess))))))
       (when error
         ($ :div {:id (str input-id "-error")
                  :class "text-error text-sm mt-1"}
@@ -71,7 +74,8 @@
   "Display-only component for receipt approval showing Line items total and editable Total guess.
    The actual total_amount is auto-set from computed total but is not editable directly."
   [{:keys [id value on-change values error field-spec inline]}]
-  (let [field-key (cond
+  (let [t (i18n/use-t)
+        field-key (cond
                     (keyword? id) (name id)
                     (string? id) id
                     :else "total_amount")
@@ -104,7 +108,7 @@
         ;; Line items total (read-only, calculated from items)
         ($ :div {:class row-class}
           ($ :label {:class label-class}
-            ($ :span {:class label-text-class} "Line items total:"))
+            ($ :span {:class label-text-class} (str (t :common/line-items-total) ":")))
           ($ :div {:class value-wrap-class}
             ($ :div {:class value-text-class}
               (or (h/format-decimal computed-total) "0.00"))))
@@ -112,7 +116,7 @@
         ;; Total guess (editable)
         ($ :div {:class row-class}
           ($ :label {:class label-class}
-            ($ :span {:class label-text-class} "Total guess:"))
+            ($ :span {:class label-text-class} (str (t :common/total-guess) ":")))
           ($ :div {:class value-wrap-class}
             ($ :div {:class "flex items-center gap-2"}
               ($ :input {:id (str input-id "-guess")
@@ -129,7 +133,7 @@
                             :type "button"
                             :on-click (fn []
                                         (set-local-guess! computed-total))}
-                  "Use line total")))))
+                  (t :common/use-line-total))))))
 
         (when error
           ($ :div {:id (str input-id "-error")

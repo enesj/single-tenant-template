@@ -138,7 +138,6 @@ external entity Expense {
     rate_fetched_at: Timestamp?
         -- When the exchange rate was fetched. null when currency = "BAM".
     notes: String?
-    is_posted: Boolean
 }
 
 external entity GlobalSettings {

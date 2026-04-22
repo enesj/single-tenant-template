@@ -135,7 +135,6 @@ entity DashboardState {
 
     -- Team & operational
     team: TeamOverview
-    pending_count: Integer?                 -- admin/owner only: expenses with is_posted = false
     unmapped_alias_count: Integer?          -- admin/owner only: aliases with article_id = null
 
     -- Derived
@@ -340,15 +339,6 @@ rule ComputeBiggestExpense {
     ensures: biggest_expense = compute_biggest_expense(tenant)
 }
 
--- Pending expenses (admin/owner only)
-
-rule ComputePendingCount {
-    when: DashboardLoaded(tenant, viewer_role)
-    requires: viewer_role in {owner, admin}
-
-    ensures: pending_count = compute_pending_count(tenant)
-}
-
 -- Unmapped alias count (admin/owner only)
 
 rule ComputeUnmappedAliasCount {
@@ -384,9 +374,9 @@ invariant RankingBound {
 }
 
 invariant AdminOnlyFields {
-    -- pending_count and unmapped_alias_count are only populated
-    -- when viewer_role is owner or admin. For member/viewer roles,
-    -- these fields are null and the corresponding widgets are hidden.
+    -- unmapped_alias_count is only populated when viewer_role is
+    -- owner or admin. For member/viewer roles, it is null and the
+    -- corresponding widget is hidden.
 }
 
 invariant TenantScoped {
@@ -422,8 +412,8 @@ surface DashboardAPI {
 
     @guarantee RoleAwareResponse
         -- When viewer_role is member or viewer, the response omits
-        -- pending_count and unmapped_alias_count (set to null).
-        -- The backend does not run those queries at all for
+        -- unmapped_alias_count (set to null).
+        -- The backend does not run that query at all for
         -- non-admin roles — not just hidden client-side.
 
     @guidance
