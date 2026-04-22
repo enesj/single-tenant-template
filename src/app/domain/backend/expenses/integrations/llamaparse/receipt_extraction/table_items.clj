@@ -20,7 +20,8 @@
         (every? (comp nil? text/safe-trim) rest*)))))
 
 (def summary-prefixes
-  ["ve" "osn" "pdv" "vat" "tax" "jib" "pib" "ibfm" "bf" "uplac" "upl" "gotovina" "kartica" "povrat" "ukupno" "total"
+  ["ve" "osn" "pdv" "пдв" "vat" "tax" "porez" "порез"
+   "jib" "pib" "ibfm" "bf" "uplac" "upl" "gotovina" "kartica" "povrat" "ukupno" "укупно" "total"
    "popust" "pupust" "rabat" "discount" "akcija" "snizenje" "sniženje"])
 
 (defn summary-label?
@@ -70,11 +71,19 @@
 
 (defn- header-token?
   [norm]
-  (boolean
-    (and norm
-      (re-find
-        #"(?iu)\b(?:label|naziv|artikal|artikl|artikla|name|opis|description|cijena|price|kol\.?|koli[čc]ina|qty|quantity|ukupno|total|iznos|oznaka|pdv|vat|tax|назив|опис|цијена|кол\.?|укупно|износ|пдв)\b"
-        norm))))
+  (let [tokens (when norm
+                 (->> (str/split norm #"[^\p{L}\p{N}]+")
+                   (remove str/blank?)
+                   set))
+        header-tokens #{"label" "naziv" "artikal" "artikl" "artikla" "name" "item" "opis"
+                        "description" "cijena" "price" "kol" "kolicina" "količina"
+                        "qty" "quantity" "ukupno" "total" "iznos" "oznaka" "stopa" "porez"
+                        "pdv" "vat" "tax" "назив" "опис" "цијена" "кол"
+                        "укупно" "износ" "ознака" "стопа" "порез" "пдв"}]
+    (boolean
+      (and norm
+        (or (contains? header-tokens norm)
+          (some header-tokens tokens))))))
 
 (defn- header-row?
   [cells]
@@ -193,7 +202,9 @@
                  (:amount embedded))
         label-norm (first norms)
         ignore-summary? (and label-norm (summary-label? label-norm) (not discount-label?))
-        discount-cue? (or discount-label? pct-cell embedded)]
+        negative-pct? (boolean (and pct-cell (re-find #"-\d" pct-cell)))
+        negative-amount? (boolean (and amount (neg? (bigdec amount))))
+        discount-cue? (or discount-label? negative-pct? negative-amount? embedded)]
     (cond
       ignore-summary?
       nil

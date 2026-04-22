@@ -110,3 +110,45 @@
         (is (re-find #"(?i)supplier_id" count-sql-str))
         (is (re-find #"(?i)expense_category_id" count-sql-str))
         (is (re-find #"(?i)group\s+by\s+currency" total-sql-str))))))
+
+(deftest normalize-batch-update-updates-supports-app-and-db-keys
+  (let [expense-id (str (UUID/randomUUID))
+        supplier-id (str (UUID/randomUUID))
+        payer-id (str (UUID/randomUUID))
+        expense-category-id (str (UUID/randomUUID))
+        purchased-at "2026-04-22T10:50:01.700Z"]
+    (testing "kebab-case payload keys are normalized to DB keys"
+      (is (= {:supplier_id supplier-id
+              :payer_id payer-id
+              :expense_category_id expense-category-id
+              :purchased_at purchased-at
+              :total_amount 42.5M
+              :currency "EUR"
+              :notes "Batch note"
+              :is_posted false}
+            (#'user-expenses/normalize-batch-update-updates
+             {:id expense-id
+              :supplier-id supplier-id
+              :payer-id payer-id
+              :expense-category-id expense-category-id
+              :purchased-at purchased-at
+              :total-amount 42.5M
+              :currency "EUR"
+              :notes "Batch note"
+              :is-posted false
+              :created-at "ignored"
+              :updated-at "ignored"}))))
+    (testing "snake_case payload keys continue to work"
+      (is (= {:payer_id payer-id
+              :currency "USD"}
+            (#'user-expenses/normalize-batch-update-updates
+             {:id expense-id
+              :payer_id payer-id
+              :currency "USD"
+              :updated_at "ignored"}))))
+    (testing "unsupported fields are dropped"
+      (is (= {}
+            (#'user-expenses/normalize-batch-update-updates
+             {:id expense-id
+              :not-a-real-field true
+              :updated-at purchased-at}))))))

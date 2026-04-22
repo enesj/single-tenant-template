@@ -219,17 +219,11 @@
      {:id       string — DOM id
       :label    string — button text
       :active?  boolean — shown-bold when true
-      :on-click (fn [] ...) — dispatched on click}
-
-   :extra-toggle-groups (optional) — vector of grouped toggle specs. Each group
-   renders as a labeled segmented pill so related toggles read as one control:
-     {:id      string — DOM id for the group wrapper
-      :label   string — group heading (optional)
-      :toggles [<toggle-spec> ...]}"
+      :on-click (fn [] ...) — dispatched on click}"
   [{:keys [entity-name _show-timestamps? _show-edit? _show-delete? _show-highlights? _show-select? _show-filtering?
            global-settings? current-entity-name compact? entity-spec hardcoded-display-settings
            per-page on-per-page-change rows-per-page-options measured-table-height measured-table-width
-           extra-toggles extra-toggle-groups]}]
+           extra-toggles]}]
 
   (let [;; Normalize entity name to keyword consistently
         entity-kw (if (keyword? entity-name) entity-name (keyword entity-name))
@@ -327,17 +321,7 @@
                         :event-key ::ui-events/toggle-select
                         :hardcoded-key :show-select?})
 
-        (toggle-button {:label "Selected Rows"
-                        :is-active? curr-show-selected-rows?
-                        :event-key ::ui-events/toggle-selected-rows
-                        :hardcoded-key :show-selected-rows?})
-
-        (toggle-button {:label "Unselected Rows"
-                        :is-active? curr-show-unselected-rows?
-                        :event-key ::ui-events/toggle-unselected-rows
-                        :hardcoded-key :show-unselected-rows?})
-
-        ;; Pagination control
+;; Pagination control
         (toggle-button {:label "Pagination"
                         :is-active? curr-show-pagination?
                         :event-key ::ui-events/toggle-pagination
@@ -367,7 +351,7 @@
                         :event-key ::ui-events/toggle-batch-delete
                         :hardcoded-key :show-batch-delete?})
 
-        ;; Domain-provided toggles (e.g. source filters on expenses)
+        ;; Domain-provided loose toggles (e.g. source filters on expenses)
         (for [{:keys [id label active? on-click]} extra-toggles
               :when (and id label on-click)]
           ($ :div {:key id

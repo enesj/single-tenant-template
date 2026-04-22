@@ -28,7 +28,8 @@
   (some-> s str str/lower-case (str/replace #"\s+" " ") str/trim not-empty))
 
 (def ^:private ignore-merchant-prefixes
-  ["jib" "pib" "ibfm" "ibem" "tbfm" "bf" "ve" "osn" "pdv" "vat" "total" "ukupno" "uplac" "upl" "gotovina" "kartica"])
+  ["jib" "pib" "ibfm" "ibem" "tbfm" "bf" "ve" "osn" "pdv" "vat" "total" "ukupno" "uplac" "upl" "gotovina" "kartica"
+   "kasir" "касир" "cashier" "operator" "operater" "оператер" "оператор"])
 
 (def ^:private ignore-merchant-exact
   #{"fiskalni racun" "fiskalni račun" "racun" "račun"

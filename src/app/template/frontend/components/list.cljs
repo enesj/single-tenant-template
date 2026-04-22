@@ -34,6 +34,41 @@
     [uix.dom]
     [uix.re-frame :refer [use-subscribe]]))
 
+(defn- toggle-group-pill
+  "Render a vector of toggle specs as a single rounded segmented pill.
+
+   Spec: {:id :label :toggles [{:id :label :active? :on-click} ...]}
+   Returns nil when toggles is empty."
+  [{group-id :id group-label :label toggles :toggles}]
+  (when (and group-id (seq toggles))
+    ($ :div {:key group-id
+             :id group-id
+             :class (str "flex items-center gap-3 py-0.5 rounded-full border border-base-300 bg-base-100 "
+                      (if group-label "pl-3 pr-1" "p-0"))}
+      (when group-label
+        ($ :span {:class "text-xs text-base-content/60"} group-label))
+      ($ :div {:class "flex"}
+        (for [[idx {:keys [id label active? on-click]}] (map-indexed vector toggles)
+              :when (and id label on-click)]
+          ($ :button
+            {:key id
+             :id id
+             :type "button"
+             :class (str "px-3 py-0.5 text-sm border border-base-300 "
+                      (cond
+                        (zero? idx) "rounded-l-full "
+                        (= idx (dec (count toggles))) "rounded-r-full border-l-0 "
+                        :else "border-l-0 ")
+                      (if active?
+                        "font-semibold"
+                        "font-light hover:bg-base-200"))
+             :style (if active?
+                      {:background-color "rgba(100, 116, 139, 0.65)"
+                       :color "white"}
+                      {})
+             :on-click on-click}
+            label))))))
+
 (defn- apply-rows-override-transforms
   [{:keys [rows active-filters sorts entity-name entity-spec server-pagination?]}]
   (if server-pagination?
@@ -723,19 +758,40 @@
                           total-records (when server-mode?
                                           (or (:total-items ui-state)
                                             (:total ui-state)))
-                          record-count (or total-records (count visible-items))]
-                      ($ :div {:id (str "selected-count-" (kw/ensure-name entity-name))
-                               :class "flex items-center gap-2 text-sm text-base-content/70"}
-                        ($ :span {:class "font-semibold"}
-                          (str record-count " " (if (= record-count 1)
-                                                  (t :common/record-singular)
-                                                  (t :common/record-plural))))
-                        (when (pos? selected-count)
-                          ($ :span
-                            (str "(" selected-count " " (t :common/selected)
-                              (when (pos? hidden-selected-count)
-                                (str ", " hidden-selected-count " " (t :common/hidden)))
-                              ")")))))
+                          record-count (or total-records (count visible-items))
+                          selected-locked? (and hardcoded-view-options
+                                             (contains? hardcoded-view-options :show-selected-rows?))
+                          unselected-locked? (and hardcoded-view-options
+                                               (contains? hardcoded-view-options :show-unselected-rows?))
+                          row-toggles (cond-> []
+                                        (not selected-locked?)
+                                        (conj {:id (str "toggle-selected-rows-" (kw/ensure-name entity-name))
+                                               :label "Selected"
+                                               :active? (:show-selected-rows? merged-display-settings)
+                                               :on-click #(rf/dispatch [::ui-events/toggle-selected-rows entity-kw])})
+                                        (not unselected-locked?)
+                                        (conj {:id (str "toggle-unselected-rows-" (kw/ensure-name entity-name))
+                                               :label "Unselected"
+                                               :active? (:show-unselected-rows? merged-display-settings)
+                                               :on-click #(rf/dispatch [::ui-events/toggle-unselected-rows entity-kw])}))
+                          extra-groups (:extra-settings-toggle-groups props)]
+                      ($ :div {:class "flex items-center justify-between gap-4 flex-wrap"}
+                        ($ :div {:id (str "selected-count-" (kw/ensure-name entity-name))
+                                 :class "flex items-center gap-2 text-sm text-base-content/70"}
+                          ($ :span {:class "font-semibold"}
+                            (str record-count " " (if (= record-count 1)
+                                                    (t :common/record-singular)
+                                                    (t :common/record-plural))))
+                          (when (pos? selected-count)
+                            ($ :span
+                              (str "(" selected-count " " (t :common/selected)
+                                (when (pos? hidden-selected-count)
+                                  (str ", " hidden-selected-count " " (t :common/hidden)))
+                                ")"))))
+                        ($ :div {:class "flex items-center gap-2 flex-wrap"}
+                          (toggle-group-pill {:id (str "toggle-group-row-visibility-" (kw/ensure-name entity-name))
+                                              :toggles row-toggles})
+                          (map toggle-group-pill extra-groups))))
 
                     ($ :div {:id (str "table-shell-" (kw/ensure-name entity-name))
                              :ref shell-ref
@@ -768,7 +824,7 @@
                            :per-page effective-per-page
                            :on-per-page-change on-per-page-change
                            :rows-per-page-options [5 10 20 25 50 100]
-                           ;; Domain-provided toggles appended to the settings panel
+                           ;; Flat domain-provided toggles still live in the settings panel.
                            :extra-settings-toggles (:extra-settings-toggles props)}))
                       (when (and (get merged-display-settings :show-pagination? true)
                               (> pagination-total-pages 1))

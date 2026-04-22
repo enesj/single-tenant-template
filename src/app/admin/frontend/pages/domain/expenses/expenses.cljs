@@ -113,19 +113,20 @@
            :form-display :modal
            :row-class-fn (fn [item]
                            (when (manual-expense? item) "bg-slate-200/70"))
-           :extra-settings-toggles
-           [{:id "toggle-show-manual-expenses"
-             :label "Manual"
-             :active? show-manual?
-             :on-click #(rf/dispatch [:expenses/toggle-source-filter
-                                      :manual
-                                      [:admin-expenses/refresh-list]])}
-            {:id "toggle-show-receipt-expenses"
-             :label "From receipts"
-             :active? show-receipts?
-             :on-click #(rf/dispatch [:expenses/toggle-source-filter
-                                      :receipts
-                                      [:admin-expenses/refresh-list]])}]
+           :extra-settings-toggle-groups
+           [{:id "toggle-group-expense-source"
+             :toggles [{:id "toggle-show-manual-expenses"
+                        :label "Manual"
+                        :active? show-manual?
+                        :on-click #(rf/dispatch [:expenses/toggle-source-filter
+                                                 :manual
+                                                 [:admin-expenses/refresh-list]])}
+                       {:id "toggle-show-receipt-expenses"
+                        :label "From receipts"
+                        :active? show-receipts?
+                        :on-click #(rf/dispatch [:expenses/toggle-source-filter
+                                                 :receipts
+                                                 [:admin-expenses/refresh-list]])}]}]
            :render-actions #(render-expense-actions open-receipt-detail! %)
            :render-edit-form
            (fn [item {:keys [on-success on-cancel]}]

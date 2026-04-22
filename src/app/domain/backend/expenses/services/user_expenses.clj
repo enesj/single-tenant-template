@@ -144,14 +144,37 @@
            :deleted-ids deleted-ids
            :not-found-ids not-found-ids})))))
 
+(def ^:private batch-update-allowed-keys
+  #{:supplier_id
+    :payer_id
+    :expense_category_id
+    :purchased_at
+    :total_amount
+    :currency
+    :notes
+    :is_posted
+    :receipt_id})
+
+(defn- normalize-batch-update-updates
+  "Normalize a batch-update item into DB-oriented expense update keys.
+
+   Accepts either app/runtime kebab-case keys (for example `:payer-id`) or
+   database snake_case keys (for example `:payer_id`), removes non-updatable
+   bookkeeping fields, and returns only the supported update columns."
+  [item]
+  (-> item
+    model-naming/app-map-keys->db
+    (dissoc :id :created_at :updated_at)
+    (select-keys batch-update-allowed-keys)))
+
 (defn batch-update-user-expenses!
   "Batch update multiple expenses owned by a user.
 
   `items` is a collection of maps, each containing:
   - :id (UUID or UUID string)
-  - any updatable expense columns (snake_case keys)
+  - any updatable expense columns using snake_case or kebab-case keys
 
-  Only the following keys are applied:
+  Only the following fields are applied after normalization:
   :supplier_id :payer_id :expense_category_id :purchased_at :total_amount :currency :notes :is_posted :receipt_id
 
   `tenant-id` scopes the ownership checks and updates to a specific tenant.
@@ -163,7 +186,6 @@
   [db tenant-id user-id items]
   (let [user-id (ensure-uuid user-id)
         tenant-id (ensure-uuid tenant-id)
-        allowed-keys #{:supplier_id :payer_id :expense_category_id :purchased_at :total_amount :currency :notes :is_posted :receipt_id}
         items (vec (or items []))
         try-uuid type-conv/try-parse-uuid]
     (when-not user-id
@@ -177,11 +199,7 @@
               (reduce
                 (fn [acc item]
                   (let [expense-id (try-uuid (:id item))
-                        updates (-> item
-                                  (dissoc :id
-                                    :created_at :updated_at
-                                    :created-at :updated-at)
-                                  (select-keys allowed-keys))]
+                        updates (normalize-batch-update-updates item)]
                     (cond
                       (nil? expense-id)
                       (update acc :errors conj {:id (:id item) :error "Invalid expense id"})
@@ -208,40 +226,40 @@
    `tenant-id` scopes the query to a specific tenant."
   [db tenant-id user-id expense-id]
   (let [user-id (ensure-uuid user-id)
-        tenant-id (ensure-uuid tenant-id)]
-    (let [where (cond-> [:and
-                         [:= :e.id expense-id]]
-                  user-id (conj [:= :e.user_id user-id])
-                  tenant-id (conj [:= :e.tenant_id tenant-id]))
-          expense (jdbc/execute-one!
-                    db
-                    (sql/format {:select [[:e.*]
-                                          [:s.display_name :supplier_display_name]
-                                          [:s.normalized_key :supplier_normalized_key]
-                                          [:p.label :payer_label]
-                                          [:p.type :payer_type]
-                                          [:ec.name :expense_category_name]]
-                                 :from [[:expenses :e]]
-                                 :left-join [[:suppliers :s] [:= :s.id :e.supplier_id]
-                                             [:payers :p] [:= :p.id :e.payer_id]
-                                             [:expense_categories :ec] [:= :ec.id :e.expense_category_id]]
-                                 :where where})
-                    {:builder-fn rs/as-unqualified-lower-maps})
-          items (when expense
-                  (jdbc/execute!
-                    db
-                    (sql/format {:select [[:ei.*]
-                                          [:aa.raw_label :raw_label]
-                                          [:aa.raw_label_normalized :raw_label_normalized]
-                                          [:a.canonical_name :article_canonical_name]]
-                                 :from [[:expense_items :ei]]
-                                 :left-join [[:article_aliases :aa] [:= :aa.id :ei.alias_id]
-                                             [:articles :a] [:= :a.id :aa.article_id]]
-                                 :where [:= :ei.expense_id expense-id]
-                                 :order-by [[:ei.created_at :asc]]})
-                    {:builder-fn rs/as-unqualified-lower-maps}))]
-      (when expense
-        (assoc expense :items items)))))
+        tenant-id (ensure-uuid tenant-id)
+        where (cond-> [:and
+                       [:= :e.id expense-id]]
+                user-id (conj [:= :e.user_id user-id])
+                tenant-id (conj [:= :e.tenant_id tenant-id]))
+        expense (jdbc/execute-one!
+                  db
+                  (sql/format {:select [[:e.*]
+                                        [:s.display_name :supplier_display_name]
+                                        [:s.normalized_key :supplier_normalized_key]
+                                        [:p.label :payer_label]
+                                        [:p.type :payer_type]
+                                        [:ec.name :expense_category_name]]
+                               :from [[:expenses :e]]
+                               :left-join [[:suppliers :s] [:= :s.id :e.supplier_id]
+                                           [:payers :p] [:= :p.id :e.payer_id]
+                                           [:expense_categories :ec] [:= :ec.id :e.expense_category_id]]
+                               :where where})
+                  {:builder-fn rs/as-unqualified-lower-maps})
+        items (when expense
+                (jdbc/execute!
+                  db
+                  (sql/format {:select [[:ei.*]
+                                        [:aa.raw_label :raw_label]
+                                        [:aa.raw_label_normalized :raw_label_normalized]
+                                        [:a.canonical_name :article_canonical_name]]
+                               :from [[:expense_items :ei]]
+                               :left-join [[:article_aliases :aa] [:= :aa.id :ei.alias_id]
+                                           [:articles :a] [:= :a.id :aa.article_id]]
+                               :where [:= :ei.expense_id expense-id]
+                               :order-by [[:ei.created_at :asc]]})
+                  {:builder-fn rs/as-unqualified-lower-maps}))]
+    (when expense
+      (assoc expense :items items))))
 
 (def ^:private expense-text-filter-columns
   "Mapping from text filter keys to SQL column identifiers for expenses."
@@ -288,16 +306,16 @@
                         (cond
                           (nil? value) nil
                           (keyword? value) (some-> value name str/trim not-empty str/upper-case)
-                          :else (some-> value str str/trim not-empty str/upper-case)))]
-    (let [values (cond
-                   (nil? currency) []
-                   (and (sequential? currency) (not (string? currency))) currency
-                   :else [currency])]
-      (->> values
-        (map normalize-one)
-        (remove nil?)
-        distinct
-        vec))))
+                          :else (some-> value str str/trim not-empty str/upper-case)))
+        values (cond
+                 (nil? currency) []
+                 (and (sequential? currency) (not (string? currency))) currency
+                 :else [currency])]
+    (->> values
+      (map normalize-one)
+      (remove nil?)
+      distinct
+      vec)))
 
 (defn- text-cast-column
   [column]

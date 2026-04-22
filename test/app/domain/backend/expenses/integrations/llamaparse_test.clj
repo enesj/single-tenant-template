@@ -387,6 +387,36 @@
     (is (= 6.75M (bigdec (get-in items [0 :line_total]))))
     (is (= 6.75M (bigdec (get-in extraction [:totals :total]))))))
 
+(deftest receipt-extraction-ignores-cyrillic-tax-summary-table
+  (let [resp {:items {:pages [{:items [{:type "text"
+                                        :value (str "ФИСКАЛНИ РАЧУН\n"
+                                                 "PEPCO B-H DOO Подружница Сарајево 4\n"
+                                                 "Спасовданска 20\n"
+                                                 "Ist. Novo Sarajevo\n")}
+                                       {:type "table"
+                                        :rows [["Назив" "Цијена" "Кол." "Укупно"]
+                                               ["2200663305162 63305105 Mirisna svijeca u staklu Premium Collec (E)" "10,00" "1" "10,00"]
+                                               ["2217931679665 31679635 Svijeca \"silver & gold\" s poklopcem 13.5 (E)" "10,00" "1" "10,00"]
+                                               ["2200833176462 33176405 jaja 6cm, 12 kom_ONE_Dark beige (E)" "2,50" "1" "2,50"]]}
+                                       {:type "table"
+                                        :rows [["Ознака" "Назив" "Стопа" "Порез"]
+                                               ["E" "ПДВ" "17%" "3,27"]]}]}]}}
+        extraction (receipt-extract/response->extraction resp)
+        items (:items extraction)
+        egg-item (nth items 2)]
+    (is (= 3 (count items)))
+    (is (= "PEPCO B-H" (get-in extraction [:merchant :name])))
+    (is (= 22.50M (bigdec (get-in extraction [:totals :total]))))
+    (is (= [10.00M 10.00M 2.50M]
+          (mapv (comp bigdec :line_total) items)))
+    (is (= "33176405 jaja 6cm, 12 kom ONE Dark beige (E)" (:raw_label egg-item)))
+    (is (= 2.50M (bigdec (:unit_price egg-item))))
+    (is (= 2.50M (bigdec (:line_total egg-item))))
+    (is (every? (fn [{:keys [unit_price line_total]}]
+                  (and (not (neg? (bigdec unit_price)))
+                    (not (neg? (bigdec line_total)))))
+          items))))
+
 (deftest receipt-extraction-prefers-header-over-body-items
   (let [resp {:items {:pages [{:items [{:type "header"
                                         :md (str "\"UNI-EXPERT\" d.o.o.\n"
@@ -486,6 +516,55 @@
         receipt (receipt-extract/response->receipt resp)]
     (is (= "Pepco B-H" (get-in extraction [:merchant :name])))
     (is (= "Pepco B-H" (first (str/split-lines (:parsed-markdown receipt)))))))
+
+(deftest receipt-extraction-ignores-cyrillic-cashier-line-after-merchant-text
+  (let [resp {:text {:pages [{:text (str "PEPCO B-H DOO\n"
+                                      "Podružnica Sarajevo 4\n"
+                                      "Spasovdanska 20\n"
+                                      "Ist. Novo Sarajevo\n"
+                                      "Касир: Alma Halilovic\n")}]}
+              :items {:pages [{:items [{:type "text"
+                                        :value (str "FISKALNI RAČUN\n"
+                                                 "PEPCO B-H DOO\n"
+                                                 "Podružnica Sarajevo 4\n"
+                                                 "Spasovdanska 20\n"
+                                                 "Ist. Novo Sarajevo")}
+                                       {:type "text"
+                                        :value (str "Касир: Alma Halilovic\n"
+                                                 "ЕСИР број: 77/4.0")}
+                                       {:type "table"
+                                        :rows [["ITEM" "22,50E"]]}]}]}}
+        extraction (receipt-extract/response->extraction resp)
+        receipt (receipt-extract/response->receipt resp)
+        merchant (:merchant extraction)]
+    (is (= "PEPCO B-H" (:name merchant)))
+    (is (= "Podružnica Sarajevo 4" (:store_name merchant)))
+    (is (not= "Касир: Alma Halilovic" (:name merchant)))
+    (is (= "PEPCO B-H" (first (str/split-lines (:parsed-markdown receipt)))))))
+
+(deftest receipt-extraction-parses-merged-merchant-line-with-cyrillic-branch-context
+  (let [resp {:items {:pages [{:items [{:type "text"
+                                        :value (str "FISKALNI RAČUN\n"
+                                                 "4203144510138\n"
+                                                 "PEPCO B-H DOO Подружница Сарајево 4\n"
+                                                 "10884203144510001 PEPCO B-H DOO\n"
+                                                 "Подружница Сарајево 4\n"
+                                                 "Спасовданска 20\n"
+                                                 "Ist. Novo Sarajevo")}
+                                       {:type "text"
+                                        :value (str "Касир: Alma Halilovic\n"
+                                                 "ЕСИР број: 77/4.0")}
+                                       {:type "table"
+                                        :rows [["ITEM" "22,50E"]]}]}]}}
+        extraction (receipt-extract/response->extraction resp)
+        receipt (receipt-extract/response->receipt resp)
+        merchant (:merchant extraction)]
+    (is (= "PEPCO B-H" (:name merchant)))
+    (is (= "Подружница Сарајево 4" (:store_name merchant)))
+    (is (= "Спасовданска 20, Ist. Novo Sarajevo" (:address merchant)))
+    (is (= "Подружница Сарајево 4, Спасовданска 20, Ist. Novo Sarajevo"
+          (:raw_address merchant)))
+    (is (= "PEPCO B-H" (first (str/split-lines (:parsed-markdown receipt)))))))
 
 (deftest receipt-extraction-prefers-quoted-or-legal-over-branch-line
   (let [itx {:items {:pages [{:items [{:type "header"

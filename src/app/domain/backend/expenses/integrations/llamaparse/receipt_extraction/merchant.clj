@@ -5,7 +5,8 @@
 
 (def merchant-ignore-prefixes
   ["jib" "pib" "ibfm" "ibem" "tbfm" "bf" "fiskalni" "racun" "račun" "фискални" "рачун"
-   "ve" "osn" "pdv" "vat" "total" "ukupno" "ukupna" "ukupan" "uplac" "upl" "gotovina" "kartica" "povrat"])
+   "ve" "osn" "pdv" "vat" "total" "ukupno" "ukupna" "ukupan" "uplac" "upl" "gotovina" "kartica" "povrat"
+   "kasir" "касир" "cashier" "operator" "operater" "оператер" "оператор"])
 
 (def merchant-ignore-exact
   #{"fiskalni racun" "fiskalni račun" "racun" "račun" "фискални рачун" "рачун"
@@ -96,20 +97,39 @@
 (defn- merchant-candidate?
   [line]
   (let [line (some-> line text/safe-trim)
-        norm (text/normalize-text line)]
+        norm (text/normalize-text line)
+        embedded-store-line? (boolean
+                               (and line
+                                 (re-find legal-suffix-re line)
+                                 (some #(str/includes? norm %)
+                                   ["podruznica" "podružnica" "подружница"
+                                    "ogranak" "огранак"
+                                    "poslovnica" "пословница"
+                                    "filijala" "филијала"
+                                    "prodavnica" "продавница"])))
+        address-like? (address-like-line? line)]
     (boolean
       (and line norm
         (re-find #"\p{L}" line)
         (not (separator-noise? line))
         (not (re-matches text/ba-datetime-line-re line))
         (not (re-matches text/ba-date-line-re line))
-        (not (address-like-line? line))
+        (or (not address-like?) embedded-store-line?)
         (not (item-like-line? line))
         (not (contains? merchant-ignore-exact norm))
         (not (some #(str/starts-with? norm %) merchant-ignore-prefixes))))))
 
 (def store-line-prefixes
-  ["ogranak" "pj" "podruznica" "podružnica" "poslovnica" "filijala" "prodavnica" "radnja" "maloprodaja" "maloprodajna" "apoteka"])
+  ["ogranak" "огранак"
+   "pj" "pj." "пј" "п.ј"
+   "podruznica" "podružnica" "подружница"
+   "poslovnica" "пословница"
+   "filijala" "филијала"
+   "prodavnica" "продавница"
+   "radnja" "радња"
+   "maloprodaja" "малопродаја"
+   "maloprodajna" "малопродајна"
+   "apoteka" "апотека"])
 
 (def store-line-regexes
   [#"(?iu)^p\s*\.?\s*j\s*\.?(?:\s*(?:broj|br\.?))?\s*\d{0,4}\b"
