@@ -26,10 +26,8 @@
                   dashboard/get-biggest-expense (fn [_db _tenant-id] nil)
                   dashboard/get-spending-averages (fn [_db _tenant-id] nil)
                   dashboard/get-team-overview (fn [_db _tenant-id] nil)
-                  dashboard/get-pending-count (fn [_db _tenant-id] 3)
                   dashboard/get-unmapped-alias-count (fn [_db seen-tenant-id]
                                                        (is (= tenant-id seen-tenant-id))
                                                        11)]
       (let [data (dashboard/get-dashboard-data :mock-db tenant-id true)]
-        (is (= 3 (:pending-count data)))
         (is (= 11 (:unmapped-alias-count data)))))))

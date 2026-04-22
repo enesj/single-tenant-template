@@ -271,7 +271,7 @@
   - A map of {param-key type-or-spec}: where the value is either a type keyword
     (:string, :uuid, :boolean, :keyword, :int) or a vector [type output-key]
     for renaming the param in the result map.
-    e.g. {:search :string, :supplier-id :uuid, :is-posted [:boolean :is-posted?]}"
+    e.g. {:search :string, :supplier-id :uuid, :source :string}"
   [filter-params]
   (cond
     (vector? filter-params)

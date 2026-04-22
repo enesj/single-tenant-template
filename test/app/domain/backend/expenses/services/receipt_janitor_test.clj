@@ -62,8 +62,8 @@
   [db {:keys [id tenant-id user-id payer-id receipt-id purchased-at total-amount currency]}]
   (jdbc/execute-one!
     db
-    ["insert into expenses (id, tenant_id, user_id, created_by, receipt_id, payer_id, purchased_at, total_amount, currency, is_posted)
-      values (?, ?, ?, ?, ?, ?, ?, ?, ?::currency, true)
+    ["insert into expenses (id, tenant_id, user_id, created_by, receipt_id, payer_id, purchased_at, total_amount, currency)
+      values (?, ?, ?, ?, ?, ?, ?, ?, ?::currency)
       returning *"
      id
      tenant-id

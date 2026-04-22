@@ -309,20 +309,8 @@
      :tenant-name (:name tenant)}))
 
 ;; ---------------------------------------------------------------------------
-;; Admin-only: pending count + unmapped alias count
+;; Admin-only: unmapped alias count
 ;; ---------------------------------------------------------------------------
-
-(defn get-pending-count
-  "Count of expenses that are not yet posted (is_posted = false)."
-  [db tenant-id]
-  (let [tid (ensure-uuid tenant-id)]
-    (:count
-     (query-one db
-       {:select [[[:count :*] :count]]
-        :from :expenses
-        :where [:and
-                [:= :tenant_id tid]
-                [:= :is_posted false]]}))))
 
 (defn get-unmapped-alias-count
   "Count unmapped article aliases in the active tenant.
@@ -375,8 +363,7 @@
              :biggest-expense  biggest
              :averages         averages
              :team             team}
-      power-user? (assoc :pending-count (safe :pending #(get-pending-count db tenant-id))
-                    :unmapped-alias-count (safe :unmapped #(get-unmapped-alias-count db tenant-id))))))
+      power-user? (assoc :unmapped-alias-count (safe :unmapped #(get-unmapped-alias-count db tenant-id))))))
 
 (comment
   ;; REPL testing

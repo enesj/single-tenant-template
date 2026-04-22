@@ -50,16 +50,6 @@
                     :field field
                     :value v})))))))
 
-(defn- parse-bool
-  "Parse boolean value. Named parse-bool to avoid shadowing clojure.core/parse-boolean."
-  [v]
-  (let [v (blank->nil v)]
-    (cond
-      (nil? v) nil
-      (instance? Boolean v) v
-      (string? v) (Boolean/parseBoolean v)
-      :else (boolean v))))
-
 (defn- parse-bigdec!
   [field v]
   (let [v (blank->nil v)]
@@ -236,7 +226,6 @@
     (update-if-present :purchased_at #(parse-instant! :purchased_at %))
     (update-if-present :total_amount #(parse-bigdec! :total_amount %))
     (update-if-present :currency #(some-> % str str/trim blank->nil))
-    (update-if-present :is_posted parse-bool)
     (update-if-present :notes blank->nil)))
 
 (defn- expense-rate-date
@@ -412,8 +401,8 @@
 
 (defn list-expenses
   "List expenses with common filters.
-   opts: :from, :to, :supplier-id, :payer-id, :is-posted?, :tenant-id, :source, :limit, :offset."
-  [db {:keys [from to supplier-id payer-id is-posted? tenant-id source limit offset order-dir]
+   opts: :from, :to, :supplier-id, :payer-id, :tenant-id, :source, :limit, :offset."
+  [db {:keys [from to supplier-id payer-id tenant-id source limit offset order-dir]
        :or {limit 50 offset 0 order-dir :desc}}]
   (let [from (try (parse-instant! :from from) (catch Exception _ nil))
         to (try (parse-instant! :to to) (catch Exception _ nil))
@@ -424,7 +413,6 @@
                      to (conj [:<= :e.purchased_at to])
                      supplier-id (conj [:= :e.supplier_id supplier-id])
                      payer-id (conj [:= :e.payer_id payer-id])
-                     (some? is-posted?) (conj [:= :e.is_posted (boolean is-posted?)])
                      source-where (conj source-where))
         query {:select [[:e.*]
                         [:s.display_name :supplier_display_name]
@@ -448,8 +436,8 @@
 
 (defn count-expenses
   "Count expenses with the same filters as `list-expenses`.
-   opts: :from, :to, :supplier-id, :payer-id, :is-posted?, :tenant-id, :source."
-  [db {:keys [from to supplier-id payer-id is-posted? tenant-id source]}]
+   opts: :from, :to, :supplier-id, :payer-id, :tenant-id, :source."
+  [db {:keys [from to supplier-id payer-id tenant-id source]}]
   (let [from (try (parse-instant! :from from) (catch Exception _ nil))
         to (try (parse-instant! :to to) (catch Exception _ nil))
         source-where (source-clause :receipt_id source)
@@ -459,7 +447,6 @@
                      to (conj [:<= :purchased_at to])
                      supplier-id (conj [:= :supplier_id supplier-id])
                      payer-id (conj [:= :payer_id payer-id])
-                     (some? is-posted?) (conj [:= :is_posted (boolean is-posted?)])
                      source-where (conj source-where))
         row (jdbc/execute-one!
               db
@@ -608,8 +595,7 @@
                                          :exchange_rate
                                          :rate_fetched_at
                                          :currency
-                                         :notes
-                                         :is_posted])
+                                         :notes])
                            (update-if-present :currency #(when % [:cast % :currency]))
                            (assoc :id expense-id))
              expense (try
@@ -700,7 +686,7 @@
                           (dissoc :items)
                           normalize-expense-data)
          amount-keys [:purchased_at :total_amount :currency]
-         base-keys [:store_id :supplier_id :payer_id :expense_category_id :purchased_at :total_amount :currency :notes :is_posted]
+         base-keys [:store_id :supplier_id :payer_id :expense_category_id :purchased_at :total_amount :currency :notes]
          where (if tenant-id
                  [:and [:= :id id*] [:= :tenant_id tenant-id]]
                  [:= :id id*])]

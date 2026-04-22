@@ -67,3 +67,29 @@
       (is (= [:kom :kg]
             (:options (get by-id :unit)))
         "Static select options should be normalized to kebab-case keywords"))))
+
+(deftest form-entity-specs-support-batch-edit-mode
+  (testing "Batch edit mode prefers :batch-edit-fields and falls back to :edit-fields when absent"
+    (reset-db!
+      {:admin {:config {:form-fields
+                        {:expenses {:create-fields ["total_amount"]
+                                    :edit-fields ["supplier_id" "payer_id" "expense_category_id" "notes"]
+                                    :batch-edit-fields ["supplier_id" "payer_id" "notes"]
+                                    :field-config {"supplier_id" {"type" "select"
+                                                                   "options" ["suppliers" "display_name"]}
+                                                   "payer_id" {"type" "select"
+                                                               "options" ["payers" "label"]}
+                                                   "expense_category_id" {"type" "select"
+                                                                          "options" ["expense_categories" "name"]}
+                                                   "notes" {"type" "textarea"}}}
+                         :suppliers {:edit-fields ["display_name"]
+                                     :field-config {"display_name" {"type" "text"}}}}}}})
+
+    (let [expense-spec @(rf/subscribe [:form-entity-specs/by-name :expenses :batch-edit])
+          supplier-spec @(rf/subscribe [:form-entity-specs/by-name :suppliers :batch-edit])]
+      (is (= [:supplier-id :payer-id :notes]
+            (mapv :id expense-spec))
+        "Explicit batch-edit fields should drive batch edit mode")
+      (is (= [:display-name]
+            (mapv :id supplier-spec))
+        "Entities without :batch-edit-fields should fall back to :edit-fields"))))

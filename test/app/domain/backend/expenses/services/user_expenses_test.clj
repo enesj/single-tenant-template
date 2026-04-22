@@ -104,7 +104,6 @@
         (is (= 7 (:total-expenses summary)))
         (is (= {"BAM" 42.50M} (:currency-totals summary)))
         (is (= 7 (:recent-count summary)))
-        (is (re-find #"(?i)is_posted" count-sql-str))
         (is (re-find #"(?i)purchased_at\s*>=|purchased_at\s*>=" count-sql-str))
         (is (re-find #"(?i)purchased_at\s*<=|purchased_at\s*<=" count-sql-str))
         (is (re-find #"(?i)supplier_id" count-sql-str))
@@ -124,8 +123,7 @@
               :purchased_at purchased-at
               :total_amount 42.5M
               :currency "EUR"
-              :notes "Batch note"
-              :is_posted false}
+              :notes "Batch note"}
             (#'user-expenses/normalize-batch-update-updates
              {:id expense-id
               :supplier-id supplier-id
@@ -135,7 +133,6 @@
               :total-amount 42.5M
               :currency "EUR"
               :notes "Batch note"
-              :is-posted false
               :created-at "ignored"
               :updated-at "ignored"}))))
     (testing "snake_case payload keys continue to work"

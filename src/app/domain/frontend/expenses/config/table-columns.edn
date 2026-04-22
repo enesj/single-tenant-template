@@ -180,7 +180,7 @@
    :created_at {:label-key :common/created-at}}},
  :expenses
  {:available-columns
-  ["purchased_at" "supplier_display_name" "store_display_name" "expense_category_name" "payer_label" "currency" "total_amount" "notes" "id" "created_at" "updated_at" "created_by_name" "tenant_id" "user_id" "created_by" "receipt_id" "store_id" "supplier_id" "payer_id" "expense_category_id" "is_posted"],
+  ["purchased_at" "supplier_display_name" "store_display_name" "expense_category_name" "payer_label" "currency" "total_amount" "notes" "id" "created_at" "updated_at" "created_by_name" "tenant_id" "user_id" "created_by" "receipt_id" "store_id" "supplier_id" "payer_id" "expense_category_id"],
   :computed-fields
   {:supplier_display_name {:type "string", :label "Supplier"},
    :store_display_name {:type "string", :label "Store"},

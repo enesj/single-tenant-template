@@ -93,10 +93,12 @@
       (nil? current-entity) (assoc (or current {}) expense-categories-entity default-entity)
       :else
       (assoc current expense-categories-entity
-        (-> current-entity
-          (update :create-fields merge-ordered-values (:create-fields default-entity))
-          (update :edit-fields merge-ordered-values (:edit-fields default-entity))
-          (update :field-config merge-missing-map-entries (:field-config default-entity)))))))
+        (cond-> (-> current-entity
+                  (update :create-fields merge-ordered-values (:create-fields default-entity))
+                  (update :edit-fields merge-ordered-values (:edit-fields default-entity))
+                  (update :field-config merge-missing-map-entries (:field-config default-entity)))
+          (contains? default-entity :batch-edit-fields)
+          (update :batch-edit-fields merge-ordered-values (:batch-edit-fields default-entity)))))))
 
 (defn- reconcile-expense-category-table-columns
   [current defaults]

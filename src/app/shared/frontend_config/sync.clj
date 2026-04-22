@@ -13,7 +13,7 @@
   [:available-columns :default-visible-columns :filterable-columns :sortable-columns :always-visible])
 
 (def ^:private form-fields-list-keys
-  [:create-fields :edit-fields :required-fields])
+  [:create-fields :edit-fields :batch-edit-fields :required-fields])
 
 (defn- normalize-values
   [xs]
@@ -284,7 +284,7 @@
               computed (validation/computed-fields-by-entity (:table-columns data))]
           (for [[kind value] data
                 :let [plan (case kind
-                     :entities (plan-entities value schema-index allowlist)
+                             :entities (plan-entities value schema-index allowlist)
                              :table-columns (plan-table-columns value schema-index computed allowlist)
                              :form-fields (plan-form-fields value schema-index allowlist)
                              :view-options (plan-view-options value schema-index computed allowlist)

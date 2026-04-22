@@ -152,7 +152,7 @@
    :unit {:label-key :common/unit}}},
  :expenses
  {:available-columns
-  ["purchased_at" "supplier_display_name" "payer_label" "currency" "total_amount" "notes" "is_posted" "id" "receipt_id" "created_at" "updated_at" "user_id" "supplier_id" "payer_id" "store_id" "tenant_id" "created_by" "expense_category_id"],
+  ["purchased_at" "supplier_display_name" "payer_label" "currency" "total_amount" "notes" "id" "receipt_id" "created_at" "updated_at" "user_id" "supplier_id" "payer_id" "store_id" "tenant_id" "created_by" "expense_category_id"],
   :computed-fields
   {:supplier_display_name {:type "string", :label "Supplier"},
    :payer_label {:type "string", :label "Payer"}},
@@ -161,15 +161,13 @@
    "supplier_display_name"
    "payer_label"
    "currency"
-   "total_amount"
-   "is_posted"],
+    "total_amount"],
   :filterable-columns
   ["purchased_at"
    "supplier_display_name"
    "payer_label"
    "currency"
-   "total_amount"
-   "is_posted"
+    "total_amount"
    "created_at"
    "updated_at"],
   :sortable-columns
@@ -177,8 +175,7 @@
    "supplier_display_name"
    "payer_label"
    "currency"
-   "total_amount"
-   "is_posted"
+    "total_amount"
    "created_at"
    "updated_at"],
   :always-visible [],

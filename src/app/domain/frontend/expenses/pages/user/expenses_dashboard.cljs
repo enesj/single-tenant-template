@@ -329,7 +329,7 @@
 ;; Admin Alerts Card
 ;; ========================================================================
 
-(defui admin-alerts-card [{:keys [pending-count unmapped-count loading? t]}]
+(defui admin-alerts-card [{:keys [unmapped-count loading? t]}]
   ($ :div {:class "bg-white rounded-xl shadow-sm border border-slate-100 p-5"}
     ($ :p {:class "text-sm font-medium text-slate-500 mb-3"} (t :dashboard/admin-alerts))
     (if loading?
@@ -337,13 +337,6 @@
         ($ skeleton-block {:class "h-4 w-32"})
         ($ skeleton-block {:class "h-4 w-28"}))
       ($ :div {:class "space-y-3"}
-        (when (some? pending-count)
-          ($ :div {:class "flex items-center justify-between"}
-            ($ :span {:class "text-sm text-slate-600"}
-              (t :dashboard/pending-expenses))
-            ($ :span {:class (str "text-sm font-semibold "
-                               (if (pos? pending-count) "text-amber-600" "text-emerald-600"))}
-              pending-count)))
         (when (some? unmapped-count)
           ($ :button {:class "flex items-center justify-between w-full hover:bg-slate-50 rounded p-1 -m-1 transition-colors"
                       :on-click #(rf/dispatch [:navigate-to "/unmapped-items"])}
@@ -380,7 +373,6 @@
         user-name (or (:full-name user) "there")
         loading? (boolean (use-subscribe [:workspace-dashboard/loading?]))
         error (use-subscribe [:workspace-dashboard/error])
-        has-data? (boolean (use-subscribe [:workspace-dashboard/has-data?]))
         ;; Widget data
         last-30d (use-subscribe [:workspace-dashboard/last-30-days])
         last-6m (use-subscribe [:workspace-dashboard/last-6-months])
@@ -393,7 +385,6 @@
         biggest (use-subscribe [:workspace-dashboard/biggest-expense])
         averages (use-subscribe [:workspace-dashboard/averages])
         team (use-subscribe [:workspace-dashboard/team])
-        pending-count (use-subscribe [:workspace-dashboard/pending-count])
         unmapped-count (use-subscribe [:workspace-dashboard/unmapped-alias-count])
         ;; Compute comparison %
         compute-pct (fn [summary]
@@ -493,8 +484,7 @@
                           (if power-user? "md:grid-cols-2" ""))}
           ($ team-card {:data team :loading? loading? :t t})
           (when power-user?
-            ($ admin-alerts-card {:pending-count pending-count
-                                  :unmapped-count unmapped-count
+            ($ admin-alerts-card {:unmapped-count unmapped-count
                                   :loading? loading?
                                   :t t})))
 

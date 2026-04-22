@@ -147,7 +147,6 @@
                   currency
                   purchased-at
                   notes
-                  is-posted
                   items
                   created-at]} expense
           supplier-name supplier-display-name
@@ -161,7 +160,6 @@
           created created-at
           linked-receipt-id (some-> (expense-receipt-id expense) str)
           direct-editable? (and expense (manual-expense? expense))
-          posted? (true? is-posted)
           show-conversion? (and (some? currency)
                              (not= "BAM" currency)
                              (or original-total bam-total current-rate))]
@@ -180,7 +178,7 @@
                   ($ :h1 {:class "text-xl sm:text-2xl font-bold"}
                     (or supplier-name "Expense Detail")))
                 ($ :div {:class "flex gap-2"}
-                  (when (and expense (not posted?) can-write? direct-editable?)
+                  (when (and expense can-write? direct-editable?)
                     ($ button {:btn-type :outline
                                :id "btn-edit-expense"
                                :on-click #(rf/dispatch [:navigate-to (str "/expenses/" expense-id "?edit=true")])}
@@ -208,14 +206,9 @@
 
             :else
             ($ :div {:class "space-y-6"}
-              ;; Status badge
-              ($ :div {:class "flex items-center gap-2"}
-                ($ :span {:class (str "ds-badge "
-                                   (if posted? "ds-badge-success" "ds-badge-warning"))}
-                  (if posted? (t :expense-detail/status-posted) (t :expense-detail/status-pending)))
-                (when created
-                  ($ :span {:class "text-sm text-base-content/60"}
-                    (str (t :expense-detail/created) " " (format-short-date created)))))
+              (when created
+                ($ :div {:class "text-sm text-base-content/60"}
+                  (str (t :expense-detail/created) " " (format-short-date created))))
 
               (when linked-receipt-id
                 ($ :div {:class "ds-alert ds-alert-info"}
@@ -259,15 +252,8 @@
                                :id (str "btn-edit-linked-receipt-" linked-receipt-id)
                                :on-click #(rf/dispatch [:navigate-to (str "/receipts/" linked-receipt-id)])}
                       "Edit receipt"))
-                  (when (not posted?)
-                    ($ button {:btn-type :error
-                               :size :sm
-                               :id "btn-delete-expense"
-                               :on-click #(rf/dispatch [:user-expenses/delete-expense expense-id])}
-                      (t :expense-detail/btn-delete)))
-                  (when (and (not posted?) direct-editable?)
-                    ($ button {:btn-type :primary
-                               :size :sm
-                               :id "btn-post-expense"
-                               :on-click #(rf/dispatch [:user-expenses/post-expense expense-id])}
-                      (t :expense-detail/btn-post))))))))))))
+                  ($ button {:btn-type :error
+                             :size :sm
+                             :id "btn-delete-expense"
+                             :on-click #(rf/dispatch [:user-expenses/delete-expense expense-id])}
+                    (t :expense-detail/btn-delete)))))))))))

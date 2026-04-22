@@ -1,5 +1,5 @@
 (ns app.domain.frontend.expenses.events.user-expenses.crud.expenses
-  "User expense CRUD events (create, update, delete, post)."
+  "User expense CRUD events (create, update, delete)."
   (:require
     [app.domain.frontend.expenses.admin.adapters.sync :as expenses-sync]
     [app.domain.frontend.expenses.events.user-expenses.endpoints :as endpoints]
@@ -151,38 +151,6 @@
   common-interceptors
   (fn [db [error]]
     (log/warn "Failed to delete expense" {:error error})
-    (-> db
-      (assoc-in [:user-expenses :form :loading?] false)
-      (assoc-in [:user-expenses :form :error] (http/extract-error-message error)))))
-
-;; ---------------------------------------------------------------------------
-;; Post expense (mark as posted)
-;; ---------------------------------------------------------------------------
-
-(rf/reg-event-fx
-  :user-expenses/post-expense
-  common-interceptors
-  (fn [{:keys [db]} [expense-id]]
-    {:db (assoc-in db [:user-expenses :form :loading?] true)
-     :http-xhrio (x/xhrio db
-                   {:method :put
-                    :uri (str endpoints/list-endpoint "/" expense-id)
-                    :params {:is_posted true}
-                    :on-success [:user-expenses/post-expense-success expense-id]
-                    :on-failure [:user-expenses/post-expense-failure]})}))
-
-(rf/reg-event-fx
-  :user-expenses/post-expense-success
-  common-interceptors
-  (fn [{:keys [db]} [expense-id _response]]
-    {:db (assoc-in db [:user-expenses :form :loading?] false)
-     :dispatch [:user-expenses/fetch-expense expense-id]}))
-
-(rf/reg-event-db
-  :user-expenses/post-expense-failure
-  common-interceptors
-  (fn [db [error]]
-    (log/warn "Failed to post expense" {:error error})
     (-> db
       (assoc-in [:user-expenses :form :loading?] false)
       (assoc-in [:user-expenses :form :error] (http/extract-error-message error)))))

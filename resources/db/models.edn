@@ -214,7 +214,6 @@
    [:exchange_rate [:decimal 18 8]]
    [:rate_fetched_at :timestamptz]
    [:notes :text]
-   [:is_posted :boolean {:default true, :null false}]
    [:created_at :timestamptz {:default [:now]}]
    [:updated_at :timestamptz {:default [:now]}]],
   :types
@@ -233,8 +232,7 @@
    [:idx_expenses_expense_category
     :btree
     {:fields [:expense_category_id]}]
-   [:idx_expenses_purchased_at :btree {:fields [:purchased_at]}]
-   [:idx_expenses_is_posted :btree {:fields [:is_posted]}]]},
+   [:idx_expenses_purchased_at :btree {:fields [:purchased_at]}]]},
  :onboarding_steps
  {:fields
   [[:id :uuid {:primary-key true}]

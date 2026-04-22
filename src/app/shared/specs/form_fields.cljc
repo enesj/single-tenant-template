@@ -66,6 +66,7 @@
   [:map {:closed false}
    [:create-fields {:optional true} FieldIdVec]
    [:edit-fields {:optional true} FieldIdVec]
+   [:batch-edit-fields {:optional true} FieldIdVec]
    [:required-fields {:optional true} FieldIdVec]
    [:field-config {:optional true} [:map-of FieldId FieldConfig]]])
 
@@ -90,8 +91,8 @@
   (some-> x model-naming/ensure-app-keyword name))
 
 (defn- check-no-duplicate-fields
-  "Ensure create/edit/required vectors do not contain duplicates (after normalizing
-  keyword/string identifiers)."
+  "Ensure create/edit/batch-edit/required vectors do not contain duplicates
+  (after normalizing keyword/string identifiers)."
   [data]
   (let [problems
         (->> data
@@ -99,6 +100,7 @@
             (fn [[entity cfg]]
               (let [checks [[:create-fields (:create-fields cfg)]
                             [:edit-fields (:edit-fields cfg)]
+                            [:batch-edit-fields (:batch-edit-fields cfg)]
                             [:required-fields (:required-fields cfg)]]]
                 (for [[k xs] checks
                       :when (seq xs)
@@ -162,6 +164,7 @@
   (cond-> (or cfg {})
     (contains? cfg :create-fields) (update :create-fields sanitize-field-ids)
     (contains? cfg :edit-fields) (update :edit-fields sanitize-field-ids)
+    (contains? cfg :batch-edit-fields) (update :batch-edit-fields sanitize-field-ids)
     (contains? cfg :required-fields) (update :required-fields sanitize-field-ids)
     (contains? cfg :field-config) (update :field-config sanitize-field-config)))
 

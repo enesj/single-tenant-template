@@ -169,7 +169,6 @@
                    :to :string
                    :supplier-id :uuid
                    :payer-id :uuid
-                   :is-posted [:boolean :is-posted?]
                    :source :string}})
 
 (def expense-item-config

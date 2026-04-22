@@ -54,7 +54,6 @@
                                        :created-at-to created-to
                                        :supplier-id (h/try-parse-uuid (h/get-param params :supplier_id))
                                        :payer-id (h/try-parse-uuid (h/get-param params :payer_id))
-                                       :is-posted? (h/parse-boolean-param params :is_posted)
                                        :limit (or (some-> (h/get-param params :limit) parse-long) 50)
                                        :offset (or (some-> (h/get-param params :offset) parse-long) 0)}
                                  text-filters)
@@ -131,7 +130,7 @@
                   default-expense-category-id (when-not (or (:expense_category_id body)
                                                           (:expense-category-id body))
                                                 (user-settings/effective-default-expense-category-id db tenant-id user-id))
-                  expense-data (cond-> (select-keys body [:supplier_id :store_id :payer_id :expense_category_id :article_id :purchased_at :total_amount :currency :notes :is_posted :receipt_id])
+                  expense-data (cond-> (select-keys body [:supplier_id :store_id :payer_id :expense_category_id :article_id :purchased_at :total_amount :currency :notes :receipt_id])
                                  (:expense-category-id body)
                                  (assoc :expense_category_id (:expense-category-id body))
 
@@ -167,7 +166,7 @@
           (if expense-id
             (try
               (let [body (h/read-body-params request)
-                    updates (select-keys body [:supplier_id :store_id :payer_id :expense_category_id :purchased_at :total_amount :currency :notes :is_posted :items])]
+                    updates (select-keys body [:supplier_id :store_id :payer_id :expense_category_id :purchased_at :total_amount :currency :notes :items])]
                 (if-let [expense (user-expenses/update-user-expense! db tenant-id user-id expense-id updates)]
                   (h/json-response {:data expense})
                   (h/not-found-response "Expense not found or access denied")))

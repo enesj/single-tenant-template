@@ -82,8 +82,7 @@
                    [:= :ec_excl.id :e.expense_category_id]
                    [:= :ec_excl.exclude_from_reports true]]}]]]
     (cond-> [:and
-             [:= :e.is_posted true]
-             exclude-flagged-category-clause]
+         exclude-flagged-category-clause]
       user-id (conj [:= :e.user_id user-id])
       tenant-id (conj [:= :e.tenant_id tenant-id])
       from (conj [:>= :e.purchased_at from])

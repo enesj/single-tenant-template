@@ -152,7 +152,6 @@
     :total_amount
     :currency
     :notes
-    :is_posted
     :receipt_id})
 
 (defn- normalize-batch-update-updates
@@ -175,7 +174,7 @@
   - any updatable expense columns using snake_case or kebab-case keys
 
   Only the following fields are applied after normalization:
-  :supplier_id :payer_id :expense_category_id :purchased_at :total_amount :currency :notes :is_posted :receipt_id
+  :supplier_id :payer_id :expense_category_id :purchased_at :total_amount :currency :notes :receipt_id
 
   `tenant-id` scopes the ownership checks and updates to a specific tenant.
 
@@ -283,8 +282,7 @@
    :store-display-name :st.display_name
    :payer-label :p.label
    :payer-type :pt.label
-   :expense-category-name :ec.name
-   :is-posted :e.is_posted})
+    :expense-category-name :ec.name})
 
 (defn- parse-decimal-param
   [raw]
@@ -338,7 +336,7 @@
 
   opts:
   - :from, :to
-  - :supplier-id, :payer-id, :is-posted?
+  - :supplier-id, :payer-id
   - :supplier-display-name, :store-display-name, :expense-category-name,
     :payer-label, :notes  (text ILIKE filters)
   - :currency (exact match, accepts one or many values)
@@ -349,7 +347,7 @@
 
   `tenant-id` scopes the query to a specific tenant."
   [db tenant-id user-id {:keys [from to created-at-from created-at-to
-                                supplier-id payer-id is-posted?
+                                supplier-id payer-id
                                 supplier-display-name store-display-name
                                 expense-category-name payer-label currency notes
                                 total-amount-min total-amount-max source
@@ -365,9 +363,9 @@
         total-amount-max (parse-decimal-param total-amount-max)
         currency-values (normalize-currency-filter currency)
         source-where (case (some-> source str)
-                       "manual"  [:is :e.receipt_id nil]
+                       "manual" [:is :e.receipt_id nil]
                        "receipt" [:is-not :e.receipt_id nil]
-                       "none"    [:= 1 0]
+                       "none" [:= 1 0]
                        nil)
         order-clauses (shared-qb/resolve-order-by-clauses
                         {:sorts sorts
@@ -376,47 +374,46 @@
                          :allowed-order-by allowed-user-expenses-order-by
                          :default-order-by :expense-date
                          :default-order-dir :desc
-                         :tie-breaker [:e.id :asc]})]
-    (let [base-where (cond-> [:and]
-                       user-id (conj [:= :e.user_id user-id])
-                       tenant-id (conj [:= :e.tenant_id tenant-id])
-                       from (conj [:>= :e.purchased_at from])
-                       to (conj [:<= :e.purchased_at to])
-                       created-at-from (conj [:>= :e.created_at created-at-from])
-                       created-at-to (conj [:<= :e.created_at created-at-to])
-                       supplier-id (conj [:= :e.supplier_id supplier-id])
-                       payer-id (conj [:= :e.payer_id payer-id])
-                       (some? is-posted?) (conj [:= :e.is_posted (boolean is-posted?)])
-                       (some? total-amount-min) (conj [:>= :e.total_amount total-amount-min])
-                       (some? total-amount-max) (conj [:<= :e.total_amount total-amount-max])
-                       source-where (conj source-where))
-          base-where (apply-currency-filter base-where :e.currency currency-values)
-          query (-> {:select [[:e.*]
-                              [:s.display_name :supplier_display_name]
-                              [:st.display_name :store_display_name]
-                              [:s.normalized_key :supplier_normalized_key]
-                              [:p.label :payer_label]
-                              [:p.type :payer_type]
-                              [:ec.name :expense_category_name]
-                              [{:select [[[:count :ei.id]]]
-                                :from [[:expense_items :ei]]
-                                :where [:= :ei.expense_id :e.id]} :item_count]]
-                     :from [[:expenses :e]]
-                     :left-join [[:suppliers :s] [:= :s.id :e.supplier_id]
-                                 [:stores :st] [:= :st.id :e.store_id]
-                                 [:payers :p] [:= :p.id :e.payer_id]
-                                 [:expense_categories :ec] [:= :ec.id :e.expense_category_id]]
-                     :where base-where
-                     :order-by order-clauses
-                     :limit limit
-                     :offset offset}
-                  (shared-qb/apply-text-filters expense-text-filter-columns
-                    {:supplier-display-name supplier-display-name
-                     :store-display-name store-display-name
-                     :expense-category-name expense-category-name
-                     :payer-label payer-label
-                     :notes notes}))]
-      (jdbc/execute! db (sql/format query) {:builder-fn rs/as-unqualified-lower-maps}))))
+                         :tie-breaker [:e.id :asc]})
+        base-where (cond-> [:and]
+                     user-id (conj [:= :e.user_id user-id])
+                     tenant-id (conj [:= :e.tenant_id tenant-id])
+                     from (conj [:>= :e.purchased_at from])
+                     to (conj [:<= :e.purchased_at to])
+                     created-at-from (conj [:>= :e.created_at created-at-from])
+                     created-at-to (conj [:<= :e.created_at created-at-to])
+                     supplier-id (conj [:= :e.supplier_id supplier-id])
+                     payer-id (conj [:= :e.payer_id payer-id])
+                     (some? total-amount-min) (conj [:>= :e.total_amount total-amount-min])
+                     (some? total-amount-max) (conj [:<= :e.total_amount total-amount-max])
+                     source-where (conj source-where))
+        filtered-base-where (apply-currency-filter base-where :e.currency currency-values)
+        query (-> {:select [[:e.*]
+                            [:s.display_name :supplier_display_name]
+                            [:st.display_name :store_display_name]
+                            [:s.normalized_key :supplier_normalized_key]
+                            [:p.label :payer_label]
+                            [:p.type :payer_type]
+                            [:ec.name :expense_category_name]
+                            [{:select [[[:count :ei.id]]]
+                              :from [[:expense_items :ei]]
+                              :where [:= :ei.expense_id :e.id]} :item_count]]
+                   :from [[:expenses :e]]
+                   :left-join [[:suppliers :s] [:= :s.id :e.supplier_id]
+                               [:stores :st] [:= :st.id :e.store_id]
+                               [:payers :p] [:= :p.id :e.payer_id]
+                               [:expense_categories :ec] [:= :ec.id :e.expense_category_id]]
+                   :where filtered-base-where
+                   :order-by order-clauses
+                   :limit limit
+                   :offset offset}
+                (shared-qb/apply-text-filters expense-text-filter-columns
+                  {:supplier-display-name supplier-display-name
+                   :store-display-name store-display-name
+                   :expense-category-name expense-category-name
+                   :payer-label payer-label
+                   :notes notes}))]
+    (jdbc/execute! db (sql/format query) {:builder-fn rs/as-unqualified-lower-maps})))
 
 (defn count-user-expenses
   "Count total expenses for a specific user with optional filters.
@@ -424,7 +421,7 @@
    `tenant-id` scopes the count to a specific tenant.
    Text filters (supplier-display-name, etc.) require LEFT JOINs."
   [db tenant-id user-id {:keys [from to created-at-from created-at-to
-                                supplier-id payer-id is-posted?
+                                supplier-id payer-id
                                 supplier-display-name store-display-name
                                 expense-category-name payer-label currency notes
                                 total-amount-min total-amount-max source]}]
@@ -446,38 +443,37 @@
                             (keys expense-text-filter-columns) text-filters)
         source-col (if has-text-filters? :e.receipt_id :receipt_id)
         source-where (case (some-> source str)
-                       "manual"  [:is source-col nil]
+                       "manual" [:is source-col nil]
                        "receipt" [:is-not source-col nil]
-                       "none"    [:= 1 0]
-                       nil)]
-    (let [base-where (cond-> [:and]
-                       user-id (conj [:= (if has-text-filters? :e.user_id :user_id) user-id])
-                       tenant-id (conj [:= (if has-text-filters? :e.tenant_id :tenant_id) tenant-id])
-                       from (conj [:>= (if has-text-filters? :e.purchased_at :purchased_at) from])
-                       to (conj [:<= (if has-text-filters? :e.purchased_at :purchased_at) to])
-                       created-at-from (conj [:>= (if has-text-filters? :e.created_at :created_at) created-at-from])
-                       created-at-to (conj [:<= (if has-text-filters? :e.created_at :created_at) created-at-to])
-                       supplier-id (conj [:= (if has-text-filters? :e.supplier_id :supplier_id) supplier-id])
-                       payer-id (conj [:= (if has-text-filters? :e.payer_id :payer_id) payer-id])
-                       (some? is-posted?) (conj [:= (if has-text-filters? :e.is_posted :is_posted) (boolean is-posted?)])
-                       (some? total-amount-min) (conj [:>= (if has-text-filters? :e.total_amount :total_amount) total-amount-min])
-                       (some? total-amount-max) (conj [:<= (if has-text-filters? :e.total_amount :total_amount) total-amount-max])
-                       source-where (conj source-where))
-          base-where (apply-currency-filter base-where (if has-text-filters? :e.currency :currency) currency-values)
-          query (if has-text-filters?
-                  (-> {:select [[[:count :*] :total]]
-                       :from [[:expenses :e]]
-                       :left-join [[:suppliers :s] [:= :s.id :e.supplier_id]
-                                   [:stores :st] [:= :st.id :e.store_id]
-                                   [:payers :p] [:= :p.id :e.payer_id]
-                                   [:expense_categories :ec] [:= :ec.id :e.expense_category_id]]
-                       :where base-where}
-                    (shared-qb/apply-text-filters expense-text-filter-columns text-filters))
-                  {:select [[[:count :*] :total]]
-                   :from [:expenses]
-                   :where base-where})]
-      (:total (jdbc/execute-one! db (sql/format query)
-                {:builder-fn rs/as-unqualified-lower-maps})))))
+                       "none" [:= 1 0]
+                       nil)
+        base-where (cond-> [:and]
+                     user-id (conj [:= (if has-text-filters? :e.user_id :user_id) user-id])
+                     tenant-id (conj [:= (if has-text-filters? :e.tenant_id :tenant_id) tenant-id])
+                     from (conj [:>= (if has-text-filters? :e.purchased_at :purchased_at) from])
+                     to (conj [:<= (if has-text-filters? :e.purchased_at :purchased_at) to])
+                     created-at-from (conj [:>= (if has-text-filters? :e.created_at :created_at) created-at-from])
+                     created-at-to (conj [:<= (if has-text-filters? :e.created_at :created_at) created-at-to])
+                     supplier-id (conj [:= (if has-text-filters? :e.supplier_id :supplier_id) supplier-id])
+                     payer-id (conj [:= (if has-text-filters? :e.payer_id :payer_id) payer-id])
+                     (some? total-amount-min) (conj [:>= (if has-text-filters? :e.total_amount :total_amount) total-amount-min])
+                     (some? total-amount-max) (conj [:<= (if has-text-filters? :e.total_amount :total_amount) total-amount-max])
+                     source-where (conj source-where))
+        filtered-base-where (apply-currency-filter base-where (if has-text-filters? :e.currency :currency) currency-values)
+        query (if has-text-filters?
+                (-> {:select [[[:count :*] :total]]
+                     :from [[:expenses :e]]
+                     :left-join [[:suppliers :s] [:= :s.id :e.supplier_id]
+                                 [:stores :st] [:= :st.id :e.store_id]
+                                 [:payers :p] [:= :p.id :e.payer_id]
+                                 [:expense_categories :ec] [:= :ec.id :e.expense_category_id]]
+                     :where filtered-base-where}
+                  (shared-qb/apply-text-filters expense-text-filter-columns text-filters))
+                {:select [[[:count :*] :total]]
+                 :from [:expenses]
+                 :where filtered-base-where})]
+    (:total (jdbc/execute-one! db (sql/format query)
+              {:builder-fn rs/as-unqualified-lower-maps}))))
 
 (def highlight-date-columns
   "Date columns available for highlight queries.
@@ -498,7 +494,7 @@
   "Return distinct local-date strings for a given timestamp column while
    respecting the same non-highlight filters as list/count."
   [db tenant-id user-id {:keys [from to created-at-from created-at-to
-                                supplier-id payer-id is-posted?
+                                supplier-id payer-id
                                 supplier-display-name store-display-name
                                 expense-category-name payer-label currency notes
                                 total-amount-min total-amount-max
@@ -533,7 +529,6 @@
                          created-at-to (conj [:<= :e.created_at created-at-to])
                          supplier-id (conj [:= :e.supplier_id (ensure-uuid supplier-id)])
                          payer-id (conj [:= :e.payer_id (ensure-uuid payer-id)])
-                         (some? is-posted?) (conj [:= :e.is_posted (boolean is-posted?)])
                          (some? total-amount-min) (conj [:>= :e.total_amount total-amount-min])
                          (some? total-amount-max) (conj [:<= :e.total_amount total-amount-max]))
             base-where (apply-currency-filter base-where :e.currency currency-values)
@@ -576,8 +571,7 @@
         expense-category-id* (some-> expense-category-id ensure-uuid)
         report-summary? (or from* to* supplier-id* expense-category-id*)]
     (if report-summary?
-      (let [summary-where (cond-> [:and
-                                   [:= :is_posted true]]
+      (let [summary-where (cond-> [:and]
                             user-id (conj [:= :user_id user-id])
                             tenant-id (conj [:= :tenant_id tenant-id])
                             from* (conj [:>= :purchased_at from*])
@@ -604,8 +598,7 @@
          :from from*
          :to to*})
       (let [total-expenses (count-user-expenses db tenant-id user-id {})
-            currency-where (cond-> [:and
-                                    [:= :is_posted true]]
+          currency-where (cond-> [:and]
                              user-id (conj [:= :user_id user-id])
                              tenant-id (conj [:= :tenant_id tenant-id]))
             currency-totals (jdbc/execute!
@@ -630,23 +623,22 @@
    `tenant-id` scopes the query to a specific tenant."
   [db tenant-id user-id {:keys [months-back] :or {months-back 6}}]
   (let [user-id (ensure-uuid user-id)
-        tenant-id (ensure-uuid tenant-id)]
-    (let [where (cond-> [:and
-                         [:= :is_posted true]
-                         [:>= :purchased_at
-                          [:raw (format "NOW() - INTERVAL '%d months'" months-back)]]]
-                  user-id (conj [:= :user_id user-id])
-                  tenant-id (conj [:= :tenant_id tenant-id]))]
-      (jdbc/execute!
-        db
-        (sql/format {:select [[[:to_char :purchased_at [:inline "YYYY-MM"]] :month]
-                              :currency
-                              [[:sum :total_amount] :total]]
-                     :from [:expenses]
-                     :where where
-                     :group-by [[:to_char :purchased_at [:inline "YYYY-MM"]] :currency]
-                     :order-by [[[:to_char :purchased_at [:inline "YYYY-MM"]] :desc]]})
-        {:builder-fn rs/as-unqualified-lower-maps}))))
+        tenant-id (ensure-uuid tenant-id)
+        where (cond-> [:and
+                       [:>= :purchased_at
+                        [:raw (format "NOW() - INTERVAL '%d months'" months-back)]]]
+                user-id (conj [:= :user_id user-id])
+                tenant-id (conj [:= :tenant_id tenant-id]))]
+    (jdbc/execute!
+      db
+      (sql/format {:select [[[:to_char :purchased_at [:inline "YYYY-MM"]] :month]
+                            :currency
+                            [[:sum :total_amount] :total]]
+                   :from [:expenses]
+                   :where where
+                   :group-by [[:to_char :purchased_at [:inline "YYYY-MM"]] :currency]
+                   :order-by [[[:to_char :purchased_at [:inline "YYYY-MM"]] :desc]]})
+      {:builder-fn rs/as-unqualified-lower-maps})))
 
 (defn get-user-spending-by-supplier
   "Get spending by supplier for a user.
@@ -656,25 +648,24 @@
   (let [user-id (ensure-uuid user-id)
         tenant-id (ensure-uuid tenant-id)
         from (parse-instant-param from)
-        to (parse-instant-param to)]
-    (let [base-where (cond-> [:and
-                              [:= :e.is_posted true]
-                              [:is-not :e.supplier_id nil]]
-                       user-id (conj [:= :e.user_id user-id])
-                       tenant-id (conj [:= :e.tenant_id tenant-id])
-                       from (conj [:>= :e.purchased_at from])
-                       to (conj [:<= :e.purchased_at to]))]
-      (jdbc/execute!
-        db
-        (sql/format {:select [:e.supplier_id
-                              [:s.display_name :supplier_name]
-                              :e.currency
-                              [[:sum :e.total_amount] :total]
-                              [[:count :*] :expense_count]]
-                     :from [[:expenses :e]]
-                     :left-join [[:suppliers :s] [:= :s.id :e.supplier_id]]
-                     :where base-where
-                     :group-by [:e.supplier_id :s.display_name :e.currency]
-                     :order-by [[[:sum :e.total_amount] :desc]]
-                     :limit limit})
-        {:builder-fn rs/as-unqualified-lower-maps}))))
+        to (parse-instant-param to)
+        base-where (cond-> [:and
+                            [:is-not :e.supplier_id nil]]
+                     user-id (conj [:= :e.user_id user-id])
+                     tenant-id (conj [:= :e.tenant_id tenant-id])
+                     from (conj [:>= :e.purchased_at from])
+                     to (conj [:<= :e.purchased_at to]))]
+    (jdbc/execute!
+      db
+      (sql/format {:select [:e.supplier_id
+                            [:s.display_name :supplier_name]
+                            :e.currency
+                            [[:sum :e.total_amount] :total]
+                            [[:count :*] :expense_count]]
+                   :from [[:expenses :e]]
+                   :left-join [[:suppliers :s] [:= :s.id :e.supplier_id]]
+                   :where base-where
+                   :group-by [:e.supplier_id :s.display_name :e.currency]
+                   :order-by [[[:sum :e.total_amount] :desc]]
+                   :limit limit})
+      {:builder-fn rs/as-unqualified-lower-maps})))

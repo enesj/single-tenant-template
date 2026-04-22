@@ -31,10 +31,10 @@
                     :active? (= tab "table-columns")
                     :on-select #(on-tab-change "table-columns")})))
 (defui form-fields-editor
-  "Editor for form-fields.edn - create/edit field lists.
+  "Editor for form-fields.edn - create/edit/batch-edit field lists.
 
   Field universe is derived from:
-  1. Fields already referenced in :create-fields / :edit-fields / :field-config
+  1. Fields already referenced in :create-fields / :edit-fields / :batch-edit-fields / :field-config
   2. Model spec fields (from models.edn) as additional available options"
   [{:keys [entity-kw form-fields-config on-toggle on-reset]}]
   (let [entity-config (get form-fields-config entity-kw {})
@@ -42,16 +42,9 @@
                              (some-> x model-naming/ensure-app-keyword))
         field-id->storage (fn [field-id]
                             (some-> field-id model-naming/app-keyword->db name))
-        normalize-field-list (fn [xs]
-                               (->> (or xs [])
-                                 (keep (fn [x]
-                                         (some-> x
-                                           normalize-field-id
-                                           field-id->storage)))
-                                 distinct
-                                 vec))
         config-fields-raw (concat (:create-fields entity-config)
                             (:edit-fields entity-config)
+                            (:batch-edit-fields entity-config)
                             (keys (or (:field-config entity-config) {})))
         config-field-ids (->> config-fields-raw
                            (keep normalize-field-id)
@@ -67,6 +60,10 @@
                                config-fields-raw)
         create-fields (set (keep normalize-field-id (or (:create-fields entity-config) [])))
         edit-fields (set (keep normalize-field-id (or (:edit-fields entity-config) [])))
+        batch-edit-fields-source (if (contains? entity-config :batch-edit-fields)
+                                   (:batch-edit-fields entity-config)
+                                   (:edit-fields entity-config))
+        batch-edit-fields (set (keep normalize-field-id (or batch-edit-fields-source [])))
         config-field-set (set config-field-ids)
         ;; Model spec fields as fallback universe (base model specs, not config-overridden)
         all-form-specs (use-subscribe [:form-entity-specs])
@@ -83,7 +80,35 @@
                               model-field-ids)
         display-name-for (fn [field-id]
                            (or (get config-display-by-id field-id)
-                             (field-id->storage field-id)))]
+                             (field-id->storage field-id)))
+        input-id (fn [section-key field-name]
+                   (str "form-fields-"
+                     (name entity-kw)
+                     "-"
+                     (name section-key)
+                     "-"
+                     field-name))
+        render-field-section (fn [{:keys [section-key title subtitle checked-fields]}]
+                               ($ :div {:class "mb-4"
+                                        :id (str "form-fields-section-" (name entity-kw) "-" (name section-key))}
+                                 ($ :h4 {:class "text-sm font-semibold mb-2"} title)
+                                 ($ :p {:class "text-xs text-base-content/60 mb-2"} subtitle)
+                                 (if (seq available-field-ids)
+                                   ($ :div {:class "grid grid-cols-2 sm:grid-cols-3 gap-2"}
+                                     (for [field-id available-field-ids
+                                           :let [field-name (display-name-for field-id)
+                                                 checkbox-id (input-id section-key field-name)]]
+                                       ($ :label {:key (str (name section-key) "-" field-name)
+                                                  :htmlFor checkbox-id
+                                                  :class "ds-tooltip ds-tooltip-top flex items-center gap-2 p-2 rounded-lg bg-base-200"
+                                                  :data-tip (str "Toggle whether `" field-name "` is shown in the " title ".")}
+                                         ($ :input {:id checkbox-id
+                                                    :type "checkbox"
+                                                    :class "ds-checkbox ds-checkbox-sm"
+                                                    :checked (contains? checked-fields field-id)
+                                                    :on-change #(on-toggle entity-kw section-key field-id)})
+                                         ($ :span {:class "text-sm"} field-name))))
+                                   ($ :p {:class "text-sm text-base-content/60"} "No columns available"))))]
     ($ :div {:class "ds-card bg-base-100 shadow-md"}
       ($ :div {:class "ds-card-body p-4"}
         ($ :div {:class "flex items-center justify-between mb-4"}
@@ -94,43 +119,23 @@
                         :on-click #(on-reset entity-kw)}
               "Reset")))
 
-        ;; Create Fields
-        ($ :div {:class "mb-4"}
-          ($ :h4 {:class "text-sm font-semibold mb-2"} "Create Form Fields")
-          ($ :p {:class "text-xs text-base-content/60 mb-2"}
-            "Fields shown when creating a new record")
-          (if (seq available-field-ids)
-            ($ :div {:class "grid grid-cols-2 sm:grid-cols-3 gap-2"}
-              (for [field-id available-field-ids
-                    :let [field-name (display-name-for field-id)]]
-                ($ :label {:key (str "create-" field-name)
-                           :class "ds-tooltip ds-tooltip-top flex items-center gap-2 p-2 rounded-lg bg-base-200"
-                           :data-tip (str "Toggle whether “" field-name "” is shown in the Create form.")}
-                  ($ :input {:type "checkbox"
-                             :class "ds-checkbox ds-checkbox-sm"
-                             :checked (contains? create-fields field-id)
-                             :on-change #(on-toggle entity-kw :create-fields field-id)})
-                  ($ :span {:class "text-sm"} field-name))))
-            ($ :p {:class "text-sm text-base-content/60"} "No columns available")))
+        (render-field-section
+          {:section-key :create-fields
+           :title "Create Form Fields"
+           :subtitle "Fields shown when creating a new record"
+           :checked-fields create-fields})
 
-        ;; Edit Fields
-        ($ :div
-          ($ :h4 {:class "text-sm font-semibold mb-2"} "Edit Form Fields")
-          ($ :p {:class "text-xs text-base-content/60 mb-2"}
-            "Fields shown when editing an existing record")
-          (if (seq available-field-ids)
-            ($ :div {:class "grid grid-cols-2 sm:grid-cols-3 gap-2"}
-              (for [field-id available-field-ids
-                    :let [field-name (display-name-for field-id)]]
-                ($ :label {:key (str "edit-" field-name)
-                           :class "ds-tooltip ds-tooltip-top flex items-center gap-2 p-2 rounded-lg bg-base-200"
-                           :data-tip (str "Toggle whether “" field-name "” is shown in the Edit form.")}
-                  ($ :input {:type "checkbox"
-                             :class "ds-checkbox ds-checkbox-sm"
-                             :checked (contains? edit-fields field-id)
-                             :on-change #(on-toggle entity-kw :edit-fields field-id)})
-                  ($ :span {:class "text-sm"} field-name))))
-            ($ :p {:class "text-sm text-base-content/60"} "No columns available")))))))
+        (render-field-section
+          {:section-key :edit-fields
+           :title "Edit Form Fields"
+           :subtitle "Fields shown when editing an existing record"
+           :checked-fields edit-fields})
+
+        (render-field-section
+          {:section-key :batch-edit-fields
+           :title "Batch Edit Form Fields"
+           :subtitle "Fields shown when updating multiple records at once"
+           :checked-fields batch-edit-fields})))))
 
 (defui table-columns-editor
   "Editor for table-columns.edn - structural column configuration."

@@ -262,7 +262,6 @@ Key services in `src/app/domain/backend/expenses/services/`:
  :total_amount :decimal
  :currency :enum
  :notes :string?
- :is_posted :boolean
  :created_at :timestamp
  :updated_at :timestamp}
 

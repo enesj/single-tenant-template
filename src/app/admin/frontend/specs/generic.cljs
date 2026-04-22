@@ -329,14 +329,28 @@
 (defn- generate-form-entity-spec-from-config
   "Generate a form entity spec from a form-fields.edn-style config map.
 
-  The config is expected to have keys like :create-fields/:edit-fields and
-  optionally :required-fields and :field-config."
-  [entity-keyword form-config editing?]
+  The config is expected to have keys like :create-fields/:edit-fields/:batch-edit-fields
+  and optionally :required-fields and :field-config.
+
+  `mode-or-editing` accepts nil/false for create mode, true for edit mode,
+  and :batch-edit for batch updates."
+  [entity-keyword form-config mode-or-editing]
   (when (map? form-config)
-    (let [{:keys [create-fields edit-fields required-fields field-config]} form-config
+    (let [{:keys [create-fields edit-fields batch-edit-fields required-fields field-config]} form-config
+          mode (cond
+                 (= mode-or-editing :batch-edit) :batch-edit
+                 (true? mode-or-editing) :edit
+                 :else :create)
+          fields-source (case mode
+             :batch-edit (cond
+                 (contains? form-config :batch-edit-fields) batch-edit-fields
+                 (seq edit-fields) edit-fields
+                 :else create-fields)
+                          :edit edit-fields
+                          create-fields)
           ;; Config files are read server-side as EDN, but delivered client-side via JSON.
           ;; JSON arrays preserve values as strings, so we normalize identifiers here.
-          fields-to-show (mapv ->kw (if editing? edit-fields create-fields))
+          fields-to-show (mapv ->kw fields-source)
           required-set (set (map ->kw required-fields))
           ;; Normalize field-config keys to canonical app keywords so lookups are stable
           ;; across EDN (keyword keys) and JSON (string keys).
@@ -350,27 +364,11 @@
         (mapv (fn [field-key]
                 (let [field-key (->kw field-key)
                       config (or (get field-config field-key) {})
-                      spec (build-field-spec-from-config entity-keyword field-key config editing?)]
+                      spec (build-field-spec-from-config entity-keyword field-key config mode-or-editing)]
                   (if (contains? required-set field-key)
                     (assoc spec :required true)
                     spec)))
           fields-to-show)))))
-
-(defn- generate-admin-form-entity-spec-from-db
-  "Generate admin form entity spec from admin form-fields.edn configuration."
-  [db entity-keyword editing?]
-  (generate-form-entity-spec-from-config
-    entity-keyword
-    (get-in db [:admin :config :form-fields entity-keyword])
-    editing?))
-
-(defn- generate-domain-form-entity-spec-from-db
-  "Generate user-route (domain) form entity spec from domain form-fields config."
-  [db entity-keyword editing?]
-  (generate-form-entity-spec-from-config
-    entity-keyword
-    (get-in db [:domain :config :form-fields entity-keyword])
-    editing?))
 
 ;; Override the template :form-entity-specs/by-name subscription for both admin + user routes.
 ;;
@@ -381,22 +379,25 @@
 ;;   - if we fall back to models-data, strip system-managed fields that frequently trigger
 ;;     blocked generic lookups (e.g. /api/v1/entities/users).
 ;;
-;; The subscription accepts an optional second parameter for editing? (defaults to false/create mode).
-;; Usage: [:form-entity-specs/by-name :users] or [:form-entity-specs/by-name :users true] for edit mode.
+;; The subscription accepts an optional second parameter for mode:
+;; - omitted / false => create mode
+;; - true => edit mode
+;; - :batch-edit => batch edit mode
+;; Usage: [:form-entity-specs/by-name :users], [:form-entity-specs/by-name :users true],
+;;        [:form-entity-specs/by-name :expenses :batch-edit].
 (rf/reg-sub
   :form-entity-specs/by-name
-  (fn [db [_ entity-name editing?]]
+  (fn [db [_ entity-name mode-or-editing]]
     (let [entity-name (-> entity-name
                         ->kw
                         model-naming/db-keyword->app)
-          editing? (boolean editing?)
           admin-route? (paths/admin-route? db)
           form-config (resolver/resolve-config-source
                         admin-route?
                         (get-in db [:admin :config :form-fields entity-name])
                         (get-in db [:domain :config :form-fields entity-name]))
           spec-from-config (when form-config
-                             (generate-form-entity-spec-from-config entity-name form-config editing?))
+                             (generate-form-entity-spec-from-config entity-name form-config mode-or-editing))
           spec-from-models (when-let [md (:models-data db)]
                              (get (field-specs/form-entity-specs md) entity-name))
           spec-from-models* (if admin-route?

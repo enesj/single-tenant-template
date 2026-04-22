@@ -71,15 +71,19 @@
    "supplier_id"
    "currency"
    "total_amount"
-   "notes"
-   "is_posted"],
+  "notes"],
   :edit-fields
   ["purchased_at"
    "supplier_id"
    "currency"
    "total_amount"
-   "notes"
-   "is_posted"],
+  "notes"],
+  :batch-edit-fields
+  ["purchased_at"
+  "supplier_id"
+  "currency"
+  "total_amount"
+  "notes"],
   :field-config
   {:purchased_at {:type "datetime-local"},
    :supplier_id
@@ -89,8 +93,7 @@
    :currency
    {:type "select", :label "Currency", :options ["BAM" "EUR" "USD"]},
    :total_amount {:type "number", :step 0.01},
-   :notes {:type "textarea"},
-   :is_posted {:type "checkbox"}}},
+  :notes {:type "textarea"}}},
  :manufacturers
  {:create-fields ["display_name"],
   :edit-fields ["display_name"],

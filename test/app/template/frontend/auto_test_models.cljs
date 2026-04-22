@@ -42,7 +42,6 @@
                        [:purchased_at :timestamptz {:null false}]
                        [:total_amount [:decimal 12 2] {:null false :check [:> :total_amount 0]}]
                        [:currency [:enum :currency] {:null false :default "BAM"}]
-                       [:is_posted :boolean {:default true :null false}]
                        [:created_at :timestamptz {:default [:now]}]
                        [:updated_at :timestamptz {:default [:now]}]]
               :types [[:currency :enum {:choices ["BAM" "EUR" "USD"]}]]}})

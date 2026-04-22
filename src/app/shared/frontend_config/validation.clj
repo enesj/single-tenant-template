@@ -15,7 +15,7 @@
   [:available-columns :default-visible-columns :filterable-columns :sortable-columns :always-visible])
 
 (def ^:private form-fields-list-keys
-  [:create-fields :edit-fields :required-fields])
+  [:create-fields :edit-fields :batch-edit-fields :required-fields])
 
 (defn- normalize-values
   [xs]
@@ -188,7 +188,7 @@
                 :let [spec-result (spec-validate kind (:scope bundle) value)
                       semantic (if (:valid? spec-result)
                                  (case kind
-                       :entities (semantic-issues-entities value schema-index allowlist)
+                                   :entities (semantic-issues-entities value schema-index allowlist)
                                    :form-fields (semantic-issues-form-fields value schema-index allowlist)
                                    :table-columns (semantic-issues-table-columns value schema-index computed allowlist)
                                    :view-options (semantic-issues-view-options value schema-index computed allowlist)

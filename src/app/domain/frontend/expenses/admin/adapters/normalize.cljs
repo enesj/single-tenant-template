@@ -67,7 +67,6 @@
                   :expense_category_name [:expense-category-name]
                   :total_amount [:total-amount]
                   :purchased_at [:purchased-at]
-                  :is_posted [:is-posted]
                   :created_at [:created-at]
                   :updated_at [:updated-at]
                   ;; FK id aliases used by list-view generated specs
@@ -77,10 +76,7 @@
                   :user_id [:user-id]
                   :receipt_id [:receipt-id]
                   ;; Expand feature: number of line items for this expense
-                  :item_count [:item-count]}
-     :post-transform (fn [m]
-                       (let [posted? (get m :is-posted)]
-                         (assoc m :status (if (true? posted?) "posted" "draft"))))}))
+                  :item_count [:item-count]}}))
 
 (defn expense-item->template-entity
   [item]

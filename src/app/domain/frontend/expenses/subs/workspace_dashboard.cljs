@@ -92,12 +92,6 @@
     (:team data)))
 
 (rf/reg-sub
-  :workspace-dashboard/pending-count
-  :<- [:workspace-dashboard/data]
-  (fn [data _]
-    (:pending-count data)))
-
-(rf/reg-sub
   :workspace-dashboard/unmapped-alias-count
   :<- [:workspace-dashboard/data]
   (fn [data _]

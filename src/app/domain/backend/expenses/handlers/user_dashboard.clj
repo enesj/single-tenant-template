@@ -8,7 +8,7 @@
 (defn dashboard-handler
   "Handler factory for GET /expenses/dashboard.
    Returns all dashboard widget data in a single response.
-   Admin-only fields (pending-count, unmapped-alias-count) are only
+  Admin-only fields (unmapped-alias-count) are only
    included when the user's role is admin or owner."
   [db]
   (fn [request]

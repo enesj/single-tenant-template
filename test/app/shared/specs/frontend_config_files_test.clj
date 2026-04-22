@@ -67,17 +67,21 @@
   (testing "Strict validation rejects duplicate field ids across snake_case and kebab-case spellings"
     (let [result (form-fields-spec/validate-form-fields-strict
                    {:expenses {:create-fields ["purchased_at" "purchased-at"]
-                               :edit-fields [:supplier_id "supplier-id"]}})]
+                               :edit-fields [:supplier_id "supplier-id"]
+                               :batch-edit-fields ["notes" :notes]}})]
       (is (false? (:valid? result)))
       (is (re-find #"create-fields" (str (:errors result))))
-      (is (re-find #"edit-fields" (str (:errors result)))))))
+      (is (re-find #"edit-fields" (str (:errors result))))
+      (is (re-find #"batch-edit-fields" (str (:errors result)))))))
 
 (deftest sanitize-form-fields-normalizes-and-dedupes-runtime-snapshots
   (testing "sanitize-form-fields canonicalizes mixed ids while preserving first-seen id style"
     (is (= {:expenses {:create-fields ["purchased_at" :supplier_id]
                        :edit-fields [:purchased_at "total_amount"]
+                       :batch-edit-fields ["notes" :supplier_id]
                        :field-config {:purchased_at {:type "datetime-local"}}}}
           (form-fields-spec/sanitize-form-fields
             {:expenses {:create-fields ["purchased-at" "purchased_at" :supplier-id]
                         :edit-fields [:purchased_at "purchased-at" "total-amount" "total_amount"]
+                        :batch-edit-fields ["notes" :notes :supplier-id "supplier_id"]
                         :field-config {:purchased-at {:type "datetime-local"}}}})))))

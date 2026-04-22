@@ -156,14 +156,12 @@
                      :purchased_at "2025-01-02T03:04"
                      :total_amount "2.34"
                      :currency "BAM"
-                     :is_posted "false"
                      :items [{:raw_label "Item"
                               :article_id (str (:id article))
                               :qty "1"
                               :unit_price "2.34"
                               :line_total "2.34"}]})]
       (is (:id expense))
-      (is (= false (:is_posted expense)))
       (is (= 1 (count (:items expense))))
       (is (= "Item" (-> expense :items first :raw_label))))))
 
@@ -397,29 +395,24 @@
           payer (th/create-payer! db {:type "cash" :label "Cash"})
           initial-total (:total (expenses/count-expenses db {}))
           initial-supplier-a-total (:total (expenses/count-expenses db {:supplier-id (:id supplier-a)}))
-          initial-unposted-total (:total (expenses/count-expenses db {:is-posted? false}))
           _ (expenses/create-expense! db
               {:supplier_id (:id supplier-a)
                :payer_id (:id payer)
                :purchased_at (now)
                :total_amount (bigdec "4.00")
-               :currency "BAM"
-               :is_posted true}
+               :currency "BAM"}
               [{:raw_label "A" :line_total (bigdec "4.00")}])
           _ (expenses/create-expense! db
               {:supplier_id (:id supplier-b)
                :payer_id (:id payer)
                :purchased_at (now)
                :total_amount (bigdec "6.00")
-               :currency "BAM"
-               :is_posted false}
+               :currency "BAM"}
               [{:raw_label "B" :line_total (bigdec "6.00")}])]
       (is (= (+ initial-total 2)
             (:total (expenses/count-expenses db {}))))
       (is (= (inc initial-supplier-a-total)
-            (:total (expenses/count-expenses db {:supplier-id (:id supplier-a)}))))
-      (is (= (inc initial-unposted-total)
-            (:total (expenses/count-expenses db {:is-posted? false})))))))
+             (:total (expenses/count-expenses db {:supplier-id (:id supplier-a)})))))))
 
 (deftest expenses-delete-cascades-expense-items
   (when-let [db fixtures/*test-db*]

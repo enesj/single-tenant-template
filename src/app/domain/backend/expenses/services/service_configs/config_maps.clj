@@ -526,8 +526,7 @@
    :before-insert (fn [data]
                     (-> data
                       (assoc :id (UUID/randomUUID))
-                      (update :currency #(when % [:cast % :currency]))
-                      (update :is_posted #(if (nil? %) true (boolean %)))))
+                      (update :currency #(when % [:cast % :currency]))))
    :before-update (fn [_id updates]
                     (-> updates
                       (update :currency #(when % [:cast % :currency]))))

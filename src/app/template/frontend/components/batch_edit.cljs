@@ -24,7 +24,7 @@
   [{:keys [entity-name selected-ids on-close]}]
 
   (let [;; Get entity configuration
-        form-entity-spec (use-subscribe [:form-entity-specs/by-name (when entity-name entity-name)])
+        form-entity-spec (use-subscribe [:form-entity-specs/by-name (when entity-name entity-name) :batch-edit])
         entity-spec form-entity-spec
 
         ;; Get all selected items
@@ -104,7 +104,7 @@
                               {:entity-name entity-name
                                :submitting? false
                                :has-form-errors? (boolean (seq errors))
-                               :no-changes? (not dirty)  ;; Use fork's dirty property
+                               :no-changes? (not dirty) ;; Use fork's dirty property
                                :on-close on-close}))))
 
            :entity-name entity-name

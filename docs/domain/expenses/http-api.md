@@ -54,7 +54,7 @@ Shared HTTP shapes and auth expectations are described in [Template HTTP API](..
 - `POST /admin/api/expenses/receipts/:id/ocr` – trigger async OCR for a single receipt (requires API key for selected `RECEIPT_OCR_WORKFLOW`).
 
 ### Expenses
-- `GET /admin/api/expenses/entries` – list; filters `from/to`, `supplier-id`, `payer-id`, `is-posted?`, pagination.
+- `GET /admin/api/expenses/entries` – list; filters `from/to`, `supplier-id`, `payer-id`, pagination.
 - `POST /admin/api/expenses/entries` – create expense with `items`.
 - `GET /admin/api/expenses/entries/:id` – fetch with items.
 - `PUT /admin/api/expenses/entries/:id` – update expense fields.

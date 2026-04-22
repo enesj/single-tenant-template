@@ -11,10 +11,6 @@
    {:value "EUR" :label "EUR"}
    {:value "USD" :label "USD"}])
 
-(def ^:private expense-status-select-options
-  [{:value "draft" :label "Draft"}
-   {:value "posted" :label "Posted"}])
-
 (def ^:private receipt-status-select-options
   [{:value "uploaded" :label "Uploaded"}
    {:value "parsing" :label "Parsing"}
@@ -39,12 +35,7 @@
              :type :select
              :input-type "select"
              :options currency-select-options}
-            {:id :purchased-at :label "Purchased at" :type :datetime}
-            {:id :status
-             :label "Status"
-             :type :select
-             :input-type "select"
-             :options expense-status-select-options}]})
+            {:id :purchased-at :label "Purchased at" :type :datetime}]})
 
 (def expense-items-entity-spec
   {:id :expense-items

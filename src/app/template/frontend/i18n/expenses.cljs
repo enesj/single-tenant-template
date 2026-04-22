@@ -46,7 +46,6 @@
     :dashboard/manage-team           "Upravljaj timom"
     :dashboard/members               "članova"
     :dashboard/admin-alerts          "Obavještenja"
-    :dashboard/pending-expenses      "Troškovi na čekanju"
     :dashboard/unmapped-aliases      "Nemapirani aliasi"
     ;; Shortcuts
     :dashboard/shortcuts             "Prečice"
@@ -290,7 +289,6 @@
     :expense-detail/breadcrumb-expenses   "Troškovi"
     :expense-detail/breadcrumb-all        "Svi troškovi"
     :expense-detail/btn-edit              "Uredi"
-    :expense-detail/status-posted         "Objavljeno"
     :expense-detail/status-pending        "Na čekanju"
     :expense-detail/created               "Kreirano"
     :expense-detail/label-supplier        "Dobavljač"
@@ -313,7 +311,6 @@
     :expense-detail/no-items              "Nema zabilježenih stavki."
     :expense-detail/not-found             "Trošak nije pronađen."
     :expense-detail/btn-delete            "Obriši"
-    :expense-detail/btn-post              "Označi kao objavljeno"
 
     ;; Expenses list page
     :expenses-list/title                  "Moji troškovi"
@@ -375,7 +372,6 @@
     :dashboard/manage-team           "Manage team"
     :dashboard/members               "members"
     :dashboard/admin-alerts          "Alerts"
-    :dashboard/pending-expenses      "Pending expenses"
     :dashboard/unmapped-aliases      "Unmapped aliases"
     ;; Shortcuts
     :dashboard/shortcuts             "Shortcuts"
@@ -612,7 +608,6 @@
     :expense-detail/breadcrumb-expenses   "Expenses"
     :expense-detail/breadcrumb-all        "All Expenses"
     :expense-detail/btn-edit              "Edit"
-    :expense-detail/status-posted         "Posted"
     :expense-detail/status-pending        "Pending"
     :expense-detail/created               "Created"
     :expense-detail/label-supplier        "Supplier"
@@ -635,7 +630,6 @@
     :expense-detail/no-items              "No line items recorded."
     :expense-detail/not-found             "Expense not found."
     :expense-detail/btn-delete            "Delete"
-    :expense-detail/btn-post              "Mark as Posted"
 
     ;; Expenses list page
     :expenses-list/title                  "My Expenses"
