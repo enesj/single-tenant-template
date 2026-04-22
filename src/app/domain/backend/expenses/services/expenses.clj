@@ -397,20 +397,35 @@
   [db id]
   (get-expense-with-items db id))
 
+(defn- source-clause
+  "Build a WHERE fragment for the :source filter.
+   \"manual\"  → receipt_id IS NULL
+   \"receipt\" → receipt_id IS NOT NULL
+   \"none\"    → always false (both toggles off)
+   other/nil  → no filter"
+  [col source]
+  (case (some-> source str)
+    "manual"  [:is col nil]
+    "receipt" [:is-not col nil]
+    "none"    [:= 1 0]
+    nil))
+
 (defn list-expenses
   "List expenses with common filters.
-   opts: :from, :to, :supplier-id, :payer-id, :is-posted?, :tenant-id, :limit, :offset."
-  [db {:keys [from to supplier-id payer-id is-posted? tenant-id limit offset order-dir]
+   opts: :from, :to, :supplier-id, :payer-id, :is-posted?, :tenant-id, :source, :limit, :offset."
+  [db {:keys [from to supplier-id payer-id is-posted? tenant-id source limit offset order-dir]
        :or {limit 50 offset 0 order-dir :desc}}]
   (let [from (try (parse-instant! :from from) (catch Exception _ nil))
         to (try (parse-instant! :to to) (catch Exception _ nil))
+        source-where (source-clause :e.receipt_id source)
         base-where (cond-> [:and]
                      tenant-id (conj [:= :e.tenant_id tenant-id])
                      from (conj [:>= :e.purchased_at from])
                      to (conj [:<= :e.purchased_at to])
                      supplier-id (conj [:= :e.supplier_id supplier-id])
                      payer-id (conj [:= :e.payer_id payer-id])
-                     (some? is-posted?) (conj [:= :e.is_posted (boolean is-posted?)]))
+                     (some? is-posted?) (conj [:= :e.is_posted (boolean is-posted?)])
+                     source-where (conj source-where))
         query {:select [[:e.*]
                         [:s.display_name :supplier_display_name]
                         [:s.normalized_key :supplier_normalized_key]
@@ -433,17 +448,19 @@
 
 (defn count-expenses
   "Count expenses with the same filters as `list-expenses`.
-   opts: :from, :to, :supplier-id, :payer-id, :is-posted?, :tenant-id."
-  [db {:keys [from to supplier-id payer-id is-posted? tenant-id]}]
+   opts: :from, :to, :supplier-id, :payer-id, :is-posted?, :tenant-id, :source."
+  [db {:keys [from to supplier-id payer-id is-posted? tenant-id source]}]
   (let [from (try (parse-instant! :from from) (catch Exception _ nil))
         to (try (parse-instant! :to to) (catch Exception _ nil))
+        source-where (source-clause :receipt_id source)
         base-where (cond-> [:and]
                      tenant-id (conj [:= :tenant_id tenant-id])
                      from (conj [:>= :purchased_at from])
                      to (conj [:<= :purchased_at to])
                      supplier-id (conj [:= :supplier_id supplier-id])
                      payer-id (conj [:= :payer_id payer-id])
-                     (some? is-posted?) (conj [:= :is_posted (boolean is-posted?)]))
+                     (some? is-posted?) (conj [:= :is_posted (boolean is-posted?)])
+                     source-where (conj source-where))
         row (jdbc/execute-one!
               db
               (sql/format {:select [[[:count :*] :total]]

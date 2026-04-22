@@ -53,6 +53,7 @@
         articles (or (use-subscribe [:user-expenses/articles]) [])
         payers (or (use-subscribe [:user-expenses/payers]) [])
         payers-loading? (boolean (use-subscribe [:user-expenses/payers-loading?]))
+        user-payer-id (use-subscribe [:user-expenses/user-payer-id])
         profile (or (use-subscribe [:profile/data]) {})
         profile-settings (:settings profile)
 
@@ -514,9 +515,11 @@
       (fn []
         (when (and (nil? payer-id)
                 (seq payers))
-          (set-payer-id! (some-> (payer-default-id payers) str)))
+          (set-payer-id! (some-> (payer-default-id payers (or (:default-payer-id profile-settings)
+                                                            user-payer-id))
+                           str)))
         js/undefined)
-      [payers payer-id])
+      [payers payer-id profile-settings user-payer-id])
 
     ;; Preselect the effective default expense category once, without
     ;; re-opening it after the user explicitly closes or replaces it.

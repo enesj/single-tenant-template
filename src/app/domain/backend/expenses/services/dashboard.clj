@@ -4,6 +4,7 @@
    All queries are tenant-scoped via tenant_id. Monetary aggregations use
    the pre-computed bam_amount column for cross-currency consistency."
   (:require
+    [app.domain.backend.expenses.services.article-aliases :as article-aliases]
     [honey.sql :as sql]
     [next.jdbc :as jdbc]
     [next.jdbc.result-set :as rs]
@@ -324,14 +325,13 @@
                 [:= :is_posted false]]}))))
 
 (defn get-unmapped-alias-count
-  "Count of all article_aliases with no article_id (global catalog).
-   Matches the count shown on the unmapped-items management page."
-  [db _tenant-id]
-  (:count
-   (query-one db
-     {:select [[[:count :id] :count]]
-      :from :article_aliases
-      :where [:is :article_id nil]})))
+  "Count unmapped article aliases in the active tenant.
+   Reuses the same tenant-aware semantics as the unmapped-aliases management page."
+  [db tenant-id]
+  (let [tid (ensure-uuid tenant-id)]
+    (article-aliases/count-unmapped-aliases db
+      (cond-> {}
+        tid (assoc :tenant-id tid)))))
 
 ;; ---------------------------------------------------------------------------
 ;; Composite: full dashboard data

@@ -136,7 +136,7 @@
    :service 'app.domain.backend.expenses.services.payers
    :default-limit 100
    :default-order-by "label"
-  :required-fields [:label]
+   :required-fields [:label]
    :has-search? false
    :route-middleware [(fn [handler] (impersonation-mw/wrap-require-impersonation handler))]})
 
@@ -169,7 +169,8 @@
                    :to :string
                    :supplier-id :uuid
                    :payer-id :uuid
-                   :is-posted [:boolean :is-posted?]}})
+                   :is-posted [:boolean :is-posted?]
+                   :source :string}})
 
 (def expense-item-config
   {:entity-key :expense-item

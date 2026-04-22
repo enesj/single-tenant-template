@@ -158,10 +158,7 @@
                          :from [[:expense_items :ei2]]
                          :join [[:article_aliases :aa2] [:= :aa2.id :ei2.alias_id]
                                 [:expenses :e2] [:= :e2.id :ei2.expense_id]]
-                         :where [:and
-                                 [:= :ei2.tenant_id tenant-id]
-                                 [:is :e2.receipt_id nil]
-                                 [:in :aa2.article_id article-ids]]}]
+                         :where [:and [:= :ei2.tenant_id tenant-id] [:in :aa2.article_id article-ids]]}]
                        [:not-in :aa.article_id article-ids]]
                :group-by [:a.id :a.canonical_name]
                :order-by [[:co_count :desc] [:a.canonical_name :asc]]

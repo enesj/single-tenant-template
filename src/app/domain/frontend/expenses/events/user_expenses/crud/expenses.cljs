@@ -10,6 +10,14 @@
     [re-frame.core :as rf]
     [taoensso.timbre :as log]))
 
+(defn- sync-sticky-default-payer
+  [db payer-id]
+  (if-let [payer-id* (some-> payer-id str)]
+    (-> db
+      (assoc-in [:user-expenses :profile :data :settings :default-payer-id] payer-id*)
+      (assoc-in [:user-expenses :payers :user-payer-id] payer-id*))
+    db))
+
 ;; ---------------------------------------------------------------------------
 ;; Create expense (modal)
 ;; ---------------------------------------------------------------------------
@@ -25,19 +33,22 @@
                    {:method :post
                     :uri endpoints/list-endpoint
                     :params expense-data
-                    :on-success [:user-expenses/create-expense-modal-success on-success]
+                    :on-success [:user-expenses/create-expense-modal-success
+                                 (or (:payer_id expense-data) (:payer-id expense-data))
+                                 on-success]
                     :on-failure [:user-expenses/create-expense-modal-failure]})}))
 
 (rf/reg-event-fx
   :user-expenses/create-expense-modal-success
   common-interceptors
-  (fn [{:keys [db]} [on-success response]]
+  (fn [{:keys [db]} [payer-id on-success response]]
     (let [expense-id (or (get-in response [:data :id])
                        (get-in response [:expense :id]))
           highlight-id (some-> expense-id str)]
       {:db (-> db
              (assoc-in [:user-expenses :form :loading?] false)
              (assoc-in [:user-expenses :form :error] nil)
+             (sync-sticky-default-payer payer-id)
              (cond-> highlight-id
                (crud-success/track-recently-created :expenses highlight-id)))
        :dispatch-n [[:user-expenses/fetch-recent {:limit 25 :offset 0}]]

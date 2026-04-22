@@ -2,6 +2,7 @@
   "User-facing receipt upload page for expense tracking."
   (:require
     [app.domain.frontend.expenses.components.page-guard :as page-guard]
+    [app.domain.frontend.expenses.shared.manual-entry.core :as manual-entry]
     [app.template.frontend.components.auth-guard :refer [auth-guard]]
     [app.template.frontend.components.button :refer [button]]
     [app.template.frontend.components.file-drop-zone :refer [file-drop-zone]]
@@ -12,19 +13,8 @@
     [uix.core :refer [$ defui use-effect]]
     [uix.re-frame :refer [use-subscribe]]))
 
-(defn- payer-default?
-  [payer]
-  (boolean (or (:is-default payer)
-             (:isDefault payer))))
-
-(defn- default-payer-id
-  [payers]
-  (let [payers (or payers [])]
-    (or (some (fn [p]
-                (when (payer-default? p)
-                  (:id p)))
-          payers)
-      (:id (first payers)))))
+(def default-payer-id manual-entry/payer-default-id)
+(def default-expense-category-id manual-entry/expense-category-default-id)
 
 (defui recent-uploads [{:keys [receipts]}]
   (let [t (use-t)]
@@ -81,7 +71,13 @@
         auth-error (:error auth-status)
 
         payers (or (use-subscribe [:user-expenses/payers]) [])
+        user-payer-id (use-subscribe [:user-expenses/user-payer-id])
         selected-payer-id (use-subscribe [:user-expenses/upload-payer-id])
+        expense-categories (or (use-subscribe [:user-expenses/expense-categories]) [])
+        selected-expense-category-id (use-subscribe [:user-expenses/upload-expense-category-id])
+        upload-notes (use-subscribe [:user-expenses/upload-notes])
+        profile (or (use-subscribe [:profile/data]) {})
+        profile-settings (:settings profile)
 
         uploading? (boolean (use-subscribe [:user-expenses/upload-loading?]))
         upload-batch (use-subscribe [:user-expenses/upload-batch])
@@ -106,20 +102,45 @@
 
     (use-effect
       (fn []
-        ;; Ensure payer options exist for the upload-scoped payer chooser.
+        ;; Ensure upload defaults are available for the upload-scoped chooser surface.
         (rf/dispatch [:user-expenses/fetch-payers {:limit 100 :offset 0}])
+        (rf/dispatch [:user-expenses/fetch-expense-categories {:limit 500 :offset 0}])
+        (rf/dispatch [:profile/fetch])
         js/undefined)
       [])
 
     (use-effect
       (fn []
-        ;; If user hasn't chosen an upload payer yet, default to the "default" payer.
+        ;; If user hasn't chosen an upload payer yet, default to the sticky payer.
         (when (and (seq payers)
                 (str/blank? (some-> selected-payer-id str)))
-          (when-let [default-id (some-> (default-payer-id payers) str str/trim not-empty)]
+          (when-let [default-id (some-> (default-payer-id payers user-payer-id) str str/trim not-empty)]
             (rf/dispatch [:user-expenses/set-upload-payer-id default-id])))
         js/undefined)
-      [payers selected-payer-id])
+      [payers selected-payer-id user-payer-id])
+
+    (use-effect
+      (fn []
+        ;; Preselect the tenant default expense category for upload-time defaults.
+        (when (and (seq expense-categories)
+                (nil? selected-expense-category-id))
+          (when-let [default-id (some-> (default-expense-category-id expense-categories profile-settings)
+                                  str
+                                  str/trim
+                                  not-empty)]
+            (rf/dispatch [:user-expenses/set-upload-expense-category-id default-id])))
+        js/undefined)
+      [expense-categories selected-expense-category-id profile-settings])
+
+    (use-effect
+      (fn []
+        ;; Initialize upload-time notes from the global default note once loaded.
+        (when (and (contains? profile :settings)
+                (nil? upload-notes))
+          (rf/dispatch [:user-expenses/set-upload-notes
+                        (or (:default-note profile-settings) "")]))
+        js/undefined)
+      [profile profile-settings upload-notes])
 
     ($ auth-guard
       {:authenticated? authenticated?
@@ -198,6 +219,39 @@
                   ($ :div {:id "help-payer-expense-upload"
                            :class "text-xs text-base-content/60 mt-2"}
                     (t :expense-upload/payer-note)))
+
+                ;; Upload-time default category
+                ($ :div {:class "mb-6"}
+                  ($ :label {:id "label-expense-category-expense-upload"
+                             :class "ds-label"}
+                    ($ :span {:class "ds-label-text font-medium"}
+                      (t :common/expense-category-name "Expense Category")))
+                  ($ :select {:id "select-expense-category-expense-upload"
+                              :class "ds-select ds-select-bordered w-full max-w-md"
+                              :disabled uploading?
+                              :value (or (some-> selected-expense-category-id str) "")
+                              :on-change (fn [e]
+                                           (let [v (-> e .-target .-value)]
+                                             (rf/dispatch [:user-expenses/set-upload-expense-category-id v])))}
+                    ($ :option {:value "" :disabled (seq expense-categories)}
+                      (t :common/expense-category-name "Expense Category"))
+                    (for [{:keys [id name]} expense-categories]
+                      ($ :option {:key (str id) :value (str id)} (or name (str id))))))
+
+                ;; Upload-time default notes
+                ($ :div {:class "mb-6"}
+                  ($ :label {:id "label-notes-expense-upload"
+                             :class "ds-label"}
+                    ($ :span {:class "ds-label-text font-medium"}
+                      (t :common/notes "Notes")))
+                  ($ :textarea {:id "textarea-notes-expense-upload"
+                                :class "ds-textarea ds-textarea-bordered w-full max-w-2xl"
+                                :rows 3
+                                :disabled uploading?
+                                :value (or upload-notes "")
+                                :on-change (fn [e]
+                                             (rf/dispatch [:user-expenses/set-upload-notes
+                                                           (-> e .-target .-value)]))}))
 
                 ;; Upload zone
                 ($ file-drop-zone {:dropzone-id "dropzone-receipt-upload"

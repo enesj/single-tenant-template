@@ -110,6 +110,15 @@
     (assoc-in [:extraction :items] items)
     (assoc-in [:extraction :totals :total] total)))
 
+(def ^:private receipt-currency "BAM")
+
+(defn- enforce-receipt-bam
+  "Receipts always persist BAM, while still validating any explicit
+   client-supplied currency value."
+  [review-data]
+  (parsing/normalize-currency! (:currency review-data))
+  (assoc review-data :currency receipt-currency))
+
 (defn save-review!
   "Persist reviewed receipt values without posting an expense.
 
@@ -122,9 +131,10 @@
     a hard gate here.
 
   Returns the updated receipt row."
-  [db receipt-id {:keys [supplier_id purchased_at total_amount currency items] :as review-data}]
+  [db receipt-id {:keys [supplier_id purchased_at total_amount items] :as review-data}]
   (jdbc/with-transaction [tx db]
-    (let [receipt (queries/get-receipt tx receipt-id)]
+    (let [review-data* (enforce-receipt-bam review-data)
+          receipt (queries/get-receipt tx receipt-id)]
       (when-not receipt
         (throw (ex-info "Receipt not found" {:status 404 :id receipt-id})))
       (when-not (parsing/approvable-status? (:status receipt))
@@ -154,7 +164,7 @@
                        :supplier-uuid supplier-uuid})
                     nil)))
             purchased-at* (parsing/parse-instant! :purchased_at purchased_at)
-            currency* (parsing/normalize-currency! currency)
+            currency* (:currency review-data*)
             total* (parsing/parse-money total_amount)]
 
         (when-not supplier-uuid
@@ -197,7 +207,8 @@
    Sets created_by from the receipt's user_id (admin path has no acting user)."
   [db receipt-id review-data]
   (jdbc/with-transaction [tx db]
-    (let [receipt (queries/get-receipt tx receipt-id)]
+    (let [review-data* (enforce-receipt-bam review-data)
+          receipt (queries/get-receipt tx receipt-id)]
       (when-not receipt
         (throw (ex-info "Receipt not found" {:status 404 :id receipt-id})))
       (when-not (parsing/approvable-status? (:status receipt))
@@ -209,17 +220,17 @@
             tenant-id  (:tenant_id receipt)
             ocr-items  (extract-ocr-items receipt)
             ocr-prices (extract-ocr-item-prices ocr-items)
-            items      (-> (:items review-data)
+          items      (-> (:items review-data*)
                          (preserve-ocr-item-unit ocr-items)
                          (mark-price-modified ocr-prices))
             base       (cond-> {:receipt_id receipt-id
                                 :created_by (:user_id receipt)
-                                :currency   (or (:currency review-data) (:currency_guess receipt) "BAM")}
+                  :currency   receipt-currency}
                          store-id  (assoc :store_id store-id)
                          tenant-id (assoc :tenant_id tenant-id))
             expense    (expenses/create-expense!
                          tx
-                         (merge base review-data)
+              (merge base review-data*)
                          items)
             extra      {:expense_id (:id expense)}]
         (status/update-status! tx receipt-id "posted" extra)
@@ -241,7 +252,8 @@
   :payer_id, :purchased_at, :total_amount, :currency, :notes, :items."
   [db user-id receipt-id review-data & {:keys [tenant-id]}]
   (jdbc/with-transaction [tx db]
-    (let [receipt (queries/get-user-receipt tx user-id receipt-id tenant-id)]
+    (let [review-data* (enforce-receipt-bam review-data)
+          receipt (queries/get-user-receipt tx user-id receipt-id tenant-id)]
       (when-not receipt
         (throw (ex-info "Receipt not found" {:status 404 :id receipt-id})))
       (when-not (parsing/approvable-status? (:status receipt))
@@ -253,18 +265,18 @@
             receipt-tid  (:tenant_id receipt)
             ocr-items    (extract-ocr-items receipt)
             ocr-prices   (extract-ocr-item-prices ocr-items)
-            items        (-> (:items review-data)
+          items        (-> (:items review-data*)
                            (preserve-ocr-item-unit ocr-items)
                            (mark-price-modified ocr-prices))
             base         (cond-> {:receipt_id receipt-id
                                   :user_id    user-id
                                   :created_by user-id
-                                  :currency   (or (:currency review-data) (:currency_guess receipt) "BAM")}
+                    :currency   receipt-currency}
                            store-id    (assoc :store_id store-id)
                            receipt-tid (assoc :tenant_id receipt-tid))
             expense      (expenses/create-expense!
                            tx
-                           (merge base review-data)
+                (merge base review-data*)
                            items)
             claim?       (nil? (:user_id receipt))
             extra        (cond-> {:expense_id (:id expense)}
@@ -288,7 +300,8 @@
   (when-not user-id
     (throw (ex-info "user-id is required" {:status 400})))
   (jdbc/with-transaction [tx db]
-    (let [receipt (queries/get-receipt tx receipt-id tenant-id)]
+    (let [review-data* (enforce-receipt-bam review-data)
+          receipt (queries/get-receipt tx receipt-id tenant-id)]
       (when-not receipt
         (throw (ex-info "Receipt not found" {:status 404 :id receipt-id})))
       (when-not (parsing/approvable-status? (:status receipt))
@@ -300,18 +313,18 @@
             receipt-tid  (:tenant_id receipt)
             ocr-items    (extract-ocr-items receipt)
             ocr-prices   (extract-ocr-item-prices ocr-items)
-            items        (-> (:items review-data)
+          items        (-> (:items review-data*)
                            (preserve-ocr-item-unit ocr-items)
                            (mark-price-modified ocr-prices))
             base         (cond-> {:receipt_id receipt-id
                                   :user_id    user-id
                                   :created_by user-id
-                                  :currency   (or (:currency review-data) (:currency_guess receipt) "BAM")}
+                    :currency   receipt-currency}
                            store-id    (assoc :store_id store-id)
                            receipt-tid (assoc :tenant_id receipt-tid))
             expense      (expenses/create-expense!
                            tx
-                           (merge base review-data)
+                (merge base review-data*)
                            items)
             claim?       (nil? (:user_id receipt))
             extra        (cond-> {:expense_id (:id expense)}
@@ -326,15 +339,16 @@
 (defn- update-receipt-metadata!
   "Update receipt metadata columns to reflect edited review data."
   [tx receipt review-data supplier supplier-alias-id]
-  (let [purchased-at* (parsing/parse-instant! :purchased_at (:purchased_at review-data))
-        currency* (parsing/normalize-currency! (:currency review-data))
-        total* (parsing/parse-money (:total_amount review-data))
+  (let [review-data* (enforce-receipt-bam review-data)
+        purchased-at* (parsing/parse-instant! :purchased_at (:purchased_at review-data*))
+        currency* (:currency review-data*)
+        total* (parsing/parse-money (:total_amount review-data*))
         items* (preserve-ocr-item-unit
-                 (or (:items review-data) [])
+                 (or (:items review-data*) [])
                  (extract-ocr-items receipt))
         supplier-guess (or (some-> supplier :display_name str/trim not-empty)
-                         (:supplier_guess review-data)
-                         (:supplier-guess review-data))]
+                         (:supplier_guess review-data*)
+                         (:supplier-guess review-data*))]
     (jdbc/execute-one!
       tx
       (sql/format
@@ -364,7 +378,8 @@
   Returns {:expense <updated-expense> :receipt <updated-receipt>}."
   [db receipt-id review-data & {:keys [tenant-id]}]
   (jdbc/with-transaction [tx db]
-    (let [receipt (queries/get-receipt tx receipt-id)
+    (let [review-data* (enforce-receipt-bam review-data)
+          receipt (queries/get-receipt tx receipt-id)
           _ (when-not receipt
               (throw (ex-info "Receipt not found" {:status 404 :id receipt-id})))
           _ (when-not (= "posted" (:status receipt))
@@ -376,12 +391,12 @@
                        {:status 409 :id receipt-id})))
 
           ;; Resolve supplier
-          supplier-uuid (parsing/try-parse-uuid (:supplier_id review-data))
+          supplier-uuid (parsing/try-parse-uuid (:supplier_id review-data*))
           get-supplier (:get suppliers/service)
           supplier (when supplier-uuid (get-supplier tx supplier-uuid))
           supplier-guess (or (some-> supplier :display_name str/trim not-empty)
-                           (:supplier_guess review-data)
-                           (:supplier-guess review-data))
+                           (:supplier_guess review-data*)
+                           (:supplier-guess review-data*))
           supplier-alias-id (try
                               (when-not (str/blank? (some-> supplier-guess str))
                                 (:id (supplier-aliases/find-or-create-alias! tx supplier-guess)))
@@ -401,9 +416,9 @@
 
           ;; Update receipt metadata
           updated-receipt (update-receipt-metadata!
-                            tx receipt review-data supplier supplier-alias-id)
+                            tx receipt review-data* supplier supplier-alias-id)
 
           ;; Update linked expense (including items)
-          updated-expense (expenses/update-expense! tx expense-id review-data tenant-id {:allow-linked-expense-update? true})]
+          updated-expense (expenses/update-expense! tx expense-id review-data* tenant-id {:allow-linked-expense-update? true})]
       {:expense updated-expense
        :receipt updated-receipt})))

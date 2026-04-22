@@ -160,6 +160,15 @@
                   (contains? #{"improvement" "improvment"} value-lower) "ds-badge-secondary"
                   :else "ds-badge-outline")}
 
+      "role-badge"
+      {:label (if (seq value-str) (titleize-status value-str) "Unknown")
+       :variant (cond
+                  (contains? #{"owner"} value-lower) "ds-badge-primary"
+                  (contains? #{"admin"} value-lower) "ds-badge-secondary"
+                  (contains? #{"member"} value-lower) "ds-badge-accent"
+                  (contains? #{"viewer"} value-lower) "ds-badge-ghost"
+                  :else "ds-badge-outline")}
+
       nil)))
 
 (defn- render-badge

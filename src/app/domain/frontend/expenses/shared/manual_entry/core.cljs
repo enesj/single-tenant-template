@@ -9,9 +9,13 @@
 (def unknown-store-id "00000000-0000-0000-0000-000000000002")
 
 (defn payer-default-id
-  [payers]
-  (or (some #(when (or (:is_default %) (:is-default %) (:isDefault %)) (:id %)) payers)
-    (:id (first payers))))
+  ([payers]
+   (payer-default-id payers nil))
+  ([payers preferred-payer-id]
+   (let [preferred-id (some-> preferred-payer-id str str/trim not-empty)]
+     (or preferred-id
+       (some #(when (or (:is_default %) (:is-default %) (:isDefault %)) (:id %)) payers)
+       (:id (first payers))))))
 
 (defn expense-category-default-id
   [expense-categories _settings]

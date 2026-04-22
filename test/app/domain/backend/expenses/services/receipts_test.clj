@@ -111,6 +111,8 @@
             "status should be promoted to extracted once the reviewed receipt has all required fields")
           (is (= 12.00M (:total_amount_guess updated))
             "total_amount_guess should reflect the reviewed total")
+          (is (= "BAM" (some-> (:currency_guess updated) str))
+            "receipt review should persist BAM regardless of reviewed currency input")
           (is (= 12.0 (get-in (parse-jsonish (:raw_extract_json updated))
                         [:extraction :totals :total]))
             "raw_extract_json should reflect the reviewed total")
@@ -192,7 +194,7 @@
                                        :payer_id (:id payer)
                                        :purchased_at "2026-01-08T09:45"
                                        :total_amount "12.00"
-                                       :currency "BAM"
+                           :currency "EUR"
                                        :notes "Updated through receipt"
                                        :items [{:raw_label "Line 1"
                                                 :line_total "12.00"}]}
@@ -200,7 +202,11 @@
       (is (= (:id created-expense) (:id expense)))
       (is (= receipt-id (:receipt_id expense)))
       (is (= (:id updated-supplier) (:supplier_id expense)))
+          (is (= "BAM" (:currency expense)))
+          (is (nil? (:exchange_rate expense)))
+          (is (nil? (:rate_fetched_at expense)))
       (is (= "Updated through receipt" (:notes expense)))
       (is (= 12.00M (:total_amount expense)))
+          (is (= "BAM" (some-> (:currency_guess receipt) str)))
       (is (= (:id expense) (:expense_id receipt)))
       (is (= "posted" (str (:status receipt)))))))

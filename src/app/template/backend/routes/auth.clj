@@ -12,7 +12,7 @@
     [app.template.backend.services.onboarding.core :as onboarding]
     [app.template.backend.services.tenant :as tenant-svc]
     [cheshire.core :as json]
-    [clojure.walk :as walk]
+
     [honey.sql :as sql]
     [next.jdbc :as jdbc]
     [next.jdbc.result-set :as rs]
@@ -35,31 +35,6 @@
     (-> (response/response (json/generate-string {:success true}))
       (response/content-type "application/json")
       (assoc :session nil))))
-
-(defn- sanitize-for-serialization
-  "Helper function to sanitize objects for JSON/EDN serialization"
-  [obj]
-  (walk/postwalk
-    (fn [x]
-      (cond
-        ;; Handle all UUID types
-        (instance? java.util.UUID x) (str x)
-        ;; Handle all time/date types
-        (instance? java.time.LocalDateTime x) (str x)
-        (instance? java.time.ZonedDateTime x) (str x)
-        (instance? java.time.OffsetDateTime x) (str x)
-        (instance? java.time.Instant x) (str x)
-        (instance? java.time.LocalDate x) (str x)
-        (instance? java.time.LocalTime x) (str x)
-        ;; Handle SQL types
-        (instance? java.sql.Timestamp x) (str x)
-        (instance? java.sql.Date x) (str x)
-        (instance? java.sql.Time x) (str x)
-        ;; Handle numeric types that might not serialize
-        (instance? java.math.BigDecimal x) (str x)
-        (instance? java.math.BigInteger x) (str x)
-        :else x))
-    obj))
 
 (defn- clear-user-auth-session
   "Remove user auth keys from session while preserving other session state."
@@ -238,9 +213,9 @@
 
         :else
         (let [config            (get-in req [:service-container :config])
-              sanitized-user    (sanitize-for-serialization fresh-user)
+              sanitized-user    (shared-data/sanitize-for-serialization fresh-user)
               tenant-ctx        (tenant-auth/resolve-tenant-context db config fresh-user)
-              repaired-session  (sanitize-for-serialization
+              repaired-session  (shared-data/sanitize-for-serialization
                                   (tenant-auth/build-auth-session
                                     {:user sanitized-user}
                                     tenant-ctx))]
@@ -298,23 +273,23 @@
                             :full-name full-name
                             :password password})
                   {:keys [user verification-required]} result
-                  sanitized-user (sanitize-for-serialization user)
+                  sanitized-user (shared-data/sanitize-for-serialization user)
                   ;; Resolve tenant context — returns :no-tenant for newly registered users.
                   ;; Workspace is provisioned later when the user verifies their email.
                   tenant-ctx (tenant-auth/resolve-tenant-context db config user
                                {:client-ip (:remote-addr req)})
-                  auth-session (sanitize-for-serialization
+                  auth-session (shared-data/sanitize-for-serialization
                                  (tenant-auth/build-auth-session {:user sanitized-user} tenant-ctx))
                   new-session (assoc existing-session :auth-session auth-session)
                   response-body (cond-> {:success true
                                          :verification-required (boolean verification-required)
                                          :user sanitized-user}
                                   (:tenant auth-session)
-                                  (assoc :tenant (sanitize-for-serialization (:tenant auth-session)))
+                                  (assoc :tenant (shared-data/sanitize-for-serialization (:tenant auth-session)))
 
                                   (:tenant-selection-required auth-session)
                                   (assoc :tenant-selection-required true
-                                    :available-tenants (sanitize-for-serialization
+                                    :available-tenants (shared-data/sanitize-for-serialization
                                                          (:available-tenants auth-session)))
 
                                   verification-required
@@ -346,23 +321,23 @@
             (let [auth-result (auth-service/login-with-password
                                 auth-service {:email email :password password})
                   user-raw  (:user auth-result)
-                  user-safe (sanitize-for-serialization user-raw)
+                  user-safe (shared-data/sanitize-for-serialization user-raw)
                   user-id   (:id user-raw)
                   ;; Resolve tenant context (provision / auto-set / selection)
                   config       (get-in req [:service-container :config])
                   tenant-ctx   (tenant-auth/resolve-tenant-context db config user-raw
                                  {:client-ip (:remote-addr req)})
-                  auth-session (sanitize-for-serialization
+                  auth-session (shared-data/sanitize-for-serialization
                                  (tenant-auth/build-auth-session {:user user-safe} tenant-ctx))
                   new-session  (assoc existing-session :auth-session auth-session)
                   ;; Build response body with tenant info
                   response-body (cond-> {:success true :user user-safe}
                                   (:tenant auth-session)
-                                  (assoc :tenant (sanitize-for-serialization (:tenant auth-session)))
+                                  (assoc :tenant (shared-data/sanitize-for-serialization (:tenant auth-session)))
 
                                   (:tenant-selection-required auth-session)
                                   (assoc :tenant-selection-required true
-                                    :available-tenants (sanitize-for-serialization
+                                    :available-tenants (shared-data/sanitize-for-serialization
                                                          (:available-tenants auth-session))))]
 
               ;; Record successful login
@@ -493,7 +468,7 @@
                                  :name "Test User"
                                  :hd nil}
                 session (auth-service/process-oauth-callback auth-service test-oauth-data :test)
-                user (sanitize-for-serialization (:user session))
+                user (shared-data/sanitize-for-serialization (:user session))
                 existing-session (or (:session req) {})
                 new-session (assoc existing-session :auth-session {:user user})]
 

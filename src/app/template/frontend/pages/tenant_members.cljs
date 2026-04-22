@@ -60,7 +60,10 @@
   [t]
   {:fields [{:id "member_name" :label (t :common/name) :type :text}
             {:id "member_email" :label (t :common/email) :type :text :input-type "email"}
-            {:id "member_role" :label (t :common/role) :type :text}
+            {:id "member_role"
+             :label (t :common/role)
+             :type :text
+             :formatter "role-badge"}
             {:id "membership_status"
              :label (t :common/membership)
              :type :text
@@ -179,6 +182,17 @@
       :delete-disabled-reason delete-disabled-reason
       :can-transfer? can-transfer?)))
 
+(defui transfer-icon []
+  ($ :svg {:xmlns "http://www.w3.org/2000/svg"
+           :class "w-4 h-4"
+           :fill "none"
+           :viewBox "0 0 24 24"
+           :stroke "currentColor"
+           :stroke-width "2"}
+    ($ :path {:stroke-linecap "round"
+              :stroke-linejoin "round"
+              :d "M8 7h12m0 0l-4-4m4 4l-4 4M16 17H4m0 0l4 4m-4-4l4-4"})))
+
 (defui member-transfer-action
   [{:keys [member can-transfer?]}]
   (let [t (use-t)
@@ -186,23 +200,25 @@
         [confirming? set-confirming!] (use-state false)]
     (when can-transfer?
       (if confirming?
-        ($ :div {:class "flex gap-1"}
+        ($ :div {:class "flex gap-1 whitespace-nowrap"}
           ($ button {:btn-type :warning
-                     :class "ds-btn-xs"
+                     :class "ds-btn-sm whitespace-nowrap"
+                     :title (t :tenant/transfer)
                      :on-click (fn []
                                  (rf/dispatch [::tenant/transfer-ownership
                                                {:user-id (member-user-id member)}])
                                  (set-confirming! false))}
             (t :common/confirm))
           ($ button {:btn-type :ghost
-                     :class "ds-btn-xs"
+                     :class "ds-btn-sm whitespace-nowrap"
                      :on-click #(set-confirming! false)}
             (t :common/cancel)))
-        ($ button {:btn-type :outline
-                   :class "ds-btn-xs"
+        ($ button {:btn-type :warning
+                   :shape "circle"
                    :id (str "transfer-btn-" mid)
+                   :title (t :tenant/transfer)
                    :on-click #(set-confirming! true)}
-          (t :tenant/transfer))))))
+          ($ transfer-icon))))))
 
 (defui member-edit-form
   [{:keys [member on-success on-cancel]}]
@@ -275,7 +291,7 @@
                     :edit-disabled?
                     :delete-disabled?
                     :on-edit-click)]
-    ($ :div {:class "flex items-center justify-end gap-2 flex-wrap"}
+    ($ :div {:class "flex items-center justify-center gap-2"}
       (when show-edit?
         ($ button
           {:id (str "btn-edit-tenant-members-" mid-str)
@@ -329,6 +345,16 @@
         {:member member
          :can-transfer? can-transfer?}))))
 
+(defn- render-invite-add-form
+  [{:keys [on-success on-cancel]}]
+  ($ :div {:class "space-y-4"}
+    ($ invite-form {:on-success on-success})
+    ($ :div {:class "flex justify-end"}
+      ($ button {:btn-type :ghost
+                 :type "button"
+                 :on-click on-cancel}
+        "Cancel"))))
+
 (defn tenant-member-list-props
   [members current-role is-owner? t]
   {:entity-name :tenant-members
@@ -336,15 +362,16 @@
    :title (t :tenant/current-members)
    :per-page 25
    :form-display :modal
-   :allow-add? false
+   :allow-add? true
+   :add-button-label (t :tenant/send-invite)
    :allow-edit? true
    :allow-delete? true
-   :display-settings {:show-add-button? false
-                      :show-filtering? false
+   :display-settings {:show-filtering? false
                       :show-select? false
                       :show-batch-edit? false
                       :show-batch-delete? false}
    :rows-override (mapv tenant-member-row (or members []))
+   :render-add-form render-invite-add-form
    :render-edit-form render-member-edit-form
    :render-actions #(render-member-row-actions current-role is-owner? t %)})
 
@@ -395,7 +422,8 @@
 ;; Invite Form Component
 ;; ============================================================================
 
-(defui invite-form []
+(defui invite-form
+  [{:keys [on-success]}]
   (let [t (use-t)
         [email set-email!] (use-state "")
         [role set-role!] (use-state "member")
@@ -406,7 +434,8 @@
                            (.preventDefault e)
                            (when (seq email)
                              (rf/dispatch [::tenant/invite-member {:email email :role role}])
-                             (set-email! "")))}
+                             (set-email! "")
+                             (when on-success (on-success))))}
       ($ :div {:class "flex-1 min-w-[200px]"}
         ($ :label {:class "ds-label"}
           ($ :span {:class "ds-label-text"} (t :common/email)))
@@ -449,7 +478,7 @@
         tenant (use-subscribe [:current-tenant])
         is-owner? (= (normalize-role current-role) "owner")]
 
-    ($ :div {:class "p-6 max-w-4xl mx-auto"}
+    ($ :div {:class "w-full px-4 py-6"}
       ($ :div {:class "mb-6"}
         ($ :h1 {:class "text-2xl font-bold"} (t :tenant/members-title))
         (when tenant

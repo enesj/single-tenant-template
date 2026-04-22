@@ -136,6 +136,20 @@
     (let [payer-id* (some-> payer-id str str/trim not-empty)]
       (assoc-in db [:user-expenses :upload :payer-id] payer-id*))))
 
+(rf/reg-event-db
+  :user-expenses/set-upload-expense-category-id
+  common-interceptors
+  (fn [db [expense-category-id]]
+    (assoc-in db [:user-expenses :upload :expense-category-id]
+              (or (some-> expense-category-id str) ""))))
+
+(rf/reg-event-db
+  :user-expenses/set-upload-notes
+  common-interceptors
+  (fn [db [notes]]
+    (assoc-in db [:user-expenses :upload :notes]
+              (or (some-> notes str) ""))))
+
 (defn- ^:private receipt-from-response
   [response]
   (:data response))
@@ -170,12 +184,17 @@
       str/trim
       not-empty)))
 
+(defn- ^:private upload-settings
+  [db]
+  (or (get-in db [:user-expenses :settings :data])
+    (get-in db [:user-expenses :profile :data :settings])))
+
 (rf/reg-event-fx
   :user-expenses/upload-receipt
   common-interceptors
   (fn [{:keys [db]} [file]]
     (let [payer-id (get-in db [:user-expenses :upload :payer-id])
-          settings (get-in db [:user-expenses :settings :data])
+          settings (upload-settings db)
           category-id (or (get-in db [:user-expenses :upload :expense-category-id])
                         (default-expense-category-id db))
           notes (or (get-in db [:user-expenses :upload :notes])
@@ -269,7 +288,7 @@
     (let [files (->> files (remove nil?) vec)
           total (count files)
           payer-id (get-in db [:user-expenses :upload :payer-id])
-          settings (get-in db [:user-expenses :settings :data])
+          settings (upload-settings db)
           category-id (or (get-in db [:user-expenses :upload :expense-category-id])
                         (default-expense-category-id db))
           notes (or (get-in db [:user-expenses :upload :notes])

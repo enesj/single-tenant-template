@@ -334,7 +334,7 @@
                                 supplier-id payer-id is-posted?
                                 supplier-display-name store-display-name
                                 expense-category-name payer-label currency notes
-                                total-amount-min total-amount-max
+                                total-amount-min total-amount-max source
                                 limit offset sorts order-by order-dir]
                          :or {limit 50 offset 0 order-dir :desc}}]
   (let [user-id (ensure-uuid user-id)
@@ -346,6 +346,11 @@
         total-amount-min (parse-decimal-param total-amount-min)
         total-amount-max (parse-decimal-param total-amount-max)
         currency-values (normalize-currency-filter currency)
+        source-where (case (some-> source str)
+                       "manual"  [:is :e.receipt_id nil]
+                       "receipt" [:is-not :e.receipt_id nil]
+                       "none"    [:= 1 0]
+                       nil)
         order-clauses (shared-qb/resolve-order-by-clauses
                         {:sorts sorts
                          :order-by (some-> order-by model-naming/ensure-app-keyword)
@@ -365,7 +370,8 @@
                        payer-id (conj [:= :e.payer_id payer-id])
                        (some? is-posted?) (conj [:= :e.is_posted (boolean is-posted?)])
                        (some? total-amount-min) (conj [:>= :e.total_amount total-amount-min])
-                       (some? total-amount-max) (conj [:<= :e.total_amount total-amount-max]))
+                       (some? total-amount-max) (conj [:<= :e.total_amount total-amount-max])
+                       source-where (conj source-where))
           base-where (apply-currency-filter base-where :e.currency currency-values)
           query (-> {:select [[:e.*]
                               [:s.display_name :supplier_display_name]
@@ -403,7 +409,7 @@
                                 supplier-id payer-id is-posted?
                                 supplier-display-name store-display-name
                                 expense-category-name payer-label currency notes
-                                total-amount-min total-amount-max]}]
+                                total-amount-min total-amount-max source]}]
   (let [user-id (ensure-uuid user-id)
         tenant-id (ensure-uuid tenant-id)
         from (parse-instant-param from)
@@ -419,7 +425,13 @@
                       :payer-label payer-label
                       :notes notes}
         has-text-filters? (shared-qb/has-text-filters?
-                            (keys expense-text-filter-columns) text-filters)]
+                            (keys expense-text-filter-columns) text-filters)
+        source-col (if has-text-filters? :e.receipt_id :receipt_id)
+        source-where (case (some-> source str)
+                       "manual"  [:is source-col nil]
+                       "receipt" [:is-not source-col nil]
+                       "none"    [:= 1 0]
+                       nil)]
     (let [base-where (cond-> [:and]
                        user-id (conj [:= (if has-text-filters? :e.user_id :user_id) user-id])
                        tenant-id (conj [:= (if has-text-filters? :e.tenant_id :tenant_id) tenant-id])
@@ -431,7 +443,8 @@
                        payer-id (conj [:= (if has-text-filters? :e.payer_id :payer_id) payer-id])
                        (some? is-posted?) (conj [:= (if has-text-filters? :e.is_posted :is_posted) (boolean is-posted?)])
                        (some? total-amount-min) (conj [:>= (if has-text-filters? :e.total_amount :total_amount) total-amount-min])
-                       (some? total-amount-max) (conj [:<= (if has-text-filters? :e.total_amount :total_amount) total-amount-max]))
+                       (some? total-amount-max) (conj [:<= (if has-text-filters? :e.total_amount :total_amount) total-amount-max])
+                       source-where (conj source-where))
           base-where (apply-currency-filter base-where (if has-text-filters? :e.currency :currency) currency-values)
           query (if has-text-filters?
                   (-> {:select [[[:count :*] :total]]

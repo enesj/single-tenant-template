@@ -6,14 +6,19 @@
     [re-frame.core :as rf]
     [re-frame.db :as rf-db]))
 
-(deftest modal-create-tracks-recently-created
-  (testing "create-expense-modal-success tracks :expenses in :ui :recently-created"
+(deftest modal-create-tracks-recently-created-and-syncs-sticky-default-payer
+  (testing "create-expense-modal-success tracks :expenses and updates the local sticky default payer"
     (sup/reset-db!)
     (rf/dispatch-sync [:user-expenses/create-expense-modal-success
+                       "payer-9"
                        nil
                        {:expense {:id "exp-1"}}])
     (is (= #{"exp-1"}
-          (get-in @rf-db/app-db [:ui :recently-created :expenses])))))
+          (get-in @rf-db/app-db [:ui :recently-created :expenses])))
+    (is (= "payer-9"
+          (get-in @rf-db/app-db [:user-expenses :payers :user-payer-id])))
+    (is (= "payer-9"
+          (get-in @rf-db/app-db [:user-expenses :profile :data :settings :default-payer-id])))))
 
 (deftest modal-update-tracks-recently-updated
   (testing "update-expense-modal-success tracks :expenses in :ui :recently-updated"
@@ -124,7 +129,7 @@
   (testing "template delete-entity for \"article-aliases\" (string) is still bridged"
     (sup/reset-db!)
     (swap! rf-db/app-db assoc-in (paths/entity-data "article-aliases") {"aa-1" {:id "aa-1"}
-                                                                         "aa-2" {:id "aa-2"}})
+                                                                        "aa-2" {:id "aa-2"}})
     (swap! rf-db/app-db assoc-in (paths/entity-ids "article-aliases") ["aa-1" "aa-2"])
     (swap! rf-db/app-db assoc-in (paths/entity-selected-ids "article-aliases") #{"aa-1"})
     (swap! rf-db/app-db assoc-in (paths/list-total-items "article-aliases") 2)
@@ -147,7 +152,7 @@
   (testing "template delete-entity for :articles uses /api/v1/expenses/articles/batch"
     (sup/reset-db!)
     (swap! rf-db/app-db assoc-in (paths/entity-data :articles) {"a-1" {:id "a-1"}
-                                                                 "a-2" {:id "a-2"}})
+                                                                "a-2" {:id "a-2"}})
     (swap! rf-db/app-db assoc-in (paths/entity-ids :articles) ["a-1" "a-2"])
     (swap! rf-db/app-db assoc-in (paths/entity-selected-ids :articles) #{"a-1"})
     (swap! rf-db/app-db assoc-in (paths/list-total-items :articles) 2)
@@ -168,7 +173,7 @@
   (testing "template delete-entity for \"articles\" (string) is still bridged"
     (sup/reset-db!)
     (swap! rf-db/app-db assoc-in (paths/entity-data "articles") {"a-1" {:id "a-1"}
-                                                                  "a-2" {:id "a-2"}})
+                                                                 "a-2" {:id "a-2"}})
     (swap! rf-db/app-db assoc-in (paths/entity-ids "articles") ["a-1" "a-2"])
     (swap! rf-db/app-db assoc-in (paths/entity-selected-ids "articles") #{"a-1"})
     (swap! rf-db/app-db assoc-in (paths/list-total-items "articles") 2)

@@ -8,6 +8,7 @@
     [app.domain.frontend.expenses.admin.adapters.sync :as expenses-sync]
     [app.domain.frontend.expenses.events.user-expenses.endpoints :as endpoints]
     [app.domain.frontend.expenses.events.user-expenses.list-support :as list-support]
+    [app.domain.frontend.expenses.events.source-filter :as source-filter]
     [app.shared.pagination :as pagination]
     [app.template.frontend.db.db :refer [common-interceptors]]
     [re-frame.core :as rf]))
@@ -16,8 +17,12 @@
   :user-expenses/refresh-expenses-list
   common-interceptors
   (fn [{:keys [db]} [opts]]
-    {:dispatch [:user-expenses/fetch-expenses (merge (list-support/build-list-request-params db :expenses pagination/default-page-size)
-                                                (when (map? opts) opts))]}))
+    (let [source-param (source-filter/source-filter->param (source-filter/current-state db))
+          base-params (list-support/build-list-request-params db :expenses pagination/default-page-size)
+          caller-opts (when (map? opts) opts)]
+      {:dispatch [:user-expenses/fetch-expenses
+                  (cond-> (merge base-params caller-opts)
+                    source-param (assoc :source source-param))]})))
 
 (rf/reg-event-fx
   :user-expenses/fetch-expenses

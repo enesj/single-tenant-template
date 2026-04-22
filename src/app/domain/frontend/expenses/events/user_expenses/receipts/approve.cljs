@@ -3,6 +3,7 @@
   (:require
     [app.domain.frontend.expenses.admin.adapters.sync :as expenses-sync]
     [app.domain.frontend.expenses.components.user-expense-form.normalization :as norm]
+    [app.domain.frontend.expenses.shared.manual-entry.core :as manual-entry]
     [app.domain.frontend.expenses.events.user-expenses.endpoints :as endpoints]
     [app.domain.frontend.expenses.events.user-expenses.xhrio :as x]
     [app.template.frontend.api.http :as http]
@@ -13,25 +14,20 @@
 
 (def ^:private base-path [:user-expenses :receipts])
 
-(defn- payer-default?
-  [payer]
-  (boolean
-    (or (:is-default payer)
-      (:isDefault payer))))
+(defn- sync-sticky-default-payer
+  [db payer-id]
+  (if-let [payer-id* (some-> payer-id str str/trim not-empty)]
+    (-> db
+      (assoc-in [:user-expenses :profile :data :settings :default-payer-id] payer-id*)
+      (assoc-in [:user-expenses :payers :user-payer-id] payer-id*))
+    db))
 
 (defn- default-payer-id
   [db]
-  (let [settings-id (some-> (get-in db [:user-expenses :settings :data :default-payer-id])
-                      str
-                      str/trim
-                      not-empty)
+  (let [preferred-payer-id (or (get-in db [:user-expenses :profile :data :settings :default-payer-id])
+                             (get-in db [:user-expenses :payers :user-payer-id]))
         payers (get-in db [:user-expenses :payers :items])]
-    (or settings-id
-      (some->> (or payers [])
-        (some (fn [p]
-                (when (payer-default? p)
-                  (:id p)))))
-      (:id (first payers)))))
+    (manual-entry/payer-default-id payers preferred-payer-id)))
 
 (defn- expense-category-default?
   [category]
@@ -113,13 +109,16 @@
                    {:method :post
                     :uri (str endpoints/receipts-endpoint "/" receipt-id "/approve")
                     :params form-data
-                    :on-success [:user-expenses/approve-receipt-success receipt-id on-success]
+                    :on-success [:user-expenses/approve-receipt-success
+                                 receipt-id
+                                 (or (:payer_id form-data) (:payer-id form-data))
+                                 on-success]
                     :on-failure [:user-expenses/approve-receipt-failure]})}))
 
 (rf/reg-event-fx
   :user-expenses/approve-receipt-success
   common-interceptors
-  (fn [{:keys [db]} [receipt-id on-success response]]
+  (fn [{:keys [db]} [receipt-id payer-id on-success response]]
     (let [expense (get-in response [:data :expense])
           receipt (get-in response [:data :receipt])
           fx (cond-> []
@@ -130,6 +129,7 @@
                      (assoc-in [:user-expenses :form :error] nil)
                      (assoc-in (conj base-path :action-loading?) false)
                      (assoc-in (conj base-path :error) nil)
+                     (sync-sticky-default-payer payer-id)
                      (cond-> receipt
                        (assoc-in (conj base-path :by-id receipt-id) receipt)))
                :dispatch-n [[:user-expenses/fetch-recent {:limit 25 :offset 0}]
@@ -207,7 +207,12 @@
                        {:method :post
                         :uri (str endpoints/receipts-endpoint "/" receipt-id "/approve")
                         :params (norm/prepare-expense-submit-values values)
-                        :on-success [:user-expenses/post-selected-approve-success receipt-id remaining succeeded failed]
+                        :on-success [:user-expenses/post-selected-approve-success
+                                     receipt-id
+                                     (:payer_id values)
+                                     remaining
+                                     succeeded
+                                     failed]
                         :on-failure [:user-expenses/post-selected-approve-failure receipt-id remaining succeeded failed]})}
         (let [message (or (:error validation) "Receipt is missing required fields.")]
           (post-selected-next-fx db* remaining succeeded (conj failed {:id (str receipt-id)
@@ -229,11 +234,11 @@
 (rf/reg-event-fx
   :user-expenses/post-selected-approve-success
   common-interceptors
-  (fn [{:keys [db]} [receipt-id remaining succeeded failed response]]
+  (fn [{:keys [db]} [receipt-id payer-id remaining succeeded failed response]]
     (let [expense (get-in response [:data :expense])
           receipt (get-in response [:data :receipt])]
       (cond-> (post-selected-next-fx
-                (cond-> db
+                (cond-> (sync-sticky-default-payer db payer-id)
                   receipt
                   (assoc-in (conj base-path :by-id receipt-id) receipt))
                 remaining
@@ -322,13 +327,16 @@
                    {:method :post
                     :uri (str endpoints/receipts-endpoint "/" receipt-id "/update-posted")
                     :params form-data
-                    :on-success [:user-expenses/update-posted-receipt-success receipt-id on-success]
+                    :on-success [:user-expenses/update-posted-receipt-success
+                                 receipt-id
+                                 (or (:payer_id form-data) (:payer-id form-data))
+                                 on-success]
                     :on-failure [:user-expenses/update-posted-receipt-failure]})}))
 
 (rf/reg-event-fx
   :user-expenses/update-posted-receipt-success
   common-interceptors
-  (fn [{:keys [db]} [receipt-id on-success response]]
+  (fn [{:keys [db]} [receipt-id payer-id on-success response]]
     (let [expense (get-in response [:data :expense])
           receipt (get-in response [:data :receipt])
           fx (cond-> []
@@ -339,6 +347,7 @@
                      (assoc-in [:user-expenses :form :error] nil)
                      (assoc-in (conj base-path :action-loading?) false)
                      (assoc-in (conj base-path :error) nil)
+                     (sync-sticky-default-payer payer-id)
                      (cond-> receipt
                        (assoc-in (conj base-path :by-id receipt-id) receipt)))
                :dispatch-n [[:user-expenses/fetch-recent {:limit 25 :offset 0}]

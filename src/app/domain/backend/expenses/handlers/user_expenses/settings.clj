@@ -14,6 +14,65 @@
   "Roles allowed to execute danger-zone actions (delete-all)."
   #{"admin" "owner"})
 
+(defn- load-export-expenses
+  "Load expenses for the profile export action.
+
+   When `tenant-id` is present, export the full tenant dataset; otherwise
+   fall back to the requesting user's own expenses."
+  [db user-id tenant-id]
+  (->> (if tenant-id
+         (jdbc/execute! db
+           ["SELECT e.*, s.display_name as supplier_name, p.label as payer_label
+             FROM expenses e
+             LEFT JOIN suppliers s ON e.supplier_id = s.id
+             LEFT JOIN payers p ON e.payer_id = p.id
+             WHERE e.tenant_id = ?
+             ORDER BY e.purchased_at DESC
+             LIMIT 1000"
+            tenant-id])
+         (jdbc/execute! db
+           ["SELECT e.*, s.display_name as supplier_name, p.label as payer_label
+             FROM expenses e
+             LEFT JOIN suppliers s ON e.supplier_id = s.id
+             LEFT JOIN payers p ON e.payer_id = p.id
+             WHERE e.user_id = ?
+             ORDER BY e.purchased_at DESC
+             LIMIT 1000"
+            user-id]))
+    (map db-adapter/to-app)))
+
+(defn- delete-all-expenses!
+  "Delete all expenses for the active profile danger-zone scope.
+
+   When `tenant-id` is present, delete the full tenant dataset; otherwise
+   fall back to the requesting user's own expenses."
+  [tx user-id tenant-id]
+  (if tenant-id
+    (do
+      (jdbc/execute-one!
+        tx
+        ["UPDATE receipts
+          SET expense_id = NULL,
+              status = CASE WHEN status = 'posted'::receipt_status THEN 'extracted'::receipt_status ELSE status END
+          WHERE expense_id IN (SELECT id FROM expenses WHERE tenant_id = ?)"
+         tenant-id])
+      (jdbc/execute-one!
+        tx
+        ["DELETE FROM expenses WHERE tenant_id = ?"
+         tenant-id]))
+    (do
+      (jdbc/execute-one!
+        tx
+        ["UPDATE receipts
+          SET expense_id = NULL,
+              status = CASE WHEN status = 'posted'::receipt_status THEN 'extracted'::receipt_status ELSE status END
+          WHERE expense_id IN (SELECT id FROM expenses WHERE user_id = ?)"
+         user-id])
+      (jdbc/execute-one!
+        tx
+        ["DELETE FROM expenses WHERE user_id = ?"
+         user-id]))))
+
 (defn export-expenses-handler
   "GET /api/v1/profile/export - export expenses as CSV/PDF.
    Used by the profile page danger-zone actions."
@@ -26,26 +85,7 @@
               format (or (h/get-param params :format) "csv")
               tenant-id (h/get-tenant-id request)]
           (try
-            (let [expenses (->> (if tenant-id
-                                  (jdbc/execute! db
-                                    ["SELECT e.*, s.display_name as supplier_name, p.label as payer_label
-                                      FROM expenses e
-                                      LEFT JOIN suppliers s ON e.supplier_id = s.id
-                                      LEFT JOIN payers p ON e.payer_id = p.id
-                                      WHERE e.user_id = ? AND e.tenant_id = ?
-                                      ORDER BY e.purchased_at DESC
-                                      LIMIT 1000"
-                                     user-id tenant-id])
-                                  (jdbc/execute! db
-                                    ["SELECT e.*, s.display_name as supplier_name, p.label as payer_label
-                                      FROM expenses e
-                                      LEFT JOIN suppliers s ON e.supplier_id = s.id
-                                      LEFT JOIN payers p ON e.payer_id = p.id
-                                      WHERE e.user_id = ?
-                                      ORDER BY e.purchased_at DESC
-                                      LIMIT 1000"
-                                     user-id]))
-                             (map db-adapter/to-app))]
+            (let [expenses (load-export-expenses db user-id tenant-id)]
               (if (= format "csv")
                 (let [header "id,purchased_at,supplier,payer,total_amount,currency,notes\n"
                       rows (->> expenses
@@ -74,7 +114,7 @@
       (h/unauthorized-response))))
 
 (defn delete-all-expenses-handler
-  "DELETE /api/v1/profile/all - permanently delete all user expenses.
+  "DELETE /api/v1/profile/all - permanently delete all expenses in scope.
    Requires admin/owner role and confirmation token."
   [db]
   (fn [request]
@@ -91,35 +131,13 @@
           (if (= confirmation "DELETE_ALL_EXPENSES")
             (try
               (jdbc/with-transaction [tx db]
-                (if tenant-id
-                  (do
-                    (jdbc/execute-one!
-                      tx
-                      ["UPDATE receipts
-                        SET expense_id = NULL,
-                            status = CASE WHEN status = 'posted'::receipt_status THEN 'extracted'::receipt_status ELSE status END
-                        WHERE expense_id IN (SELECT id FROM expenses WHERE user_id = ? AND tenant_id = ?)"
-                       user-id tenant-id])
-                    (let [result (jdbc/execute-one! tx
-                                   ["DELETE FROM expenses WHERE user_id = ? AND tenant_id = ?"
-                                    user-id tenant-id])]
-                      (log/warn "User deleted all expenses" {:user-id user-id :tenant-id tenant-id
-                                                             :affected (:next.jdbc/update-count result)})
-                      (h/json-response {:data {:deleted-count (or (:next.jdbc/update-count result) 0)}})))
-                  (do
-                    (jdbc/execute-one!
-                      tx
-                      ["UPDATE receipts
-                        SET expense_id = NULL,
-                            status = CASE WHEN status = 'posted'::receipt_status THEN 'extracted'::receipt_status ELSE status END
-                        WHERE expense_id IN (SELECT id FROM expenses WHERE user_id = ?)"
-                       user-id])
-                    (let [result (jdbc/execute-one! tx
-                                   ["DELETE FROM expenses WHERE user_id = ?"
-                                    user-id])]
-                      (log/warn "User deleted all expenses" {:user-id user-id
-                                                             :affected (:next.jdbc/update-count result)})
-                      (h/json-response {:data {:deleted-count (or (:next.jdbc/update-count result) 0)}})))))
+                (let [result (delete-all-expenses! tx user-id tenant-id)]
+                  (log/warn "Power user deleted all expenses"
+                    {:user-id user-id
+                     :tenant-id tenant-id
+                     :scope (if tenant-id :tenant :user)
+                     :affected (:next.jdbc/update-count result)})
+                  (h/json-response {:data {:deleted-count (or (:next.jdbc/update-count result) 0)}})))
               (catch Exception e
                 (log/error e "Failed to delete all expenses")
                 (h/json-response {:error "Delete failed"} 500)))

@@ -10,6 +10,7 @@
     [app.domain.frontend.expenses.components.manual-expense-form.core :as manual-form]
     [app.domain.frontend.expenses.components.user-expense-form :refer [user-expense-edit-form-modal]]
     [app.domain.frontend.expenses.events.expense-items :as expense-items-events]
+    app.domain.frontend.expenses.events.source-filter
     app.domain.frontend.expenses.events.user-expenses.receipts
     [app.domain.frontend.expenses.pages.user.expense-detail :refer [expense-detail-page]]
     [app.domain.frontend.expenses.pages.user.receipts-list :as receipts-list-page]
@@ -227,6 +228,7 @@
         [viewing-id set-viewing-id!] (use-state nil)
         [expanded-ids set-expanded-ids!] (use-state #{})
         power-user? (boolean (use-subscribe [:expenses/power-user?]))
+        {:keys [show-manual? show-receipts?]} (use-subscribe [:expenses/source-filter])
         ;; Use shared entity specs when available; fall back to nil which
         ;; list-view can still handle for basic rendering.
         entity-spec (use-subscribe [:entity-specs/by-name entity-name])
@@ -288,6 +290,21 @@
            :render-edit-form render-edit-form
            :on-add-success refresh-list
            :on-edit-success refresh-list
+           :row-class-fn (fn [item]
+                           (when (manual-expense? item) "bg-slate-200/70"))
+           :extra-settings-toggles
+           [{:id "toggle-show-manual-expenses"
+             :label "Manual"
+             :active? show-manual?
+             :on-click #(rf/dispatch [:expenses/toggle-source-filter
+                                      :manual
+                                      [:user-expenses/refresh-expenses-list]])}
+            {:id "toggle-show-receipt-expenses"
+             :label "From receipts"
+             :active? show-receipts?
+             :on-click #(rf/dispatch [:expenses/toggle-source-filter
+                                      :receipts
+                                      [:user-expenses/refresh-expenses-list]])}]
            :render-actions (fn [item]
                              (let [expense-id (id-utils/extract-entity-id item)]
                                (render-actions t item

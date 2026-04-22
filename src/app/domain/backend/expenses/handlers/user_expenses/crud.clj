@@ -41,6 +41,7 @@
                   currency-filter (h/get-param params :currency)
                   total-amount-min (parse-decimal-param (h/get-param params :total-amount-min))
                   total-amount-max (parse-decimal-param (h/get-param params :total-amount-max))
+                  source-filter (some-> (h/get-param params :source) str str/trim not-empty)
                   ;; Date highlight support
                   highlight-field-raw (h/get-param params :highlight-date-field)
                   highlight-field (some-> highlight-field-raw model-naming/ensure-app-keyword)
@@ -60,6 +61,7 @@
                          currency-filter (assoc :currency currency-filter)
                          (some? total-amount-min) (assoc :total-amount-min total-amount-min)
                          (some? total-amount-max) (assoc :total-amount-max total-amount-max)
+                         source-filter (assoc :source source-filter)
                          (seq sort-opts) (merge sort-opts))
                   uid (when-not (h/tenant-elevated? request) user-id)
                   expenses (user-expenses/list-user-expenses db tenant-id uid opts)

@@ -767,7 +767,9 @@
                            ;; Pass rows per page props to table for settings panel
                            :per-page effective-per-page
                            :on-per-page-change on-per-page-change
-                           :rows-per-page-options [5 10 20 25 50 100]}))
+                           :rows-per-page-options [5 10 20 25 50 100]
+                           ;; Domain-provided toggles appended to the settings panel
+                           :extra-settings-toggles (:extra-settings-toggles props)}))
                       (when (and (get merged-display-settings :show-pagination? true)
                               (> pagination-total-pages 1))
                         ($ :div {:id (str "table-pagination-" (kw/ensure-name entity-name))

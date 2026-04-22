@@ -236,7 +236,7 @@
 (defui table
   {:prop-types table-props}
   [{:keys [headers rows row-key render-row render-row-expansion editing entity-name entity-spec measured-table-height measured-table-width _display-settings _page-display-settings
-           per-page on-per-page-change rows-per-page-options]
+           per-page on-per-page-change rows-per-page-options extra-settings-toggles]
     :as props}]
   (let [header-cells (ensure-seq headers)
         header-count (count header-cells)
@@ -356,7 +356,8 @@
                                                ;; Pass rows per page props so it's always available
                                                :per-page per-page
                                                :on-per-page-change on-per-page-change
-                                               :rows-per-page-options rows-per-page-options}))))))
+                                               :rows-per-page-options rows-per-page-options
+                                               :extra-toggles extra-settings-toggles}))))))
         ($ :tbody
           (mapcat
             (fn [[idx row-data]]

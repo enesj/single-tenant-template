@@ -6,9 +6,10 @@
     [app.template.backend.routes.utils :as route-utils :refer [get-oauth-configs]]
     [app.template.backend.security.email :as email-privacy]
     [app.template.backend.services.onboarding.core :as onboarding]
+    [app.shared.data :as shared-data]
     [clj-http.client :as http]
     [clojure.string :as str]
-    [clojure.walk :as walk]
+
     [ring.util.response :as response]
     [taoensso.timbre :as log]
     [app.admin.backend.services.admin.audit :as audit]))
@@ -132,31 +133,6 @@
             (html-error-response "Configuration Error" "GitHub OAuth is not configured.")))))))
 
 (comment "normalize-scopes moved above handlers")
-
-(defn- sanitize-for-serialization
-  "Helper function to sanitize objects for JSON/EDN serialization"
-  [obj]
-  (walk/postwalk
-    (fn [x]
-      (cond
-        ;; Handle all UUID types
-        (instance? java.util.UUID x) (str x)
-        ;; Handle all time/date types
-        (instance? java.time.LocalDateTime x) (str x)
-        (instance? java.time.ZonedDateTime x) (str x)
-        (instance? java.time.OffsetDateTime x) (str x)
-        (instance? java.time.Instant x) (str x)
-        (instance? java.time.LocalDate x) (str x)
-        (instance? java.time.LocalTime x) (str x)
-        ;; Handle SQL types
-        (instance? java.sql.Timestamp x) (str x)
-        (instance? java.sql.Date x) (str x)
-        (instance? java.sql.Time x) (str x)
-        ;; Handle numeric types that might not serialize
-        (instance? java.math.BigDecimal x) (str x)
-        (instance? java.math.BigInteger x) (str x)
-        :else x))
-    obj))
 
 (defn- fetch-google-user-info [access-token]
   (try
@@ -322,8 +298,8 @@
                               user-raw                 (:user session-data)
                               user-email               (:email user-raw)
                               masked-user-email        (email-privacy/mask-email user-email)
-                              sanitized-user           (sanitize-for-serialization user-raw)
-                              pending-auth-session     {:user (sanitize-for-serialization
+                              sanitized-user           (shared-data/sanitize-for-serialization user-raw)
+                              pending-auth-session     {:user (shared-data/sanitize-for-serialization
                                                                 (email-privacy/user-session-payload user-raw))}
                               new-signup?              (:is-new-signup session-data)
                               verification-required?   (:verification-required session-data)
@@ -351,7 +327,7 @@
                             (let [oauth-db (or db (get-in req [:service-container :db]))
                                   tenant-ctx (tenant-auth/resolve-tenant-context oauth-db config user-raw
                                                {:client-ip (:remote-addr req)})
-                                  auth-session (sanitize-for-serialization
+                                  auth-session (shared-data/sanitize-for-serialization
                                                  (tenant-auth/build-auth-session {:user sanitized-user} tenant-ctx))
                                   ;; Prefer return URL from OAuth state param (e.g. invitation accept)
                                   ;; over the default post-login redirect.

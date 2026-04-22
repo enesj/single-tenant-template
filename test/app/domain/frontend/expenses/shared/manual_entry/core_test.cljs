@@ -56,8 +56,14 @@
             {:supplier {:id "sup-1" :label "Known supplier"}}
             {:store-label "Fallback store"})))))
 
-(deftest payer-default-id-prefers-explicit-default-and-falls-back-to-first
-  (testing "prefers the explicit default payer flag when present"
+(deftest payer-default-id-prefers-sticky-user-default-then-flagged-default-then-first
+  (testing "prefers the explicit sticky per-user payer when present"
+    (is (= "payer-3"
+          (sut/payer-default-id [{:id "payer-1"}
+                                 {:id "payer-2" :is-default true}
+                                 {:id "payer-3"}]
+            "payer-3"))))
+  (testing "falls back to the explicit default payer flag when no sticky payer is present"
     (is (= "payer-2"
           (sut/payer-default-id [{:id "payer-1"}
                                  {:id "payer-2" :is-default true}]))))

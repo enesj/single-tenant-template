@@ -62,6 +62,7 @@
 
     (rf/dispatch-sync [:user-expenses/post-selected-approve-success
                        "rec-1"
+                       "payer-1"
                        ["rec-2"]
                        []
                        []
@@ -70,7 +71,39 @@
 
     (let [next-req (sup/last-http-request)]
       (is (= :get (sup/req-method next-req)))
-      (is (= "/api/v1/expenses/receipts/rec-2" (sup/req-uri next-req))))))
+      (is (= "/api/v1/expenses/receipts/rec-2" (sup/req-uri next-req))))
+    (is (= "payer-1"
+          (get-in @rf-db/app-db [:user-expenses :payers :user-payer-id])))
+    (is (= "payer-1"
+          (get-in @rf-db/app-db [:user-expenses :profile :data :settings :default-payer-id])))))
+
+(deftest approve-receipt-success-syncs-sticky-default-payer
+  (testing "approve-receipt-success updates the local sticky default payer"
+    (sup/reset-db!)
+    (rf/dispatch-sync [:user-expenses/approve-receipt-success
+                       "rec-7"
+                       "payer-7"
+                       nil
+                       {:data {:expense {:id "exp-7"}
+                               :receipt {:id "rec-7" :status "posted"}}}])
+    (is (= "payer-7"
+          (get-in @rf-db/app-db [:user-expenses :payers :user-payer-id])))
+    (is (= "payer-7"
+          (get-in @rf-db/app-db [:user-expenses :profile :data :settings :default-payer-id])))))
+
+(deftest update-posted-receipt-success-syncs-sticky-default-payer
+  (testing "update-posted-receipt-success updates the local sticky default payer"
+    (sup/reset-db!)
+    (rf/dispatch-sync [:user-expenses/update-posted-receipt-success
+                       "rec-8"
+                       "payer-8"
+                       nil
+                       {:data {:expense {:id "exp-8"}
+                               :receipt {:id "rec-8" :status "posted"}}}])
+    (is (= "payer-8"
+          (get-in @rf-db/app-db [:user-expenses :payers :user-payer-id])))
+    (is (= "payer-8"
+          (get-in @rf-db/app-db [:user-expenses :profile :data :settings :default-payer-id])))))
 
 (deftest post-selected-falls-back-to-tenant-default-expense-category
   (testing "post-selected approval uses the tenant default expense category when user settings omit one"
@@ -107,21 +140,27 @@
     (is (false? (get-in @rf-db/app-db [:user-expenses :receipts :action-loading?])))))
 
 (deftest upload-receipt-sends-file-in-formdata
-  (testing "upload-receipt sends multipart file (guards against trim-v arg loss)"
+  (testing "upload-receipt sends multipart file plus the confirmed upload defaults"
     (sup/reset-db!)
     (let [file (js/File. #js ["abc"] "r.jpg" #js {:type "image/jpeg"})]
       (rf/dispatch-sync [:user-expenses/set-upload-payer-id "payer-1"])
+      (rf/dispatch-sync [:user-expenses/set-upload-expense-category-id "cat-1"])
+      (rf/dispatch-sync [:user-expenses/set-upload-notes "Team lunch"])
       (rf/dispatch-sync [:user-expenses/upload-receipt file])
       (let [req (sup/last-http-request)
             body (sup/req-body req)
             uploaded (.get body "file")
-            payer-id (.get body "payer_id")]
+            payer-id (.get body "payer_id")
+            category-id (.get body "expense_category_id")
+            notes (.get body "notes")]
         (is (= :post (sup/req-method req)))
         (is (string? (sup/req-uri req)))
         (is (instance? js/FormData body))
         (is (instance? js/File uploaded))
         (is (= "r.jpg" (.-name uploaded)))
         (is (= "payer-1" payer-id))
+        (is (= "cat-1" category-id))
+        (is (= "Team lunch" notes))
         (is (not (true? (sup/req-format-content-type req))))))))
 
 (deftest upload-receipt-falls-back-to-tenant-default-expense-category
@@ -136,6 +175,17 @@
             body (sup/req-body req)]
         (is (= :post (sup/req-method req)))
         (is (= "cat-default" (.get body "expense_category_id")))))))
+
+(deftest upload-receipt-falls-back-to-profile-default-note
+  (testing "upload-receipt uses the profile-backed global default note when no explicit upload note is set"
+    (sup/reset-db!)
+    (swap! rf-db/app-db assoc-in [:user-expenses :profile :data :settings :default-note] "Global upload note")
+    (let [file (js/File. #js ["abc"] "r.jpg" #js {:type "image/jpeg"})]
+      (rf/dispatch-sync [:user-expenses/upload-receipt file])
+      (let [req (sup/last-http-request)
+            body (sup/req-body req)]
+        (is (= :post (sup/req-method req)))
+        (is (= "Global upload note" (.get body "notes")))))))
 
 (deftest upload-receipt-success-queues-ocr
   (testing "upload-receipt-success automatically triggers OCR"
@@ -159,22 +209,28 @@
       (is (some #(re-find #"Already uploaded" (str %)) notice)))))
 
 (deftest upload-receipts-batch-sends-multiple-requests
-  (testing "upload-receipts queues files and uploads sequentially"
+  (testing "upload-receipts queues files and uploads sequentially with shared upload defaults"
     (sup/reset-db!)
     (let [f1 (js/File. #js ["a"] "a.jpg" #js {:type "image/jpeg"})
           f2 (js/File. #js ["b"] "b.jpg" #js {:type "image/jpeg"})]
       (rf/dispatch-sync [:user-expenses/set-upload-payer-id "payer-xyz"])
+      (rf/dispatch-sync [:user-expenses/set-upload-expense-category-id "cat-xyz"])
+      (rf/dispatch-sync [:user-expenses/set-upload-notes "Batch note"])
       (rf/dispatch-sync [:user-expenses/upload-receipts [f1 f2]])
 
       (is (= 1 (count @sup/captured-http-requests)))
       (let [req1 (sup/last-http-request)
             body1 (sup/req-body req1)
             uploaded1 (.get body1 "file")
-            payer1 (.get body1 "payer_id")]
+            payer1 (.get body1 "payer_id")
+            category1 (.get body1 "expense_category_id")
+            notes1 (.get body1 "notes")]
         (is (= :post (sup/req-method req1)))
         (is (instance? js/FormData body1))
         (is (instance? js/File uploaded1))
         (is (= "payer-xyz" payer1))
+        (is (= "cat-xyz" category1))
+        (is (= "Batch note" notes1))
         (is (= "a.jpg" (.-name uploaded1))))
 
       (rf/dispatch-sync [:user-expenses/upload-receipts-success [f2] {:data {:id "rec-1"}}])
@@ -183,10 +239,14 @@
       (let [req2 (sup/last-http-request)
             body2 (sup/req-body req2)
             uploaded2 (.get body2 "file")
-            payer2 (.get body2 "payer_id")]
+            payer2 (.get body2 "payer_id")
+            category2 (.get body2 "expense_category_id")
+            notes2 (.get body2 "notes")]
         (is (instance? js/FormData body2))
         (is (instance? js/File uploaded2))
         (is (= "payer-xyz" payer2))
+        (is (= "cat-xyz" category2))
+        (is (= "Batch note" notes2))
         (is (= "b.jpg" (.-name uploaded2))))
 
       (rf/dispatch-sync [:user-expenses/upload-receipts-success [] {:data {:id "rec-2"}}])

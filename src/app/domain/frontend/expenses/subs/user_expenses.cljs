@@ -163,6 +163,16 @@
     (get-in db [:user-expenses :upload :payer-id])))
 
 (rf/reg-sub
+  :user-expenses/upload-expense-category-id
+  (fn [db _]
+    (get-in db [:user-expenses :upload :expense-category-id])))
+
+(rf/reg-sub
+  :user-expenses/upload-notes
+  (fn [db _]
+    (get-in db [:user-expenses :upload :notes])))
+
+(rf/reg-sub
   :user-expenses/recent-receipts
   (fn [db _]
     (get-in db [:user-expenses :receipts :items])))

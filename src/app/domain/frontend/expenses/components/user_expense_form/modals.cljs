@@ -4,6 +4,7 @@
     [app.domain.frontend.expenses.components.form-fields.helpers :refer [current-datetime-local
                                                                          new-line-item]]
     [app.domain.frontend.expenses.components.manual-expense-form.core :as manual-form]
+    [app.domain.frontend.expenses.shared.manual-entry.core :as manual-entry]
     [app.domain.frontend.expenses.components.user-expense-form.forms :as forms]
     [app.domain.frontend.expenses.components.user-expense-form.normalization :as norm]
     [app.domain.frontend.expenses.components.user-expense-form.specs :as specs]
@@ -14,20 +15,7 @@
     [uix.core :refer [$ defui use-effect use-memo use-state]]
     [uix.re-frame :refer [use-subscribe]]))
 
-(defn- payer-default?
-  [payer]
-  (boolean
-    (or (:is-default payer)
-      (:isDefault payer))))
-
-(defn- default-payer-id
-  [payers]
-  (let [payers (or payers [])]
-    (or (some (fn [p]
-                (when (payer-default? p)
-                  (:id p)))
-          payers)
-      (:id (first payers)))))
+(def default-payer-id manual-entry/payer-default-id)
 
 (defn- expense-category-default?
   [category]
@@ -52,6 +40,7 @@
         payers-loading? (boolean (use-subscribe [:user-expenses/payers-loading?]))
         expense-categories (or (use-subscribe [:user-expenses/expense-categories]) [])
         expense-categories-loading? (boolean (use-subscribe [:user-expenses/expense-categories-loading?]))
+        user-payer-id (use-subscribe [:user-expenses/user-payer-id])
         profile (or (use-subscribe [:profile/data]) {})
         settings (:settings profile)
         [requested? set-requested!] (use-state false)
@@ -94,7 +83,11 @@
                 (or (seq expense-categories) (not expense-categories-loading?)))
           (let [existing-payer-id (some-> (:payer_id merged-initial-data) str str/trim not-empty)
                 existing-category-id (some-> (:expense_category_id merged-initial-data) str str/trim not-empty)
-                default-payer-id* (some-> (default-payer-id payers) str str/trim not-empty)
+                default-payer-id* (some-> (default-payer-id payers (or (:default-payer-id settings)
+                                                                     user-payer-id))
+                                    str
+                                    str/trim
+                                    not-empty)
                 default-category-id* (default-expense-category-id expense-categories settings)
                 prepared (cond-> merged-initial-data
                            (and (nil? existing-payer-id) default-payer-id*)
@@ -112,6 +105,7 @@
        expense-categories
        expense-categories-loading?
        settings
+       user-payer-id
        merged-initial-data])
 
     (if-not receipt-id

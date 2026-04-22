@@ -152,9 +152,28 @@
         (is (str/includes? query-str ":e.tenant_id"))
         (is (str/includes? query-str ":aa.article_id"))
         (is (str/includes? query-str ":e.supplier_id"))
+        (is (str/includes? query-str ":e.receipt_id"))
+        (is (str/includes? query-str ":ei.price_modified false"))
         (is (str/includes? query-str ":supplier_display_name"))
         (is (str/includes? query-str ":article_id"))
         (is (str/includes? query-str ":unit_price"))))))
+
+(deftest cooccurring-articles-does-not-filter-to-manual-expenses
+  (let [tenant-id (java.util.UUID/randomUUID)
+        article-id (java.util.UUID/randomUUID)
+        captured-query (atom nil)]
+    (with-redefs [sql/format identity
+                  jdbc/execute! (fn [_db query _opts]
+                                  (reset! captured-query query)
+                                  [])]
+      (#'qa/cooccurring-articles :mock-db [article-id] 5 tenant-id nil)
+      (let [query-str (pr-str @captured-query)]
+        (is (str/includes? query-str ":ei.tenant_id"))
+        (is (str/includes? query-str ":ei2.tenant_id"))
+        (is (str/includes? query-str ":aa2.article_id"))
+        (is (str/includes? query-str ":co_count"))
+        (is (not (str/includes? query-str ":e2.receipt_id"))
+          "co-occurrence should consider all expenses regardless of source; only price enrichment should filter by receipt origin")))))
 
 (deftest quick-add-search-articles-prefers-supplier-price-and-falls-back-to-global
   (let [tenant-id (java.util.UUID/randomUUID)
