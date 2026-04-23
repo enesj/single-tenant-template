@@ -766,12 +766,12 @@
                           row-toggles (cond-> []
                                         (not selected-locked?)
                                         (conj {:id (str "toggle-selected-rows-" (kw/ensure-name entity-name))
-                                               :label "Selected"
+                                               :label (t :list/toggle-selected-rows)
                                                :active? (:show-selected-rows? merged-display-settings)
                                                :on-click #(rf/dispatch [::ui-events/toggle-selected-rows entity-kw])})
                                         (not unselected-locked?)
                                         (conj {:id (str "toggle-unselected-rows-" (kw/ensure-name entity-name))
-                                               :label "Unselected"
+                                               :label (t :list/toggle-unselected-rows)
                                                :active? (:show-unselected-rows? merged-display-settings)
                                                :on-click #(rf/dispatch [::ui-events/toggle-unselected-rows entity-kw])}))
                           extra-groups (:extra-settings-toggle-groups props)]

@@ -237,4 +237,24 @@
  ["(?i)^\\Qmak skincare\\E\\b" "Mak Skincare" "Lična njega" nil]
  ["(?i)^\\Qmisura\\E\\b" "Misura" "Pakovana hrana i pića" nil]
  ["(?i)^\\Qsolea\\E\\b" "Solea" "Lična njega" nil]
- ["(?i)^\\Qvisimax\\E\\b" "Visimax" "Papirna galanterija" nil]]
+ ["(?i)^\\Qvisimax\\E\\b" "Visimax" "Papirna galanterija" nil]
+ ["(?i)^\\Qpapirni\\E\\b" "Violeta" "Papirna galanterija" nil]
+ ["(?i)^\\Qpaprika\\E\\b"
+  "Mljekara Pađeni"
+  "Mliječni proizvodi i jaja"
+  nil]
+ ["(?i)^\\Qratluk\\E\\b" "Seyidoglu" "Pakovana hrana i pića" nil]
+ ["(?i)^\\Qkefir\\E\\b" "Zbregou" "Mliječni proizvodi i jaja" nil]
+ ["(?i)^\\Qgustin\\E\\b"
+  "Bonito"
+  "Meso, morski plodovi i delikatesi"
+  nil]
+ ["(?i)^\\Qherba\\E\\b" "Herba" "Pakovana hrana i pića" nil]
+ ["(?i)^\\Qsnickers\\E\\b" "Mars" "Pakovana hrana i pića" nil]
+ ["(?i)^\\Qsoda\\E\\b" "Corn Flip" "Pakovana hrana i pića" nil]
+ ["(?i)^\\Qsuhi\\E\\b" "Rinfu" "Pakovana hrana i pića" nil]
+ ["(?i)^\\Qdet\\E\\b" "Procter & Gamble" "Sredstva za čišćenje" nil]
+ ["(?i)^\\Qnarezani\\E\\b"
+  "Galas"
+  "Meso, morski plodovi i delikatesi"
+  nil]]

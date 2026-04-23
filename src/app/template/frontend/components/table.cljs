@@ -4,6 +4,7 @@
     [app.template.frontend.components.icons :refer [settings-icon]]
     [app.template.frontend.components.settings.list-view-settings :refer [list-view-settings-panel]]
     [app.template.frontend.events.list.settings :as settings-events]
+    [app.template.frontend.i18n :refer [use-t]]
     [app.template.frontend.subs.ui :as ui-subs]
     [app.template.frontend.ui.z-scale :as z]
     [uix.core :as uix :refer [$ defui]]
@@ -238,7 +239,8 @@
   [{:keys [headers rows row-key render-row render-row-expansion editing entity-name entity-spec measured-table-height measured-table-width _display-settings _page-display-settings
            per-page on-per-page-change rows-per-page-options extra-settings-toggles]
     :as props}]
-  (let [header-cells (ensure-seq headers)
+  (let [t (use-t)
+        header-cells (ensure-seq headers)
         header-count (count header-cells)
         ;; FIXED: Use proper nil check instead of falsy check to handle explicit false values
         show-highlights? (if (contains? props :show-highlights?)
@@ -342,7 +344,7 @@
                   ($ settings-icon {:active? settings-panel-visible?}))
                 (when (and hovering-icon? (not settings-panel-visible?))
                   ($ :span {:class "relative whitespace-nowrap px-2 py-1 rounded shadow-md z-10"}
-                    "Click to set columns visibility"))
+                    (t :list/settings-tooltip)))
                 (when settings-panel-visible?
                   ($ list-view-settings-panel {:entity-name effective-entity-name
                                                :current-entity-name effective-entity-name

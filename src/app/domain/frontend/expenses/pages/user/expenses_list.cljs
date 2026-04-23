@@ -295,13 +295,13 @@
            :extra-settings-toggle-groups
            [{:id "toggle-group-expense-source"
              :toggles [{:id "toggle-show-manual-expenses"
-                        :label "Manual"
+                        :label (t :expenses-list/source-manual)
                         :active? show-manual?
                         :on-click #(rf/dispatch [:expenses/toggle-source-filter
                                                  :manual
                                                  [:user-expenses/refresh-expenses-list]])}
                        {:id "toggle-show-receipt-expenses"
-                        :label "From receipts"
+                        :label (t :expenses-list/source-receipts)
                         :active? show-receipts?
                         :on-click #(rf/dispatch [:expenses/toggle-source-filter
                                                  :receipts

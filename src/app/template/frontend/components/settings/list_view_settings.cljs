@@ -3,6 +3,7 @@
     [app.admin.frontend.subs.config :as admin-subs]
     [app.template.frontend.subs.core :as core-subs]
     [app.template.frontend.components.icons :refer [filter-icon]]
+    [app.template.frontend.i18n :refer [use-t]]
     [app.template.frontend.utils.shared :as template-utils]
     [app.template.frontend.events.list.settings :as settings-events]
     [app.template.frontend.events.list.ui-state :as ui-events]
@@ -32,7 +33,8 @@
 (defui column-visibility-settings
   "Controls for column visibility"
   [{:keys [entity-name current-entity-name _global-settings?] :as props}]
-  (let [entity-type (or current-entity-name entity-name)
+  (let [t (use-t)
+        entity-type (or current-entity-name entity-name)
         entity-kw (if (keyword? entity-type) entity-type (keyword entity-type))
         admin-config-loaded? (use-subscribe [:admin/config-loaded?])
         vector-mode? (and admin-config-loaded?
@@ -151,7 +153,7 @@
               (when-not is-system-column?
                 ($ :span {:id (str "col-drag-" (name entity-kw) "-" field-name)
                           :class "cursor-grab select-none text-gray-400 px-1"
-                          :title "Drag to reorder"
+                          :title (t :list/drag-to-reorder)
                           :draggable true
                           :on-click (fn [e] (.stopPropagation e))
                           :on-drag-start (fn [e]
@@ -173,9 +175,9 @@
                           :disabled (not is-column-configurable?)
                           :title (when (not is-column-configurable?)
                                    (cond
-                                     (contains? always-visible-set field-id) "This column is always visible"
-                                     (contains? locked-column-set field-id) "This column visibility is locked by policy"
-                                     :else "This column is not configurable"))
+                                     (contains? always-visible-set field-id) (t :list/col-always-visible)
+                                     (contains? locked-column-set field-id) (t :list/col-locked-by-policy)
+                                     :else (t :list/col-not-configurable)))
                           :on-click (fn [_e]
                                       (when is-column-configurable?
                                         (toggle-column! vector-mode? entity-kw field-id)))}
@@ -188,7 +190,7 @@
                                   :active? (and is-filter-configurable? is-field-filterable?)
                                   :disabled? (not is-filter-configurable?)
                                   :title (when (not is-filter-configurable?)
-                                           "Filtering is not available for this column")
+                                           (t :list/filter-not-available))
                                   :on-click (fn [e]
                                               (.stopPropagation e) ; Prevent triggering the parent button's click
                                               (when is-filter-configurable?
@@ -225,7 +227,8 @@
            per-page on-per-page-change rows-per-page-options measured-table-height measured-table-width
            extra-toggles]}]
 
-  (let [;; Normalize entity name to keyword consistently
+  (let [t (use-t)
+        ;; Normalize entity name to keyword consistently
         entity-kw (if (keyword? entity-name) entity-name (keyword entity-name))
 
         ;; Subscribe to entity-specific display settings - SINGLE subscription
@@ -255,12 +258,14 @@
 
         ;; Helper component for toggle buttons
         ;; Locked settings (from resolver) are hidden from the UI
-        toggle-button (fn [{:keys [label is-active? event-key hardcoded-key]}]
+        ;; :slug is a stable, locale-independent id source so DOM ids don't drift per language.
+        toggle-button (fn [{:keys [label slug is-active? event-key hardcoded-key]}]
                         (let [;; Check if this setting is locked (hardcoded at policy level)
                               is-locked? (and hardcoded-display-settings
                                            hardcoded-key
                                            (contains? hardcoded-display-settings hardcoded-key))
-                              toggle-id (str "toggle-" (-> label str/lower-case (str/replace #"\s+" "-")) "-" (name entity-kw))]
+                              id-source (or slug label)
+                              toggle-id (str "toggle-" (-> id-source str/lower-case (str/replace #"\s+" "-")) "-" (name entity-kw))]
                           ;; Hide the control entirely if it's locked
                           (when (not is-locked?)
                             ($ :div {:id toggle-id
@@ -276,21 +281,21 @@
         ($ :div {:id (str "local-overrides-" (name entity-kw))
                  :class "flex items-center justify-between gap-2 p-2 rounded-lg bg-base-200"}
           ($ :span {:class "text-xs text-base-content/70"}
-            "Local overrides are active in this browser; they can override Defaults until cleared.")
+            (t :list/local-overrides-notice))
           ($ :button {:type "button"
                       :id (str "btn-clear-local-display-prefs-" (name entity-kw))
                       :class "btn btn-xs btn-ghost"
                       :on-click (fn [e]
                                   (.preventDefault e)
                                   (rf/dispatch [::ui-events/clear-display-prefs entity-kw]))}
-            "Reset to default settings")))
+            (t :list/reset-defaults))))
 
       ;; Entity header for global settings
       (when (not compact?)
         ($ :div {:id "entity-controls-header"
                  :class "mb-2"}
           ($ :span {:class "text-sm"}
-            (str "Controls for " (str/capitalize (name curr-entity-name))))
+            (t :list/controls-for (str/capitalize (name curr-entity-name))))
           ($ :div {:class "border-t border-gray-200 my-2"})))
 
       ;; FIRST ROW: Main controls (Edit, Delete, Highlights, Selection, Table Width, Rows Per Page)
@@ -298,55 +303,64 @@
                :class "flex flex-row flex-wrap gap-4 items-center p-3 bg-base-100 rounded-lg shadow-sm"}
 
         ;; Edit control
-        (toggle-button {:label "Edit"
+        (toggle-button {:label (t :list/toggle-edit)
+                        :slug "edit"
                         :is-active? curr-show-edit?
                         :event-key ::ui-events/toggle-edit
                         :hardcoded-key :show-edit?})
 
         ;; Delete control
-        (toggle-button {:label "Delete"
+        (toggle-button {:label (t :list/toggle-delete)
+                        :slug "delete"
                         :is-active? curr-show-delete?
                         :event-key ::ui-events/toggle-delete
                         :hardcoded-key :show-delete?})
 
         ;; Highlights control
-        (toggle-button {:label "Highlights"
+        (toggle-button {:label (t :list/toggle-highlights)
+                        :slug "highlights"
                         :is-active? curr-show-highlights?
                         :event-key ::ui-events/toggle-highlights
                         :hardcoded-key :show-highlights?})
 
         ;; Selection control
-        (toggle-button {:label "Selection"
+        (toggle-button {:label (t :list/toggle-selection)
+                        :slug "selection"
                         :is-active? curr-show-select?
                         :event-key ::ui-events/toggle-select
                         :hardcoded-key :show-select?})
 
 ;; Pagination control
-        (toggle-button {:label "Pagination"
+        (toggle-button {:label (t :list/toggle-pagination)
+                        :slug "pagination"
                         :is-active? curr-show-pagination?
                         :event-key ::ui-events/toggle-pagination
                         :hardcoded-key :show-pagination?})
 
         ;; Filtering control (global master switch)
-        (toggle-button {:label "Filtering"
+        (toggle-button {:label (t :list/toggle-filtering)
+                        :slug "filtering"
                         :is-active? curr-show-filtering?
                         :event-key ::ui-events/toggle-filtering
                         :hardcoded-key :show-filtering?})
 
         ;; Add button control
-        (toggle-button {:label "Add Button"
+        (toggle-button {:label (t :list/toggle-add-button)
+                        :slug "add-button"
                         :is-active? curr-show-add-button?
                         :event-key ::ui-events/toggle-add-button
                         :hardcoded-key :show-add-button?})
 
         ;; Batch Edit control
-        (toggle-button {:label "Batch Edit"
+        (toggle-button {:label (t :list/toggle-batch-edit)
+                        :slug "batch-edit"
                         :is-active? curr-show-batch-edit?
                         :event-key ::ui-events/toggle-batch-edit
                         :hardcoded-key :show-batch-edit?})
 
         ;; Batch Delete control
-        (toggle-button {:label "Batch Delete"
+        (toggle-button {:label (t :list/toggle-batch-delete)
+                        :slug "batch-delete"
                         :is-active? curr-show-batch-delete?
                         :event-key ::ui-events/toggle-batch-delete
                         :hardcoded-key :show-batch-delete?})
@@ -384,7 +398,7 @@
             [effective-width-str])
           ($ :div {:id "table-width-control"
                    :class "flex items-center gap-2 p-1 rounded-md"}
-            ($ :span {:class "text-sm font-medium"} "Table Width:")
+            ($ :span {:class "text-sm font-medium"} (t :list/table-width))
             ($ :input {:id (str "table-width-input-" (name entity-kw))
                        :type "number"
                        :min "800"
@@ -424,14 +438,14 @@
             [effective-height-str])
           ($ :div {:id "table-height-control"
                    :class "flex items-center gap-2 p-1 rounded-md"}
-            ($ :span {:class "text-sm font-medium"} "Table Height:")
+            ($ :span {:class "text-sm font-medium"} (t :list/table-height))
             ($ :input {:id (str "table-height-input-" (name entity-kw))
                        :type "number"
                        :min "150"
                        :max "2000"
                        :step "50"
                        :value temp-height
-                       :placeholder "auto"
+                       :placeholder (t :list/table-height-auto)
                        :class "w-20 px-2 py-1 border border-gray-300 rounded text-sm"
                        :on-change (fn [e]
                                     (let [new-value (.. e -target -value)]
@@ -447,7 +461,7 @@
         (when (and per-page on-per-page-change rows-per-page-options)
           ($ :div {:id "rows-per-page-control"
                    :class "flex items-center gap-2 p-1 rounded-md"}
-            ($ :span {:class "text-sm font-medium"} "Rows per page:")
+            ($ :span {:class "text-sm font-medium"} (t :list/rows-per-page))
             ($ :select {:id (str "rows-per-page-" (name entity-kw))
                         :value per-page
                         :class "w-20 px-2 py-1 border border-gray-300 rounded text-sm"
@@ -462,7 +476,7 @@
         ;; Section header
         ($ :div {:id "column-visibility-header"
                  :class "mb-3"}
-          ($ :span {:class "text-sm font-medium"} "Column Visibility")
+          ($ :span {:class "text-sm font-medium"} (t :list/column-visibility))
           ($ :div {:class "border-t border-gray-200 my-1"}))
 
         ;; Column visibility settings

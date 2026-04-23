@@ -320,7 +320,10 @@
   (let [has-count? (get config :has-count? true)
         query-params-fn (resolve-query-params-fn config)
         count-params-fn (or custom-count-params query-params-fn)
-        default-dir (or default-order-dir "asc")]
+        default-dir (or default-order-dir "asc")
+        default-sort-dir (if (keyword? default-dir)
+                           default-dir
+                           (keyword default-dir))]
     (fn [db]
       (utils/with-error-handling
         (fn [request]
@@ -329,11 +332,14 @@
                 date-filters (extract-date-range-filters qp date-range-columns)
                 highlight-date-filters (extract-date-range-filters qp date-range-columns (:field highlight-request))
                 custom-params (when query-params-fn (query-params-fn qp))
+                sort-params (let [{:keys [sorts order-by order-dir]} (utils/extract-sort-params qp)]
+                              (cond-> {:order-by (order-by->app order-by default-order-by)
+                                       :order-dir (or order-dir default-sort-dir)}
+                                (seq sorts) (assoc :sorts sorts)))
                 query-params (cond-> (merge {:limit (utils/parse-int-param qp :limit default-limit)
-                                             :offset (utils/parse-int-param qp :offset 0)
-                                             :order-by (order-by->app (get-param qp :order-by) default-order-by)
-                                             :order-dir (keyword (or (get-param qp :order-dir) default-dir))}
-                                       custom-params)
+                                             :offset (utils/parse-int-param qp :offset 0)}
+                                       custom-params
+                                       sort-params)
                                (seq date-filters)
                                (update :extra-filters (fn [existing]
                                                         (into (vec (or existing [])) date-filters))))
