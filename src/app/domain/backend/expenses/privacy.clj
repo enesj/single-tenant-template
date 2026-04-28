@@ -44,6 +44,28 @@
     :email_key_version
     :email-key-version})
 
+(def ^:private receipt-raw-content-keys
+  #{:raw_extract_json
+    :raw-extract-json
+    :receipts/raw_extract_json
+    :receipts/raw-extract-json
+    :parsed_markdown
+    :parsed-markdown
+    :receipts/parsed_markdown
+    :receipts/parsed-markdown
+    :storage_key
+    :storage-key
+    :receipts/storage_key
+    :receipts/storage-key
+    :original_filename
+    :original-filename
+    :receipts/original_filename
+    :receipts/original-filename
+    :file_hash
+    :file-hash
+    :receipts/file_hash
+    :receipts/file-hash})
+
 (defn scrub-user-linkage
   "Remove direct user identity/linkage fields from a response payload.
 
@@ -59,6 +81,21 @@
         value))
     payload))
 
+(defn scrub-receipt-raw-content
+  "Remove raw OCR/file-storage content from routine admin receipt payloads.
+
+   Receipt review/edit screens can keep derived fields such as totals, statuses,
+   supplier guesses, content type, and `:download-url`, but should not receive raw
+   OCR JSON, markdown text, storage keys, original filenames, or file hashes by
+   default. The explicit download endpoint remains the file access boundary."
+  [payload]
+  (walk/postwalk
+    (fn [value]
+      (if (map? value)
+        (apply dissoc value receipt-raw-content-keys)
+        value))
+    payload))
+
 (defn admin-expense-view
   "Return an admin-facing expense payload without user linkage."
   [expense]
@@ -70,11 +107,11 @@
   (scrub-user-linkage (shared-db/to-app expenses)))
 
 (defn admin-receipt-view
-  "Return an admin-facing receipt payload without user linkage."
+  "Return an admin-facing receipt payload without user linkage or raw content."
   [receipt]
-  (some-> receipt shared-db/to-app scrub-user-linkage))
+  (some-> receipt shared-db/to-app scrub-user-linkage scrub-receipt-raw-content))
 
 (defn admin-receipts-view
-  "Return admin-facing receipt payloads without user linkage."
+  "Return admin-facing receipt payloads without user linkage or raw content."
   [receipts]
-  (scrub-user-linkage (shared-db/to-app receipts)))
+  (scrub-receipt-raw-content (scrub-user-linkage (shared-db/to-app receipts))))

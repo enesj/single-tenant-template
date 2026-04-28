@@ -215,9 +215,9 @@
     "Failed to batch delete users"))
 
 (defn reveal-user-email-handler
-  "Reveal a user's email for exceptional support workflows.
+  "Reveal a user's email for exceptional owner-only break-glass workflows.
 
-   Requires a support reason and always emits an audit entry."
+   Requires a structured reason code plus details and always emits an audit entry."
   [db]
   (utils/with-validation-error-handling
     (fn [request]
@@ -225,6 +225,7 @@
         (fn [user-id body context _request]
           (let [result (identity-reveal/reveal-email! db :user user-id
                          {:admin-id (-> context :admin :id)
+                          :reason-code (or (:reason-code body) (:reason_code body))
                           :reason (:reason body)
                           :ip-address (:ip-address context)
                           :user-agent (:user-agent context)})]
@@ -243,5 +244,5 @@
     {:get (get-user-details-handler db)
      :put (update-user-handler db)}]
    ["/:id/reveal-email"
-    {:post {:middleware [#(admin-mw/wrap-admin-role % :support)]
+    {:post {:middleware [#(admin-mw/wrap-admin-role % :owner)]
             :handler (reveal-user-email-handler db)}}]])

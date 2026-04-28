@@ -115,6 +115,38 @@
         (is (nil? (get-in body [:receipt :linked-expense :created-by-name])) "linked expense creator name is hidden")
         (is (nil? (get-in body [:receipt :linked-expense :email-ciphertext])) "linked expense encrypted email is hidden")))))
 
+(deftest get-receipt-handler-scrubs-raw-receipt-content
+  (testing "routine admin receipt detail response hides raw OCR and storage metadata"
+    (let [receipt-id (java.util.UUID/randomUUID)
+          handler (receipts-routes/get-receipt-handler :db)]
+      (with-redefs [receipt-queries/get-receipt
+                    (fn [_db rid]
+                      (is (= receipt-id rid))
+                      {:id rid
+                       :status "extracted"
+                       :raw_extract_json {:extraction {:items [{:raw_label "secret"}]}}
+                       :parsed_markdown "# raw markdown"
+                       :storage_key "tenant/private/receipt.jpg"
+                       :original_filename "private-receipt.jpg"
+                       :file_hash "abcd"
+                       :content_type "image/jpeg"})
+
+                    receipt-storage/resolve-local-receipt-file
+                    (fn [_storage-key]
+                      nil)]
+        (let [response (handler {:path-params {:id (str receipt-id)}})
+              body (json/parse-string (:body response) true)
+              receipt (:receipt body)]
+          (is (= 200 (:status response)))
+          (is (= true (:success body)))
+          (is (= (str receipt-id) (:id receipt)))
+          (is (= "image/jpeg" (:content-type receipt)))
+          (is (nil? (:raw-extract-json receipt)))
+          (is (nil? (:parsed-markdown receipt)))
+          (is (nil? (:storage-key receipt)))
+          (is (nil? (:original-filename receipt)))
+          (is (nil? (:file-hash receipt))))))))
+
 (deftest update-posted-handler-hides-user-linkage-while-returning-edit-results
   (let [receipt-id (java.util.UUID/randomUUID)
         expense-id (java.util.UUID/randomUUID)

@@ -163,6 +163,15 @@
         (let [response (handler request)]
           (is (= 404 (:status response))))))))
 
+(deftest reveal-admin-email-route-requires-owner-role-test
+  (testing "reveal-email is owner-only, not routine support access"
+    (let [reveal-route (some #(when (= "/:id/reveal-email" (first %)) %)
+                         (rest (admins/routes :db)))
+          role-middleware (-> reveal-route second :post :middleware first)
+          protected-handler (role-middleware (fn [_request] {:status 200}))]
+      (is (= 403 (:status (protected-handler {:admin {:role "support"}}))))
+      (is (= 200 (:status (protected-handler {:admin {:role "owner"}})))))))
+
 ;; ============================================================================
 ;; Create Admin Tests
 ;; ============================================================================

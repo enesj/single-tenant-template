@@ -187,7 +187,7 @@
                 download-url (when (receipt-storage/resolve-local-receipt-file (:storage-key receipt*))
                                (str "/admin/api/expenses/receipts/" id "/download"))]
             (utils/success-response
-              {:receipt (privacy/scrub-user-linkage
+              {:receipt (privacy/admin-receipt-view
                           (enrich-with-linked-expense
                             db
                             (cond-> receipt*

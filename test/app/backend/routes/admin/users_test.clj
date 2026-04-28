@@ -177,6 +177,15 @@
           (is (= 0 (:offset body)))
           (is (= 1 (count (:users body)))))))))
 
+(deftest reveal-user-email-route-requires-owner-role-test
+  (testing "reveal-email is owner-only, not routine support access"
+    (let [reveal-route (some #(when (= "/:id/reveal-email" (first %)) %)
+                         (rest (users-routes/routes :db)))
+          role-middleware (-> reveal-route second :post :middleware first)
+          protected-handler (role-middleware (fn [_request] {:status 200}))]
+      (is (= 403 (:status (protected-handler {:admin {:role "support"}}))))
+      (is (= 200 (:status (protected-handler {:admin {:role "owner"}})))))))
+
 ;; ============================================================================
 ;; User Filter Logic Tests
 ;; ============================================================================

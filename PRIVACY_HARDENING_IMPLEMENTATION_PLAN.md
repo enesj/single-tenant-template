@@ -15,8 +15,8 @@ Reduce the impact of database read access and routine global-admin access by min
 | Admin session token hashing | Completed | New sessions store only a deterministic SHA-256 hash in `admin_sessions.token`; raw bearer tokens remain only at the browser/API boundary. |
 | Reset/verification/invitation token hashing | Completed | Password reset, email verification, tenant invitation, and admin invitation tokens now persist only deterministic SHA-256 hashes; raw tokens are returned only for URL/email delivery. |
 | User CSV export hardening | Completed | User CSV export now emits pseudonymous user refs and non-identity account metadata only; raw emails, encrypted email fields, full names, tenant joins, and stale role/tenant columns are omitted. |
-| Reveal-email hardening | Not started | Narrow role/ownership, add stronger reason taxonomy/rate limits/alerts/notifications as appropriate. |
-| Receipt raw content minimization | Not started | Define safe admin detail projection for raw OCR, markdown, filenames, and storage keys. |
+| Reveal-email hardening | Completed | Reveal endpoints are now owner-only break-glass flows requiring structured reason codes plus detailed justification, with structured audit metadata. |
+| Receipt raw content minimization | Completed | Routine admin receipt projections now omit raw OCR JSON, parsed markdown, storage keys, original filenames, and file hashes while preserving derived review metadata and download URL boundaries. |
 | DB relationship privacy strategy | Not started | Larger architecture decision: pseudonymous subject IDs, separate privacy boundary, or DB-level controls. |
 | Plaintext `full_name` strategy | Not started | Decide whether names are identity-management-only, encrypted, pseudonymized, or removed from operational views. |
 | Key rotation/keyring support | Not started | Add multi-key decrypt and active-key encrypt support. |
@@ -100,7 +100,13 @@ Reduce the impact of database read access and routine global-admin access by min
   - `src/app/template/backend/routes/admin/users.clj`
   - `src/app/template/backend/routes/admin/admins.clj`
 - **Validation:** focused route/service tests for allowed/denied roles and audit behavior.
-- **Progress:** Not started.
+- **Progress:** Completed on 2026-04-28.
+- **Implementation notes:**
+  - Changed user/admin reveal-email routes from support-level access to owner-level access.
+  - Added structured break-glass reason codes: `:account-security`, `:legal-request`, `:data-subject-request`, `:identity-management`, and `:production-incident`.
+  - Increased free-text justification minimum length to 20 characters and require both reason code and details before DB lookup.
+  - Audit events now include `reason_code`, `reason_label`, detailed reason, entity ref, masked email, and reveal marker while continuing not to include raw email in audit changes.
+  - Added focused service tests for validation/audit metadata and route tests proving support is denied while owner is allowed.
 
 ### 5. Minimize admin receipt raw content
 
@@ -114,7 +120,13 @@ Reduce the impact of database read access and routine global-admin access by min
   - `src/app/domain/backend/expenses/routes/receipts.clj`
   - `src/app/domain/backend/expenses/services/receipts/queries.clj`
 - **Validation:** backend route tests confirm raw fields are absent from routine admin responses.
-- **Progress:** Not started.
+- **Progress:** Completed on 2026-04-28.
+- **Implementation notes:**
+  - Added `scrub-receipt-raw-content` to the expenses privacy projection layer.
+  - `admin-receipt-view` and `admin-receipts-view` now remove `raw_extract_json`, `parsed_markdown`, `storage_key`, `original_filename`, and `file_hash` variants recursively.
+  - Receipt detail still computes derived fields such as content type and `download-url` before projection; raw storage metadata stays out of the JSON response.
+  - The explicit download endpoint remains the file access boundary.
+  - Added focused projection and route tests proving raw receipt content/storage fields are absent from routine admin payloads.
 
 ### 6. Decide and implement DB relationship privacy strategy
 
@@ -188,3 +200,5 @@ Reduce the impact of database read access and routine global-admin access by min
 | 2026-04-28 | Focused token hashing unit suite | Passed: 16 tests, 65 assertions, 0 failures, 0 errors | `tmp/privacy-token-hashing-unit-suite.txt` |
 | 2026-04-28 | DB-backed invitation focused suite | Blocked by local port conflict: `java.net.BindException: Address already in use` while starting test system | `tmp/privacy-token-invitation-tests.txt` |
 | 2026-04-28 | Focused user CSV export tests | Passed: 7 tests, 36 assertions, 0 failures, 0 errors | `tmp/user-csv-export-tests.txt` |
+| 2026-04-28 | Focused reveal-email hardening tests | Passed: 22 tests, 125 assertions, 0 failures, 0 errors | `tmp/reveal-email-hardening-tests.txt` |
+| 2026-04-28 | Focused receipt raw-content privacy tests | Passed: 14 tests, 109 assertions, 0 failures, 0 errors | `tmp/receipt-raw-content-privacy-tests.txt` |
