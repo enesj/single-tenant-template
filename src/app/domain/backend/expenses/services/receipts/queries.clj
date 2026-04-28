@@ -5,6 +5,7 @@
     [app.domain.backend.expenses.services.receipts.storage :as storage]
     [app.shared.query-builders :as shared-qb]
     [app.template.backend.security.email :as email-privacy]
+    [app.template.backend.security.privacy-subject :as privacy-subject]
     [clojure.string :as str]
     [honey.sql :as sql]
     [next.jdbc :as jdbc]
@@ -182,8 +183,9 @@
   "Build WHERE clause for receipt list/count queries.
 
   When `user-id` is provided, visibility is scoped to:
-  - receipts owned by the user, or
-  - receipts with no owner (`user_id` is nil).
+  - receipts owned by the user's secret-derived subject ref,
+  - legacy receipts still owned by users.id during migration, or
+  - receipts with no owner (`subject_ref` and `user_id` are both nil).
 
   When `tenant-id` is provided, scopes to that tenant.
 
@@ -192,8 +194,13 @@
   (let [status-clause (build-status-clause status helpers)
         visibility-clause (when user-id
                             [:or
-                             [:= :receipts.user_id user-id]
-                             [:is :receipts.user_id nil]])
+                             (privacy-subject/user-match-clause
+                               :receipts.subject_ref
+                               :receipts.user_id
+                               user-id)
+                             [:and
+                              [:is :receipts.subject_ref nil]
+                              [:is :receipts.user_id nil]]])
         tenant-clause (when tenant-id
                         [:= :receipts.tenant_id tenant-id])
         purged-clause (cond
@@ -316,7 +323,7 @@
                                   {}
                                   sortable-receipt-columns)
                            :status [:raw effective-status-sql])
-          normalized-sorts (mapv (fn [{:keys [field] :as sort-entry}]
+        normalized-sorts (mapv (fn [{:keys [field] :as sort-entry}]
                                  (assoc sort-entry :field (normalize-order-field field)))
                            (or sorts []))]
     (shared-qb/resolve-order-by-clauses
@@ -467,9 +474,9 @@
   [db {:keys [status tenant-id original-filename supplier-guess created-by-name show-purged?
               purchased-at-guess-from purchased-at-guess-to
               created-at-from created-at-to
-          updated-at-from updated-at-to
-          total-amount-guess-min total-amount-guess-max
-          total-display-min total-display-max]}]
+              updated-at-from updated-at-to
+              total-amount-guess-min total-amount-guess-max
+              total-display-min total-display-max]}]
   (let [helpers (build-status-query-helpers)
         where-clause (build-receipts-where-clause status nil helpers
                        :tenant-id tenant-id
@@ -487,11 +494,11 @@
                                              :created-at-from created-at-from
                                              :created-at-to created-at-to
                                              :updated-at-from updated-at-from
-                               :updated-at-to updated-at-to})
+                                             :updated-at-to updated-at-to})
                 (apply-receipt-amount-filters {:total-amount-guess-min total-amount-guess-min
-                                 :total-amount-guess-max total-amount-guess-max
-                                 :total-display-min total-display-min
-                                 :total-display-max total-display-max}))
+                                               :total-amount-guess-max total-amount-guess-max
+                                               :total-display-min total-display-min
+                                               :total-display-max total-display-max}))
         row (jdbc/execute-one! db (sql/format query) {:builder-fn rs/as-unqualified-lower-maps})]
     (long (or (:total row) 0))))
 
@@ -503,9 +510,9 @@
   [db user-id {:keys [status tenant-id original-filename supplier-guess created-by-name show-purged?
                       purchased-at-guess-from purchased-at-guess-to
                       created-at-from created-at-to
-               updated-at-from updated-at-to
-               total-amount-guess-min total-amount-guess-max
-               total-display-min total-display-max]}]
+                      updated-at-from updated-at-to
+                      total-amount-guess-min total-amount-guess-max
+                      total-display-min total-display-max]}]
   (when-not user-id
     (throw (ex-info "user-id is required" {:status 400})))
   (let [helpers (build-status-query-helpers)
@@ -558,11 +565,11 @@
                                              :created-at-from created-at-from
                                              :created-at-to created-at-to
                                              :updated-at-from updated-at-from
-                               :updated-at-to updated-at-to})
+                                             :updated-at-to updated-at-to})
                 (apply-receipt-amount-filters {:total-amount-guess-min total-amount-guess-min
-                                 :total-amount-guess-max total-amount-guess-max
-                                 :total-display-min total-display-min
-                                 :total-display-max total-display-max}))
+                                               :total-amount-guess-max total-amount-guess-max
+                                               :total-display-min total-display-min
+                                               :total-display-max total-display-max}))
         row (jdbc/execute-one! db (sql/format query) {:builder-fn rs/as-unqualified-lower-maps})]
     (long (or (:total row) 0))))
 
@@ -593,11 +600,11 @@
                                              :created-at-from created-at-from
                                              :created-at-to created-at-to
                                              :updated-at-from updated-at-from
-                               :updated-at-to updated-at-to})
+                                             :updated-at-to updated-at-to})
                 (apply-receipt-amount-filters {:total-amount-guess-min total-amount-guess-min
-                                 :total-amount-guess-max total-amount-guess-max
-                                 :total-display-min total-display-min
-                                 :total-display-max total-display-max}))
+                                               :total-amount-guess-max total-amount-guess-max
+                                               :total-display-min total-display-min
+                                               :total-display-max total-display-max}))
         row (jdbc/execute-one! db (sql/format query) {:builder-fn rs/as-unqualified-lower-maps})]
     (long (or (:total row) 0))))
 
@@ -631,8 +638,9 @@
   "Fetch a single receipt visible to `user-id`.
 
   Visibility rules:
-  - receipts owned by `user-id`
-  - receipts with no `user_id` (unassigned/admin-uploaded)
+  - receipts owned by the user's secret-derived subject ref
+  - legacy receipts owned by `user-id`
+  - receipts with no owner (`subject_ref` and `user_id` are both nil)
 
   Returns nil when not found or not visible.
   Optional `tenant-id` scopes to a specific tenant."
@@ -640,10 +648,13 @@
   ([db user-id receipt-id tenant-id]
    (when-not user-id
      (throw (ex-info "user-id is required" {:status 400})))
-   (let [receipt (get-receipt db receipt-id tenant-id)]
+   (let [subject-ref (privacy-subject/user-subject-ref user-id)
+         receipt (get-receipt db receipt-id tenant-id)]
      (when (and receipt
-             (or (= user-id (:user_id receipt))
-               (nil? (:user_id receipt))))
+             (or (= subject-ref (:subject_ref receipt))
+               (= user-id (:user_id receipt))
+               (and (nil? (:subject_ref receipt))
+                 (nil? (:user_id receipt)))))
        receipt))))
 
 (defn list-pending-for-processing

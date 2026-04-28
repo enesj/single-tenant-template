@@ -100,12 +100,26 @@
       result
       (map-util/dissoc-in result [action-name] :types))))
 
+(defn- remove-empty-model-stubs
+  "Drop empty model placeholders before validating reconstructed schema.
+
+   Historical SQL/drop-table migrations can leave a model key with no fields,
+   indexes, or types after the in-memory schema reducer removes its final
+   component. Such placeholders represent no live table schema."
+  [schema]
+  (into {}
+    (remove (fn [[_ model]]
+              (and (map? model)
+                (empty? model)))
+      schema)))
+
 (defn- actions->internal-models
   [actions]
   ;; Throws spec exception if not valid.
   (actions/validate-actions! actions)
   (->> actions
     (reduce apply-action-to-schema {})
+    (remove-empty-model-stubs)
     (spec-util/conform ::models/internal-models)))
 
 (defn current-db-schema

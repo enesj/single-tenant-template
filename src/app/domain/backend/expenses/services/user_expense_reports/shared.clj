@@ -1,5 +1,6 @@
 (ns app.domain.backend.expenses.services.user-expense-reports.shared
   (:require
+    [app.template.backend.security.privacy-subject :as privacy-subject]
     [honey.sql :as sql]
     [next.jdbc :as jdbc]
     [next.jdbc.result-set :as rs])
@@ -82,8 +83,8 @@
                    [:= :ec_excl.id :e.expense_category_id]
                    [:= :ec_excl.exclude_from_reports true]]}]]]
     (cond-> [:and
-         exclude-flagged-category-clause]
-      user-id (conj [:= :e.user_id user-id])
+             exclude-flagged-category-clause]
+      user-id (conj (privacy-subject/user-match-clause :e.subject_ref :e.user_id user-id))
       tenant-id (conj [:= :e.tenant_id tenant-id])
       from (conj [:>= :e.purchased_at from])
       to (conj [:<= :e.purchased_at to])

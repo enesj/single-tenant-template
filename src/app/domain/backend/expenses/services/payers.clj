@@ -5,6 +5,7 @@
     [app.domain.backend.expenses.services.service-configs :as configs]
     [app.domain.backend.expenses.services.services-factory :as factory]
     [app.template.backend.security.email :as email-privacy]
+    [app.template.backend.security.privacy-subject :as privacy-subject]
     [honey.sql :as sql]
     [next.jdbc :as jdbc]
     [next.jdbc.result-set :as rs]))
@@ -216,7 +217,9 @@
 
 (defn get-user-payer-id
   "Look up the user's own payer ID from user_expense_settings for the given user + tenant.
-   Returns the payer UUID or nil when no settings row exists."
+   Matches subject_ref rows first and falls back to legacy user_id rows during
+   the privacy-subject migration window. Returns the payer UUID or nil when no
+   settings row exists."
   [db user-id tenant-id]
   (when (and user-id tenant-id)
     (:default_payer_id
@@ -224,7 +227,11 @@
        (sql/format {:select [:default_payer_id]
                     :from [:user_expense_settings]
                     :where [:and
-                            [:= :user_id user-id]
+                            (privacy-subject/user-match-clause :subject_ref :user_id user-id)
                             [:= :tenant_id tenant-id]]
+                    :order-by [[[:case
+                                 [:= :subject_ref (privacy-subject/user-subject-ref user-id)] 0
+                                 :else 1]
+                                :asc]]
                     :limit 1})
        {:builder-fn rs/as-unqualified-lower-maps}))))

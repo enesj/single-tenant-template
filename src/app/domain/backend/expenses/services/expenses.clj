@@ -219,6 +219,8 @@
     (update-if-present :payer_id #(parse-uuid! :payer_id %))
     (update-if-present :user_id #(parse-uuid! :user_id %))
     (update-if-present :created_by #(parse-uuid! :created_by %))
+    (update-if-present :subject_ref blank->nil)
+    (update-if-present :created_by_subject_ref blank->nil)
     (update-if-present :receipt_id #(parse-uuid! :receipt_id %))
     (update-if-present :store_id #(parse-uuid! :store_id %))
     (update-if-present :expense_category_id #(parse-uuid! :expense_category_id %))
@@ -587,6 +589,8 @@
                                          :expense_category_id
                                          :user_id
                                          :created_by
+                                         :subject_ref
+                                         :created_by_subject_ref
                                          :receipt_id
                                          :purchased_at
                                          :total_amount

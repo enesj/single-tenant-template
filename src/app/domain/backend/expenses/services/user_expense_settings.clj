@@ -8,6 +8,7 @@
   (:require
     [app.domain.backend.expenses.services.expense-categories :as expense-categories]
     [app.shared.adapters.database :as db-adapter]
+    [app.template.backend.security.privacy-subject :as privacy-subject]
     [honey.sql :as sql]
     [next.jdbc :as jdbc]
     [next.jdbc.result-set :as rs])
@@ -19,9 +20,43 @@
   {:default-payer-id nil
    :receipt-ocr-provider "mistral"})
 
+(defn- settings-owner-clause
+  "Match a settings row by subject ref, falling back to legacy user_id rows."
+  [user-id]
+  (privacy-subject/user-match-clause :subject_ref :user_id user-id))
+
+(defn- update-settings-row!
+  [tx tenant-id user-id subject-ref updates]
+  (when (seq updates)
+    (jdbc/execute-one!
+      tx
+      (sql/format {:update :user_expense_settings
+                   :set (merge updates
+                          {:subject_ref subject-ref
+                           :user_id nil
+                           :updated_at [:now]})
+                   :where [:and
+                           [:= :tenant_id tenant-id]
+                           (settings-owner-clause user-id)]
+                   :returning [:default_payer_id :receipt_ocr_provider]})
+      {:builder-fn rs/as-unqualified-lower-maps})))
+
+(defn- insert-settings-row!
+  [tx tenant-id subject-ref updates]
+  (jdbc/execute-one!
+    tx
+    (sql/format {:insert-into :user_expense_settings
+                 :values [(merge {:id (UUID/randomUUID)
+                                  :tenant_id tenant-id
+                                  :subject_ref subject-ref}
+                            updates)]
+                 :returning [:default_payer_id :receipt_ocr_provider]})
+    {:builder-fn rs/as-unqualified-lower-maps}))
+
 (defn get-user-expense-settings
   "Return the persisted settings row for `user-id` scoped to `tenant-id`, or nil
-   if none exists."
+   if none exists. Reads subject-ref rows first and falls back to legacy user_id
+   rows during the privacy-subject migration window."
   [db tenant-id user-id]
   (when-not (instance? UUID tenant-id)
     (throw (ex-info "tenant-id must be a UUID" {:tenant-id tenant-id})))
@@ -29,11 +64,16 @@
     (throw (ex-info "user-id must be a UUID" {:user-id user-id})))
   (-> (jdbc/execute-one!
         db
-      (sql/format {:select [:default_payer_id :receipt_ocr_provider]
+        (sql/format {:select [:default_payer_id :receipt_ocr_provider]
                      :from [:user_expense_settings]
                      :where [:and
                              [:= :tenant_id tenant-id]
-                             [:= :user_id user-id]]})
+                             (settings-owner-clause user-id)]
+                     :order-by [[[:case
+                                  [:= :subject_ref (privacy-subject/user-subject-ref user-id)] 0
+                                  :else 1]
+                                 :asc]]
+                     :limit 1})
         {:builder-fn rs/as-unqualified-lower-maps})
     db-adapter/to-app))
 
@@ -60,24 +100,20 @@
    Called after expense creation and receipt approval to keep the default
    in sync with the user's most recent choice.
 
-   No-op when `payer-id` is nil."
+   No-op when `payer-id` is nil. New/updated rows are keyed by subject_ref and
+   no longer store users.id in user_id."
   [db tenant-id user-id payer-id]
   (when (and payer-id tenant-id user-id)
     (let [t-id (if (string? tenant-id) (UUID/fromString tenant-id) tenant-id)
           u-id (if (string? user-id) (UUID/fromString user-id) user-id)
           p-id (if (string? payer-id) (UUID/fromString payer-id) payer-id)
+          subject-ref (privacy-subject/user-subject-ref u-id)
           current (get-user-expense-settings db t-id u-id)
           current-payer-id (:default-payer-id current)]
       (when (not= current-payer-id p-id)
-        (jdbc/execute-one!
-          db
-          [(str
-             "INSERT INTO user_expense_settings (id, tenant_id, user_id, default_payer_id, created_at, updated_at) "
-             "VALUES (?, ?, ?, ?, now(), now()) "
-             "ON CONFLICT (tenant_id, user_id) DO UPDATE SET "
-             "default_payer_id = EXCLUDED.default_payer_id, "
-             "updated_at = now()")
-           (UUID/randomUUID) t-id u-id p-id])))))
+        (jdbc/with-transaction [tx db]
+          (or (update-settings-row! tx t-id u-id subject-ref {:default_payer_id p-id})
+            (insert-settings-row! tx t-id subject-ref {:default_payer_id p-id})))))))
 
 (defn effective-settings-with-global
   "Merge global settings with per-user persisted settings to produce the
@@ -93,8 +129,9 @@
      :receipt-ocr-provider (:receipt-ocr-provider user)}))
 
 (defn update-user-defaults!
-  "Update per-user defaults (payer only) in a single UPSERT.
-   Used by the profile page save-defaults action."
+  "Update per-user defaults (payer only).
+   Used by the profile page save-defaults action. New/updated rows are keyed by
+   subject_ref and no longer store users.id in user_id."
   [db tenant-id user-id {:keys [default-payer-id]}]
   (when-not (instance? UUID tenant-id)
     (throw (ex-info "tenant-id must be a UUID" {:tenant-id tenant-id})))
@@ -102,18 +139,9 @@
     (throw (ex-info "user-id must be a UUID" {:user-id user-id})))
   (when-not (or (nil? default-payer-id) (instance? UUID default-payer-id))
     (throw (ex-info "payer-id must be UUID or nil" {:payer-id default-payer-id})))
-  (-> (jdbc/execute-one!
-        db
-        [(str
-           "INSERT INTO user_expense_settings (id, tenant_id, user_id, default_payer_id) "
-           "VALUES (?, ?, ?, ?) "
-           "ON CONFLICT (tenant_id, user_id) DO UPDATE SET "
-           "default_payer_id = EXCLUDED.default_payer_id, "
-           "updated_at = now() "
-           "RETURNING default_payer_id, receipt_ocr_provider")
-         (UUID/randomUUID)
-         tenant-id
-         user-id
-         default-payer-id]
-        {:builder-fn rs/as-unqualified-lower-maps})
-    db-adapter/to-app))
+  (let [subject-ref (privacy-subject/user-subject-ref user-id)
+        updates {:default_payer_id default-payer-id}]
+    (-> (jdbc/with-transaction [tx db]
+          (or (update-settings-row! tx tenant-id user-id subject-ref updates)
+            (insert-settings-row! tx tenant-id subject-ref updates)))
+      db-adapter/to-app)))

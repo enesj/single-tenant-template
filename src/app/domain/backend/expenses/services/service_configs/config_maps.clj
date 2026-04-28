@@ -431,27 +431,13 @@
                    ;; Cast the payer_type enum to text so JDBC returns a plain
                    ;; string and JSON encoding stays predictable downstream.
                    [[:cast :p/type :text] :payer_type]
-                   ;; Correlated subquery: stable user linkage for the system payer.
-                   ;; We surface refs/names downstream, never raw email, so admin
-                   ;; tables can still follow structure without exposing identity.
-                   [{:select [:u/id]
-                     :from [[:users :u]]
-                     :join [[:user_expense_settings :ues] [:= :ues/user_id :u/id]]
+                   ;; Correlated subquery: expose only the privacy subject ref
+                   ;; for the default-payer linkage, not users.id/name/email.
+                   [{:select [:ues/subject_ref]
+                     :from [[:user_expense_settings :ues]]
                      :where [:= :ues/default_payer_id :p/id]
                      :limit 1}
-                    :user_id]
-                   [{:select [:u/full_name]
-                     :from [[:users :u]]
-                     :join [[:user_expense_settings :ues] [:= :ues/user_id :u/id]]
-                     :where [:= :ues/default_payer_id :p/id]
-                     :limit 1}
-                    :user_full_name]
-                   [{:select [:u/email_ciphertext]
-                     :from [[:users :u]]
-                     :join [[:user_expense_settings :ues] [:= :ues/user_id :u/id]]
-                     :where [:= :ues/default_payer_id :p/id]
-                     :limit 1}
-                    :user_email_ciphertext]
+                    :user_subject_ref]
                    [{:select [[[:count :*] :n]]
                      :from [[:expenses :e]]
                      :where [:and

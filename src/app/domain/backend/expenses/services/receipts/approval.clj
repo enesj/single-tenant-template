@@ -8,6 +8,7 @@
     [app.domain.backend.expenses.services.receipts.storage :as storage]
     [app.domain.backend.expenses.services.supplier-aliases :as supplier-aliases]
     [app.domain.backend.expenses.services.suppliers :as suppliers]
+    [app.template.backend.security.privacy-subject :as privacy-subject]
     [cheshire.core :as json]
     [clojure.string :as str]
     [honey.sql :as sql]
@@ -119,6 +120,12 @@
   (parsing/normalize-currency! (:currency review-data))
   (assoc review-data :currency receipt-currency))
 
+(defn- receipt-subject-ref
+  "Return the receipt's subject ref, deriving one for legacy user_id rows."
+  [receipt]
+  (or (:subject_ref receipt)
+    (some-> (:user_id receipt) privacy-subject/user-subject-ref)))
+
 (defn save-review!
   "Persist reviewed receipt values without posting an expense.
 
@@ -204,7 +211,8 @@
    not explicitly provided in review-data.
 
    Reads tenant_id from the receipt row and includes it in the expense data.
-   Sets created_by from the receipt's user_id (admin path has no acting user)."
+   Uses the receipt's subject ref for operational ownership; legacy user_id rows
+   are converted to a subject ref at write time."
   [db receipt-id review-data]
   (jdbc/with-transaction [tx db]
     (let [review-data* (enforce-receipt-bam review-data)
@@ -215,24 +223,26 @@
         (throw (ex-info "Receipt not in approvable status"
                  {:status 409 :id receipt-id :current-status (:status receipt)})))
 
-      (let [context    (queries/get-receipt-refine-context tx receipt-id)
-            store-id   (:store_id context)
-            tenant-id  (:tenant_id receipt)
-            ocr-items  (extract-ocr-items receipt)
-            ocr-prices (extract-ocr-item-prices ocr-items)
-          items      (-> (:items review-data*)
-                         (preserve-ocr-item-unit ocr-items)
-                         (mark-price-modified ocr-prices))
-            base       (cond-> {:receipt_id receipt-id
-                                :created_by (:user_id receipt)
-                  :currency   receipt-currency}
-                         store-id  (assoc :store_id store-id)
-                         tenant-id (assoc :tenant_id tenant-id))
-            expense    (expenses/create-expense!
-                         tx
-              (merge base review-data*)
-                         items)
-            extra      {:expense_id (:id expense)}]
+      (let [context     (queries/get-receipt-refine-context tx receipt-id)
+            store-id    (:store_id context)
+            tenant-id   (:tenant_id receipt)
+            subject-ref (receipt-subject-ref receipt)
+            ocr-items   (extract-ocr-items receipt)
+            ocr-prices  (extract-ocr-item-prices ocr-items)
+            items       (-> (:items review-data*)
+                          (preserve-ocr-item-unit ocr-items)
+                          (mark-price-modified ocr-prices))
+            base        (cond-> {:receipt_id receipt-id
+                                 :subject_ref subject-ref
+                                 :created_by_subject_ref subject-ref
+                                 :currency receipt-currency}
+                          store-id (assoc :store_id store-id)
+                          tenant-id (assoc :tenant_id tenant-id))
+            expense     (expenses/create-expense!
+                          tx
+                          (merge base review-data*)
+                          items)
+            extra       {:expense_id (:id expense)}]
         (status/update-status! tx receipt-id "posted" extra)
         expense))))
 
@@ -240,10 +250,11 @@
   "Create an expense from a receipt for a specific user and update status → posted.
 
   Receipt must be visible to the user:
-  - owned by user-id, OR
-  - unassigned (user_id is NULL)
+  - owned by the user's subject ref,
+  - legacy-owned by user-id, OR
+  - unassigned (`subject_ref` and `user_id` are NULL).
 
-  If the receipt is unassigned, it is claimed by setting :user_id to user-id.
+  If the receipt is unassigned, it is claimed by setting `subject_ref`.
 
   store_id is resolved automatically from the receipt's store_alias_id when
   not explicitly provided in review-data. tenant_id is read from the receipt row.
@@ -253,6 +264,7 @@
   [db user-id receipt-id review-data & {:keys [tenant-id]}]
   (jdbc/with-transaction [tx db]
     (let [review-data* (enforce-receipt-bam review-data)
+          subject-ref (privacy-subject/user-subject-ref user-id)
           receipt (queries/get-user-receipt tx user-id receipt-id tenant-id)]
       (when-not receipt
         (throw (ex-info "Receipt not found" {:status 404 :id receipt-id})))
@@ -265,31 +277,34 @@
             receipt-tid  (:tenant_id receipt)
             ocr-items    (extract-ocr-items receipt)
             ocr-prices   (extract-ocr-item-prices ocr-items)
-          items        (-> (:items review-data*)
+            items        (-> (:items review-data*)
                            (preserve-ocr-item-unit ocr-items)
                            (mark-price-modified ocr-prices))
             base         (cond-> {:receipt_id receipt-id
-                                  :user_id    user-id
-                                  :created_by user-id
-                    :currency   receipt-currency}
-                           store-id    (assoc :store_id store-id)
+                                  :subject_ref subject-ref
+                                  :created_by_subject_ref subject-ref
+                                  :currency receipt-currency}
+                           store-id (assoc :store_id store-id)
                            receipt-tid (assoc :tenant_id receipt-tid))
             expense      (expenses/create-expense!
                            tx
-                (merge base review-data*)
+                           (merge base review-data*)
                            items)
-            claim?       (nil? (:user_id receipt))
+            claim?       (and (nil? (:subject_ref receipt))
+                           (nil? (:user_id receipt)))
             extra        (cond-> {:expense_id (:id expense)}
-                           claim? (assoc :user_id user-id))]
+                           claim? (assoc :subject_ref subject-ref
+                                    :created_by_subject_ref subject-ref))]
         (status/update-status! tx receipt-id "posted" extra)
         expense))))
 
 (defn approve-and-post-for-user-any!
-  "Create an expense from a receipt as a user, without enforcing receipt ownership.
+  "Create an expense as a user without enforcing receipt ownership.
 
   Intended for user-role admins in the user UI who can process any receipt.
 
-  If the receipt is unassigned (`user_id` is NULL), it is claimed by setting :user_id to user-id.
+  If the receipt is unassigned (`subject_ref` and `user_id` are NULL), it is
+  claimed by setting `subject_ref`.
 
   store_id is resolved automatically from the receipt's store_alias_id when
   not explicitly provided in review-data. tenant_id is read from the receipt row.
@@ -301,6 +316,7 @@
     (throw (ex-info "user-id is required" {:status 400})))
   (jdbc/with-transaction [tx db]
     (let [review-data* (enforce-receipt-bam review-data)
+          subject-ref (privacy-subject/user-subject-ref user-id)
           receipt (queries/get-receipt tx receipt-id tenant-id)]
       (when-not receipt
         (throw (ex-info "Receipt not found" {:status 404 :id receipt-id})))
@@ -313,22 +329,24 @@
             receipt-tid  (:tenant_id receipt)
             ocr-items    (extract-ocr-items receipt)
             ocr-prices   (extract-ocr-item-prices ocr-items)
-          items        (-> (:items review-data*)
+            items        (-> (:items review-data*)
                            (preserve-ocr-item-unit ocr-items)
                            (mark-price-modified ocr-prices))
             base         (cond-> {:receipt_id receipt-id
-                                  :user_id    user-id
-                                  :created_by user-id
-                    :currency   receipt-currency}
-                           store-id    (assoc :store_id store-id)
+                                  :subject_ref subject-ref
+                                  :created_by_subject_ref subject-ref
+                                  :currency receipt-currency}
+                           store-id (assoc :store_id store-id)
                            receipt-tid (assoc :tenant_id receipt-tid))
             expense      (expenses/create-expense!
                            tx
-                (merge base review-data*)
+                           (merge base review-data*)
                            items)
-            claim?       (nil? (:user_id receipt))
+            claim?       (and (nil? (:subject_ref receipt))
+                           (nil? (:user_id receipt)))
             extra        (cond-> {:expense_id (:id expense)}
-                           claim? (assoc :user_id user-id))]
+                           claim? (assoc :subject_ref subject-ref
+                                    :created_by_subject_ref subject-ref))]
         (status/update-status! tx receipt-id "posted" extra)
         expense))))
 

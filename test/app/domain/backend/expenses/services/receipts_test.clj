@@ -6,6 +6,7 @@
     [app.domain.backend.expenses.services.receipts.status :as receipt-status]
     [app.domain.backend.expenses.services.suppliers :as suppliers]
     [app.domain.expenses.test-helpers :as th]
+    [app.template.backend.security.privacy-subject :as privacy-subject]
     [cheshire.core :as json]
     [clojure.string :as str]
     [clojure.test :refer [deftest is testing use-fixtures]]
@@ -31,6 +32,34 @@
        total-amount-guess
        tenant-id]
       {:builder-fn rs/as-unqualified-lower-maps})))
+
+(deftest get-user-receipt-enforces-subject-ref-ownership
+  (let [receipt-id (UUID/randomUUID)
+        user-id (UUID/randomUUID)
+        other-user-id (UUID/randomUUID)
+        owned-receipt {:id receipt-id
+                       :subject_ref (privacy-subject/user-subject-ref user-id)
+                       :user_id nil}
+        other-subject-receipt {:id receipt-id
+                               :subject_ref (privacy-subject/user-subject-ref other-user-id)
+                               :user_id nil}
+        unassigned-receipt {:id receipt-id
+                            :subject_ref nil
+                            :user_id nil}]
+    (testing "subject-owned rows are visible to the matching user"
+      (with-redefs [receipt-queries/get-receipt (fn [_db _receipt-id _tenant-id]
+                                                  owned-receipt)]
+        (is (= owned-receipt
+              (receipt-queries/get-user-receipt :db user-id receipt-id)))))
+    (testing "subject-owned rows are not treated as unassigned for other users"
+      (with-redefs [receipt-queries/get-receipt (fn [_db _receipt-id _tenant-id]
+                                                  other-subject-receipt)]
+        (is (nil? (receipt-queries/get-user-receipt :db user-id receipt-id)))))
+    (testing "truly unassigned rows remain claimable/visible"
+      (with-redefs [receipt-queries/get-receipt (fn [_db _receipt-id _tenant-id]
+                                                  unassigned-receipt)]
+        (is (= unassigned-receipt
+              (receipt-queries/get-user-receipt :db user-id receipt-id)))))))
 
 (defn- parse-jsonish
   [raw]
@@ -194,7 +223,7 @@
                                        :payer_id (:id payer)
                                        :purchased_at "2026-01-08T09:45"
                                        :total_amount "12.00"
-                           :currency "EUR"
+                                       :currency "EUR"
                                        :notes "Updated through receipt"
                                        :items [{:raw_label "Line 1"
                                                 :line_total "12.00"}]}
@@ -202,11 +231,11 @@
       (is (= (:id created-expense) (:id expense)))
       (is (= receipt-id (:receipt_id expense)))
       (is (= (:id updated-supplier) (:supplier_id expense)))
-          (is (= "BAM" (:currency expense)))
-          (is (nil? (:exchange_rate expense)))
-          (is (nil? (:rate_fetched_at expense)))
+      (is (= "BAM" (:currency expense)))
+      (is (nil? (:exchange_rate expense)))
+      (is (nil? (:rate_fetched_at expense)))
       (is (= "Updated through receipt" (:notes expense)))
       (is (= 12.00M (:total_amount expense)))
-          (is (= "BAM" (some-> (:currency_guess receipt) str)))
+      (is (= "BAM" (some-> (:currency_guess receipt) str)))
       (is (= (:id expense) (:expense_id receipt)))
       (is (= "posted" (str (:status receipt)))))))

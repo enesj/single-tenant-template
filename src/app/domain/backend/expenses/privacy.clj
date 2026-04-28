@@ -15,6 +15,12 @@
     :users/id
     :created_by
     :created-by
+    :subject_ref
+    :subject-ref
+    :created_by_subject_ref
+    :created-by-subject-ref
+    :user_subject_ref
+    :user-subject-ref
     :created_by_user_id
     :created-by-user-id
     :created_by_full_name

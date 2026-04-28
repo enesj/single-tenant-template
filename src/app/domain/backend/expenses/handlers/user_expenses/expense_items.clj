@@ -7,6 +7,7 @@
     [app.domain.backend.expenses.handlers.user-expenses.helpers :as h]
     [app.domain.backend.expenses.services.article-aliases :as aliases]
     [app.shared.query-builders :as shared-qb]
+    [app.template.backend.security.privacy-subject :as privacy-subject]
     [clojure.string :as str]
     [honey.sql :as sql]
     [next.jdbc :as jdbc]
@@ -18,6 +19,10 @@
 (def ^:private power-user-roles
   "Roles allowed to access the expense items power page."
   #{"admin" "owner"})
+
+(defn- expense-owner-clause
+  [user-id]
+  (privacy-subject/user-match-clause :e.subject_ref :e.user_id user-id))
 
 (def ^:private allowed-expense-items-order-by
   "Allowlisted sort keys for `list-expense-items-handler`.
@@ -152,7 +157,7 @@
                   ;; Elevated users (admin/owner) see all tenant items; others see only their own.
                   effective-user-id (when-not elevated? user-id)
                   where (cond-> [:and]
-                          (some? effective-user-id) (conj [:= :e.user_id effective-user-id])
+                          (some? effective-user-id) (conj (expense-owner-clause effective-user-id))
                           tenant-id (conj [:= :e.tenant_id tenant-id])
                           expense-id (conj [:= :ei.expense_id expense-id])
                           unit (conj [:= :ei.unit unit])
@@ -221,7 +226,7 @@
        :where (cond-> [:and
                        [:= :ei.id item-id]
                        [:= :e.id :ei.expense_id]
-                       [:= :e.user_id user-id]]
+                       (expense-owner-clause user-id)]
                 tenant-id (conj [:= :e.tenant_id tenant-id]))
        :returning [:ei.*]})
     {:builder-fn rs/as-unqualified-lower-maps}))
@@ -243,7 +248,7 @@
                    [:articles :a] [:= :a.id :aa.article_id]]
        :where (cond-> [:and
                        [:= :ei.id item-id]
-                       [:= :e.user_id user-id]]
+                       (expense-owner-clause user-id)]
                 tenant-id (conj [:= :e.tenant_id tenant-id]))
        :limit 1})
     {:builder-fn rs/as-unqualified-lower-maps}))
@@ -314,7 +319,8 @@
                [:= :id item-id]
                [:in :expense_id {:select [:id]
                                  :from [:expenses]
-                                 :where (cond-> [:and [:= :user_id user-id]]
+                                 :where (cond-> [:and
+                                                 (privacy-subject/user-match-clause :subject_ref :user_id user-id)]
                                           tenant-id (conj [:= :tenant_id tenant-id]))}]]
        :returning [:*]})
     {:builder-fn rs/as-unqualified-lower-maps}))

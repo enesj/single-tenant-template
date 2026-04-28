@@ -1,0 +1,41 @@
+({:action :add-column,
+  :field-name :subject-ref,
+  :model-name :expenses,
+  :options {:type [:varchar 64]}}
+ {:action :create-index,
+  :index-name :idx-expenses-tenant-subject,
+  :model-name :expenses,
+  :options {:fields [:tenant_id :subject_ref], :type :btree}}
+ {:action :add-column,
+  :field-name :subject-ref,
+  :model-name :receipts,
+  :options {:type [:varchar 64]}}
+ {:action :add-column,
+  :field-name :created-by-subject-ref,
+  :model-name :expenses,
+  :options {:type [:varchar 64]}}
+ {:action :create-index,
+  :index-name :idx-receipts-tenant-subject,
+  :model-name :receipts,
+  :options {:fields [:tenant_id :subject_ref], :type :btree}}
+ {:action :alter-column,
+  :field-name :user-id,
+  :model-name :user_expense_settings,
+  :options {:foreign-key :users/id, :on-delete :cascade, :type :uuid},
+  :changes {:null {:from false, :to :EMPTY}}}
+ {:action :add-column,
+  :field-name :subject-ref,
+  :model-name :user_expense_settings,
+  :options {:type [:varchar 64]}}
+ {:action :add-column,
+  :field-name :created-by-subject-ref,
+  :model-name :receipts,
+  :options {:type [:varchar 64]}}
+ {:action :create-index,
+  :index-name :uniq-user-expense-settings-tenant-subject,
+  :model-name :user_expense_settings,
+  :options
+  {:fields [:tenant_id :subject_ref],
+   :unique true,
+   :where [:raw "(subject_ref IS NOT NULL)"],
+   :type :btree}})

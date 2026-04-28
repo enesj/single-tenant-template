@@ -1,10 +1,36 @@
 (ns app.domain.backend.expenses.services.user-expenses-test
   (:require
+    [app.domain.backend.expenses.services.expenses :as admin-expenses]
     [app.domain.backend.expenses.services.user-expenses :as user-expenses]
     [clojure.test :refer [deftest is testing]]
     [next.jdbc :as jdbc])
   (:import
     [java.util UUID]))
+
+(deftest create-user-expense-stores-subject-ref-not-direct-user-link
+  (let [captured (atom nil)
+        tenant-id (UUID/randomUUID)
+        user-id (UUID/randomUUID)
+        line-items [{:description "Tea" :line-total 3M}]]
+    (with-redefs [admin-expenses/create-expense!
+                  (fn [_db expense-data expense-items]
+                    (reset! captured {:expense-data expense-data
+                                      :items expense-items})
+                    {:id (UUID/randomUUID)})]
+      (user-expenses/create-user-expense!
+        :db
+        tenant-id
+        user-id
+        {:total_amount 3M}
+        line-items)
+      (let [{:keys [expense-data items]} @captured]
+        (is (= line-items items))
+        (is (= tenant-id (:tenant_id expense-data)))
+        (is (not (contains? expense-data :user_id)))
+        (is (not (contains? expense-data :created_by)))
+        (is (re-matches #"[0-9a-f]{64}" (:subject_ref expense-data)))
+        (is (= (:subject_ref expense-data)
+              (:created_by_subject_ref expense-data)))))))
 
 (deftest list-user-expenses-selects-store-display-name
   (let [captured-sql (atom nil)]

@@ -1,12 +1,12 @@
 <!-- ai: {:tags [:operations :security :email-privacy] :kind :runbook} -->
 
-# Email Privacy Key Management & Rotation Runbook
+# Email and Privacy Subject Key Management & Rotation Runbook
 
-This runbook documents how to operate the current email privacy design safely and what to do if email privacy keys ever need to change.
+This runbook documents how to operate the current email privacy design safely, how operational privacy subject refs are keyed, and what to do if privacy keys ever need to change.
 
 ## Current Design
 
-The current implementation lives in `src/app/template/backend/security/email.clj`.
+The email privacy implementation lives in `src/app/template/backend/security/email.clj`.
 
 Today the system:
 
@@ -22,6 +22,8 @@ Important operational constraint:
 
 `email_key_version` is stored on rows and is now used by decryption. This means encryption-key compatibility can be deployed before a rotation: old rows can continue to decrypt with their stored version while new writes use the active version.
 
+Operational expense/receipt ownership now also uses `src/app/template/backend/security/privacy_subject.clj`. New operational rows store deterministic HMAC subject refs in columns such as `subject_ref` instead of direct `users.id` links. Those refs are derived with `PRIVACY_SUBJECT_KEY_B64`; the mapping is not stored in the database.
+
 ## Which Keys Exist
 
 The current email privacy implementation uses these environment variables:
@@ -31,6 +33,7 @@ The current email privacy implementation uses these environment variables:
 - `EMAIL_PRIVACY_ENCRYPTION_KEY_<VERSION>_B64`
 - `EMAIL_PRIVACY_LOOKUP_KEY_B64`
 - `EMAIL_PRIVACY_KEY_VERSION`
+- `PRIVACY_SUBJECT_KEY_B64`
 
 Their roles are different:
 
@@ -39,6 +42,9 @@ Their roles are different:
 - `EMAIL_PRIVACY_ENCRYPTION_KEY_<VERSION>_B64` optionally provides a single per-version encryption key, for example `EMAIL_PRIVACY_ENCRYPTION_KEY_V1_B64`
 - `EMAIL_PRIVACY_LOOKUP_KEY_B64` computes `email_lookup_hash` for auth, password reset, invitation matching, and duplicate checks
 - `EMAIL_PRIVACY_KEY_VERSION` labels newly written rows with a version such as `v1`
+- `PRIVACY_SUBJECT_KEY_B64` computes pseudonymous operational `subject_ref` values for user-owned expenses, receipts, and user expense settings
+
+All base64 key values should decode to at least 32 bytes.
 
 Encryption key lookup order for a requested version is:
 
@@ -47,6 +53,8 @@ Encryption key lookup order for a requested version is:
 3. `EMAIL_PRIVACY_ENCRYPTION_KEY_B64` when the requested version is the active `EMAIL_PRIVACY_KEY_VERSION`
 4. bundled development default key only for `:dev`, `:local`, and `:test` profiles
 
+Privacy subject refs currently have one active key. There is no keyring/version column for `subject_ref` yet, so changing `PRIVACY_SUBJECT_KEY_B64` requires a planned operational-data backfill/cutover before old subject refs can be matched with the new key.
+
 ## Safe Current Operating Mode
 
 The current implementation is production-acceptable only in **stable-key mode**.
@@ -54,11 +62,14 @@ The current implementation is production-acceptable only in **stable-key mode**.
 That means:
 
 - keep encryption and lookup keys stable across deploys
-- back up both keys securely
-- do not rotate either key casually
+- keep `PRIVACY_SUBJECT_KEY_B64` stable across deploys
+- back up all privacy keys securely
+- do not rotate any privacy key casually
 - treat any key change as an application plus data migration
 
 Encryption-key multi-key read support now exists. A rotation still requires a planned rollout and backfill; do not remove old keys until all rows have been re-encrypted and verified.
+
+Privacy-subject key rotation support does not yet exist. Treat `PRIVACY_SUBJECT_KEY_B64` like a long-lived operational identity secret until a dedicated subject-ref key-version migration is designed.
 
 ## Key Change Categories
 
@@ -82,6 +93,43 @@ Impact:
 - affects login, password reset, admin auth, invitation checks, and duplicate detection
 - cannot be safely rotated today by changing an environment variable and redeploying
 
+### Privacy subject key
+
+This is an operational relationship key.
+
+Impact:
+
+- affects `subject_ref` and `created_by_subject_ref` ownership matching
+- affects user-scoped expense/receipt/settings/report visibility
+- affects future backfill/cutover of legacy `user_id` rows
+- cannot be safely rotated today by changing an environment variable and redeploying
+
+## Operational Subject-Ref Backfill/Cutover
+
+Legacy rows created before subject refs were introduced may still contain direct operational links such as `expenses.user_id`, `receipts.user_id`, and `user_expense_settings.user_id`.
+
+Use the app-level backfill command, not DB-only SQL, because subject refs require the application secret:
+
+```bash
+bb privacy-subject-backfill dev --cutover --limit 100 --pretty
+```
+
+The command is dry-run by default and writes an EDN report under `tmp/`. Review the report before applying.
+
+For a live cutover, first confirm that `PRIVACY_SUBJECT_KEY_B64` is stable for the target environment and that a recent database backup exists, then run with explicit apply flags:
+
+```bash
+railway run bb privacy-subject-backfill prod --cutover --apply --pretty
+```
+
+Notes:
+
+- `--cutover` fills missing subject refs and nulls direct operational `users.id` links only when the matching subject ref exists or can be computed.
+- Without `--cutover`, `--apply` fills subject-ref columns but leaves direct legacy links in place.
+- Use `--limit N` for batched operation.
+- Production execution should happen through the deployment environment so the command receives the same platform-managed secrets as the app.
+- Do not remove legacy read fallbacks or direct-link columns until a full cutover has been validated in the target environment.
+
 ## Required Future Work Before Any Key Rotation
 
 Before rotating keys in production, confirm compatibility support is deployed.
@@ -98,6 +146,13 @@ For lookup-key rotation, additional work is required:
 1. Lookup-key versioning support or dual-hash transition support
 2. Controlled backfill/re-hash process for all protected rows
 3. Read-side transition logic so auth/reset/invitation flows continue to work during migration
+
+For privacy-subject key rotation, additional work is required:
+
+1. Subject-ref key versioning or dual-subject transition support
+2. Controlled backfill of operational rows using the application secret, not DB-only SQL
+3. Read-side transition logic so subject-owned and legacy rows remain visible during migration
+4. A verified cutover plan before nulling/removing legacy direct operational user links
 
 ## Migration Procedure: Encryption Key Rotation
 
@@ -233,7 +288,7 @@ Good options:
 
 Recommended production posture:
 
-- store `EMAIL_PRIVACY_ENCRYPTION_KEY_B64` and `EMAIL_PRIVACY_LOOKUP_KEY_B64` as platform-managed secrets
+- store `EMAIL_PRIVACY_ENCRYPTION_KEY_B64`, `EMAIL_PRIVACY_LOOKUP_KEY_B64`, and `PRIVACY_SUBJECT_KEY_B64` as platform-managed secrets
 - restrict access to the smallest possible operator set
 - enable audit logs for secret access/changes
 - back up the values in a second secure recovery channel controlled by trusted operators
@@ -251,7 +306,7 @@ Do **not** store production values in:
 
 Use local environment variables or a gitignored local secret mechanism.
 
-Bundled development defaults are available only when the active profile is `:dev`, `:local`, or `:test`. Any other profile, including `:staging`, must provide explicit email privacy keys and will fail fast if they are absent.
+Bundled development defaults are available only when the active profile is `:dev`, `:local`, or `:test`. Any other profile, including `:staging`, must provide explicit email privacy keys and `PRIVACY_SUBJECT_KEY_B64`; the app will fail fast if they are absent.
 
 Acceptable local options:
 
@@ -265,11 +320,12 @@ Do not commit local key material.
 
 Use this wording in runbooks and onboarding docs:
 
-> Email privacy keys are long-lived secrets. Changing them requires a staged application/data migration. Do not rotate them as routine config maintenance.
+> Email privacy and privacy-subject keys are long-lived secrets. Changing them requires a staged application/data migration. Do not rotate them as routine config maintenance.
 
 ## Related Files
 
 - `src/app/template/backend/security/email.clj`
+- `src/app/template/backend/security/privacy_subject.clj`
 - `src/app/template/backend/auth/service.clj`
 - `src/app/template/backend/auth/password_reset.clj`
 - `src/app/template/backend/services/invitation.clj`

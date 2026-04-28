@@ -149,6 +149,8 @@
                      [:tenant_id :uuid {:foreign-key :tenants/id :null false :on-delete :cascade}]
                      [:user_id :uuid {:foreign-key :users/id :on-delete :set-null}]
                      [:created_by :uuid {:foreign-key :users/id :on-delete :set-null}]
+                     [:subject_ref [:varchar 64]]
+                     [:created_by_subject_ref [:varchar 64]]
                      [:payer_id :uuid {:foreign-key :payers/id :on-delete :set-null}]
                      [:expense_category_id :uuid {:foreign-key :expense_categories/id :on-delete :set-null}]
                      [:notes :text]
@@ -180,6 +182,7 @@
                                                       "approved" "posted" "failed"]}]]
             :indexes [[:idx_receipts_tenant :btree {:fields [:tenant_id]}]
                       [:idx_receipts_user :btree {:fields [:user_id]}]
+                      [:idx_receipts_tenant_subject :btree {:fields [:tenant_id :subject_ref]}]
                       [:idx_receipts_tenant_file_hash :btree {:fields [:tenant_id :file_hash] :unique true}]
                       [:idx_receipts_status :btree {:fields [:status]}]
                       [:idx_receipts_supplier_alias_id :btree {:fields [:supplier_alias_id]}]
@@ -212,6 +215,8 @@
                      [:tenant_id :uuid {:foreign-key :tenants/id :null false :on-delete :cascade}]
                      [:user_id :uuid {:foreign-key :users/id :on-delete :set-null}]
                      [:created_by :uuid {:foreign-key :users/id :on-delete :set-null}]
+                     [:subject_ref [:varchar 64]]
+                     [:created_by_subject_ref [:varchar 64]]
                      [:receipt_id :uuid {:foreign-key :receipts/id :on-delete :set-null}]
                      [:store_id :uuid {:foreign-key :stores/id :on-delete :set-null}]
                      [:supplier_id :uuid {:foreign-key :suppliers/id :on-delete :set-null}]
@@ -230,6 +235,7 @@
             :types [[:currency :enum {:choices ["BAM" "EUR" "USD" "GBP" "CHF" "HRK" "RSD" "TRY"]}]]
             :indexes [[:idx_expenses_tenant :btree {:fields [:tenant_id]}]
                       [:idx_expenses_user :btree {:fields [:user_id]}]
+                      [:idx_expenses_tenant_subject :btree {:fields [:tenant_id :subject_ref]}]
                       [:uniq_expenses_receipt_id :btree {:fields [:receipt_id] :unique true}]
                       [:idx_expenses_store :btree {:fields [:store_id]}]
                       [:idx_expenses_supplier :btree {:fields [:supplier_id]}]
@@ -243,14 +249,20 @@
 
  :user_expense_settings {:fields [[:id :uuid {:primary-key true}]
                                   [:tenant_id :uuid {:foreign-key :tenants/id :null false :on-delete :cascade}]
-                                  [:user_id :uuid {:foreign-key :users/id :null false :on-delete :cascade}]
+                                  [:user_id :uuid {:foreign-key :users/id :on-delete :cascade}]
+                                  [:subject_ref [:varchar 64]]
                                   [:default_payer_id :uuid {:foreign-key :payers/id :on-delete :set-null}]
                                   [:receipt_ocr_provider :text {:null false :default "mistral"}]
                                   [:created_at :timestamptz {:default [:now]}]
                                   [:updated_at :timestamptz {:default [:now]}]]
                          :indexes [[:uniq_user_expense_settings_tenant_user
                                     :btree
-                                    {:fields [:tenant_id :user_id] :unique true}]]}
+                                    {:fields [:tenant_id :user_id] :unique true}]
+                                   [:uniq_user_expense_settings_tenant_subject
+                                    :btree
+                                    {:fields [:tenant_id :subject_ref]
+                                     :unique true
+                                     :where [:raw "(subject_ref IS NOT NULL)"]}]]}
 
  ;; ----------------------------------------------------------------------------
  ;; Raw Labels (deduplicated receipt line item labels) — global catalog

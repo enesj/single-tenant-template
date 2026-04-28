@@ -17,7 +17,7 @@ Reduce the impact of database read access and routine global-admin access by min
 | User CSV export hardening | Completed | User CSV export now emits pseudonymous user refs and non-identity account metadata only; raw emails, encrypted email fields, full names, tenant joins, and stale role/tenant columns are omitted. |
 | Reveal-email hardening | Completed | Reveal endpoints are now owner-only break-glass flows requiring structured reason codes plus detailed justification, with structured audit metadata. |
 | Receipt raw content minimization | Completed | Routine admin receipt projections now omit raw OCR JSON, parsed markdown, storage keys, original filenames, and file hashes while preserving derived review metadata and download URL boundaries. |
-| DB relationship privacy strategy | Decision recorded | A true DB-dump relationship privacy fix requires a dedicated schema/migration project; continue using app-layer pseudonymous projections until that project is explicitly scoped. |
+| DB relationship privacy strategy | Local cutover completed | New expense/receipt/settings writes use secret-derived `subject_ref` values; dev/test legacy rows have been cut over to subject refs with direct operational `users.id` links nulled. Production/staging cutover remains an explicit operator action. |
 | Plaintext `full_name` strategy | Completed | Names remain identity-management data, while routine operational audit/login-monitoring views now use pseudonymous refs instead of `full_name`. |
 | Key rotation/keyring support | Completed | Email ciphertext decrypts by stored `email_key_version` using keyring/per-version config; new writes continue using the active key version. |
 | Dev/staging key policy | Completed | Bundled email privacy defaults are now limited to `:dev`, `:local`, and `:test`; staging/prod-like profiles require explicit keys. |
@@ -136,15 +136,24 @@ Reduce the impact of database read access and routine global-admin access by min
   - Introduce pseudonymous subject IDs separated from identity table.
   - Split identity and operational databases/roles.
   - Add row-level/role-level DB controls.
-- **Decision:** Do not attempt an opportunistic partial schema rewrite in this hardening pass. The current app-layer work reduces routine admin exposure, but a DB-only attacker can still follow direct operational foreign keys. Meaningfully changing that requires a dedicated migration project that introduces a separate privacy-subject boundary and updates all operational ownership joins atomically.
-- **Recommended implementation project:**
-  - Introduce pseudonymous subject IDs that operational tables reference instead of identity rows.
-  - Keep identity-to-subject mapping in a narrower identity boundary with stricter DB role access.
-  - Migrate receipts, expenses, expense items, payer ownership, and tenant membership touchpoints in one planned migration sequence.
-  - Add DB role/view restrictions for read-only operational access where practical.
-- **Files likely impacted:** canonical schema EDN, generated migrations, auth/tenant/expenses services, route tests, migration docs.
-- **Validation:** migration checks against dev and test databases, service-level ownership tests, and DB role/view access checks.
-- **Progress:** Decision recorded on 2026-04-28; implementation deferred to a dedicated schema/migration project.
+- **Decision:** Use deterministic, secret-derived privacy subject refs for operational ownership. The mapping from `users.id` to `subject_ref` is computed with `PRIVACY_SUBJECT_KEY_B64` and is not stored in the database, so a DB dump can group one subject's rows but cannot directly join those rows back to `users.id` without the application secret.
+- **Implemented first slice:**
+  - Added nullable `subject_ref` / `created_by_subject_ref` columns to `expenses` and `receipts`.
+  - Added nullable `subject_ref` to `user_expense_settings` and made `user_id` nullable for migration-window compatibility.
+  - Added tenant/subject indexes plus a partial unique settings index on `(tenant_id, subject_ref)`.
+  - New user expense writes, receipt uploads, receipt posting/claiming, and user settings updates store subject refs instead of direct `users.id` ownership links.
+  - User-scoped reads/deletes/reports/settings/default-payer lookups match subject refs first and fall back to legacy `user_id` rows.
+  - Receipt visibility treats only rows with both `subject_ref` and `user_id` nil as unassigned, preventing subject-owned rows from becoming globally claimable.
+  - Admin privacy projections scrub subject refs from routine responses.
+  - Prod-like profiles now fail fast unless `PRIVACY_SUBJECT_KEY_B64` is configured; `:dev`, `:local`, and `:test` keep a bundled local fallback.
+  - Migration tooling now ignores empty historical model stubs left by earlier drop-table/schema-only SQL migrations so future schema migrations can be generated safely.
+- **Migration:** `resources/db/migrations/0073_privacy_subject_refs.edn` generated from canonical EDN and applied to both dev and test databases.
+- **Backfill/cutover tooling:** Added `app.template.backend.security.privacy-subject-backfill` and `bb privacy-subject-backfill`. The command is dry-run by default, computes subject refs in application code with `PRIVACY_SUBJECT_KEY_B64`, writes reports under `tmp/`, and requires explicit `--apply` before modifying rows. Passing `--cutover` also nulls direct operational `users.id` links once the matching subject ref exists or can be computed.
+- **Local cutover:** Applied `bb privacy-subject-backfill ... --cutover --apply --yes` to dev and test. Dev cut over 237 expense rows, 222 receipt rows, and 5 settings rows. Test cut over 6 settings rows; test expenses/receipts already had no direct operational links. Post-cutover dry-runs for both dev and test scanned 0 candidates and all direct-link/missing-subject counters were 0.
+- **Remaining operational cutover work:** Run the backfill/cutover command in staging/production after confirming a stable `PRIVACY_SUBJECT_KEY_B64` and taking an environment backup. Production/staging live cutover should be an explicit operator action, not an automatic schema migration. DB-only SQL should not compute or store the mapping secret. After verified cutover, remove legacy fallback code and later drop direct operational user-link columns in a separate schema migration.
+- **Files impacted:** canonical schema EDN, generated migration, privacy-subject helper, expenses/receipts/settings/payers/report/profile handlers, migration tooling, route/service tests, operations docs.
+- **Validation:** migration checks against dev and test databases, PostgreSQL schema/index verification, focused backend tests, dry-run backfill validation, and editor diagnostics.
+- **Progress:** First non-destructive subject-ref slice, dry-run-first backfill/cutover tooling, and local dev/test cutover completed on 2026-04-28; staging/production cutover and legacy fallback removal remain separate controlled operations.
 
 ### 7. Decide plaintext `full_name` policy
 
@@ -247,3 +256,13 @@ Reduce the impact of database read access and routine global-admin access by min
 | 2026-04-28 | Focused email keyring tests | Passed: 6 tests, 9 assertions, 0 failures, 0 errors | `tmp/email-keyring-tests.txt` |
 | 2026-04-28 | Focused email key policy tests | Passed: 7 tests, 15 assertions, 0 failures, 0 errors | `tmp/email-key-policy-tests.txt` |
 | 2026-04-28 | Stale runtime session-takeover docs grep | Passed: no matches under `docs/**` | n/a |
+| 2026-04-28 | Privacy-subject migration generation | Generated `0073_privacy_subject_refs.edn`; filtered known SQL-only `is_posted` drift; duplicate migration numbers clean | n/a |
+| 2026-04-28 | Privacy-subject migrations applied | Passed: migration 0073 applied to dev and test; status shows 0073 applied in both | n/a |
+| 2026-04-28 | Privacy-subject DB schema verification | Passed: dev DB has new subject columns and indexes, including partial unique `uniq_user_expense_settings_tenant_subject` | PostgreSQL MCP |
+| 2026-04-28 | Focused privacy-subject backend tests | Passed: 33 tests, 184 assertions, 0 failures | `tmp/privacy-subject-refs-kaocha-focused-tests-2.txt` |
+| 2026-04-28 | Editor diagnostics for privacy-subject changes | Passed: no errors in touched Clojure files | VS Code diagnostics |
+| 2026-04-28 | Focused privacy-subject backfill tests | Passed: 7 tests, 25 assertions, 0 failures | `tmp/privacy-subject-backfill-tests.txt` |
+| 2026-04-28 | Privacy-subject backfill dry-run | Passed: dev dry-run with `--cutover --limit 2`; scanned 2 each for expenses, receipts, and settings with no writes | `tmp/privacy-subject-backfill-dry-run.txt` |
+| 2026-04-28 | Dev privacy-subject cutover apply | Passed: cut over 237 expenses, 222 receipts, and 5 settings rows; all direct operational user-link and missing-subject counters became 0 | `tmp/privacy-subject-backfill-dev-apply.txt` |
+| 2026-04-28 | Test privacy-subject cutover apply | Passed: cut over 6 settings rows; test expenses/receipts already had no direct operational user links; all counters became 0 | `tmp/privacy-subject-backfill-test-apply.txt` |
+| 2026-04-28 | Post-cutover dry-run verification | Passed: dev and test dry-runs scanned 0 candidates and would update 0 rows | `tmp/privacy-subject-backfill-dev-post-cutover-dry-run.txt`, `tmp/privacy-subject-backfill-test-post-cutover-dry-run.txt` |

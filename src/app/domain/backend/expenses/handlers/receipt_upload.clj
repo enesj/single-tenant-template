@@ -11,6 +11,7 @@
     [app.domain.backend.expenses.handlers.user-expenses.helpers :as h]
     [app.domain.backend.expenses.services.receipts.storage :as receipt-storage]
     [app.domain.backend.expenses.services.user-expense-settings :as user-settings]
+    [app.template.backend.security.privacy-subject :as privacy-subject]
     [app.shared.adapters.database :as shared-db]
     [cheshire.core :as json]
     [clojure.java.io :as io]
@@ -160,12 +161,14 @@
     (let [{:keys [storage_key bytes original_filename content_type file_size]} (store-uploaded-file! file)
           user-id (h/get-user-id request)
           tenant-id (h/get-tenant-id request)
+          subject-ref (privacy-subject/user-subject-ref user-id)
           payer-id (parse-uuid-param :payer-id (:payer-id params))
           explicit-expense-category-id (parse-uuid-param :expense-category-id (:expense-category-id params))
           expense-category-id (or explicit-expense-category-id
                                 (user-settings/effective-default-expense-category-id db tenant-id user-id))
           notes (some-> (:notes params) str str/trim not-empty)
-          result (receipt-storage/upload-receipt! db (cond-> {:user_id user-id
+          result (receipt-storage/upload-receipt! db (cond-> {:subject_ref subject-ref
+                                                              :created_by_subject_ref subject-ref
                                                               :payer_id payer-id
                                                               :expense_category_id expense-category-id
                                                               :notes notes

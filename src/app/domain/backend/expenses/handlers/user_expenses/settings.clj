@@ -6,6 +6,7 @@
   (:require
     [app.domain.backend.expenses.handlers.user-expenses.helpers :as h]
     [app.shared.adapters.database :as db-adapter]
+    [app.template.backend.security.privacy-subject :as privacy-subject]
     [clojure.string :as str]
     [next.jdbc :as jdbc]
     [taoensso.timbre :as log]))
@@ -18,34 +19,37 @@
   "Load expenses for the profile export action.
 
    When `tenant-id` is present, export the full tenant dataset; otherwise
-   fall back to the requesting user's own expenses."
+   fall back to the requesting user's own expenses. User-scoped exports match
+   subject_ref rows and legacy user_id rows during migration."
   [db user-id tenant-id]
-  (->> (if tenant-id
-         (jdbc/execute! db
-           ["SELECT e.*, s.display_name as supplier_name, p.label as payer_label
+  (let [subject-ref (privacy-subject/user-subject-ref user-id)]
+    (->> (if tenant-id
+           (jdbc/execute! db
+             ["SELECT e.*, s.display_name as supplier_name, p.label as payer_label
              FROM expenses e
              LEFT JOIN suppliers s ON e.supplier_id = s.id
              LEFT JOIN payers p ON e.payer_id = p.id
              WHERE e.tenant_id = ?
              ORDER BY e.purchased_at DESC
              LIMIT 1000"
-            tenant-id])
-         (jdbc/execute! db
-           ["SELECT e.*, s.display_name as supplier_name, p.label as payer_label
+              tenant-id])
+           (jdbc/execute! db
+             ["SELECT e.*, s.display_name as supplier_name, p.label as payer_label
              FROM expenses e
              LEFT JOIN suppliers s ON e.supplier_id = s.id
              LEFT JOIN payers p ON e.payer_id = p.id
-             WHERE e.user_id = ?
+             WHERE (e.subject_ref = ? OR e.user_id = ?)
              ORDER BY e.purchased_at DESC
              LIMIT 1000"
-            user-id]))
-    (map db-adapter/to-app)))
+              subject-ref user-id]))
+      (map db-adapter/to-app))))
 
 (defn- delete-all-expenses!
   "Delete all expenses for the active profile danger-zone scope.
 
    When `tenant-id` is present, delete the full tenant dataset; otherwise
-   fall back to the requesting user's own expenses."
+   fall back to the requesting user's own expenses. User-scoped deletes match
+   subject_ref rows and legacy user_id rows during migration."
   [tx user-id tenant-id]
   (if tenant-id
     (do
@@ -60,18 +64,18 @@
         tx
         ["DELETE FROM expenses WHERE tenant_id = ?"
          tenant-id]))
-    (do
+    (let [subject-ref (privacy-subject/user-subject-ref user-id)]
       (jdbc/execute-one!
         tx
         ["UPDATE receipts
           SET expense_id = NULL,
               status = CASE WHEN status = 'posted'::receipt_status THEN 'extracted'::receipt_status ELSE status END
-          WHERE expense_id IN (SELECT id FROM expenses WHERE user_id = ?)"
-         user-id])
+          WHERE expense_id IN (SELECT id FROM expenses WHERE subject_ref = ? OR user_id = ?)"
+         subject-ref user-id])
       (jdbc/execute-one!
         tx
-        ["DELETE FROM expenses WHERE user_id = ?"
-         user-id]))))
+        ["DELETE FROM expenses WHERE subject_ref = ? OR user_id = ?"
+         subject-ref user-id]))))
 
 (defn export-expenses-handler
   "GET /api/v1/profile/export - export expenses as CSV/PDF.

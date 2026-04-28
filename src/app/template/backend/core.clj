@@ -280,22 +280,28 @@
 (defn- validate-config!
   "Fail fast if required secrets are absent.
   Called after load-config but before other resources are opened.
-  Hard errors: database credentials + production email privacy keys.
-  Warnings: optional integrations and non-prod fallback email privacy keys."
+  Hard errors: database credentials + prod-like privacy keys.
+  Warnings: optional integrations and local fallback privacy keys."
   [config profile]
   (let [db-url-override (some-> (System/getenv "DATABASE_URL") str/trim not-empty)
         encryption-key (some-> (System/getenv "EMAIL_PRIVACY_ENCRYPTION_KEY_B64") str/trim not-empty)
         lookup-key (some-> (System/getenv "EMAIL_PRIVACY_LOOKUP_KEY_B64") str/trim not-empty)
+        subject-key (some-> (System/getenv "PRIVACY_SUBJECT_KEY_B64") str/trim not-empty)
+        local-privacy-profile? (contains? #{:dev :local :test} profile)
+        prod-like-profile? (not local-privacy-profile?)
         errors (cond-> []
                  (and (not db-url-override)
                    (nil? (get-in config [:database :password])))
                  (conj "[:database :password] — set DB_PASSWORD (prod) or DB_DEV_PASSWORD/DB_TEST_PASSWORD env var")
 
-                 (and (= :prod profile) (nil? encryption-key))
-                 (conj "EMAIL_PRIVACY_ENCRYPTION_KEY_B64 — required in production for encrypted-at-rest email storage")
+                 (and prod-like-profile? (nil? encryption-key))
+                 (conj "EMAIL_PRIVACY_ENCRYPTION_KEY_B64 — required in prod-like profiles for encrypted-at-rest email storage")
 
-                 (and (= :prod profile) (nil? lookup-key))
-                 (conj "EMAIL_PRIVACY_LOOKUP_KEY_B64 — required in production for blind-index email lookup"))
+                 (and prod-like-profile? (nil? lookup-key))
+                 (conj "EMAIL_PRIVACY_LOOKUP_KEY_B64 — required in prod-like profiles for blind-index email lookup")
+
+                 (and prod-like-profile? (nil? subject-key))
+                 (conj "PRIVACY_SUBJECT_KEY_B64 — required in prod-like profiles for pseudonymous operational subject refs"))
         warnings (cond-> []
                    (and (= :prod profile)
                      (nil? (get-in config [:oauth :google :client-secret])))
@@ -306,9 +312,12 @@
                      (nil? (get-in config [:email :postmark :api-key])))
                    (conj "[:email] — email sending disabled (set SMTP_PASS or POSTMARK_API_KEY to enable)")
 
-                   (and (not= :prod profile)
+                   (and local-privacy-profile?
                      (or (nil? encryption-key) (nil? lookup-key)))
-                   (conj "[email-privacy] — using non-production fallback keys; set EMAIL_PRIVACY_ENCRYPTION_KEY_B64 and EMAIL_PRIVACY_LOOKUP_KEY_B64 for realistic local testing"))]
+                   (conj "[email-privacy] — using local fallback keys; set EMAIL_PRIVACY_ENCRYPTION_KEY_B64 and EMAIL_PRIVACY_LOOKUP_KEY_B64 for realistic local testing")
+
+                   (and local-privacy-profile? (nil? subject-key))
+                   (conj "[privacy-subject] — using a local fallback key; set PRIVACY_SUBJECT_KEY_B64 for realistic local testing"))]
     (when (seq warnings)
       (log/warn {:event :config/missing-optional-secrets
                  :profile profile

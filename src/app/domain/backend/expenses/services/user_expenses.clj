@@ -1,9 +1,10 @@
 (ns app.domain.backend.expenses.services.user-expenses
-  "User-facing expense services with user_id filtering.
+  "User-facing expense services with privacy subject filtering.
    These services enforce that users can only access their own expenses."
   (:require
     [app.domain.backend.expenses.services.exchange-rates :as exchange-rates]
     [app.domain.backend.expenses.services.expenses :as admin-expenses]
+    [app.template.backend.security.privacy-subject :as privacy-subject]
     [app.shared.model-naming :as model-naming]
     [app.shared.query-builders :as shared-qb]
     [app.shared.type-conversion :as type-conv]
@@ -29,6 +30,11 @@
     (instance? UUID v) v
     :else (UUID/fromString (str v))))
 
+(defn- user-ownership-clause
+  "Return the subject-ref first ownership predicate for migration-window reads."
+  [subject-column legacy-column user-id]
+  (privacy-subject/user-match-clause subject-column legacy-column user-id))
+
 (defn- parse-instant-param
   "Lenient parse of a date/time string into java.time.Instant.
    Accepts ISO 8601 instants, offset date-times, or plain dates.
@@ -47,12 +53,14 @@
 
    For non-BAM currencies, this primes the daily exchange-rate cache (when app
    config is available) and lets the shared expense service persist normalized
-   monetary fields for every write path."
+   monetary fields for every write path. New rows store a secret-derived
+   subject ref instead of a direct users.id owner link."
   ([db tenant-id user-id expense-data items]
    (create-user-expense! db tenant-id user-id expense-data items nil))
   ([db tenant-id user-id expense-data items app-config]
    (let [user-id (ensure-uuid user-id)
          tenant-id (ensure-uuid tenant-id)
+         subject-ref (privacy-subject/user-subject-ref user-id)
          currency (or (:currency expense-data) "BAM")
          total-amount (some-> (:total_amount expense-data) bigdec)]
      (when-not user-id
@@ -66,8 +74,8 @@
          (catch Exception e
            (log/warn e "Failed to ensure daily rates" {:currency currency}))))
      (let [expense-data (cond-> (assoc expense-data
-                                  :user_id user-id
-                                  :created_by user-id
+                                  :subject_ref subject-ref
+                                  :created_by_subject_ref subject-ref
                                   :currency currency)
                           tenant-id (assoc :tenant_id tenant-id))]
        (admin-expenses/create-expense! db expense-data items)))))
@@ -80,14 +88,15 @@
         tenant-id (ensure-uuid tenant-id)]
     (when-not user-id
       (throw (ex-info "user-id is required" {:expense-id expense-id})))
-    ;; First verify ownership (scoped by tenant when present)
+    ;; First verify ownership (scoped by tenant when present).
+    ;; During the migration window, match new subject refs and legacy user_id rows.
     (let [ownership-where (cond-> [:and
                                    [:= :id expense-id]
-                                   [:= :user_id user-id]]
+                                   (user-ownership-clause :subject_ref :user_id user-id)]
                             tenant-id (conj [:= :tenant_id tenant-id]))
           existing (jdbc/execute-one!
                      db
-                     (sql/format {:select [:id :user_id]
+                     (sql/format {:select [:id :user_id :subject_ref]
                                   :from [:expenses]
                                   :where ownership-where})
                      {:builder-fn rs/as-unqualified-lower-maps})]
@@ -119,7 +128,7 @@
       (jdbc/with-transaction [tx db]
         ;; Only delete expenses that are owned by the user (scoped by tenant).
         (let [ownership-where (cond-> [:and
-                                       [:= :user_id user-id]
+                                       (user-ownership-clause :subject_ref :user_id user-id)
                                        [:in :id ids]]
                                 tenant-id (conj [:= :tenant_id tenant-id]))
               owned-rows (jdbc/execute!
@@ -228,7 +237,7 @@
         tenant-id (ensure-uuid tenant-id)
         where (cond-> [:and
                        [:= :e.id expense-id]]
-                user-id (conj [:= :e.user_id user-id])
+                user-id (conj (user-ownership-clause :e.subject_ref :e.user_id user-id))
                 tenant-id (conj [:= :e.tenant_id tenant-id]))
         expense (jdbc/execute-one!
                   db
@@ -282,7 +291,7 @@
    :store-display-name :st.display_name
    :payer-label :p.label
    :payer-type :pt.label
-    :expense-category-name :ec.name})
+   :expense-category-name :ec.name})
 
 (defn- parse-decimal-param
   [raw]
@@ -376,7 +385,7 @@
                          :default-order-dir :desc
                          :tie-breaker [:e.id :asc]})
         base-where (cond-> [:and]
-                     user-id (conj [:= :e.user_id user-id])
+                     user-id (conj (user-ownership-clause :e.subject_ref :e.user_id user-id))
                      tenant-id (conj [:= :e.tenant_id tenant-id])
                      from (conj [:>= :e.purchased_at from])
                      to (conj [:<= :e.purchased_at to])
@@ -447,8 +456,10 @@
                        "receipt" [:is-not source-col nil]
                        "none" [:= 1 0]
                        nil)
+        user-subject-column (if has-text-filters? :e.subject_ref :subject_ref)
+        user-legacy-column (if has-text-filters? :e.user_id :user_id)
         base-where (cond-> [:and]
-                     user-id (conj [:= (if has-text-filters? :e.user_id :user_id) user-id])
+                     user-id (conj (user-ownership-clause user-subject-column user-legacy-column user-id))
                      tenant-id (conj [:= (if has-text-filters? :e.tenant_id :tenant_id) tenant-id])
                      from (conj [:>= (if has-text-filters? :e.purchased_at :purchased_at) from])
                      to (conj [:<= (if has-text-filters? :e.purchased_at :purchased_at) to])
@@ -521,7 +532,7 @@
                        (clojure.string/replace tz-id "'" "''")
                        "', " sql-col ")::date, 'YYYY-MM-DD')")
             base-where (cond-> [:and]
-                         user-id (conj [:= :e.user_id user-id])
+                         user-id (conj (user-ownership-clause :e.subject_ref :e.user_id user-id))
                          tenant-id (conj [:= :e.tenant_id tenant-id])
                          from (conj [:>= :e.purchased_at from])
                          to (conj [:<= :e.purchased_at to])
@@ -572,7 +583,7 @@
         report-summary? (or from* to* supplier-id* expense-category-id*)]
     (if report-summary?
       (let [summary-where (cond-> [:and]
-                            user-id (conj [:= :user_id user-id])
+                            user-id (conj (user-ownership-clause :subject_ref :user_id user-id))
                             tenant-id (conj [:= :tenant_id tenant-id])
                             from* (conj [:>= :purchased_at from*])
                             to* (conj [:<= :purchased_at to*])
@@ -598,8 +609,8 @@
          :from from*
          :to to*})
       (let [total-expenses (count-user-expenses db tenant-id user-id {})
-          currency-where (cond-> [:and]
-                             user-id (conj [:= :user_id user-id])
+            currency-where (cond-> [:and]
+                             user-id (conj (user-ownership-clause :subject_ref :user_id user-id))
                              tenant-id (conj [:= :tenant_id tenant-id]))
             currency-totals (jdbc/execute!
                               db
@@ -627,7 +638,7 @@
         where (cond-> [:and
                        [:>= :purchased_at
                         [:raw (format "NOW() - INTERVAL '%d months'" months-back)]]]
-                user-id (conj [:= :user_id user-id])
+                user-id (conj (user-ownership-clause :subject_ref :user_id user-id))
                 tenant-id (conj [:= :tenant_id tenant-id]))]
     (jdbc/execute!
       db
@@ -651,7 +662,7 @@
         to (parse-instant-param to)
         base-where (cond-> [:and
                             [:is-not :e.supplier_id nil]]
-                     user-id (conj [:= :e.user_id user-id])
+                     user-id (conj (user-ownership-clause :e.subject_ref :e.user_id user-id))
                      tenant-id (conj [:= :e.tenant_id tenant-id])
                      from (conj [:>= :e.purchased_at from])
                      to (conj [:<= :e.purchased_at to]))]
