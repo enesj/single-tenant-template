@@ -177,7 +177,7 @@ Test with real database using transaction rollback:
 | Password Reset | `password_test.clj` | Forgot, verify, reset flows |
 | Settings | `settings_test.clj` | View options CRUD |
 | Bulk Operations | `user_bulk_test.clj` | Batch updates, export |
-| User Operations | `user_operations_test.clj` | Role, verify, impersonate |
+| User Operations | `user_operations_test.clj` | Role, verify, reset password, activity/search |
 | Transactions | `transactions_test.clj` | Monitoring, trends, suspicious |
 | Entities | `entities_test.clj` | CRUD with constraints |
 | Integrations | `integrations_test.clj` | Status, performance, webhooks |

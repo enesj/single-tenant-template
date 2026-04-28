@@ -8,7 +8,7 @@ Key terms used across the single-tenant template, admin backend, and admin UI.
 - **Admin** — Staff user who signs in to the admin panel, authenticated via `POST /admin/api/login` and represented by `admins` table rows.
 - **User** — End user managed by admins. Stored in `users` table; managed via `/admin/api/users` and `/admin/api/user-management/*`.
 - **Admin Token** — Session token issued on admin login. Passed via `x-admin-token` header or session cookie for protected routes.
-- **Impersonation** — Temporary user session created by an admin (`POST /admin/api/user-management/impersonate/:id`) for debugging/support.
+- **Identity Management** — Explicit admin surfaces for managing user/admin accounts, email state, password reset flows, roles, and tenant memberships.
 
 ## Monitoring
 - **Audit Log** — Record of admin/user actions (`audit_logs` table). Includes actor/target, action, metadata, and request context. Listed via `/admin/api/audit` and per-user activity.

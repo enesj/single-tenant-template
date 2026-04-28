@@ -20,8 +20,8 @@ Reduce the impact of database read access and routine global-admin access by min
 | DB relationship privacy strategy | Decision recorded | A true DB-dump relationship privacy fix requires a dedicated schema/migration project; continue using app-layer pseudonymous projections until that project is explicitly scoped. |
 | Plaintext `full_name` strategy | Completed | Names remain identity-management data, while routine operational audit/login-monitoring views now use pseudonymous refs instead of `full_name`. |
 | Key rotation/keyring support | Completed | Email ciphertext decrypts by stored `email_key_version` using keyring/per-version config; new writes continue using the active key version. |
-| Dev/staging key policy | Not started | Prevent shared defaults outside local development and document rotation/reset path. |
-| Stale impersonation docs cleanup | Not started | Remove old runtime impersonation references from docs. |
+| Dev/staging key policy | Completed | Bundled email privacy defaults are now limited to `:dev`, `:local`, and `:test`; staging/prod-like profiles require explicit keys. |
+| Stale impersonation docs cleanup | Completed | Removed stale runtime session-takeover route/feature references from docs and inventory text. |
 
 ## Ordered implementation plan
 
@@ -191,19 +191,38 @@ Reduce the impact of database read access and routine global-admin access by min
   - Keep local dev convenience only when environment is explicitly local.
   - Fail fast in staging/prod-like envs if explicit keys are absent.
   - Document reset/rotation for local data.
-- **Files likely impacted:** config/security docs and `email.clj` config checks.
-- **Validation:** focused config tests.
-- **Progress:** Not started.
+- **Files impacted:**
+  - `src/app/template/backend/security/email.clj`
+  - `test/app/template/backend/security/email_test.clj`
+  - `docs/general/operations/email-privacy-key-management.md`
+- **Validation:** focused email security tests confirm local/test defaults work, staging fails fast without explicit encryption/lookup keys, and keyring behavior remains intact.
+- **Progress:** Completed on 2026-04-28.
+- **Implementation notes:**
+  - Replaced broad non-prod default-key fallback with a narrow `:dev`/`:local`/`:test` allowlist.
+  - Missing-key exceptions now include the active profile for easier startup/debug diagnosis.
+  - `:staging` and any other non-local profile now require explicit email privacy key env vars instead of silently using bundled development defaults.
 
 ### 10. Remove stale impersonation documentation
 
 - **Goal:** Docs should match runtime behavior after impersonation removal.
-- **Files likely impacted:**
+- **Files impacted:**
   - `docs/admin/backend/http-api.md`
   - `docs/general/reference/api-reference.md`
   - `docs/general/reference/glossary.md`
-- **Validation:** grep for stale `impersonat` references.
-- **Progress:** Not started.
+  - `docs/admin/backend/services.md`
+  - `docs/admin/frontend/admin-panel-single-tenant.md`
+  - `docs/general/reference/database-schema.md`
+  - `docs/shared/auth-utilities.md`
+  - `docs/general/architecture/backend-runtime.md`
+  - `docs/general/architecture/routing.md`
+  - `docs/general/testing/be/overview.md`
+  - `ALLIUM_SPECS_INVENTORY.md`
+- **Validation:** `docs/**` grep for stale runtime references returns no matches.
+- **Progress:** Completed on 2026-04-28.
+- **Implementation notes:**
+  - Removed the old `POST /admin/api/user-management/impersonate/:id` API documentation.
+  - Reworded user-management route/service summaries to list current role, email verification, password reset, activity, and search features.
+  - Replaced session-isolation wording that described minting user sessions from the admin console.
 
 ## Edge cases to preserve
 
@@ -226,3 +245,5 @@ Reduce the impact of database read access and routine global-admin access by min
 | 2026-04-28 | Focused receipt raw-content privacy tests | Passed: 14 tests, 109 assertions, 0 failures, 0 errors | `tmp/receipt-raw-content-privacy-tests.txt` |
 | 2026-04-28 | Focused `full_name` operational privacy tests | Passed: 15 tests, 92 assertions, 0 failures, 0 errors | `tmp/full-name-operational-privacy-tests.txt` |
 | 2026-04-28 | Focused email keyring tests | Passed: 6 tests, 9 assertions, 0 failures, 0 errors | `tmp/email-keyring-tests.txt` |
+| 2026-04-28 | Focused email key policy tests | Passed: 7 tests, 15 assertions, 0 failures, 0 errors | `tmp/email-key-policy-tests.txt` |
+| 2026-04-28 | Stale runtime session-takeover docs grep | Passed: no matches under `docs/**` | n/a |

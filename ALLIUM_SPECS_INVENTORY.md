@@ -73,7 +73,7 @@ Generated from the current repository state on 2026-04-18.
 | `template/external-api-audit.candidate.allium` | 2 | candidate | Logging failures from outgoing HTTP calls to external APIs into audit surfaces. |
 | `template/frontend-config-runtime-resolution.candidate.allium` | 3 | candidate | Operator-managed runtime frontend configuration for admin and user list settings. |
 | `template/mobile-web.candidate.allium` | 2 | candidate | Mobile web experience for phone-based expense capture, review, dashboard, and reports. |
-| `template/multi-tenancy.candidate.allium` | 3 | candidate | Shared-schema multi-tenancy with tenant-scoped access, provisioning, invitations, and impersonation. |
+| `template/multi-tenancy.candidate.allium` | 3 | candidate | Shared-schema multi-tenancy with tenant-scoped access, provisioning, invitations, and admin privacy boundaries. |
 | `template/platform-boundaries.allium` | 3 | active | High-level template platform boundaries across admin API, user API, and SPA route catalogs. |
 | `template/workspace-onboarding.candidate.allium` | 2 | candidate | First-run onboarding experience for users entering a workspace. |
 

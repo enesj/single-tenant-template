@@ -7,7 +7,7 @@ This document covers admin-only services that power the admin console (users, au
 Domain services live in their respective domain docs (see [Expenses Services](../../domain/expenses/backend-services.md)).
 
 ## Service Map (high level)
-- **Admin users** (`app.admin.backend.services.admin.users`) – CRUD + role changes + email verification + password resets + impersonation support.
+- **Admin users** (`app.admin.backend.services.admin.users`) – CRUD + role changes + email verification, password resets, activity aggregation, and advanced search.
 - **Admin audit** (`app.admin.backend.services.admin.audit`) – write/list audit events; merges admin/user context and normalizes principal identifiers.
 - **Admin auth** (`app.admin.backend.services.admin.auth`) – session creation/validation for admin login flows.
 - **Admin admins** (`app.admin.backend.services.admin.admins`) – manage admin accounts and metadata.
@@ -18,13 +18,13 @@ Domain services live in their respective domain docs (see [Expenses Services](..
 
 ## How Routes Bind to Services
 - `app.template.backend.routes.admin.users` → basic user CRUD.
-- `app.template.backend.routes.admin.user-operations` → role update, force verify email, reset password, impersonation, activity aggregation, advanced search.
+- `app.template.backend.routes.admin.user-operations` → role update, force verify email, reset password, activity aggregation, advanced search.
 - `app.template.backend.routes.admin.audit` → global audit listing/export.
 - `app.template.backend.routes.admin.login-events` → login event listing.
 
 ## Monitoring/Audit Data Shape
 - **Audit events**: include `principal-id`, `principal-type` (`admin|user`), `action`, `metadata`, `created-at`. Use `admin-utils/log-admin-action` when adding new admin actions.
-- **Login events**: include `principal-id`, `principal-type`, `success`, `reason`, `ip`, `user-agent`, `created-at`, and resolved `principal-name/email` when available.
+- **Login events**: include `principal-id`, `principal-type`, `success`, `reason`, `ip`, `user-agent`, `created-at`, and pseudonymous principal refs for routine admin views.
 - **User activity aggregation** (`app.admin.backend.services.admin.users/get-user-activity`): combines audit + login events and derived stats for the per-user modal. If you add new audit actions, keep names consistent so aggregation stays meaningful.
 
 ## Adding/Extending Services

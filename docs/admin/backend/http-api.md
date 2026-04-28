@@ -48,7 +48,6 @@ For shared HTTP shapes, auth expectations, and generic entity CRUD, see [Templat
 - `POST /admin/api/user-management/verify-email/:id` – force email verification.
 - `POST /admin/api/user-management/reset-password/:id` – reset password.
 - `GET /admin/api/user-management/activity/:id` – aggregated audit + login activity for the user (supports pagination via `page`/`per-page`).
-- `POST /admin/api/user-management/impersonate/:id` – create impersonation session.
 - `GET /admin/api/user-management/search` – advanced search (filters: `search`, `status`, `email-verified`, `role`, `auth-provider`, `sort-by`, `sort-order`, pagination).
 
 ### Audit Logs (protected, `app.template.backend.routes.admin.audit`)

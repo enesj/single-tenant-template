@@ -16,7 +16,7 @@ The same server serves both.
   - Protected (admin auth middleware):
     - `/dashboard`
     - `/users` (CRUD)
-    - `/user-management/*` (role updates, verify email, reset password, impersonation, activity, search)
+    - `/user-management/*` (role updates, verify email, reset password, activity, search)
     - `/audit` (global audit logs)
     - `/login-events` (global login history)
     - `/expenses/*` (and any other enabled domain APIs) mounted under `/admin/api/<domain-id>` via `app.domain.backend.registry`

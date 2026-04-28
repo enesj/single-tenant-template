@@ -209,7 +209,6 @@ Response: updated user map (top-level keys, not wrapped).
 - `PUT /admin/api/user-management/role/:id` – body `{:role "owner|admin|member|viewer"}` → `{:success true}`
 - `POST /admin/api/user-management/verify-email/:id` → `{:success true :message "Email verified"}`
 - `POST /admin/api/user-management/reset-password/:id` → `{:success <bool> :message ...}`
-- `POST /admin/api/user-management/impersonate/:id` → `{... :success true :token <user-session-token>}`
 - `GET /admin/api/user-management/search` – filters: `search`, `status`, `email-verified`, `role`, `auth-provider`, `sort-by`, `sort-order`, pagination. Response: `{:users [...]}`.
 - `GET /admin/api/user-management/activity/:id` – query `page`/`per-page`. Response:
   ```json

@@ -71,7 +71,7 @@ Server pagination behavior on these pages:
 Admin and user sessions are isolated:
 - User logout only clears the user `:auth-session` and leaves any `:admin-token` intact (so admin work continues).
 - Admin logout removes only `:admin-token` and preserves any user `:auth-session`.
-- Impersonation creates a user `:auth-session` while retaining the admin token.
+- Admin support workflows use admin APIs directly; they do not mint user sessions from the admin console.
 
 ## Extension Points
 

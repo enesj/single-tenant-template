@@ -26,7 +26,7 @@ Canonical schema is materialized in `resources/db/models.edn`, generated from th
 - **Fields**: `id` (uuid, pk), `actor_type` (`audit-actor-type`), `actor_id` (uuid), `action` (text, required), `target_type` (text), `target_id` (uuid), `metadata` (jsonb), `ip` (text), `user_agent` (text), `created_at` (timestamptz, default `NOW()`), `updated_at` (timestamptz, default `NOW()`).
 - **Enums**: `audit-actor-type` = `user | admin`.
 - **Indexes**: `idx_audit_logs_created_at` (created_at), `idx_audit_logs_actor` (actor_type, actor_id).
-- **Usage**: Populated by admin actions (update/create/delete/login/logout, impersonation, verification, etc.) and exposed via `/admin/api/audit` and `/admin/api/user-management/activity/:id`.
+- **Usage**: Populated by admin actions (update/create/delete/login/logout, verification, password reset, etc.) and exposed via `/admin/api/audit` and `/admin/api/user-management/activity/:id`.
 
 ### `login_events`
 

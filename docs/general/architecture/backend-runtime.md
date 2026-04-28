@@ -27,7 +27,7 @@ Applied in `app.template.backend.middleware.security` and admin routes:
   - `/auth/*` (password flows)
   - `/dashboard`
   - `/users` (CRUD)
-  - `/user-management/*` (roles, verify email, reset password, impersonation, activity, search)
+  - `/user-management/*` (roles, verify email, reset password, activity, search)
   - `/audit` (global audit logs)
   - `/login-events` (global login history)
   - Dev helpers: `/dev-get-rate-limits`, `/dev-clear-rate-limits`, `/test-put`

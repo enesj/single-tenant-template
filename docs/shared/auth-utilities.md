@@ -16,7 +16,7 @@ Shared role/permission helpers for the single-tenant admin app.
 - `get-auth-status` – normalize session/auth state for shared consumption.
 
 ## Usage patterns
-- **Backend**: Apply `has-permission?` in handlers/middleware to guard admin actions (e.g., role updates, impersonation).
+- **Backend**: Apply `has-permission?` in handlers/middleware to guard admin actions such as role updates, exports, and break-glass identity reveal.
 - **Frontend**: Gate buttons/menus using the same permission helpers to keep UI in sync with backend rules.
 
 ## Notes
