@@ -3,6 +3,7 @@
     [app.backend.fixtures :as fixtures]
     [app.domain.backend.expenses.services.receipts.janitor :as janitor]
     [app.domain.expenses.test-helpers :as th]
+    [app.template.backend.security.privacy-subject :as privacy-subject]
     [clojure.java.io :as io]
     [clojure.string :as str]
     [clojure.test :refer [deftest is testing use-fixtures]]
@@ -41,48 +42,50 @@
 
 (defn- insert-receipt!
   [db {:keys [id tenant-id user-id storage-key status updated-at expense-id file-purged-at]}]
-  (jdbc/execute-one!
-    db
-    ["insert into receipts (id, tenant_id, user_id, created_by, storage_key, file_hash, status, updated_at, expense_id, file_purged_at)
-      values (?, ?, ?, ?, ?, ?, ?::receipt_status, ?, ?, ?)
-      returning *"
-     id
-     tenant-id
-     user-id
-     user-id
-     storage-key
-     (random-file-hash)
-     status
-     updated-at
-     expense-id
-     file-purged-at]
-    {:builder-fn rs/as-unqualified-lower-maps}))
+  (let [subject-ref (privacy-subject/user-subject-ref user-id)]
+    (jdbc/execute-one!
+      db
+      ["insert into receipts (id, tenant_id, subject_ref, created_by_subject_ref, storage_key, file_hash, status, updated_at, expense_id, file_purged_at)
+        values (?, ?, ?, ?, ?, ?, ?::receipt_status, ?, ?, ?)
+        returning *"
+       id
+       tenant-id
+       subject-ref
+       subject-ref
+       storage-key
+       (random-file-hash)
+       status
+       updated-at
+       expense-id
+       file-purged-at]
+      {:builder-fn rs/as-unqualified-lower-maps})))
 
 (defn- insert-expense!
   [db {:keys [id tenant-id user-id payer-id receipt-id purchased-at total-amount currency]}]
-  (jdbc/execute-one!
-    db
-    ["insert into expenses (id, tenant_id, user_id, created_by, receipt_id, payer_id, purchased_at, total_amount, currency)
-      values (?, ?, ?, ?, ?, ?, ?, ?, ?::currency)
-      returning *"
-     id
-     tenant-id
-     user-id
-     user-id
-     receipt-id
-     payer-id
-     purchased-at
-     total-amount
-     currency]
-    {:builder-fn rs/as-unqualified-lower-maps}))
+  (let [subject-ref (privacy-subject/user-subject-ref user-id)]
+    (jdbc/execute-one!
+      db
+      ["insert into expenses (id, tenant_id, subject_ref, created_by_subject_ref, receipt_id, payer_id, purchased_at, total_amount, currency)
+        values (?, ?, ?, ?, ?, ?, ?, ?, ?::currency)
+        returning *"
+       id
+       tenant-id
+       subject-ref
+       subject-ref
+       receipt-id
+       payer-id
+       purchased-at
+       total-amount
+       currency]
+      {:builder-fn rs/as-unqualified-lower-maps})))
 
-(defn- update-receipt-expense-id!
-  [db receipt-id expense-id]
+(defn- update-expense-receipt-id!
+  [db expense-id receipt-id]
   (jdbc/execute-one!
     db
-    ["update receipts set expense_id = ? where id = ? returning *"
-     expense-id
-     receipt-id]
+    ["update expenses set receipt_id = ? where id = ? returning *"
+     receipt-id
+     expense-id]
     {:builder-fn rs/as-unqualified-lower-maps}))
 
 (defn- fetch-receipt
@@ -114,7 +117,8 @@
                            :user-id (:id user)
                            :storage-key (str old-good-id ".jpg")
                            :status "posted"
-                           :updated-at old-ts})
+                           :updated-at old-ts
+                           :expense-id old-expense-id})
       (insert-expense! db {:id old-expense-id
                            :tenant-id tenant-id
                            :user-id (:id user)
@@ -123,14 +127,15 @@
                            :purchased-at old-ts
                            :total-amount 12.50M
                            :currency "BAM"})
-      (update-receipt-expense-id! db old-good-id old-expense-id)
+      (update-expense-receipt-id! db old-expense-id old-good-id)
 
       (insert-receipt! db {:id recent-id
                            :tenant-id tenant-id
                            :user-id (:id user)
                            :storage-key (str recent-id ".jpg")
                            :status "posted"
-                           :updated-at recent-ts})
+                           :updated-at recent-ts
+                           :expense-id recent-expense-id})
       (insert-expense! db {:id recent-expense-id
                            :tenant-id tenant-id
                            :user-id (:id user)
@@ -139,7 +144,7 @@
                            :purchased-at recent-ts
                            :total-amount 5.00M
                            :currency "BAM"})
-      (update-receipt-expense-id! db recent-id recent-expense-id)
+      (update-expense-receipt-id! db recent-expense-id recent-id)
 
       (insert-receipt! db {:id no-expense-id
                            :tenant-id tenant-id
@@ -155,6 +160,7 @@
                            :storage-key (str purged-id ".jpg")
                            :status "posted"
                            :updated-at old-ts
+                           :expense-id purged-expense-id
                            :file-purged-at now})
       (insert-expense! db {:id purged-expense-id
                            :tenant-id tenant-id
@@ -164,7 +170,7 @@
                            :purchased-at old-ts
                            :total-amount 8.00M
                            :currency "BAM"})
-      (update-receipt-expense-id! db purged-id purged-expense-id)
+      (update-expense-receipt-id! db purged-expense-id purged-id)
 
       (insert-receipt! db {:id wrong-status-id
                            :tenant-id tenant-id
@@ -198,7 +204,8 @@
                              :user-id (:id user)
                              :storage-key (str receipt-id ".jpg")
                              :status "posted"
-                             :updated-at old-ts})
+                             :updated-at old-ts
+                             :expense-id expense-id})
         (insert-expense! db {:id expense-id
                              :tenant-id tenant-id
                              :user-id (:id user)
@@ -207,7 +214,7 @@
                              :purchased-at old-ts
                              :total-amount 19.99M
                              :currency "BAM"})
-        (update-receipt-expense-id! db receipt-id expense-id)
+        (update-expense-receipt-id! db expense-id receipt-id)
 
         (let [result (janitor/run-janitor! db {:storage-base-dir storage-dir
                                                :older-than-days 60
@@ -246,7 +253,8 @@
                              :user-id (:id user)
                              :storage-key (str receipt-id ".jpg")
                              :status "posted"
-                             :updated-at old-ts})
+                             :updated-at old-ts
+                             :expense-id expense-id})
         (insert-expense! db {:id expense-id
                              :tenant-id tenant-id
                              :user-id (:id user)
@@ -255,7 +263,7 @@
                              :purchased-at old-ts
                              :total-amount 22.00M
                              :currency "BAM"})
-        (update-receipt-expense-id! db receipt-id expense-id)
+        (update-expense-receipt-id! db expense-id receipt-id)
 
         (let [result (janitor/run-janitor! db {:storage-base-dir storage-dir
                                                :older-than-days 60

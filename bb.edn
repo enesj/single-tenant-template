@@ -383,7 +383,7 @@
           :task (apply shell {:extra-env (dotenv)} "clj" "-M" "scripts/bb/expenses/receipt_file_janitor.clj" *command-line-args*)},
 
          privacy-subject-backfill
-         {:doc "Backfill expense/receipt privacy subject refs. Dry-run by default. Usage: bb privacy-subject-backfill [dev|test|prod] [--apply] [--cutover] [--limit N] [--yes] [--pretty]",
+         {:doc "Backfill/check expense/receipt privacy subject refs. Dry-run by default. Usage: bb privacy-subject-backfill [dev|test|prod] [--apply] [--cutover] [--check-complete] [--limit N] [--yes] [--pretty]",
           :task (apply shell {:extra-env (dotenv)} "clj" "-M" "scripts/bb/expenses/privacy_subject_backfill.clj" *command-line-args*)},
 
          backup-db

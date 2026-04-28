@@ -22,7 +22,7 @@
 
 (defn- expense-owner-clause
   [user-id]
-  (privacy-subject/user-match-clause :e.subject_ref :e.user_id user-id))
+  (privacy-subject/user-match-clause :e.subject_ref user-id))
 
 (def ^:private allowed-expense-items-order-by
   "Allowlisted sort keys for `list-expense-items-handler`.
@@ -320,7 +320,7 @@
                [:in :expense_id {:select [:id]
                                  :from [:expenses]
                                  :where (cond-> [:and
-                                                 (privacy-subject/user-match-clause :subject_ref :user_id user-id)]
+                                                 (privacy-subject/user-match-clause :subject_ref user-id)]
                                           tenant-id (conj [:= :tenant_id tenant-id]))}]]
        :returning [:*]})
     {:builder-fn rs/as-unqualified-lower-maps}))

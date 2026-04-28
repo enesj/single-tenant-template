@@ -84,7 +84,7 @@
                    [:= :ec_excl.exclude_from_reports true]]}]]]
     (cond-> [:and
              exclude-flagged-category-clause]
-      user-id (conj (privacy-subject/user-match-clause :e.subject_ref :e.user_id user-id))
+      user-id (conj (privacy-subject/user-match-clause :e.subject_ref user-id))
       tenant-id (conj [:= :e.tenant_id tenant-id])
       from (conj [:>= :e.purchased_at from])
       to (conj [:<= :e.purchased_at to])

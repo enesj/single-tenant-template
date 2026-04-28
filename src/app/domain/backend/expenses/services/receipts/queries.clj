@@ -4,7 +4,6 @@
     [app.domain.backend.expenses.services.expenses :as expenses]
     [app.domain.backend.expenses.services.receipts.storage :as storage]
     [app.shared.query-builders :as shared-qb]
-    [app.template.backend.security.email :as email-privacy]
     [app.template.backend.security.privacy-subject :as privacy-subject]
     [clojure.string :as str]
     [honey.sql :as sql]
@@ -183,9 +182,8 @@
   "Build WHERE clause for receipt list/count queries.
 
   When `user-id` is provided, visibility is scoped to:
-  - receipts owned by the user's secret-derived subject ref,
-  - legacy receipts still owned by users.id during migration, or
-  - receipts with no owner (`subject_ref` and `user_id` are both nil).
+  - receipts owned by the user's secret-derived subject ref, or
+  - receipts with no owner (`subject_ref` is nil).
 
   When `tenant-id` is provided, scopes to that tenant.
 
@@ -196,11 +194,8 @@
                             [:or
                              (privacy-subject/user-match-clause
                                :receipts.subject_ref
-                               :receipts.user_id
                                user-id)
-                             [:and
-                              [:is :receipts.subject_ref nil]
-                              [:is :receipts.user_id nil]]])
+                             [:is :receipts.subject_ref nil]])
         tenant-clause (when tenant-id
                         [:= :receipts.tenant_id tenant-id])
         purged-clause (cond
@@ -290,8 +285,7 @@
 (def ^:private receipt-text-filter-columns
   "Mapping from text filter keys to SQL column identifiers for receipts."
   {:original-filename :receipts.original_filename
-   :supplier-guess    :receipts.supplier_guess
-   :created-by-name   :cb.full_name})
+   :supplier-guess    :receipts.supplier_guess})
 
 (def ^:private sortable-receipt-columns
   "Whitelist mapping client-supplied column names to ORDER BY expressions.
@@ -341,10 +335,10 @@
   Returns a lightweight projection for list views (detail endpoints return
   raw_extract_json / parsed_markdown, etc.).
   Optional :tenant-id in opts scopes to a specific tenant.
-  Text filter keys: :original-filename, :supplier-guess, :created-by-name.
+  Text filter keys: :original-filename, :supplier-guess.
   Numeric range filter keys: :total-amount-guess-min/max (alias: :total-display-min/max)."
   [db {:keys [status tenant-id limit offset sorts order-dir order-by
-              original-filename supplier-guess created-by-name show-purged?
+              original-filename supplier-guess show-purged?
               purchased-at-guess-from purchased-at-guess-to
               created-at-from created-at-to
               updated-at-from updated-at-to
@@ -358,8 +352,7 @@
                        :show-purged? show-purged?)
         order-clauses (build-receipt-order-clauses sorts order-by order-dir effective-status-sql)
         text-filters {:original-filename original-filename
-                      :supplier-guess supplier-guess
-                      :created-by-name created-by-name}
+                      :supplier-guess supplier-guess}
         query (cond-> {:select [:receipts.id
                                 :receipts.original_filename
                                 [[:raw effective-status-sql] :status]
@@ -370,15 +363,11 @@
                                 :receipts.currency_guess
                                 :receipts.payer_id
                                 :receipts.expense_id
-                                :receipts.created_by
-                                [:cb.id :created_by_user_id]
-                                [:cb.full_name :created_by_full_name]
                                 :receipts.file_purged_at
                                 [[:raw "coalesce((receipts.raw_extract_json->>'refine_pending')::boolean, false)"] :refine_pending]
                                 :receipts.created_at
                                 :receipts.updated_at]
                        :from [:receipts]
-                       :left-join [[:users :cb] [:= :cb.id :receipts.created_by]]
                        :order-by order-clauses
                        :limit limit
                        :offset offset}
@@ -395,25 +384,24 @@
                                                :total-amount-guess-max total-amount-guess-max
                                                :total-display-min total-display-min
                                                :total-display-max total-display-max}))]
-    (->> (jdbc/execute! db (sql/format query) {:builder-fn rs/as-unqualified-lower-maps})
-      (mapv email-privacy/routine-created-by-view))))
+    (jdbc/execute! db (sql/format query) {:builder-fn rs/as-unqualified-lower-maps})))
 
 (defn list-user-receipts
   "List receipts visible to a specific user.
 
   Visibility rules:
-  - receipts owned by `user-id`
-  - receipts with no `user_id` (unassigned/admin-uploaded)
+  - receipts owned by `user-id` via its secret-derived subject ref
+  - receipts with no `subject_ref` (unassigned/admin-uploaded)
 
   Supports optional status, text, and date filters.
   Optional :tenant-id in opts scopes to a specific tenant.
-  Text filter keys: :original-filename, :supplier-guess, :created-by-name.
+  Text filter keys: :original-filename, :supplier-guess.
   Numeric range filter keys: :total-amount-guess-min/max (alias: :total-display-min/max).
 
   Returns a lightweight projection for list views (detail endpoints return
   raw_extract_json / parsed_markdown, etc.)."
   [db user-id {:keys [status tenant-id limit offset sorts order-dir order-by
-                      original-filename supplier-guess created-by-name show-purged?
+                      original-filename supplier-guess show-purged?
                       purchased-at-guess-from purchased-at-guess-to
                       created-at-from created-at-to
                       updated-at-from updated-at-to
@@ -429,8 +417,7 @@
                        :show-purged? show-purged?)
         order-clauses (build-receipt-order-clauses sorts order-by order-dir effective-status-sql)
         text-filters {:original-filename original-filename
-                      :supplier-guess supplier-guess
-                      :created-by-name created-by-name}
+                      :supplier-guess supplier-guess}
         query (-> {:select [:receipts.id
                             :receipts.original_filename
                             [[:raw effective-status-sql] :status]
@@ -441,14 +428,11 @@
                             :receipts.currency_guess
                             :receipts.payer_id
                             :receipts.expense_id
-                            :receipts.created_by
-                            [[:coalesce :cb.full_name :cb.email] :created_by_name]
                             :receipts.file_purged_at
                             [[:raw "coalesce((receipts.raw_extract_json->>'refine_pending')::boolean, false)"] :refine_pending]
                             :receipts.created_at
                             :receipts.updated_at]
                    :from [:receipts]
-                   :left-join [[:users :cb] [:= :cb.id :receipts.created_by]]
                    :where where-clause
                    :order-by order-clauses
                    :limit limit
@@ -469,9 +453,9 @@
 (defn count-receipts
   "Count receipts using the same status/text/date filter semantics as `list-receipts`.
   Optional :tenant-id in opts scopes to a specific tenant.
-  Text filter keys: :original-filename, :supplier-guess, :created-by-name.
+  Text filter keys: :original-filename, :supplier-guess.
   Numeric range filter keys: :total-amount-guess-min/max (alias: :total-display-min/max)."
-  [db {:keys [status tenant-id original-filename supplier-guess created-by-name show-purged?
+  [db {:keys [status tenant-id original-filename supplier-guess show-purged?
               purchased-at-guess-from purchased-at-guess-to
               created-at-from created-at-to
               updated-at-from updated-at-to
@@ -482,11 +466,9 @@
                        :tenant-id tenant-id
                        :show-purged? show-purged?)
         text-filters {:original-filename original-filename
-                      :supplier-guess supplier-guess
-                      :created-by-name created-by-name}
+                      :supplier-guess supplier-guess}
         query (-> (cond-> {:select [[[:count :*] :total]]
-                           :from [:receipts]
-                           :left-join [[:users :cb] [:= :cb.id :receipts.created_by]]}
+                           :from [:receipts]}
                     where-clause (assoc :where where-clause))
                 (shared-qb/apply-text-filters receipt-text-filter-columns text-filters)
                 (apply-receipt-date-filters {:purchased-at-guess-from purchased-at-guess-from
@@ -505,9 +487,9 @@
 (defn count-user-receipts
   "Count receipts visible to `user-id` using the same filters as `list-user-receipts`.
   Optional :tenant-id in opts scopes to a specific tenant.
-  Text filter keys: :original-filename, :supplier-guess, :created-by-name.
+  Text filter keys: :original-filename, :supplier-guess.
   Numeric range filter keys: :total-amount-guess-min/max (alias: :total-display-min/max)."
-  [db user-id {:keys [status tenant-id original-filename supplier-guess created-by-name show-purged?
+  [db user-id {:keys [status tenant-id original-filename supplier-guess show-purged?
                       purchased-at-guess-from purchased-at-guess-to
                       created-at-from created-at-to
                       updated-at-from updated-at-to
@@ -520,11 +502,9 @@
                        :tenant-id tenant-id
                        :show-purged? show-purged?)
         text-filters {:original-filename original-filename
-                      :supplier-guess supplier-guess
-                      :created-by-name created-by-name}
+                      :supplier-guess supplier-guess}
         query (-> {:select [[[:count :*] :total]]
                    :from [:receipts]
-                   :left-join [[:users :cb] [:= :cb.id :receipts.created_by]]
                    :where where-clause}
                 (shared-qb/apply-text-filters receipt-text-filter-columns text-filters)
                 (apply-receipt-date-filters {:purchased-at-guess-from purchased-at-guess-from
@@ -542,7 +522,7 @@
 
 (defn count-purged-receipts
   "Count purged receipts using the same status/text/date/numeric filters as `list-receipts`."
-  [db {:keys [status tenant-id original-filename supplier-guess created-by-name
+  [db {:keys [status tenant-id original-filename supplier-guess
               purchased-at-guess-from purchased-at-guess-to
               created-at-from created-at-to
               updated-at-from updated-at-to
@@ -553,11 +533,9 @@
                        :tenant-id tenant-id
                        :purged-only? true)
         text-filters {:original-filename original-filename
-                      :supplier-guess supplier-guess
-                      :created-by-name created-by-name}
+                      :supplier-guess supplier-guess}
         query (-> (cond-> {:select [[[:count :*] :total]]
-                           :from [:receipts]
-                           :left-join [[:users :cb] [:= :cb.id :receipts.created_by]]}
+                           :from [:receipts]}
                     where-clause (assoc :where where-clause))
                 (shared-qb/apply-text-filters receipt-text-filter-columns text-filters)
                 (apply-receipt-date-filters {:purchased-at-guess-from purchased-at-guess-from
@@ -575,7 +553,7 @@
 
 (defn count-user-purged-receipts
   "Count purged receipts visible to `user-id` using the same filters as `list-user-receipts`."
-  [db user-id {:keys [status tenant-id original-filename supplier-guess created-by-name
+  [db user-id {:keys [status tenant-id original-filename supplier-guess
                       purchased-at-guess-from purchased-at-guess-to
                       created-at-from created-at-to
                       updated-at-from updated-at-to
@@ -588,11 +566,9 @@
                        :tenant-id tenant-id
                        :purged-only? true)
         text-filters {:original-filename original-filename
-                      :supplier-guess supplier-guess
-                      :created-by-name created-by-name}
+                      :supplier-guess supplier-guess}
         query (-> {:select [[[:count :*] :total]]
                    :from [:receipts]
-                   :left-join [[:users :cb] [:= :cb.id :receipts.created_by]]
                    :where where-clause}
                 (shared-qb/apply-text-filters receipt-text-filter-columns text-filters)
                 (apply-receipt-date-filters {:purchased-at-guess-from purchased-at-guess-from
@@ -639,8 +615,7 @@
 
   Visibility rules:
   - receipts owned by the user's secret-derived subject ref
-  - legacy receipts owned by `user-id`
-  - receipts with no owner (`subject_ref` and `user_id` are both nil)
+  - receipts with no owner (`subject_ref` is nil)
 
   Returns nil when not found or not visible.
   Optional `tenant-id` scopes to a specific tenant."
@@ -652,9 +627,7 @@
          receipt (get-receipt db receipt-id tenant-id)]
      (when (and receipt
              (or (= subject-ref (:subject_ref receipt))
-               (= user-id (:user_id receipt))
-               (and (nil? (:subject_ref receipt))
-                 (nil? (:user_id receipt)))))
+               (nil? (:subject_ref receipt))))
        receipt))))
 
 (defn list-pending-for-processing

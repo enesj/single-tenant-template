@@ -145,18 +145,31 @@
     merged))
 
 (def ^:private sql-only-schema-actions
-  "Schema actions already represented by explicit SQL migrations.
+  "Schema actions already represented by explicit SQL migrations or redundant with
+   column drops in the same generated migration.
 
    Automigrate reconstructs model state from EDN schema migrations only, so SQL-only
    migrations like 0071_expenses_is_posted_drop can be rediscovered forever.
-   Filtering only these exact actions prevents duplicate non-idempotent generated
-   drops while preserving the canonical source model as the alignment target."
+   PostgreSQL also auto-drops indexes that depend on a dropped column; suppressing
+   these exact redundant index-drop actions avoids a non-idempotent drop after the
+   column action has already removed the index. Filtering only these exact actions
+   prevents duplicate non-idempotent generated drops while preserving the canonical
+   source model as the alignment target."
   #{{:action :drop-column
      :field-name :is-posted
      :model-name :expenses}
     {:action :drop-index
      :index-name :idx-expenses-is-posted
-     :model-name :expenses}})
+     :model-name :expenses}
+    {:action :drop-index
+     :index-name :idx-expenses-user
+     :model-name :expenses}
+    {:action :drop-index
+     :index-name :idx-receipts-user
+     :model-name :receipts}
+    {:action :drop-index
+     :index-name :uniq-user-expense-settings-tenant-user
+     :model-name :user_expense_settings}})
 
 (defn- schema-migration-files
   "Return the current generated schema migration files."

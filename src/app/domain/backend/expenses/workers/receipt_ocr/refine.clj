@@ -73,7 +73,7 @@
                    (seq raw-tables)
                    (str "\n\n---\nRaw OCR table (may contain additional items not captured above):\n\n"
                      (str/join "\n\n" raw-tables)))
-        user-id (:user_id receipt)
+        subject-ref (:subject_ref receipt)
         filename (:original_filename receipt)
         user-enabled? (receipt-eligible-for-refine? db receipt _opts)
         has-markdown? (boolean (seq (some-> markdown str str/trim)))
@@ -90,7 +90,7 @@
         (when user-enabled?
           (log/info "Cerebras receipt refine skipped"
             {:receipt-id receipt-id
-             :user-id user-id
+             :subject-ref subject-ref
              :filename filename
              :reasons reasons
              :has-api-key? has-api-key?
@@ -105,7 +105,7 @@
         (try
           (log/info "Cerebras receipt refine starting"
             (cond-> {:receipt-id receipt-id
-                     :user-id user-id
+                     :subject-ref subject-ref
                      :filename filename
                      :include-store-context? receipt-refine-include-store-context?
                      :total-mismatch? total-mismatch?
@@ -124,7 +124,7 @@
                                      (assoc :provider_confidence provider-confidence))]
             (log/info "Cerebras receipt refine applied"
               (cond-> {:receipt-id receipt-id
-                       :user-id user-id
+                       :subject-ref subject-ref
                        :filename filename
                        :duration-ms duration-ms
                        :model (:model refine)
@@ -141,7 +141,7 @@
             (let [details (common/safe-ex-data e)]
               (log/warn e "Cerebras receipt refine failed; continuing without refine"
                 (cond-> {:receipt-id receipt-id
-                         :user-id user-id
+                         :subject-ref subject-ref
                          :filename filename
                          :error_message (or (.getMessage e) (str (class e)))}
                   (seq details) (assoc :error_details details))))

@@ -16,7 +16,7 @@
                                                  :total_amount_guess 10.00M
                                                  :purchased_at_guess "2026-03-19"
                                                  :payer_id (java.util.UUID/randomUUID)
-                                                 :user_id (java.util.UUID/randomUUID)
+                                                 :subject_ref "receipt-subject"
                                                  :tenant_id (java.util.UUID/randomUUID)})
                   receipt-status/update-status! (fn [_db rid status extra]
                                                   (reset! persisted {:receipt-id rid

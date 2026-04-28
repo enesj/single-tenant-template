@@ -188,7 +188,6 @@
 
 (deftest maybe-refine-with-cerebras-preserves-provider-confidence
   (let [receipt-id (java.util.UUID/randomUUID)
-        user-id (java.util.UUID/randomUUID)
         extract-result {:parsed-markdown "TOTAL: 20,13"
                         :raw {}
                         :extraction {:provider_confidence {:line_total_reliability 0.98
@@ -215,7 +214,7 @@
                 (#'refine/maybe-refine-with-cerebras
                  ::db
                  {:id receipt-id
-                  :user_id user-id
+                  :subject_ref "receipt-subject"
                   :original_filename "IMG_4117.jpeg"}
                  extract-result
                  {:cerebras-cfg {:api-key "k"}
@@ -227,7 +226,6 @@
 
 (deftest maybe-refine-with-cerebras-appends-raw-ocr-table-on-small-total-mismatch
   (let [receipt-id (java.util.UUID/randomUUID)
-        user-id (java.util.UUID/randomUUID)
         captured-markdown (atom nil)
         extract-result {:parsed-markdown "KONZUM\n\nTOTAL: 15,50"
                         :raw {:items {:pages []}}
@@ -258,7 +256,7 @@
                  (#'refine/maybe-refine-with-cerebras
                   ::db
                   {:id receipt-id
-                   :user_id user-id
+                   :subject_ref "receipt-subject"
                    :original_filename "IMG_4161.jpeg"}
                   extract-result
                   {:cerebras-cfg {:api-key "k"}
@@ -327,7 +325,7 @@
 (deftest refine-review-required-results-logs-cerebras-when-eligible-refine
   (let [opts {:cerebras-cfg {:refine-concurrency 1 :refine-timeout-ms 1000}}
         results [{:receipt {:id (java.util.UUID/randomUUID)
-                            :user_id (java.util.UUID/randomUUID)}
+                            :subject_ref "receipt-subject"}
                   :review-required? true
                   :extract-result {}}]
         output (let [w (java.io.StringWriter.)]

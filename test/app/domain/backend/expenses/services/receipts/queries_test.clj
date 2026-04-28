@@ -63,8 +63,8 @@
           (is (string? sql-lc))
           (is (re-find #"purchased_at_guess" sql-lc)))))))
 
-(deftest list-user-receipts-applies-created-by-and-date-filters-test
-  (testing "user receipts queries apply created-by text and date range filters"
+(deftest list-user-receipts-applies-date-filters-test
+  (testing "user receipts queries apply date range filters without joining creator identity"
     (let [captured-sql (atom nil)]
       (with-redefs [jdbc/execute! (fn [_db sql-params _opts]
                                     (reset! captured-sql sql-params)
@@ -76,14 +76,13 @@
            :offset 0
            :order-by "created-at"
            :order-dir :desc
-           :created-by-name "Enes"
            :purchased-at-guess-from "2026-03-21T00:00:00.000Z"
            :purchased-at-guess-to "2026-03-22T00:00:00.000Z"
            :created-at-from "2026-03-30T00:00:00.000Z"
            :updated-at-to "2026-03-31T00:00:00.000Z"})
         (let [sql-lc (some-> @captured-sql first str str/lower-case)]
           (is (string? sql-lc))
-          (is (re-find #"coalesce\(cb.full_name, cb.email\)" sql-lc))
+          (is (not (re-find #"join users" sql-lc)))
           (is (re-find #"receipts\.purchased_at_guess >= \?" sql-lc))
           (is (re-find #"receipts\.purchased_at_guess <= \?" sql-lc))
           (is (re-find #"receipts\.created_at >= \?" sql-lc))

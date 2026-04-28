@@ -152,7 +152,7 @@
    :unit {:label-key :common/unit}}},
  :expenses
  {:available-columns
-  ["purchased_at" "supplier_display_name" "payer_label" "currency" "total_amount" "notes" "id" "receipt_id" "created_at" "updated_at" "user_id" "supplier_id" "payer_id" "store_id" "tenant_id" "created_by" "expense_category_id"],
+  ["purchased_at" "supplier_display_name" "payer_label" "currency" "total_amount" "notes" "id" "receipt_id" "created_at" "updated_at" "supplier_id" "payer_id" "store_id" "tenant_id" "expense_category_id"],
   :computed-fields
   {:supplier_display_name {:type "string", :label "Supplier"},
    :payer_label {:type "string", :label "Payer"}},
@@ -179,7 +179,7 @@
    "created_at"
    "updated_at"],
   :always-visible [],
-  :column-config {:receipt_id {:type "text"}, :user_id {:type "text"}, :supplier_id {:type "text"}, :payer_id {:type "text"}, :store_id {:type "text"}, :created_by {:type "text"}, :expense_category_id {:type "text"}}},
+  :column-config {:receipt_id {:type "text"}, :supplier_id {:type "text"}, :payer_id {:type "text"}, :store_id {:type "text"}, :expense_category_id {:type "text"}}},
  :manufacturers
  {:available-columns
   ["display_name" "normalized_key" "created_at" "updated_at" "id"],
@@ -253,10 +253,20 @@
   ["action" "entity-name" "admin-ref" "admin-name" "user-agent"],
   :always-visible ["action"],
   :computed-fields
-  {:entity-name
+  {:actor-display-name
+   {:type "adapter-derived",
+    :dependencies ["actor-type" "actor-id" "admin-ref" "admin-name"]},
+   :entity-name
    {:type "join",
     :compute-fn "join-entity-name",
-    :dependencies ["entity-type" "entity-id"]}},
+    :dependencies ["target-type" "target-id" "metadata"]},
+   :context-summary
+   {:type "adapter-derived",
+    :dependencies ["metadata" "target-type"]},
+   :operation {:type "metadata", :dependencies ["metadata"]},
+   :severity {:type "metadata", :dependencies ["metadata"]},
+   :http-status {:type "metadata", :dependencies ["metadata"]},
+   :error-message {:type "metadata", :dependencies ["metadata"]}},
   :column-config
   {:actor-display-name {:width "160px", :type "text"},
    :context-summary {:width "360px", :type "text"},
@@ -280,28 +290,25 @@
    :error-message {:label "Error message"}}},
  :receipts
  {:available-columns
-  ["original-filename" "status" "supplier-guess" "created-at" "updated-at" "id" "file-size" "raw-extract-json" "parsed-markdown" "total-amount-guess" "currency-guess" "purchased-at-guess" "error-message" "error-details" "retry-count" "expense-id" "user-id" "payer-id" "storage-key" "file-hash" "content-type" "supplier-alias-id" "store-guess" "store-alias-id" "tenant-id" "created-by"],
+  ["status" "supplier-guess" "created-at" "updated-at" "id" "file-size" "raw-extract-json" "parsed-markdown" "total-amount-guess" "currency-guess" "purchased-at-guess" "error-message" "error-details" "retry-count" "expense-id" "payer-id" "storage-key" "file-hash" "content-type" "supplier-alias-id" "store-guess" "store-alias-id" "tenant-id"],
   :default-visible-columns
-  ["original-filename"
-   "status"
+  ["status"
    "supplier-guess"
    "created-at"
    "updated-at"],
   :filterable-columns
-  ["original-filename"
-   "status"
+  ["status"
    "supplier-guess"
    "created-at"
    "updated-at"],
   :sortable-columns
-  ["original-filename"
-   "status"
+  ["status"
    "supplier-guess"
    "created-at"
    "updated-at"],
-  :always-visible ["original-filename" "status" "purchased-at-guess"],
+  :always-visible ["status" "purchased-at-guess"],
   :computed-fields {},
-  :column-config {:expense-id {:type "text"}, :user-id {:type "text"}, :payer-id {:type "text"}, :supplier-alias-id {:type "text"}, :store-alias-id {:type "text"}, :created-by {:type "text"}}},
+  :column-config {:expense-id {:type "text"}, :payer-id {:type "text"}, :supplier-alias-id {:type "text"}, :store-alias-id {:type "text"}}},
  :login-events
  {:available-columns
   ["created-at" "principal-type" "success" "reason" "user-agent" "id" "principal-id" "ip" "updated-at"],

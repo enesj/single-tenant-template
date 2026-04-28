@@ -4,7 +4,6 @@
     [app.domain.backend.expenses.services.article-aliases :as aliases]
     [app.domain.backend.expenses.services.articles :as articles]
     [app.domain.backend.expenses.services.exchange-rates :as exchange-rates]
-    [app.template.backend.security.email :as email-privacy]
     [clojure.string :as str]
     [honey.sql :as sql]
     [next.jdbc :as jdbc]
@@ -217,8 +216,7 @@
   (-> expense-data
     (update-if-present :supplier_id #(parse-uuid! :supplier_id %))
     (update-if-present :payer_id #(parse-uuid! :payer_id %))
-    (update-if-present :user_id #(parse-uuid! :user_id %))
-    (update-if-present :created_by #(parse-uuid! :created_by %))
+
     (update-if-present :subject_ref blank->nil)
     (update-if-present :created_by_subject_ref blank->nil)
     (update-if-present :receipt_id #(parse-uuid! :receipt_id %))
@@ -421,20 +419,16 @@
                         [:s.normalized_key :supplier_normalized_key]
                         [:p.label :payer_label]
                         [:p.type :payer_type]
-                        [:ec.name :expense_category_name]
-                        [:cb.id :created_by_user_id]
-                        [:cb.full_name :created_by_full_name]]
+                        [:ec.name :expense_category_name]]
                :from [[:expenses :e]]
                :left-join [[:suppliers :s] [:= :s.id :e.supplier_id]
                            [:payers :p] [:= :p.id :e.payer_id]
-                           [:expense_categories :ec] [:= :ec.id :e.expense_category_id]
-                           [:users :cb] [:= :cb.id :e.created_by]]
+                           [:expense_categories :ec] [:= :ec.id :e.expense_category_id]]
                :where base-where
                :order-by [[:e.purchased_at order-dir]]
                :limit limit
                :offset offset}]
-    (->> (jdbc/execute! db (sql/format query) {:builder-fn rs/as-unqualified-lower-maps})
-      (mapv email-privacy/routine-created-by-view))))
+    (jdbc/execute! db (sql/format query) {:builder-fn rs/as-unqualified-lower-maps})))
 
 (defn count-expenses
   "Count expenses with the same filters as `list-expenses`.
@@ -587,8 +581,6 @@
                                          :supplier_id
                                          :payer_id
                                          :expense_category_id
-                                         :user_id
-                                         :created_by
                                          :subject_ref
                                          :created_by_subject_ref
                                          :receipt_id

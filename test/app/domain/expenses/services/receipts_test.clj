@@ -9,6 +9,7 @@
     [app.domain.backend.expenses.services.receipts.storage :as receipt-storage]
     [app.domain.backend.expenses.services.suppliers :as suppliers]
     [app.domain.expenses.test-helpers :as th]
+    [app.template.backend.security.privacy-subject :as privacy-subject]
     [clojure.java.io :as io]
     [clojure.test :refer [deftest is use-fixtures]])
   (:import
@@ -41,22 +42,22 @@
                                                       :storage_key "s3://bucket/r1.jpg"
                                                       :bytes (.getBytes "hello world")})
           receipt-id (:id (:receipt upload))
-            _ (receipt-status/store-extraction-results! db receipt-id {:currency_guess "USD"})
+          _ (receipt-status/store-extraction-results! db receipt-id {:currency_guess "USD"})
           _ (receipt-status/update-status! db receipt-id "extracted")
           review {:supplier_id (:id supplier)
                   :payer_id (:id payer)
                   :purchased_at (now)
                   :total_amount (bigdec "12.34")
-              :currency "EUR"
+                  :currency "EUR"
                   :items [{:raw_label "Milk" :line_total (bigdec "12.34")}]}
           expense (receipt-approval/approve-and-post! db receipt-id review)
           stored (receipt-queries/get-receipt db receipt-id)]
       (is (:id expense))
-              (is (= "BAM" (:currency expense)))
+      (is (= "BAM" (:currency expense)))
       (is (= 12.34M (:original_amount expense)))
       (is (= 12.34M (:bam_amount expense)))
-              (is (nil? (:exchange_rate expense)))
-              (is (nil? (:rate_fetched_at expense)))
+      (is (nil? (:exchange_rate expense)))
+      (is (nil? (:rate_fetched_at expense)))
       (is (= "posted" (:status stored)))
       (is (= (:id expense) (:expense_id stored)))
       (is (= 1 (count (:items expense)))))))
@@ -298,7 +299,9 @@
           payer (th/create-payer! db {:type "cash"
                                       :label "Cash"
                                       :tenant_id tenant-id})
-          upload (receipt-storage/upload-receipt! db {:user_id user-id
+          subject-ref (privacy-subject/user-subject-ref user-id)
+          upload (receipt-storage/upload-receipt! db {:subject_ref subject-ref
+                                                      :created_by_subject_ref subject-ref
                                                       :tenant_id tenant-id
                                                       :storage_key (str "s3://bucket/member-bam-" (UUID/randomUUID) ".jpg")
                                                       :bytes (.getBytes (str "member-bam-" (UUID/randomUUID)))})
@@ -313,7 +316,7 @@
                   :items [{:raw_label "Item" :line_total (bigdec "7.77")}]}
           expense (receipt-approval/approve-and-post-for-user! db user-id receipt-id review :tenant-id tenant-id)
           stored (receipt-queries/get-receipt db receipt-id tenant-id)]
-      (is (= user-id (:user_id expense)))
+      (is (= subject-ref (:subject_ref expense)))
       (is (= "BAM" (:currency expense)))
       (is (= 7.77M (:original_amount expense)))
       (is (= 7.77M (:bam_amount expense)))
@@ -331,7 +334,10 @@
           payer (th/create-payer! db {:type "cash"
                                       :label "Cash"
                                       :tenant_id member-tenant-id})
-          upload (receipt-storage/upload-receipt! db {:user_id member-user
+          member-subject-ref (privacy-subject/user-subject-ref member-user)
+          admin-subject-ref (privacy-subject/user-subject-ref admin-user)
+          upload (receipt-storage/upload-receipt! db {:subject_ref member-subject-ref
+                                                      :created_by_subject_ref member-subject-ref
                                                       :tenant_id member-tenant-id
                                                       :storage_key (str "s3://bucket/admin-bam-" (UUID/randomUUID) ".jpg")
                                                       :bytes (.getBytes (str "admin-bam-" (UUID/randomUUID)))})
@@ -346,7 +352,7 @@
                   :items [{:raw_label "Item" :line_total (bigdec "3.33")}]}
           expense (receipt-approval/approve-and-post-for-user-any! db admin-user receipt-id review :tenant-id member-tenant-id)
           stored (receipt-queries/get-receipt db receipt-id member-tenant-id)]
-      (is (= admin-user (:user_id expense)))
+      (is (= admin-subject-ref (:subject_ref expense)))
       (is (= "BAM" (:currency expense)))
       (is (= 3.33M (:original_amount expense)))
       (is (= 3.33M (:bam_amount expense)))
@@ -355,7 +361,7 @@
       (is (= "posted" (:status stored)))
       (is (= (:id expense) (:expense_id stored))))))
 
-(deftest receipts-approve-for-user-sets-expense-user-id-and-scopes
+(deftest receipts-approve-for-user-sets-expense-subject-ref-and-scopes
   (when-let [db fixtures/*test-db*]
     (let [{user-1 :user-id tenant-1 :tenant-id} (create-test-context! db "member-one")
           {user-2 :user-id tenant-2 :tenant-id} (create-test-context! db "member-two")
@@ -365,7 +371,10 @@
                                       :label "Cash"
                                       :tenant_id tenant-1})
 
-          upload-owned (receipt-storage/upload-receipt! db {:user_id user-1
+          subject-1 (privacy-subject/user-subject-ref user-1)
+          subject-2 (privacy-subject/user-subject-ref user-2)
+          upload-owned (receipt-storage/upload-receipt! db {:subject_ref subject-1
+                                                            :created_by_subject_ref subject-1
                                                             :tenant_id tenant-1
                                                             :storage_key (str "s3://bucket/u1-" (UUID/randomUUID) ".jpg")
                                                             :bytes (.getBytes (str "u1-" (UUID/randomUUID)))})
@@ -378,7 +387,8 @@
           receipt-unassigned (:id (:receipt upload-unassigned))
           _ (receipt-status/update-status! db receipt-unassigned "extracted")
 
-          upload-other (receipt-storage/upload-receipt! db {:user_id user-2
+          upload-other (receipt-storage/upload-receipt! db {:subject_ref subject-2
+                                                            :created_by_subject_ref subject-2
                                                             :tenant_id tenant-2
                                                             :storage_key (str "s3://bucket/u2-" (UUID/randomUUID) ".jpg")
                                                             :bytes (.getBytes (str "u2-" (UUID/randomUUID)))})
@@ -388,7 +398,7 @@
                   :payer_id (:id payer)
                   :purchased_at (now)
                   :total_amount (bigdec "7.77")
-                :currency "EUR"
+                  :currency "EUR"
                   :items [{:raw_label "Item" :line_total (bigdec "7.77")}]}
 
           expense-owned (receipt-approval/approve-and-post-for-user! db user-1 receipt-owned review :tenant-id tenant-1)
@@ -399,15 +409,15 @@
 
           scoped (receipt-queries/list-user-receipts db user-1 {:limit 200 :tenant-id tenant-1})
           scoped-ids (set (map :id scoped))]
-      (is (= user-1 (:user_id expense-owned)))
+      (is (= subject-1 (:subject_ref expense-owned)))
       (is (= "BAM" (:currency expense-owned)))
       (is (= "posted" (:status stored-owned)))
       (is (= (:id expense-owned) (:expense_id stored-owned)))
 
-      (is (= user-1 (:user_id expense-unassigned)))
+      (is (= subject-1 (:subject_ref expense-unassigned)))
       (is (= "BAM" (:currency expense-unassigned)))
       (is (= "posted" (:status stored-unassigned)))
-      (is (= user-1 (:user_id stored-unassigned)))
+      (is (= subject-1 (:subject_ref stored-unassigned)))
       (is (= (:id expense-unassigned) (:expense_id stored-unassigned)))
 
       (is (contains? scoped-ids receipt-owned))
@@ -430,7 +440,10 @@
                                       :label "Cash"
                                       :tenant_id member-tenant-id})
 
-          upload (receipt-storage/upload-receipt! db {:user_id member-user
+          member-subject-ref (privacy-subject/user-subject-ref member-user)
+          admin-subject-ref (privacy-subject/user-subject-ref admin-user)
+          upload (receipt-storage/upload-receipt! db {:subject_ref member-subject-ref
+                                                      :created_by_subject_ref member-subject-ref
                                                       :tenant_id member-tenant-id
                                                       :storage_key (str "s3://bucket/member-" (UUID/randomUUID) ".jpg")
                                                       :bytes (.getBytes (str "member-" (UUID/randomUUID)))})
@@ -445,8 +458,8 @@
                   :items [{:raw_label "Item" :line_total (bigdec "3.33")}]}
           expense (receipt-approval/approve-and-post-for-user-any! db admin-user receipt-id review :tenant-id member-tenant-id)
           stored (receipt-queries/get-receipt db receipt-id member-tenant-id)]
-      (is (= admin-user (:user_id expense)))
-          (is (= "BAM" (:currency expense)))
+      (is (= admin-subject-ref (:subject_ref expense)))
+      (is (= "BAM" (:currency expense)))
       (is (= "posted" (:status stored)))
       (is (= (:id expense) (:expense_id stored)))
-      (is (= member-user (:user_id stored))))))
+      (is (= member-subject-ref (:subject_ref stored))))))

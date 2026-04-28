@@ -1,0 +1,7 @@
+({:action :drop-column, :field-name :user-id, :model-name :expenses}
+ {:action :drop-column, :field-name :created-by, :model-name :receipts}
+ {:action :drop-column,
+  :field-name :user-id,
+  :model-name :user_expense_settings}
+ {:action :drop-column, :field-name :created-by, :model-name :expenses}
+ {:action :drop-column, :field-name :user-id, :model-name :receipts})

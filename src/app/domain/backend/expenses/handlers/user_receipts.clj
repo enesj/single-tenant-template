@@ -198,7 +198,6 @@
   - show-purged (optional boolean; when truthy include purged receipts)
   - original-filename (text filter, ILIKE)
   - supplier-guess (text filter, ILIKE)
-  - created-by-name (text filter, ILIKE)
   - total-amount-guess-min/max or total-display-min/max (numeric filters)
   - purchased-at-guess-from/to, created-at-from/to, updated-at-from/to (date filters)"
   [db]
@@ -212,7 +211,7 @@
                 status (parse-status-param (or (:status qp) (get qp "status")))
                 show-purged? (parse-show-purged-param qp)
                 text-filters (h/extract-text-filter-params qp
-                               [:original-filename :supplier-guess :created-by-name])
+                               [:original-filename :supplier-guess])
                 amount-filters (extract-total-amount-range-filters qp)
                 date-filters (into {}
                                (keep (fn [k]
@@ -228,7 +227,7 @@
                                      :offset (parse-long-param qp :offset 0)}
                                sort-opts
                                text-filters
-                                   amount-filters
+                               amount-filters
                                date-filters)
                        tenant-id (assoc :tenant-id tenant-id))
                 {:keys [rows total purged-total limit offset]}

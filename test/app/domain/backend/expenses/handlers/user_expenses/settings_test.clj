@@ -2,6 +2,7 @@
   (:require
     [app.domain.backend.expenses.handlers.user-expenses.settings :as settings]
     [app.shared.adapters.database :as db-adapter]
+    [app.template.backend.security.privacy-subject :as privacy-subject]
     [clojure.string :as str]
     [clojure.test :refer [deftest is]]
     [next.jdbc :as jdbc]))
@@ -23,6 +24,7 @@
 
 (deftest load-export-expenses-falls-back-to-user-scope-without-tenant
   (let [user-id (java.util.UUID/randomUUID)
+        subject-ref (privacy-subject/user-subject-ref user-id)
         captured (atom nil)]
     (with-redefs [jdbc/execute! (fn [_db sqlvec]
                                   (reset! captured sqlvec)
@@ -31,8 +33,8 @@
       (is (= [{:row 1}]
             (#'settings/load-export-expenses :mock-db user-id nil)))
       (let [[sql & params] @captured]
-        (is (str/includes? sql "WHERE e.user_id = ?"))
-        (is (= [user-id] params))))))
+        (is (str/includes? sql "WHERE e.subject_ref = ?"))
+        (is (= [subject-ref] params))))))
 
 (deftest delete-all-expenses-uses-tenant-scope-when-present
   (let [user-id (java.util.UUID/randomUUID)
@@ -53,6 +55,7 @@
 
 (deftest delete-all-expenses-falls-back-to-user-scope-without-tenant
   (let [user-id (java.util.UUID/randomUUID)
+        subject-ref (privacy-subject/user-subject-ref user-id)
         calls (atom [])]
     (with-redefs [jdbc/execute-one! (fn [_tx sqlvec]
                                       (swap! calls conj sqlvec)
@@ -62,7 +65,7 @@
       (is (= {:next.jdbc/update-count 3}
             (#'settings/delete-all-expenses! :mock-tx user-id nil)))
       (let [[receipt-sql delete-sql] @calls]
-        (is (str/includes? (first receipt-sql) "WHERE expense_id IN (SELECT id FROM expenses WHERE user_id = ?)"))
-        (is (= [user-id] (vec (rest receipt-sql))))
-        (is (str/includes? (first delete-sql) "DELETE FROM expenses WHERE user_id = ?"))
-        (is (= [user-id] (vec (rest delete-sql))))))))
+        (is (str/includes? (first receipt-sql) "WHERE expense_id IN (SELECT id FROM expenses WHERE subject_ref = ?)"))
+        (is (= [subject-ref] (vec (rest receipt-sql))))
+        (is (str/includes? (first delete-sql) "DELETE FROM expenses WHERE subject_ref = ?"))
+        (is (= [subject-ref] (vec (rest delete-sql))))))))

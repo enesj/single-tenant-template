@@ -235,27 +235,131 @@
        :results []}
       rows)))
 
+(def ^:private direct-link-count-keys
+  [:expenses_user_id_links
+   :expenses_created_by_links
+   :receipts_user_id_links
+   :receipts_created_by_links
+   :settings_user_id_links])
+
+(def ^:private missing-subject-count-keys
+  [:expenses_missing_subject_ref
+   :expenses_missing_created_by_subject_ref
+   :receipts_missing_subject_ref
+   :receipts_missing_created_by_subject_ref
+   :settings_missing_subject_ref])
+
+(defn- existing-column-set
+  "Return the existing column names for `table` in the current schema."
+  [db table]
+  (->> (jdbc/execute!
+         db
+         ["SELECT column_name
+            FROM information_schema.columns
+           WHERE table_schema = current_schema()
+             AND table_name = ?"
+          (name table)]
+         {:builder-fn rs/as-unqualified-lower-maps})
+    (map (comp keyword :column_name))
+    set))
+
+(defn- count-all-rows
+  [db table]
+  (let [row (jdbc/execute-one!
+              db
+              (sql/format {:select [[[:count :*] :total]]
+                           :from [table]})
+              {:builder-fn rs/as-unqualified-lower-maps})]
+    (long (or (:total row) 0))))
+
+(defn- count-when-columns-present
+  [db table available-columns required-columns where-clause]
+  (if (every? available-columns required-columns)
+    (let [row (jdbc/execute-one!
+                db
+                (sql/format {:select [[[:count :*] :total]]
+                             :from [table]
+                             :where where-clause})
+                {:builder-fn rs/as-unqualified-lower-maps})]
+      (long (or (:total row) 0)))
+    0))
+
 (defn linkage-stats
-  "Return counts showing remaining direct operational users.id links."
+  "Return counts showing remaining direct operational users.id links.
+
+   Direct-link columns are expected to disappear after the destructive cleanup
+   migration. Missing direct-link columns are treated as zero remaining links so
+   `--check-complete` remains useful after the drop."
   [db]
-  (jdbc/execute-one!
-    db
-    [(str
-       "SELECT\n"
-       "  (SELECT count(*) FROM expenses) AS expenses_total,\n"
-       "  (SELECT count(*) FROM expenses WHERE user_id IS NOT NULL) AS expenses_user_id_links,\n"
-       "  (SELECT count(*) FROM expenses WHERE user_id IS NOT NULL AND subject_ref IS NULL) AS expenses_missing_subject_ref,\n"
-       "  (SELECT count(*) FROM expenses WHERE created_by IS NOT NULL) AS expenses_created_by_links,\n"
-       "  (SELECT count(*) FROM expenses WHERE created_by IS NOT NULL AND created_by_subject_ref IS NULL) AS expenses_missing_created_by_subject_ref,\n"
-       "  (SELECT count(*) FROM receipts) AS receipts_total,\n"
-       "  (SELECT count(*) FROM receipts WHERE user_id IS NOT NULL) AS receipts_user_id_links,\n"
-       "  (SELECT count(*) FROM receipts WHERE user_id IS NOT NULL AND subject_ref IS NULL) AS receipts_missing_subject_ref,\n"
-       "  (SELECT count(*) FROM receipts WHERE created_by IS NOT NULL) AS receipts_created_by_links,\n"
-       "  (SELECT count(*) FROM receipts WHERE created_by IS NOT NULL AND created_by_subject_ref IS NULL) AS receipts_missing_created_by_subject_ref,\n"
-       "  (SELECT count(*) FROM user_expense_settings) AS settings_total,\n"
-       "  (SELECT count(*) FROM user_expense_settings WHERE user_id IS NOT NULL) AS settings_user_id_links,\n"
-       "  (SELECT count(*) FROM user_expense_settings WHERE user_id IS NOT NULL AND subject_ref IS NULL) AS settings_missing_subject_ref")]
-    {:builder-fn rs/as-unqualified-lower-maps}))
+  (let [expense-columns (existing-column-set db :expenses)
+        receipt-columns (existing-column-set db :receipts)
+        settings-columns (existing-column-set db :user_expense_settings)
+        count-present (fn [table available required where]
+                        (count-when-columns-present db table available required where))]
+    {:expenses_total (count-all-rows db :expenses)
+     :expenses_user_id_links (count-present :expenses expense-columns [:user_id]
+                               [:is-not :user_id nil])
+     :expenses_missing_subject_ref (count-present :expenses expense-columns [:user_id :subject_ref]
+                                     [:and
+                                      [:is-not :user_id nil]
+                                      [:is :subject_ref nil]])
+     :expenses_created_by_links (count-present :expenses expense-columns [:created_by]
+                                  [:is-not :created_by nil])
+     :expenses_missing_created_by_subject_ref (count-present :expenses expense-columns [:created_by :created_by_subject_ref]
+                                                [:and
+                                                 [:is-not :created_by nil]
+                                                 [:is :created_by_subject_ref nil]])
+     :receipts_total (count-all-rows db :receipts)
+     :receipts_user_id_links (count-present :receipts receipt-columns [:user_id]
+                               [:is-not :user_id nil])
+     :receipts_missing_subject_ref (count-present :receipts receipt-columns [:user_id :subject_ref]
+                                     [:and
+                                      [:is-not :user_id nil]
+                                      [:is :subject_ref nil]])
+     :receipts_created_by_links (count-present :receipts receipt-columns [:created_by]
+                                  [:is-not :created_by nil])
+     :receipts_missing_created_by_subject_ref (count-present :receipts receipt-columns [:created_by :created_by_subject_ref]
+                                                [:and
+                                                 [:is-not :created_by nil]
+                                                 [:is :created_by_subject_ref nil]])
+     :settings_total (count-all-rows db :user_expense_settings)
+     :settings_user_id_links (count-present :user_expense_settings settings-columns [:user_id]
+                               [:is-not :user_id nil])
+     :settings_missing_subject_ref (count-present :user_expense_settings settings-columns [:user_id :subject_ref]
+                                     [:and
+                                      [:is-not :user_id nil]
+                                      [:is :subject_ref nil]])}))
+
+(defn remaining-link-count
+  "Return the total number of remaining direct-link or missing-subject counters."
+  [stats]
+  (reduce
+    (fn [total k]
+      (+ total (long (or (get stats k) 0))))
+    0
+    (concat direct-link-count-keys missing-subject-count-keys)))
+
+(defn cutover-complete?
+  "Return true when linkage stats show no remaining direct operational user links."
+  [stats]
+  (zero? (remaining-link-count stats)))
+
+(defn cutover-status
+  "Return a status map suitable for operator checks and CI gates."
+  [db]
+  (let [stats (linkage-stats db)
+        remaining (remaining-link-count stats)]
+    {:complete? (zero? remaining)
+     :remaining-link-count remaining
+     :stats stats}))
+
+(defn assert-cutover-complete!
+  "Throw if direct operational user links or missing subject refs remain."
+  [db]
+  (let [status (cutover-status db)]
+    (when-not (:complete? status)
+      (throw (ex-info "Privacy subject cutover is incomplete" status)))
+    status))
 
 (defn- write-report!
   [report]

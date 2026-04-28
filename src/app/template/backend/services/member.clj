@@ -2,6 +2,7 @@
   "Tenant member management — role changes, ownership transfer, removal."
   (:require
     [app.shared.adapters.database :refer [convert-pg-objects]]
+    [app.template.backend.security.privacy-subject :as privacy-subject]
     [app.template.backend.services.onboarding.core :as onboarding]
     [honey.sql :as sql]
     [next.jdbc :as jdbc]
@@ -265,7 +266,7 @@
                                                :from   [:user_expense_settings]
                                                :where  [:and
                                                         [:= :tenant_id target-tenant-id]
-                                                        [:= :user_id target-user-id]]})
+                                                        [:= :subject_ref (privacy-subject/user-subject-ref target-user-id)]]})
                                   {:builder-fn rs/as-unqualified-lower-maps})
                   user-payer-id (:default_payer_id user-settings)
                   system-payer-ids (set (map :id system-payers))]
@@ -280,7 +281,7 @@
                 (sql/format {:delete-from [:user_expense_settings]
                              :where [:and
                                      [:= :tenant_id target-tenant-id]
-                                     [:= :user_id target-user-id]]})))
+                                     [:= :subject_ref (privacy-subject/user-subject-ref target-user-id)]]})))
             (catch Exception e
               (log/warn e "Failed to cleanup payer/settings on member removal"
                 {:tenant-id target-tenant-id :user-id target-user-id}))))

@@ -57,11 +57,11 @@
       (is (= :privacy-subject/missing-key (-> ex ex-data :type)))
       (is (= :staging (-> ex ex-data :profile))))))
 
-(deftest user-match-clause-supports-migration-window
+(deftest user-match-clause-matches-subject-ref-only
   (with-env {"AERO_PROFILE" "prod"
              "PRIVACY_SUBJECT_KEY_B64" explicit-key-b64}
     #(let [user-id #uuid "00000000-0000-0000-0000-000000000123"
-           clause (subject/user-match-clause :e.subject_ref :e.user_id user-id)]
-       (is (= :or (first clause)))
-       (is (= [:= :e.user_id user-id] (nth clause 2)))
-       (is (re-matches #"[0-9a-f]{64}" (get-in clause [1 2]))))))
+           clause (subject/user-match-clause :e.subject_ref user-id)]
+       (is (= := (first clause)))
+       (is (= :e.subject_ref (second clause)))
+       (is (re-matches #"[0-9a-f]{64}" (nth clause 2))))))

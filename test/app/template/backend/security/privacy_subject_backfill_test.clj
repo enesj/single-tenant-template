@@ -73,3 +73,14 @@
               :receipt_ocr_provider nil}
              {:default_payer_id legacy-payer
               :receipt_ocr_provider "other"}))))))
+
+(deftest cutover-status-helpers-count-remaining-links
+  (testing "complete stats return zero remaining links"
+    (is (zero? (sut/remaining-link-count {})))
+    (is (sut/cutover-complete? {})))
+  (testing "any direct-link or missing-subject counter marks the cutover incomplete"
+    (let [stats {:expenses_user_id_links 1
+                 :receipts_missing_subject_ref 2
+                 :settings_user_id_links 3}]
+      (is (= 6 (sut/remaining-link-count stats)))
+      (is (false? (sut/cutover-complete? stats))))))

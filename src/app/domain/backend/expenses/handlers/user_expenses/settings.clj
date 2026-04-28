@@ -19,8 +19,7 @@
   "Load expenses for the profile export action.
 
    When `tenant-id` is present, export the full tenant dataset; otherwise
-   fall back to the requesting user's own expenses. User-scoped exports match
-   subject_ref rows and legacy user_id rows during migration."
+   fall back to the requesting user's own subject-ref expenses."
   [db user-id tenant-id]
   (let [subject-ref (privacy-subject/user-subject-ref user-id)]
     (->> (if tenant-id
@@ -38,18 +37,17 @@
              FROM expenses e
              LEFT JOIN suppliers s ON e.supplier_id = s.id
              LEFT JOIN payers p ON e.payer_id = p.id
-             WHERE (e.subject_ref = ? OR e.user_id = ?)
+             WHERE e.subject_ref = ?
              ORDER BY e.purchased_at DESC
              LIMIT 1000"
-              subject-ref user-id]))
+              subject-ref]))
       (map db-adapter/to-app))))
 
 (defn- delete-all-expenses!
   "Delete all expenses for the active profile danger-zone scope.
 
    When `tenant-id` is present, delete the full tenant dataset; otherwise
-   fall back to the requesting user's own expenses. User-scoped deletes match
-   subject_ref rows and legacy user_id rows during migration."
+   fall back to the requesting user's own subject-ref expenses."
   [tx user-id tenant-id]
   (if tenant-id
     (do
@@ -70,12 +68,12 @@
         ["UPDATE receipts
           SET expense_id = NULL,
               status = CASE WHEN status = 'posted'::receipt_status THEN 'extracted'::receipt_status ELSE status END
-          WHERE expense_id IN (SELECT id FROM expenses WHERE subject_ref = ? OR user_id = ?)"
-         subject-ref user-id])
+          WHERE expense_id IN (SELECT id FROM expenses WHERE subject_ref = ?)"
+         subject-ref])
       (jdbc/execute-one!
         tx
-        ["DELETE FROM expenses WHERE subject_ref = ? OR user_id = ?"
-         subject-ref user-id]))))
+        ["DELETE FROM expenses WHERE subject_ref = ?"
+         subject-ref]))))
 
 (defn export-expenses-handler
   "GET /api/v1/profile/export - export expenses as CSV/PDF.

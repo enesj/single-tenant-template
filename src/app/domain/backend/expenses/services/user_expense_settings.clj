@@ -9,6 +9,7 @@
     [app.domain.backend.expenses.services.expense-categories :as expense-categories]
     [app.shared.adapters.database :as db-adapter]
     [app.template.backend.security.privacy-subject :as privacy-subject]
+    [clojure.string :as str]
     [honey.sql :as sql]
     [next.jdbc :as jdbc]
     [next.jdbc.result-set :as rs])
@@ -21,9 +22,9 @@
    :receipt-ocr-provider "mistral"})
 
 (defn- settings-owner-clause
-  "Match a settings row by subject ref, falling back to legacy user_id rows."
+  "Match a settings row by subject ref."
   [user-id]
-  (privacy-subject/user-match-clause :subject_ref :user_id user-id))
+  (privacy-subject/user-match-clause :subject_ref user-id))
 
 (defn- update-settings-row!
   [tx tenant-id user-id subject-ref updates]
@@ -33,7 +34,6 @@
       (sql/format {:update :user_expense_settings
                    :set (merge updates
                           {:subject_ref subject-ref
-                           :user_id nil
                            :updated_at [:now]})
                    :where [:and
                            [:= :tenant_id tenant-id]
@@ -54,9 +54,8 @@
     {:builder-fn rs/as-unqualified-lower-maps}))
 
 (defn get-user-expense-settings
-  "Return the persisted settings row for `user-id` scoped to `tenant-id`, or nil
-   if none exists. Reads subject-ref rows first and falls back to legacy user_id
-   rows during the privacy-subject migration window."
+  "Return the persisted subject-ref settings row for `user-id` scoped to `tenant-id`,
+   or nil if none exists."
   [db tenant-id user-id]
   (when-not (instance? UUID tenant-id)
     (throw (ex-info "tenant-id must be a UUID" {:tenant-id tenant-id})))
@@ -69,13 +68,27 @@
                      :where [:and
                              [:= :tenant_id tenant-id]
                              (settings-owner-clause user-id)]
-                     :order-by [[[:case
-                                  [:= :subject_ref (privacy-subject/user-subject-ref user-id)] 0
-                                  :else 1]
-                                 :asc]]
                      :limit 1})
         {:builder-fn rs/as-unqualified-lower-maps})
     db-adapter/to-app))
+
+(defn get-subject-expense-settings
+  "Return the persisted settings row for `subject-ref` scoped to `tenant-id`,
+   or nil if none exists."
+  [db tenant-id subject-ref]
+  (when-not (instance? UUID tenant-id)
+    (throw (ex-info "tenant-id must be a UUID" {:tenant-id tenant-id})))
+  (when-let [subject-ref* (some-> subject-ref str str/trim not-empty)]
+    (-> (jdbc/execute-one!
+          db
+          (sql/format {:select [:default_payer_id :receipt_ocr_provider]
+                       :from [:user_expense_settings]
+                       :where [:and
+                               [:= :tenant_id tenant-id]
+                               [:= :subject_ref subject-ref*]]
+                       :limit 1})
+          {:builder-fn rs/as-unqualified-lower-maps})
+      db-adapter/to-app)))
 
 (defn effective-settings
   "Merge persisted per-user settings over defaults."
@@ -100,8 +113,7 @@
    Called after expense creation and receipt approval to keep the default
    in sync with the user's most recent choice.
 
-   No-op when `payer-id` is nil. New/updated rows are keyed by subject_ref and
-   no longer store users.id in user_id."
+   No-op when `payer-id` is nil. New/updated rows are keyed by subject_ref."
   [db tenant-id user-id payer-id]
   (when (and payer-id tenant-id user-id)
     (let [t-id (if (string? tenant-id) (UUID/fromString tenant-id) tenant-id)
@@ -131,7 +143,7 @@
 (defn update-user-defaults!
   "Update per-user defaults (payer only).
    Used by the profile page save-defaults action. New/updated rows are keyed by
-   subject_ref and no longer store users.id in user_id."
+   subject_ref."
   [db tenant-id user-id {:keys [default-payer-id]}]
   (when-not (instance? UUID tenant-id)
     (throw (ex-info "tenant-id must be a UUID" {:tenant-id tenant-id})))

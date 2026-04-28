@@ -53,8 +53,7 @@
 
 (def receipts-entity-spec
   {:id :receipts
-   :fields [{:id :original-filename :label "File" :type :text}
-            {:id :status
+   :fields [{:id :status
              :label "Status"
              :type :select
              :input-type "select"

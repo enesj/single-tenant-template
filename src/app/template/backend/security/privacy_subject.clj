@@ -88,22 +88,15 @@
           hex)))))
 
 (defn user-match-clause
-  "HoneySQL predicate matching a user-owned row during the migration window.
-
-   `subject-column` is the new secret-derived subject ref column. `legacy-column`
-   is the old direct users.id column retained temporarily for rows that have not
-   yet been backfilled/cut over."
-  [subject-column legacy-column user-id]
-  (when-let [subject-ref (user-subject-ref user-id)]
-    [:or
-     [:= subject-column subject-ref]
-     [:= legacy-column user-id]]))
-
-(defn subject-only-match-clause
-  "HoneySQL predicate matching only the new subject-ref column."
+  "HoneySQL predicate matching a user-owned row by secret-derived subject ref."
   [subject-column user-id]
   (when-let [subject-ref (user-subject-ref user-id)]
     [:= subject-column subject-ref]))
+
+(defn subject-only-match-clause
+  "HoneySQL predicate matching only the subject-ref column."
+  [subject-column user-id]
+  (user-match-clause subject-column user-id))
 
 (comment
   (user-subject-ref (UUID/randomUUID))

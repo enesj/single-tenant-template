@@ -180,13 +180,12 @@
    :created_at {:label-key :common/created-at}}},
  :expenses
  {:available-columns
-  ["purchased_at" "supplier_display_name" "store_display_name" "expense_category_name" "payer_label" "currency" "total_amount" "notes" "id" "created_at" "updated_at" "created_by_name" "tenant_id" "user_id" "created_by" "receipt_id" "store_id" "supplier_id" "payer_id" "expense_category_id"],
+  ["purchased_at" "supplier_display_name" "store_display_name" "expense_category_name" "payer_label" "currency" "total_amount" "notes" "id" "created_at" "updated_at" "tenant_id" "receipt_id" "store_id" "supplier_id" "payer_id" "expense_category_id"],
   :computed-fields
-  {:supplier_display_name {:type "string", :label "Supplier"},
-   :store_display_name {:type "string", :label "Store"},
-   :expense_category_name {:type "string", :label "Expense Category"},
-   :payer_label {:type "string", :label "Payer"},
-   :created_by_name {:type "string", :label "Created By"}},
+  {:supplier_display_name {:type "string", :label "Supplier"}
+   :store_display_name {:type "string", :label "Store"}
+   :expense_category_name {:type "string", :label "Expense Category"}
+   :payer_label {:type "string", :label "Payer"}},
   :default-visible-columns
   ["purchased_at"
    "supplier_display_name"
@@ -216,25 +215,27 @@
    "created_at"
    "updated_at"],
   :always-visible [],
-  :column-config {:receipt_id {:type "text"}, :user_id {:type "text"}, :supplier_id {:type "text"}, :payer_id {:type "text"}, :store_id {:type "text"}, :created_by {:type "text"}, :expense_category_id {:type "text"}},
+  :column-config {:receipt_id {:type "text"}
+                  :supplier_id {:type "text"}
+                  :payer_id {:type "text"}
+                  :store_id {:type "text"}
+                  :expense_category_id {:type "text"}},
   :column-metadata
-  {:expense_category_name {:label-key :common/expense-category},
-   :payer_label {:label-key :common/payer},
-   :supplier_display_name {:label-key :common/supplier},
-   :updated_at {:label-key :common/updated-at},
-   :currency {:label-key :common/currency},
-   :store_display_name {:label-key :common/store},
-   :id {:label-key :common/id},
-   :notes {:label-key :common/notes},
-   :purchased_at {:label-key :common/purchased-at},
-   :total_amount {:label-key :common/total},
-   :created_at {:label-key :common/created-at},
-   :created_by {:label-key :common/created-by},
-   :supplier_id {:label-key :common/supplier-id},
-   :store_id {:label-key :common/store-id},
-   :payer_id {:label-key :common/payer-id},
-   :expense_category_id {:label-key :common/expense-category-id},
-   :user_id {:label-key :common/user-id},
+  {:expense_category_name {:label-key :common/expense-category}
+   :payer_label {:label-key :common/payer}
+   :supplier_display_name {:label-key :common/supplier}
+   :updated_at {:label-key :common/updated-at}
+   :currency {:label-key :common/currency}
+   :store_display_name {:label-key :common/store}
+   :id {:label-key :common/id}
+   :notes {:label-key :common/notes}
+   :purchased_at {:label-key :common/purchased-at}
+   :total_amount {:label-key :common/total}
+   :created_at {:label-key :common/created-at}
+   :supplier_id {:label-key :common/supplier-id}
+   :store_id {:label-key :common/store-id}
+   :payer_id {:label-key :common/payer-id}
+   :expense_category_id {:label-key :common/expense-category-id}
    :receipt_id {:label-key :common/receipt-id}}},
  :manufacturers
  {:available-columns
@@ -332,53 +333,50 @@
    :id {:label-key :common/id}}},
  :receipts
  {:available-columns
-  ["original-filename" "status" "supplier-guess" "created-at" "updated-at" "created-by-name" "id" "file-size" "raw-extract-json" "parsed-markdown" "total-amount-guess" "currency-guess" "purchased-at-guess" "error-message" "error-details" "retry-count" "expense-id" "user-id" "payer-id" "storage-key" "file-hash" "content-type" "supplier-alias-id" "store-guess" "store-alias-id" "tenant-id" "created-by"],
+  ["status" "supplier-guess" "created-at" "updated-at" "id" "file-size" "raw-extract-json" "parsed-markdown" "total-amount-guess" "currency-guess" "purchased-at-guess" "error-message" "error-details" "retry-count" "expense-id" "payer-id" "storage-key" "file-hash" "content-type" "supplier-alias-id" "store-guess" "store-alias-id" "tenant-id"],
   :default-visible-columns
-  ["original-filename"
-   "status"
+  ["status"
    "supplier-guess"
    "created-at"
    "updated-at"],
   :filterable-columns
-  ["original-filename"
-   "status"
+  ["status"
    "supplier-guess"
    "created-at"
    "updated-at"],
   :sortable-columns
-  ["original-filename"
-   "status"
+  ["status"
    "supplier-guess"
    "created-at"
    "updated-at"],
-  :always-visible ["original-filename" "status" "purchased-at-guess"],
-  :computed-fields {:created-by-name {:type "string", :label "Created By"}},
-  :column-config {:expense-id {:type "text"}, :user-id {:type "text"}, :payer-id {:type "text"}, :supplier-alias-id {:type "text"}, :store-alias-id {:type "text"}, :created-by {:type "text"}},
+  :always-visible ["status" "purchased-at-guess"],
+  :computed-fields {},
+  :column-config {:expense-id {:type "text"}
+                  :payer-id {:type "text"}
+                  :supplier-alias-id {:type "text"}
+                  :store-alias-id {:type "text"}},
   :column-metadata
-  {:original-filename {:label-key :common/original-filename},
-   :raw-extract-json {:label-key :common/raw-extract-json},
-   :updated-at {:label-key :common/updated-at},
-   :total-amount-guess {:label-key :common/total-amount-guess},
-   :purchased-at-guess {:label-key :common/purchased-at-guess},
-   :user-id {:label-key :common/user-id},
-   :file-size {:label-key :common/file-size},
-   :store-alias-id {:label-key :common/store-alias},
-   :currency-guess {:label-key :common/currency-guess},
-   :store-guess {:label-key :common/store-guess},
-   :expense-id {:label-key :common/expense-id},
-   :status {:label-key :common/status},
-   :file-hash {:label-key :common/file-hash},
-   :payer-id {:label-key :common/payer-id},
-   :id {:label-key :common/id},
-   :content-type {:label-key :common/content-type},
-   :supplier-alias-id {:label-key :common/supplier-alias},
-   :error-details {:label-key :common/error-details},
-   :storage-key {:label-key :common/storage-key},
-   :error-message {:label-key :common/error-message},
-   :supplier-guess {:label-key :common/supplier-guess},
-   :retry-count {:label-key :common/retry-count},
-   :created-at {:label-key :common/created-at},
-   :created-by {:label-key :common/created-by},
+  {:raw-extract-json {:label-key :common/raw-extract-json}
+   :updated-at {:label-key :common/updated-at}
+   :total-amount-guess {:label-key :common/total-amount-guess}
+   :purchased-at-guess {:label-key :common/purchased-at-guess}
+   :file-size {:label-key :common/file-size}
+   :store-alias-id {:label-key :common/store-alias}
+   :currency-guess {:label-key :common/currency-guess}
+   :store-guess {:label-key :common/store-guess}
+   :expense-id {:label-key :common/expense-id}
+   :status {:label-key :common/status}
+   :file-hash {:label-key :common/file-hash}
+   :payer-id {:label-key :common/payer-id}
+   :id {:label-key :common/id}
+   :content-type {:label-key :common/content-type}
+   :supplier-alias-id {:label-key :common/supplier-alias}
+   :error-details {:label-key :common/error-details}
+   :storage-key {:label-key :common/storage-key}
+   :error-message {:label-key :common/error-message}
+   :supplier-guess {:label-key :common/supplier-guess}
+   :retry-count {:label-key :common/retry-count}
+   :created-at {:label-key :common/created-at}
    :parsed-markdown {:label-key :common/parsed-markdown}}},
  :stores
  {:available-columns

@@ -7,6 +7,7 @@
   (:require
     [app.shared.adapters.database :refer [convert-pg-objects]]
     [app.template.backend.security.email :as email-privacy]
+    [app.template.backend.security.privacy-subject :as privacy-subject]
     [app.template.backend.services.onboarding.core :as onboarding]
     [clojure.string :as str]
     [honey.sql :as sql]
@@ -186,7 +187,7 @@
           (sql/format {:insert-into [:user_expense_settings]
                        :values [{:id (java.util.UUID/randomUUID)
                                  :tenant_id tenant-id
-                                 :user_id (user-id user)
+                                 :subject_ref (privacy-subject/user-subject-ref (user-id user))
                                  :default_payer_id owner-payer-id
                                  :created_at now
                                  :updated_at now}]}))
@@ -262,11 +263,11 @@
       (sql/format {:insert-into [:user_expense_settings]
                    :values [{:id (java.util.UUID/randomUUID)
                              :tenant_id t-id
-                             :user_id u-id
+                             :subject_ref (privacy-subject/user-subject-ref u-id)
                              :default_payer_id payer-id
                              :created_at now
                              :updated_at now}]
-                   :on-conflict [:tenant_id :user_id]
+                   :on-conflict [:tenant_id :subject_ref]
                    :do-update-set {:default_payer_id payer-id
                                    :updated_at now}}))
     (log/info "Provisioned user payer"

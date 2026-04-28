@@ -55,7 +55,7 @@
      :id-keys [:id]
      ;; Stringify foreign-key identifiers so they can be used as
      ;; stable string IDs in the shared template entity store.
-     :stringify-keys [:supplier_id :payer_id :expense_category_id :receipt_id :user_id]
+     :stringify-keys [:supplier_id :payer_id :expense_category_id :receipt_id]
      ;; Alias commonly used fields to their kebab-case counterparts so
      ;; vector-config / entity-specs (which are based on models.edn) can
      ;; resolve them by the expected IDs like :supplier-id, :payer-id, etc.
@@ -73,7 +73,7 @@
                   :supplier_id [:supplier-id]
                   :payer_id [:payer-id]
                   :expense_category_id [:expense-category-id]
-                  :user_id [:user-id]
+
                   :receipt_id [:receipt-id]
                   ;; Expand feature: number of line items for this expense
                   :item_count [:item-count]}}))

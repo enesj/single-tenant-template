@@ -21,12 +21,13 @@
    (println "  bb privacy-subject-backfill [dev|test|prod] [options]")
    (println)
    (println "Options:")
-   (println "  --apply       Perform writes. Default is dry-run.")
-   (println "  --cutover     Also null direct users.id links after subject refs exist.")
-   (println "  --limit N     Process at most N candidates per table.")
-   (println "  --yes         Skip confirmation for --apply.")
-   (println "  --pretty      Pretty-print the EDN result.")
-   (println "  --help        Show this help.")
+   (println "  --apply           Perform writes. Default is dry-run.")
+   (println "  --cutover         Also null direct users.id links after subject refs exist.")
+   (println "  --check-complete  Verify no direct operational user links remain; exits non-zero if incomplete.")
+   (println "  --limit N         Process at most N candidates per table.")
+   (println "  --yes             Skip confirmation for --apply.")
+   (println "  --pretty          Pretty-print the EDN result.")
+   (println "  --help            Show this help.")
    (println)
    (println "Safety:")
    (println "  - Dry-run is the default.")
@@ -57,6 +58,7 @@
          parsed {:profile :dev
                  :apply? false
                  :cutover? false
+                 :check-complete? false
                  :yes? false
                  :pretty? false}]
     (let [[a b & more] args]
@@ -77,6 +79,9 @@
 
         (= a "--cutover")
         (recur (cons b more) (assoc parsed :cutover? true))
+
+        (= a "--check-complete")
+        (recur (cons b more) (assoc parsed :check-complete? true))
 
         (or (= a "--yes") (= a "--force"))
         (recur (cons b more) (assoc parsed :yes? true))
@@ -117,24 +122,32 @@
 (defn -main
   [& args]
   (try
-    (let [{:keys [profile apply? cutover? yes? limit] :as opts} (parse-args args)
+    (let [{:keys [profile apply? cutover? check-complete? yes? limit] :as opts} (parse-args args)
           _ (System/setProperty "app.environment" (name profile))
           db (datasource-for-profile profile)
           dry-run? (not apply?)]
-      (println (str "Running privacy-subject-backfill"
-                 " profile=" (name profile)
-                 " dry-run=" dry-run?
-                 " cutover=" (boolean cutover?)
-                 " limit=" (or limit "none")))
-      (when (and apply? (not (or yes? (confirm! opts))))
-        (println "❌ Cancelled.")
-        (System/exit 1))
-      (let [result (backfill/backfill-privacy-subjects!
-                     db
-                     (cond-> {:dry-run? dry-run?
-                              :cutover? cutover?}
-                       limit (assoc :limit limit)))]
-        (print-result! opts result)))
+      (if check-complete?
+        (let [result (backfill/cutover-status db)]
+          (println (str "Checking privacy-subject cutover"
+                     " profile=" (name profile)))
+          (print-result! opts result)
+          (when-not (:complete? result)
+            (System/exit 1)))
+        (do
+          (println (str "Running privacy-subject-backfill"
+                     " profile=" (name profile)
+                     " dry-run=" dry-run?
+                     " cutover=" (boolean cutover?)
+                     " limit=" (or limit "none")))
+          (when (and apply? (not (or yes? (confirm! opts))))
+            (println "❌ Cancelled.")
+            (System/exit 1))
+          (let [result (backfill/backfill-privacy-subjects!
+                         db
+                         (cond-> {:dry-run? dry-run?
+                                  :cutover? cutover?}
+                           limit (assoc :limit limit)))]
+            (print-result! opts result)))))
     (catch clojure.lang.ExceptionInfo e
       (binding [*out* *err*]
         (usage (or (.getMessage e) "privacy-subject-backfill failed")))

@@ -121,10 +121,9 @@
   (assoc review-data :currency receipt-currency))
 
 (defn- receipt-subject-ref
-  "Return the receipt's subject ref, deriving one for legacy user_id rows."
+  "Return the receipt's subject ref. Nil means the receipt is unassigned."
   [receipt]
-  (or (:subject_ref receipt)
-    (some-> (:user_id receipt) privacy-subject/user-subject-ref)))
+  (:subject_ref receipt))
 
 (defn save-review!
   "Persist reviewed receipt values without posting an expense.
@@ -211,8 +210,7 @@
    not explicitly provided in review-data.
 
    Reads tenant_id from the receipt row and includes it in the expense data.
-   Uses the receipt's subject ref for operational ownership; legacy user_id rows
-   are converted to a subject ref at write time."
+   Uses the receipt's subject ref for operational ownership."
   [db receipt-id review-data]
   (jdbc/with-transaction [tx db]
     (let [review-data* (enforce-receipt-bam review-data)
@@ -250,9 +248,8 @@
   "Create an expense from a receipt for a specific user and update status → posted.
 
   Receipt must be visible to the user:
-  - owned by the user's subject ref,
-  - legacy-owned by user-id, OR
-  - unassigned (`subject_ref` and `user_id` are NULL).
+  - owned by the user's subject ref, OR
+  - unassigned (`subject_ref` is NULL).
 
   If the receipt is unassigned, it is claimed by setting `subject_ref`.
 
@@ -290,8 +287,7 @@
                            tx
                            (merge base review-data*)
                            items)
-            claim?       (and (nil? (:subject_ref receipt))
-                           (nil? (:user_id receipt)))
+            claim?       (nil? (:subject_ref receipt))
             extra        (cond-> {:expense_id (:id expense)}
                            claim? (assoc :subject_ref subject-ref
                                     :created_by_subject_ref subject-ref))]
@@ -303,8 +299,8 @@
 
   Intended for user-role admins in the user UI who can process any receipt.
 
-  If the receipt is unassigned (`subject_ref` and `user_id` are NULL), it is
-  claimed by setting `subject_ref`.
+  If the receipt is unassigned (`subject_ref` is NULL), it is claimed by setting
+  `subject_ref`.
 
   store_id is resolved automatically from the receipt's store_alias_id when
   not explicitly provided in review-data. tenant_id is read from the receipt row.
@@ -342,8 +338,7 @@
                            tx
                            (merge base review-data*)
                            items)
-            claim?       (and (nil? (:subject_ref receipt))
-                           (nil? (:user_id receipt)))
+            claim?       (nil? (:subject_ref receipt))
             extra        (cond-> {:expense_id (:id expense)}
                            claim? (assoc :subject_ref subject-ref
                                     :created_by_subject_ref subject-ref))]

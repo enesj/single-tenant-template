@@ -106,7 +106,7 @@ Impact:
 
 ## Operational Subject-Ref Backfill/Cutover
 
-Legacy rows created before subject refs were introduced may still contain direct operational links such as `expenses.user_id`, `receipts.user_id`, and `user_expense_settings.user_id`.
+Legacy deployments that have not yet applied the subject-ref cutover and schema cleanup may still contain direct operational links such as `expenses.user_id`, `receipts.user_id`, and `user_expense_settings.user_id`.
 
 Use the app-level backfill command, not DB-only SQL, because subject refs require the application secret:
 
@@ -122,13 +122,21 @@ For a live cutover, first confirm that `PRIVACY_SUBJECT_KEY_B64` is stable for t
 railway run bb privacy-subject-backfill prod --cutover --apply --pretty
 ```
 
+After the cutover apply finishes, run the read-only completion gate in the same target environment. It exits non-zero if any direct operational user links or missing subject refs remain:
+
+```bash
+railway run bb privacy-subject-backfill prod --check-complete --pretty
+```
+
 Notes:
 
 - `--cutover` fills missing subject refs and nulls direct operational `users.id` links only when the matching subject ref exists or can be computed.
+- `--check-complete` performs no writes; use it before applying the schema migration that drops direct-link columns.
 - Without `--cutover`, `--apply` fills subject-ref columns but leaves direct legacy links in place.
 - Use `--limit N` for batched operation.
 - Production execution should happen through the deployment environment so the command receives the same platform-managed secrets as the app.
-- Do not remove legacy read fallbacks or direct-link columns until a full cutover has been validated in the target environment.
+- App-level legacy read fallbacks have been removed.
+- In the current schema, migration `0074_schema.edn` removes `expenses.user_id`, `expenses.created_by`, `receipts.user_id`, `receipts.created_by`, and `user_expense_settings.user_id` after cutover verification. Do not apply that migration to any environment until `--check-complete` reports `:complete? true` and `:remaining-link-count 0` there.
 
 ## Required Future Work Before Any Key Rotation
 

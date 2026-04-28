@@ -7,10 +7,10 @@
     [taoensso.timbre :as log]))
 
 (defn- resolve-payer-id
-  [db {:keys [payer_id tenant_id user_id]}]
+  [db {:keys [payer_id tenant_id subject_ref]}]
   (or payer_id
-    (when (and tenant_id user_id)
-      (-> (user-expense-settings/get-user-expense-settings db tenant_id user_id)
+    (when (and tenant_id subject_ref)
+      (-> (user-expense-settings/get-subject-expense-settings db tenant_id subject_ref)
         user-expense-settings/effective-settings
         :default-payer-id))))
 
@@ -84,9 +84,7 @@
 
           :else
           (try
-            (if-let [user-id (:user_id receipt)]
-              (receipt-approval/approve-and-post-for-user! db user-id receipt-id review-data)
-              (receipt-approval/approve-and-post! db receipt-id review-data))
+            (receipt-approval/approve-and-post! db receipt-id review-data)
             (log/info "Auto-posted extracted receipt" {:receipt-id receipt-id})
             {:status "posted"}
             (catch Exception e
