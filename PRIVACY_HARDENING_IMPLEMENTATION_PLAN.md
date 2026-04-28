@@ -19,7 +19,7 @@ Reduce the impact of database read access and routine global-admin access by min
 | Receipt raw content minimization | Completed | Routine admin receipt projections now omit raw OCR JSON, parsed markdown, storage keys, original filenames, and file hashes while preserving derived review metadata and download URL boundaries. |
 | DB relationship privacy strategy | Decision recorded | A true DB-dump relationship privacy fix requires a dedicated schema/migration project; continue using app-layer pseudonymous projections until that project is explicitly scoped. |
 | Plaintext `full_name` strategy | Completed | Names remain identity-management data, while routine operational audit/login-monitoring views now use pseudonymous refs instead of `full_name`. |
-| Key rotation/keyring support | Not started | Add multi-key decrypt and active-key encrypt support. |
+| Key rotation/keyring support | Completed | Email ciphertext decrypts by stored `email_key_version` using keyring/per-version config; new writes continue using the active key version. |
 | Dev/staging key policy | Not started | Prevent shared defaults outside local development and document rotation/reset path. |
 | Stale impersonation docs cleanup | Not started | Remove old runtime impersonation references from docs. |
 
@@ -171,11 +171,18 @@ Reduce the impact of database read access and routine global-admin access by min
   - Use row `email_key_version` for decrypt.
   - Keep active key for encrypt.
   - Add rotation/re-encryption utility later if needed.
-- **Files likely impacted:**
+- **Files impacted:**
   - `src/app/template/backend/security/email.clj`
-  - auth/admin/tenant tests.
-- **Validation:** tests for current key, old key, missing key, invalid ciphertext.
-- **Progress:** Not started.
+  - `test/app/template/backend/security/email_test.clj`
+  - `docs/general/operations/email-privacy-key-management.md`
+- **Validation:** focused tests cover active-key writes, old-key decrypt by stored version, keyring config, per-version env config, missing retired key in prod, raw-email precedence, and malformed ciphertext rejection.
+- **Progress:** Completed on 2026-04-28.
+- **Implementation notes:**
+  - `encrypt-email` now uses the requested active key version rather than ignoring the optional version argument.
+  - `decrypt-email` accepts an optional key version and resolves the configured encryption key for that version.
+  - `resolve-email` now reads `email_key_version` aliases from rows and decrypts ciphertext with the stored version.
+  - Supported read-key configuration order is per-version env var, `EMAIL_PRIVACY_ENCRYPTION_KEYRING_B64`, active `EMAIL_PRIVACY_ENCRYPTION_KEY_B64`, then the local dev default outside prod-like profiles.
+  - No schema migration was required because `email_key_version` already exists on protected rows.
 
 ### 9. Tighten dev/staging key policy
 
@@ -218,3 +225,4 @@ Reduce the impact of database read access and routine global-admin access by min
 | 2026-04-28 | Focused reveal-email hardening tests | Passed: 22 tests, 125 assertions, 0 failures, 0 errors | `tmp/reveal-email-hardening-tests.txt` |
 | 2026-04-28 | Focused receipt raw-content privacy tests | Passed: 14 tests, 109 assertions, 0 failures, 0 errors | `tmp/receipt-raw-content-privacy-tests.txt` |
 | 2026-04-28 | Focused `full_name` operational privacy tests | Passed: 15 tests, 92 assertions, 0 failures, 0 errors | `tmp/full-name-operational-privacy-tests.txt` |
+| 2026-04-28 | Focused email keyring tests | Passed: 6 tests, 9 assertions, 0 failures, 0 errors | `tmp/email-keyring-tests.txt` |

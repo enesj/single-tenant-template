@@ -14,27 +14,38 @@ Today the system:
 - computes a blind lookup hash with `email->lookup-hash`
 - encrypts email ciphertext with `encrypt-email`
 - stamps each write with `email_key_version` via `current-key-version`
-- decrypts ciphertext with a single active encryption key in `decrypt-email`
+- decrypts ciphertext with the key matching the row `email_key_version` when that version is configured
 
 Important operational constraint:
 
 > Changing email privacy keys is a planned migration, not routine config maintenance.
 
-At the time of writing, `email_key_version` is stored on rows, but decryption still assumes one active encryption key. That means key changes are not currently safe as a simple secret update.
+`email_key_version` is stored on rows and is now used by decryption. This means encryption-key compatibility can be deployed before a rotation: old rows can continue to decrypt with their stored version while new writes use the active version.
 
 ## Which Keys Exist
 
 The current email privacy implementation uses these environment variables:
 
 - `EMAIL_PRIVACY_ENCRYPTION_KEY_B64`
+- `EMAIL_PRIVACY_ENCRYPTION_KEYRING_B64`
+- `EMAIL_PRIVACY_ENCRYPTION_KEY_<VERSION>_B64`
 - `EMAIL_PRIVACY_LOOKUP_KEY_B64`
 - `EMAIL_PRIVACY_KEY_VERSION`
 
 Their roles are different:
 
 - `EMAIL_PRIVACY_ENCRYPTION_KEY_B64` encrypts and decrypts `email_ciphertext`
+- `EMAIL_PRIVACY_ENCRYPTION_KEYRING_B64` optionally provides retired encryption read keys as comma-separated `version:base64-key` entries, for example `v1:...base64...,v2:...base64...`
+- `EMAIL_PRIVACY_ENCRYPTION_KEY_<VERSION>_B64` optionally provides a single per-version encryption key, for example `EMAIL_PRIVACY_ENCRYPTION_KEY_V1_B64`
 - `EMAIL_PRIVACY_LOOKUP_KEY_B64` computes `email_lookup_hash` for auth, password reset, invitation matching, and duplicate checks
 - `EMAIL_PRIVACY_KEY_VERSION` labels newly written rows with a version such as `v1`
+
+Encryption key lookup order for a requested version is:
+
+1. per-version env var, e.g. `EMAIL_PRIVACY_ENCRYPTION_KEY_V1_B64`
+2. `EMAIL_PRIVACY_ENCRYPTION_KEYRING_B64`
+3. `EMAIL_PRIVACY_ENCRYPTION_KEY_B64` when the requested version is the active `EMAIL_PRIVACY_KEY_VERSION`
+4. local development default key only outside production-like profiles
 
 ## Safe Current Operating Mode
 
@@ -47,7 +58,7 @@ That means:
 - do not rotate either key casually
 - treat any key change as an application plus data migration
 
-If you need true key rotation in the future, implement multi-key support first.
+Encryption-key multi-key read support now exists. A rotation still requires a planned rollout and backfill; do not remove old keys until all rows have been re-encrypted and verified.
 
 ## Key Change Categories
 
@@ -73,12 +84,12 @@ Impact:
 
 ## Required Future Work Before Any Key Rotation
 
-Before rotating keys in production, the app must first gain compatibility support.
+Before rotating keys in production, confirm compatibility support is deployed.
 
 Minimum required changes:
 
-1. Multi-key decryption support for ciphertext using stored `email_key_version`
-2. Write-path support for a new active version
+1. Multi-key decryption support for ciphertext using stored `email_key_version` (implemented)
+2. Write-path support for a new active version (implemented via `EMAIL_PRIVACY_KEY_VERSION`)
 3. A controlled re-encryption backfill process for old rows
 4. A verified procedure for retiring old keys after migration completion
 
@@ -90,7 +101,7 @@ For lookup-key rotation, additional work is required:
 
 ## Migration Procedure: Encryption Key Rotation
 
-Use this only after multi-key decryption support has been implemented.
+Use this with the multi-key decryption support in `email.clj`.
 
 ### Phase 1: Ship compatibility code
 

@@ -47,6 +47,8 @@
            :env-key env-key}
           e)))))
 
+(declare validate-key-bytes)
+
 (defn- load-key-bytes
   [env-key default-b64]
   (let [raw (or (getenv* env-key)
@@ -56,19 +58,80 @@
         (ex-info (str "Missing required email privacy key: " env-key)
           {:type :email-privacy/missing-key
            :env-key env-key})))
-    (let [decoded (decode-base64 env-key raw)]
-      (when-not (= 32 (alength decoded))
-        (throw
-          (ex-info (str env-key " must decode to exactly 32 bytes")
-            {:type :email-privacy/invalid-key-length
-             :env-key env-key
-             :decoded-length (alength decoded)})))
-      decoded)))
+    (->> raw
+      (decode-base64 env-key)
+      (validate-key-bytes env-key))))
+
+(defn- validate-key-bytes
+  [env-key decoded]
+  (when-not (= 32 (alength decoded))
+    (throw
+      (ex-info (str env-key " must decode to exactly 32 bytes")
+        {:type :email-privacy/invalid-key-length
+         :env-key env-key
+         :decoded-length (alength decoded)})))
+  decoded)
+
+(defn- normalize-key-version
+  [key-version]
+  (some-> key-version str str/trim not-empty))
+
+(defn- env-token
+  [s]
+  (-> (str s)
+    str/upper-case
+    (str/replace #"[^A-Z0-9]" "_")))
+
+(defn- encryption-key-env-key
+  [key-version]
+  (str "EMAIL_PRIVACY_ENCRYPTION_KEY_" (env-token key-version) "_B64"))
+
+(defn- parse-keyring-entry
+  [entry]
+  (let [[version raw] (str/split (str entry) #":" 2)
+        version* (normalize-key-version version)
+        raw* (some-> raw str str/trim not-empty)]
+    (when (and version* raw*)
+      [version* raw*])))
+
+(defn- configured-encryption-keyring
+  []
+  (->> (some-> (getenv* "EMAIL_PRIVACY_ENCRYPTION_KEYRING_B64")
+         (str/split #","))
+    (keep parse-keyring-entry)
+    (into {})))
 
 (defn current-key-version
   "Return the active email privacy key version string."
   []
   (or (getenv* "EMAIL_PRIVACY_KEY_VERSION") "v1"))
+
+(defn- load-encryption-key-by-version
+  [key-version]
+  (let [active-version (current-key-version)
+        version (or (normalize-key-version key-version) active-version)
+        version-env-key (encryption-key-env-key version)
+        keyring (configured-encryption-keyring)
+        raw (or (getenv* version-env-key)
+              (get keyring version)
+              (when (= version active-version)
+                (getenv* "EMAIL_PRIVACY_ENCRYPTION_KEY_B64"))
+              (when-not (prod-profile?)
+                default-dev-encryption-key-b64))
+        source-env-key (cond
+                         (getenv* version-env-key) version-env-key
+                         (get keyring version) "EMAIL_PRIVACY_ENCRYPTION_KEYRING_B64"
+                         (= version active-version) "EMAIL_PRIVACY_ENCRYPTION_KEY_B64"
+                         :else version-env-key)]
+    (when-not raw
+      (throw
+        (ex-info (str "Missing required email privacy encryption key for version: " version)
+          {:type :email-privacy/missing-key
+           :env-key source-env-key
+           :key-version version})))
+    (->> raw
+      (decode-base64 source-env-key)
+      (validate-key-bytes source-env-key))))
 
 (defn normalize-email
   "Normalize an email to the canonical value used for lookup + storage."
@@ -98,19 +161,18 @@
 (defn encrypt-email
   "Encrypt a normalized email with AES-256-GCM.
 
-   Returns a base64 payload containing iv + ciphertext-tag bytes."
+   Returns a base64 payload containing iv + ciphertext-tag bytes. The
+   optional key version selects the encryption key used for the write."
   ([email]
    (encrypt-email email (current-key-version)))
-  ([email _key-version]
+  ([email key-version]
    (when-let [normalized (normalize-email email)]
      (let [iv (byte-array gcm-iv-length)
            cipher (Cipher/getInstance "AES/GCM/NoPadding")]
        (.nextBytes secure-random iv)
        (.init cipher
          Cipher/ENCRYPT_MODE
-         (SecretKeySpec. (load-key-bytes "EMAIL_PRIVACY_ENCRYPTION_KEY_B64"
-                           default-dev-encryption-key-b64)
-           "AES")
+         (SecretKeySpec. (load-encryption-key-by-version key-version) "AES")
          (GCMParameterSpec. gcm-tag-bits iv))
        (let [ciphertext (.doFinal cipher (.getBytes normalized "UTF-8"))
              payload (byte-array (+ (alength iv) (alength ciphertext)))]
@@ -119,22 +181,25 @@
          (.encodeToString encoder payload))))))
 
 (defn decrypt-email
-  "Decrypt an email ciphertext previously produced by `encrypt-email`."
-  [ciphertext]
-  (when (some? ciphertext)
-    (let [payload (.decode decoder (str ciphertext))
-          iv (byte-array gcm-iv-length)
-          cipher-bytes (byte-array (- (alength payload) gcm-iv-length))
-          cipher (Cipher/getInstance "AES/GCM/NoPadding")]
-      (System/arraycopy payload 0 iv 0 gcm-iv-length)
-      (System/arraycopy payload gcm-iv-length cipher-bytes 0 (alength cipher-bytes))
-      (.init cipher
-        Cipher/DECRYPT_MODE
-        (SecretKeySpec. (load-key-bytes "EMAIL_PRIVACY_ENCRYPTION_KEY_B64"
-                          default-dev-encryption-key-b64)
-          "AES")
-        (GCMParameterSpec. gcm-tag-bits iv))
-      (String. (.doFinal cipher cipher-bytes) "UTF-8"))))
+  "Decrypt an email ciphertext previously produced by `encrypt-email`.
+
+   When a key version is supplied, use the configured key for that version;
+   otherwise fall back to the active key for backwards compatibility."
+  ([ciphertext]
+   (decrypt-email ciphertext (current-key-version)))
+  ([ciphertext key-version]
+   (when (some? ciphertext)
+     (let [payload (.decode decoder (str ciphertext))
+           iv (byte-array gcm-iv-length)
+           cipher-bytes (byte-array (- (alength payload) gcm-iv-length))
+           cipher (Cipher/getInstance "AES/GCM/NoPadding")]
+       (System/arraycopy payload 0 iv 0 gcm-iv-length)
+       (System/arraycopy payload gcm-iv-length cipher-bytes 0 (alength cipher-bytes))
+       (.init cipher
+         Cipher/DECRYPT_MODE
+         (SecretKeySpec. (load-encryption-key-by-version key-version) "AES")
+         (GCMParameterSpec. gcm-tag-bits iv))
+       (String. (.doFinal cipher cipher-bytes) "UTF-8")))))
 
 (defn mask-email
   "Return a human-readable masked email hint."
@@ -195,7 +260,8 @@
    Accepts both explicit application-level email keys and DB ciphertext aliases
    used in JOIN projections. Supports both raw DB snake_case keys and app-layer
    kebab-case keys because admin query normalization may run before the privacy
-   projection."
+   projection. When ciphertext is used, decrypts with the row's stored
+   email_key_version when present."
   [row]
   (or (row-value row [:email
                       :users/email
@@ -212,29 +278,51 @@
                       :verification-email
                       :created_by_email
                       :created-by-email])
-    (some-> (row-value row [:email_ciphertext
-                            :email-ciphertext
-                            :users/email_ciphertext
-                            :users/email-ciphertext
-                            :admins/email_ciphertext
-                            :admins/email-ciphertext
-                            :tenant_invitations/email_ciphertext
-                            :tenant-invitations/email-ciphertext
-                            :admin_invitations/email_ciphertext
-                            :admin-invitations/email-ciphertext
-                            :user_email_ciphertext
-                            :user-email-ciphertext
-                            :owner_email_ciphertext
-                            :owner-email-ciphertext
-                            :inviter_email_ciphertext
-                            :inviter-email-ciphertext
-                            :admin_email_ciphertext
-                            :admin-email-ciphertext
-                            :verification_email_ciphertext
-                            :verification-email-ciphertext
-                            :created_by_email_ciphertext
-                            :created-by-email-ciphertext])
-      decrypt-email)))
+    (let [ciphertext (row-value row [:email_ciphertext
+                                     :email-ciphertext
+                                     :users/email_ciphertext
+                                     :users/email-ciphertext
+                                     :admins/email_ciphertext
+                                     :admins/email-ciphertext
+                                     :tenant_invitations/email_ciphertext
+                                     :tenant-invitations/email-ciphertext
+                                     :admin_invitations/email_ciphertext
+                                     :admin-invitations/email-ciphertext
+                                     :user_email_ciphertext
+                                     :user-email-ciphertext
+                                     :owner_email_ciphertext
+                                     :owner-email-ciphertext
+                                     :inviter_email_ciphertext
+                                     :inviter-email-ciphertext
+                                     :admin_email_ciphertext
+                                     :admin-email-ciphertext
+                                     :verification_email_ciphertext
+                                     :verification-email-ciphertext
+                                     :created_by_email_ciphertext
+                                     :created-by-email-ciphertext])
+          key-version (row-value row [:email_key_version
+                                      :email-key-version
+                                      :users/email_key_version
+                                      :users/email-key-version
+                                      :admins/email_key_version
+                                      :admins/email-key-version
+                                      :tenant_invitations/email_key_version
+                                      :tenant-invitations/email-key-version
+                                      :admin_invitations/email_key_version
+                                      :admin-invitations/email-key-version
+                                      :user_email_key_version
+                                      :user-email-key-version
+                                      :owner_email_key_version
+                                      :owner-email-key-version
+                                      :inviter_email_key_version
+                                      :inviter-email-key-version
+                                      :admin_email_key_version
+                                      :admin-email-key-version
+                                      :verification_email_key_version
+                                      :verification-email-key-version
+                                      :created_by_email_key_version
+                                      :created-by-email-key-version])]
+      (some-> ciphertext (decrypt-email key-version)))))
 
 (defn stable-ref
   "Return a short stable reference derived from a UUID-like identifier."
