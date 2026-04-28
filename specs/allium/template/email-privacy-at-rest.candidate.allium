@@ -8,7 +8,8 @@
 --
 -- The spec focuses on observable behavior:
 -- - exact email identity matching remains available for auth, reset, and invite flows
--- - routine admin surfaces are pseudonymous and do not reveal user email addresses
+-- - routine operational admin surfaces are pseudonymous and do not reveal user email addresses
+-- - explicit identity-management admin surfaces may reveal exact user/member email addresses
 -- - admins may still follow structural links between users, tenants, receipts, and expenses
 -- - invitation mismatch errors disclose the exact invited email
 -- - partial substring search over email is intentionally not part of the contract
@@ -195,6 +196,7 @@ surface AdminUsersDirectory {
             entry.user
             entry.user_ref
             entry.nickname
+            entry.user.email
             entry.user.status
             entry.user.email_verified
             entry.user.auth_provider
@@ -203,8 +205,10 @@ surface AdminUsersDirectory {
         FindUserByRef(viewer, user_ref)
         SearchUsersByNickname(viewer, query)
 
-    @guarantee NoRoutineEmailDisclosure
-        -- The admin users surface does not expose full or masked email addresses in routine usage.
+    @guarantee IdentityManagementEmailDisclosure
+        -- The admin users surface is an explicit identity-management surface.
+        -- It may expose full email addresses so admins can identify and edit user accounts.
+        -- This exception does not apply to receipt, expense, audit, or other operational views.
 
     @guarantee NoPartialEmailSearchContract
         -- Substring or contains-style email search is not part of the contract.

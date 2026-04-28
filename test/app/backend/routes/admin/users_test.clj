@@ -7,6 +7,7 @@
     [app.backend.test-helpers :as h]
     [app.shared.adapters.normalization :as norm]
     [app.template.backend.routes.admin.users :as users-routes]
+    [app.template.backend.security.email :as email-privacy]
     [app.template.backend.utils.adapters.persistence :as persist]
     [clojure.string :as str]
     [clojure.test :refer [deftest is testing use-fixtures]]
@@ -48,10 +49,12 @@
   (testing "admin user listing exposes resolved email while removing encrypted persistence fields"
     (let [user-id (random-uuid)
           email "identity-user@example.test"]
-      (with-redefs [persist/execute-admin-query
+      (with-redefs [email-privacy/decrypt-email (fn [ciphertext]
+                                                  (is (= "ciphertext" ciphertext))
+                                                  email)
+                    persist/execute-admin-query
                     (fn [_db _query normalize _opts]
                       (normalize [{:id user-id
-                                   :email email
                                    :email_ciphertext "ciphertext"
                                    :email_lookup_hash "lookup-hash"
                                    :password_hash "secret"

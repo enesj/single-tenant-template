@@ -76,46 +76,50 @@
 
 (defn- export-users-query
   [user-ids]
-  (cond-> {:select [:u.id :u.email_ciphertext :u.full_name :u.role :u.status
-                    :u.email_verified :u.auth_provider :u.created_at :u.last_login_at
-                    [:t.name :tenant_name] [:t.slug :tenant_slug]]
+  (cond-> {:select [:u.id
+                    :u.status
+                    :u.email_verified
+                    :u.auth_provider
+                    :u.created_at
+                    :u.last_login_at]
            :from [[:users :u]]
-           :join [[:tenants :t] [:= :u.tenant_id :t.id]]
            :order-by [[:u.created_at :desc]]}
     (seq user-ids) (assoc :where [:in :u.id user-ids])
     (not (seq user-ids)) (assoc :limit 10000)))
 
 (defn export-users-csv
-  "Export users data as CSV"
+  "Export pseudonymous user data as CSV.
+
+  The export intentionally omits raw emails, encrypted email persistence fields,
+  full names, and tenant relationship fields. Routine admin CSV exports should
+  not create a portable identity dump."
   [db user-ids]
   (try
     (let [users (persist/execute-admin-query
                   db
                   (export-users-query user-ids)
                   (fn [raw]
-                    (let [normalized (-> raw
-                                       shared-db/convert-pg-objects
-                                       (norm/normalize-admin-result export-user-config))]
-                      (mapv (fn [user]
-                              (let [email (email-privacy/resolve-email user)]
-                                (cond-> (dissoc user :email-ciphertext :email-lookup-hash :email-key-version)
-                                  email (assoc :email email))))
-                        normalized))))
+                    (->> (-> raw
+                           shared-db/convert-pg-objects
+                           (norm/normalize-admin-result export-user-config))
+                      (mapv #(dissoc %
+                               :email
+                               :email-ciphertext
+                               :email-lookup-hash
+                               :email-key-version
+                               :full-name
+                               :tenant-name
+                               :tenant-slug)))))
 
-          ;; Convert to CSV format
-          csv-headers "ID,Email,Full Name,Role,Status,Email Verified,Auth Provider,Created At,Last Login,Tenant Name,Tenant Slug"
+          ;; Convert to CSV format. Keep this intentionally pseudonymous.
+          csv-headers "User Ref,Status,Email Verified,Auth Provider,Created At,Last Login"
           csv-rows (map (fn [user]
-                          (str (:id user) ","
-                            (or (:email user) "") ","
-                            (or (:full-name user) "") ","
-                            (or (:role user) "") ","
+                          (str (email-privacy/user-ref (:id user)) ","
                             (or (:status user) "") ","
                             (if (:email-verified user) "Yes" "No") ","
                             (or (:auth-provider user) "") ","
                             (or (:created-at user) "") ","
-                            (or (:last-login-at user) "") ","
-                            (or (:tenant-name user) "") ","
-                            (or (:tenant-slug user) ""))) users)
+                            (or (:last-login-at user) ""))) users)
           csv-content (str csv-headers "\n" (str/join "\n" csv-rows))]
 
       {:success true

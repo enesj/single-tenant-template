@@ -98,6 +98,8 @@
                      (:full_name user)
                      (:user-display-name user)
                      (:user_display_name user)
+                     (:email user)
+                     (:users/email user)
                      (:user-ref user)
                      (:user_ref user)
                      (:email-masked user)

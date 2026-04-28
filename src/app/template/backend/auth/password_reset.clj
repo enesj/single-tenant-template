@@ -8,6 +8,7 @@
   (:require
     [app.template.backend.db.protocols :as db-protocols]
     [app.template.backend.security.email :as email-privacy]
+    [app.template.backend.security.tokens :as token-security]
     [buddy.hashers :as hashers]
     [java-time.api :as time]
     [taoensso.timbre :as log])
@@ -111,6 +112,7 @@
    Returns: {:token <string> :expires-at <instant>}"
   [db principal-type principal-id]
   (let [token (generate-reset-token)
+        token-storage (token-security/hash-token token)
         expires-at (time/plus (time/instant) (time/hours reset-token-expiry-hours))
         token-id (UUID/randomUUID)
         principal-type-str (name principal-type)]
@@ -128,7 +130,7 @@
       "INSERT INTO password_reset_tokens 
        (id, principal_type, principal_id, token, expires_at, created_at)
        VALUES (?, ?::login_principal_type, ?, ?, ?, NOW())"
-      [token-id principal-type-str principal-id token expires-at])
+      [token-id principal-type-str principal-id token-storage expires-at])
 
     (log/info "Created password reset token"
       {:principal-type principal-type
@@ -142,7 +144,7 @@
   [db token]
   (first (db-protocols/execute! db
            "SELECT * FROM password_reset_tokens WHERE token = ?"
-           [token])))
+           [(token-security/hash-token token)])))
 
 (defn verify-reset-token
   "Verify a password reset token and return principal info.
@@ -180,7 +182,7 @@
   [db token]
   (db-protocols/execute! db
     "UPDATE password_reset_tokens SET used_at = NOW() WHERE token = ?"
-    [token]))
+    [(token-security/hash-token token)]))
 
 ;; ============================================================================
 ;; Principal Lookup
@@ -207,7 +209,7 @@
   "Find a user or admin by ID"
   [db principal-type principal-id]
   (let [table (if (= principal-type :admin) "admins" "users")
-  query (str "SELECT id, email_ciphertext, email_lookup_hash, email_key_version, full_name, password_hash "
+        query (str "SELECT id, email_ciphertext, email_lookup_hash, email_key_version, full_name, password_hash "
                 "FROM " table " WHERE id = ? LIMIT 1")]
     (some-> (first (db-protocols/execute! db query [principal-id]))
       normalize-principal-record)))

@@ -3,6 +3,7 @@
   (:require
     [app.template.backend.db.protocols :as db-protocols]
     [app.template.backend.security.email :as email-privacy]
+    [app.template.backend.security.tokens :as token-security]
     [java-time.api :as time]
     [taoensso.timbre :as log])
   (:import
@@ -27,10 +28,11 @@
   "Create a new email verification token for a user"
   [db user-id]
   (let [token (generate-verification-token)
+        token-storage (token-security/hash-token token)
         expires-at (time/plus (time/local-date-time) (time/hours verification-expiry-hours))
         token-data {:id (java.util.UUID/randomUUID)
                     :user_id user-id
-                    :token token
+                    :token token-storage
                     :expires_at expires-at
                     :attempts 0}]
 
@@ -51,13 +53,13 @@
    In the single-tenant template we don't need RLS bypass or tenant joins."
   [db token]
   (let [row (some->> (db-protocols/execute! db
-                      "SELECT evt.*,
+                       "SELECT evt.*,
                               u.email_ciphertext AS verification_email_ciphertext,
                               u.full_name AS verification_full_name
                        FROM email_verification_tokens evt
                        JOIN users u ON evt.user_id = u.id
                        WHERE evt.token = ?"
-                      [token])
+                       [(token-security/hash-token token)])
               first
               (into {}
                 (map (fn [[k v]]
@@ -156,7 +158,7 @@
                attempts = attempts + 1,
                last_attempted_at = NOW()
            WHERE token = ?"
-          [token])
+          [(token-security/hash-token token)])
 
         ;; Mark user as verified
         (db-protocols/execute! db

@@ -193,7 +193,9 @@
   "Resolve the concrete email for a row.
 
    Accepts both explicit application-level email keys and DB ciphertext aliases
-   used in JOIN projections."
+   used in JOIN projections. Supports both raw DB snake_case keys and app-layer
+   kebab-case keys because admin query normalization may run before the privacy
+   projection."
   [row]
   (or (row-value row [:email
                       :users/email
@@ -211,10 +213,15 @@
                       :created_by_email
                       :created-by-email])
     (some-> (row-value row [:email_ciphertext
+                            :email-ciphertext
                             :users/email_ciphertext
+                            :users/email-ciphertext
                             :admins/email_ciphertext
+                            :admins/email-ciphertext
                             :tenant_invitations/email_ciphertext
+                            :tenant-invitations/email-ciphertext
                             :admin_invitations/email_ciphertext
+                            :admin-invitations/email-ciphertext
                             :user_email_ciphertext
                             :user-email-ciphertext
                             :owner_email_ciphertext

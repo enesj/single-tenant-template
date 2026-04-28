@@ -8,6 +8,7 @@
     [app.admin.backend.services.admin.auth :as auth]
     [app.shared.adapters.database :refer [convert-pg-objects]]
     [app.template.backend.security.email :as email-privacy]
+    [app.template.backend.security.tokens :as token-security]
     [honey.sql :as sql]
     [java-time.api :as time]
     [next.jdbc :as jdbc]
@@ -24,7 +25,7 @@
         inviter-email (or (:inviter_email invitation)
                         (some-> (:inviter_email_ciphertext invitation)
                           email-privacy/decrypt-email))]
-    (cond-> invitation
+    (cond-> (dissoc invitation :token)
       email (assoc :email email)
       inviter-email (assoc :inviter_email inviter-email))))
 
@@ -32,14 +33,15 @@
   [invitation]
   (let [email (email-privacy/resolve-email invitation)
         inviter-email (some-> (:inviter_email invitation) email-privacy/mask-email)]
-    (cond-> (-> invitation
-              (dissoc :email
-                :email_ciphertext
-                :email_lookup_hash
-                :email_key_version
-                :inviter_email
-                :inviter_email_ciphertext)
-              email (assoc :email_masked (email-privacy/mask-email email)))
+    (cond-> (dissoc invitation
+              :token
+              :email
+              :email_ciphertext
+              :email_lookup_hash
+              :email_key_version
+              :inviter_email
+              :inviter_email_ciphertext)
+      email (assoc :email_masked (email-privacy/mask-email email))
       inviter-email (assoc :inviter_email_masked inviter-email))))
 
 ;; ============================================================================
@@ -83,6 +85,7 @@
     (assert-no-pending-invite! db normalized-email)
     (assert-not-already-admin! db normalized-email)
     (let [token (auth/generate-session-token)
+          token-storage (token-security/hash-token token)
           expires-at (time/plus (time/instant) (time/days 7))
           inv-id (UUID/randomUUID)
           now (time/instant)
@@ -95,7 +98,7 @@
                                               :role [:cast role :admin_invitation_role]
                                               :invited_by inv-by
                                               :status [:cast "pending" :admin_invitation_status]
-                                              :token token
+                                              :token token-storage
                                               :expires_at expires-at
                                               :created_at now
                                               :updated_at now}
@@ -109,7 +112,7 @@
          :entity-id inv-id
          :changes (merge {:role role}
                     (email-privacy/redact-email-change normalized-email))})
-      (routine-invitation-view result))))
+      (assoc (routine-invitation-view result) :token token))))
 
 (defn find-invitation-by-token
   "Lookup an invitation by token, joined with the inviter's name."
@@ -120,7 +123,7 @@
                                   [:a.email_ciphertext :inviter_email_ciphertext]]
                          :from   [[:admin_invitations :ai]]
                          :join   [[:admins :a] [:= :ai.invited_by :a.id]]
-                         :where  [:= :ai.token token]})
+                         :where  [:= :ai.token (token-security/hash-token token)]})
             {:builder-fn rs/as-unqualified-maps})
     convert-pg-objects
     with-resolved-invitation-identities))
@@ -243,7 +246,8 @@
 
 (defn resend-invitation!
   "Refresh the expiry of a pending invitation and return it for re-sending.
-   Throws if the invitation is not pending."
+   Throws if the invitation is not pending. Generates a new raw token because the
+   stored token value is a non-recoverable hash."
   [db invitation-id admin-id]
   (let [inv (find-invitation-by-id db invitation-id)]
     (when-not inv
@@ -252,11 +256,14 @@
       (throw (ex-info "Only pending invitations can be resent"
                {:type :validation-error
                 :errors {:status ["This invitation is no longer pending"]}})))
-    (let [now         (time/instant)
+    (let [token       (auth/generate-session-token)
+          token-storage (token-security/hash-token token)
+          now         (time/instant)
           new-expires (time/plus now (time/days 7))]
       (jdbc/execute-one! db
         (sql/format {:update [:admin_invitations]
-                     :set    {:expires_at new-expires
+                     :set    {:token token-storage
+                              :expires_at new-expires
                               :updated_at now}
                      :where  [:= :id (:id inv)]}))
       (audit/log-audit! db
@@ -264,8 +271,8 @@
          :action "resend_admin_invitation"
          :entity-type "admin_invitation"
          :entity-id (:id inv)
-        :changes (email-privacy/redact-email-change (email-privacy/resolve-email inv))})
-      (routine-invitation-view (assoc inv :expires_at new-expires :updated_at now)))))
+         :changes (email-privacy/redact-email-change (email-privacy/resolve-email inv))})
+      (assoc (routine-invitation-view (assoc inv :expires_at new-expires :updated_at now)) :token token))))
 
 (defn list-pending-invitations
   "List all pending admin invitations, joined with inviter info."

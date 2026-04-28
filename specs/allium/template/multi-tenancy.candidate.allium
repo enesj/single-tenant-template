@@ -875,11 +875,15 @@ surface PlatformTenantAdminView {
             t.name
             t.slug
             t.status
+            t.owners.user.email
+            t.memberships.user.email
             t.owners.count
             t.active_memberships.count
 
     @guidance
         -- Platform admins can view all tenants.
+        -- Tenant admin identity screens may show owner/member email addresses
+        -- for account management and support triage.
         -- Platform admins can access expenses and receipts directly only through
         -- privacy-scrubbed admin projections.
         -- Tenant expense reference data (expense_items, payers, payer_types, aliases)

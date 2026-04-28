@@ -4,6 +4,7 @@
     [app.admin.backend.services.admin.admin-invitation :as inv-svc]
     [app.admin.backend.services.admin.auth :as auth]
     [app.backend.fixtures :as fixtures]
+    [app.template.backend.security.tokens :as token-security]
     [clojure.test :refer [deftest is testing use-fixtures]]
     [honey.sql :as sql]
     [next.jdbc :as jdbc]
@@ -46,11 +47,20 @@
                        {:email      invite-email
                         :role       "admin"
                         :invited-by (:id owner)})]
-    (testing "creates a pending invitation with token"
+    (testing "creates a pending invitation with raw token in the return value"
       (is (some? inv))
       (is (= "pending" (str (:status inv))))
       (is (some? (:token inv)))
-      (is (= invite-email (:email inv))))))
+      (is (= invite-email (:email inv))))
+
+    (testing "stores only a hash of the invitation token"
+      (let [stored (jdbc/execute-one! db
+                     (sql/format {:select [:token]
+                                  :from [:admin_invitations]
+                                  :where [:= :id (:id inv)]})
+                     {:builder-fn rs/as-unqualified-maps})]
+        (is (= (token-security/hash-token (:token inv)) (:token stored)))
+        (is (not= (:token inv) (:token stored)))))))
 
 (deftest create-invitation-invalid-role
   (let [db    fixtures/*test-db*
@@ -182,13 +192,34 @@
         owner (create-admin! db "resend-owner")
         inv   (inv-svc/create-invitation! db
                 {:email (unique-email "resendee") :role "support" :invited-by (:id owner)})
+        original-token (:token inv)
         original-expires (:expires_at inv)
         ;; Wait briefly to ensure different timestamp
         _ (Thread/sleep 50)
         updated (inv-svc/resend-invitation! db (:id inv) (:id owner))]
-    (testing "extends expiry"
+    (testing "extends expiry and returns a fresh raw token"
       (is (some? (:expires_at updated)))
-      (is (not= (str original-expires) (str (:expires_at updated)))))))
+      (is (not= (str original-expires) (str (:expires_at updated))))
+      (is (some? (:token updated)))
+      (is (not= original-token (:token updated))))
+
+    (testing "stores only the new token hash"
+      (let [stored (jdbc/execute-one! db
+                     (sql/format {:select [:token]
+                                  :from [:admin_invitations]
+                                  :where [:= :id (:id inv)]})
+                     {:builder-fn rs/as-unqualified-maps})]
+        (is (= (token-security/hash-token (:token updated)) (:token stored)))
+        (is (not= (:token updated) (:token stored)))))))
+
+(deftest list-pending-invitations-does-not-expose-token-hashes
+  (let [db    fixtures/*test-db*
+        owner (create-admin! db "token-list-owner")]
+    (inv-svc/create-invitation! db
+      {:email (unique-email "token-list") :role "admin" :invited-by (:id owner)})
+    (testing "list results omit token values entirely"
+      (is (every? #(nil? (:token %))
+            (inv-svc/list-pending-invitations db))))))
 
 ;; ============================================================================
 ;; list-pending-invitations

@@ -4,6 +4,7 @@
     [app.shared.adapters.database :refer [convert-pg-objects]]
     [app.template.backend.auth.service :as auth-service]
     [app.template.backend.security.email :as email-privacy]
+    [app.template.backend.security.tokens :as token-security]
     [app.template.backend.services.onboarding.core :as onboarding]
     [app.template.backend.services.tenant :as tenant-svc]
     [honey.sql :as sql]
@@ -30,7 +31,7 @@
                                 :from [:tenant_invitations]
                                 :where [:and
                                         [:= :tenant_id tenant-id]
-          (email-privacy/email-match-clause :email_lookup_hash :email email)
+                                        (email-privacy/email-match-clause :email_lookup_hash :email email)
                                         [:= :status [:cast "pending" :invitation_status]]]
                                 :limit 1}))]
     (when existing
@@ -45,7 +46,7 @@
                                 :join [[:users :u] [:= :tm.user_id :u.id]]
                                 :where [:and
                                         [:= :tm.tenant_id tenant-id]
-          (email-privacy/email-match-clause :u.email_lookup_hash :u.email email)
+                                        (email-privacy/email-match-clause :u.email_lookup_hash :u.email email)
                                         [:= :tm.status [:cast "active" :membership_status]]]
                                 :limit 1}))]
     (when existing
@@ -68,7 +69,7 @@
 (defn- with-resolved-email
   [row]
   (let [email (some-> row email-privacy/resolve-email)]
-    (cond-> row
+    (cond-> (dissoc row :token)
       email (assoc :email email))))
 
 ;; ============================================================================
@@ -84,6 +85,7 @@
       (assert-no-pending-invite! db t-id normalized-email)
       (assert-not-already-member! db t-id normalized-email)
       (let [token (auth-service/create-session-token)
+            token-storage (token-security/hash-token token)
             expires-at (time/plus (time/local-date-time) (time/days 7))
             inv-id (java.util.UUID/randomUUID)
             now (java.time.LocalDateTime/now)
@@ -97,13 +99,14 @@
                                          :role [:cast role :invitation_role]
                                          :invited_by inv-by
                                          :status [:cast "pending" :invitation_status]
-                                         :token token
+                                         :token token-storage
                                          :expires_at expires-at
                                          :created_at now
                                          :updated_at now}
                                         (email-privacy/email-storage normalized-email))]
                              :returning [:*]})))
-          (assoc :email normalized-email))))))
+          (assoc :email normalized-email
+            :token token))))))
 
 (defn find-invitation-by-token
   "Lookup an invitation by token, joined with tenant name/slug."
@@ -114,7 +117,7 @@
                                   [:t.slug :tenant_slug]]
                          :from   [[:tenant_invitations :ti]]
                          :join   [[:tenants :t] [:= :ti.tenant_id :t.id]]
-                         :where  [:= :ti.token token]})
+                         :where  [:= :ti.token (token-security/hash-token token)]})
             {:builder-fn rs/as-unqualified-maps})
     convert-pg-objects
     with-resolved-email))
@@ -241,7 +244,8 @@
 
 (defn resend-invitation!
   "Refresh the expiry of a pending invitation and return it (so the caller can re-send the email).
-   Throws if the invitation is not pending."
+   Throws if the invitation is not pending. Generates a new raw token because the
+   stored token value is a non-recoverable hash."
   [db invitation-id]
   (let [inv (find-invitation-by-id db invitation-id)]
     (when-not inv
@@ -250,15 +254,18 @@
       (throw (ex-info "Only pending invitations can be resent"
                {:type :validation-error
                 :errors {:status ["This invitation is no longer pending"]}})))
-    (let [now (java.time.LocalDateTime/now)
+    (let [token (auth-service/create-session-token)
+          token-storage (token-security/hash-token token)
+          now (java.time.LocalDateTime/now)
           new-expires (time/plus (time/local-date-time) (time/days 7))]
       (jdbc/execute-one! db
         (sql/format {:update [:tenant_invitations]
-                     :set    {:expires_at new-expires
+                     :set    {:token token-storage
+                              :expires_at new-expires
                               :updated_at now}
                      :where  [:= :id (:id inv)]}))
-      ;; Return the invitation with the refreshed expiry
-      (assoc inv :expires_at new-expires :updated_at now))))
+      ;; Return the invitation with the refreshed expiry and raw token for delivery.
+      (assoc inv :token token :expires_at new-expires :updated_at now))))
 
 (defn list-pending-invitations
   "List all pending invitations for a tenant."

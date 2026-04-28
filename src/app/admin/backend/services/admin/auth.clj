@@ -3,6 +3,7 @@
   (:require
     [app.shared.type-conversion :as tc]
     [app.template.backend.security.email :as email-privacy]
+    [app.template.backend.security.tokens :as token-security]
     [buddy.hashers :as hashers]
     [honey.sql :as hsql]
     [java-time.api :as time]
@@ -20,6 +21,16 @@
   "Generate a unique session token"
   []
   (str (UUID/randomUUID)))
+
+(defn hash-session-token
+  "Derive the deterministic storage value for an admin session bearer token.
+
+  The raw token is returned only to the caller/browser. Database lookups store and
+  compare this SHA-256 value so a DB dump does not contain directly reusable
+  admin session bearer tokens. Nil remains nil so missing-token callers keep the
+  existing no-match behavior."
+  [token]
+  (token-security/hash-token token))
 
 (defn hash-password
   "Hash a password using bcrypt+sha512 for secure storage.
@@ -113,13 +124,14 @@
   [db admin-id ip-address user-agent]
   (let [session-id (UUID/randomUUID)
         token (generate-session-token)
+        token-storage (hash-session-token token)
         now (time/instant)
         expires-at (time/plus now (time/hours 8))]
     (jdbc/execute-one! db
       (hsql/format {:insert-into :admin_sessions
                     :values [{:id session-id
                               :admin_id admin-id
-                              :token token
+                              :token token-storage
                               :created_at now
                               :last_activity now
                               :expires_at expires-at
@@ -134,12 +146,13 @@
   "Get admin by session token. The legacy name is retained for callers."
   [db token]
   (let [now (time/instant)
+        token-storage (hash-session-token token)
         row (jdbc/execute-one! db
               (hsql/format {:select [:a.*]
                             :from   [[:admin_sessions :s]]
                             :join   [[:admins :a] [:= :s.admin_id :a.id]]
                             :where  [:and
-                                     [:= :s.token token]
+                                     [:= :s.token token-storage]
                                      [:> :s.expires_at now]]})
               {:builder-fn rs/as-unqualified-lower-maps})]
     (when row
@@ -153,7 +166,7 @@
   (jdbc/execute-one! db
     (hsql/format {:update :admin_sessions
                   :set {:last_activity (time/instant)}
-                  :where [:= :token token]})
+                  :where [:= :token (hash-session-token token)]})
     {:builder-fn rs/as-unqualified-lower-maps}))
 
 (defn invalidate-session!
@@ -161,7 +174,7 @@
   [db token]
   (jdbc/execute-one! db
     (hsql/format {:delete-from :admin_sessions
-                  :where [:= :token token]})
+                  :where [:= :token (hash-session-token token)]})
     {:builder-fn rs/as-unqualified-lower-maps}))
 
 (defn invalidate-all-admin-sessions!
