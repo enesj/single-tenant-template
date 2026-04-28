@@ -9,7 +9,6 @@
     [app.template.frontend.pages.about :refer [about-page]]
     [app.template.frontend.pages.home :refer [home-page]]
     [app.template.frontend.pages.invitation-accept :refer [invitation-accept-page]]
-    [app.template.frontend.pages.impersonation-grants :refer [impersonation-grants-page]]
     [app.template.frontend.pages.management-guide :refer [management-guide-page]]
     [app.template.frontend.pages.tenant-members :refer [tenant-members-page]]
     [app.template.frontend.pages.onboarding :refer [onboarding-page]]
@@ -198,7 +197,6 @@
 
                       :tenant-select ($ tenant-select-page)
                       :tenant-members ($ tenant-members-page)
-                      :tenant-impersonation ($ impersonation-grants-page)
                       :invitation-accept ($ invitation-accept-page)
                       :onboarding ($ onboarding-page)
                       :management-guide ($ management-guide-page)

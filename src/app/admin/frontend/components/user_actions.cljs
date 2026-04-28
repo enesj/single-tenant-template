@@ -45,10 +45,6 @@
                       (log/info "Viewing user activity" user-id user-label)
                       (rf/dispatch [:admin/view-user-activity user-id]))
 
-     :impersonate (fn []
-                    (log/info "Impersonating user" user-id user-label)
-                    (rf/dispatch [:admin/impersonate-user user-id]))
-
      :reset-password (fn []
                        (log/info "Resetting user password" user-id user-label)
                        (rf/dispatch [:admin/reset-user-password user-id]))
@@ -66,14 +62,7 @@
   [handlers user-label]
   (merge
     (shared-actions/create-confirmation-handlers handlers user-label "user")
-    {:impersonate (fn [e]
-                    (.stopPropagation e)
-                    (confirm-dialog/show-confirm
-                      {:message (str "Impersonate user " user-label "? This will log you in as this user.")
-                       :title "Confirm User Impersonation"
-                       :on-confirm (:impersonate handlers)}))
-
-     :reset-password (fn [e]
+    {:reset-password (fn [e]
                        (.stopPropagation e)
                        (confirm-dialog/show-confirm
                          {:message (str "Reset password for " user-label "? They will receive a reset email.")
@@ -105,20 +94,19 @@
   (let [user-id (id-utils/extract-entity-id user)
         ;; Use shared utilities to extract entity data
         user-status (shared-actions/get-entity-status user :user)
-      user-label (or (:full-name user)
-           (:full_name user)
-           (:user-display-name user)
-           (:user_display_name user)
-           (:user-ref user)
-           (:user_ref user)
-           (:email-masked user)
-           (:email_masked user)
-           "this user")
+        user-label (or (:full-name user)
+                     (:full_name user)
+                     (:user-display-name user)
+                     (:user_display_name user)
+                     (:user-ref user)
+                     (:user_ref user)
+                     (:email-masked user)
+                     (:email_masked user)
+                     "this user")
         email-verified (or (:users/email-verified user) (:email-verified user))
 
         ;; Subscribe to loading states
         updating-user? (use-subscribe [:admin/updating-user?])
-        impersonating-user? (use-subscribe [:admin/impersonating-user?])
         loading-user-details? (use-subscribe [:admin/loading-user-details?])
 
         ;; Create action handlers
@@ -159,14 +147,6 @@
                            ;; Advanced actions group
                         (conj (shared-actions/create-dangerous-action-group
                                 (cond-> []
-                                  (= user-status "active")
-                                  (conj {:id "impersonate-user"
-                                         :icon "👤"
-                                         :label "Impersonate User"
-                                         :variant :info
-                                         :loading-key :impersonating-user?
-                                         :on-click (:impersonate confirmation-handlers)})
-
                                   true
                                   (conj {:id "reset-password"
                                          :icon "🔑"
@@ -189,7 +169,6 @@
 
         ;; Loading states map
         loading-states {:updating-user? updating-user?
-                        :impersonating-user? impersonating-user?
                         :loading-user-details? loading-user-details?}]
 
     ;; Return the action dropdown component - aligned to start like other buttons

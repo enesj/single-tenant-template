@@ -1,34 +1,8 @@
 (ns app.admin.frontend.events.users.security
-  "Security operations - impersonation, password resets, email verification"
+  "Security operations - password resets and email verification"
   (:require
     [app.admin.frontend.events.users.utils :as utils]
     [re-frame.core :as rf]))
-
-;; ============================================================================
-;; Impersonate User Events
-;; ============================================================================
-
-(rf/reg-event-fx
-  :admin/impersonate-user
-  (fn [{:keys [db]} [_ user-id]]
-    (utils/log-user-operation "Impersonating user" user-id)
-    {:db (utils/create-loading-db-state db :admin/impersonating-user)
-     :http-xhrio (utils/create-user-http-request
-                   :post (str "/admin/api/users/impersonate/" user-id)
-                   :on-success [:admin/impersonate-user-success]
-                   :on-failure [:admin/impersonate-user-failure])}))
-
-(rf/reg-event-fx
-  :admin/impersonate-user-success
-  (fn [{:keys [db]} [_ response]]
-    (utils/log-user-operation "User impersonation successful, redirecting...")
-    (set! (.-location js/window) (or (:redirect-url response) "/dashboard"))
-    {:db (utils/clear-loading-db-state db :admin/impersonating-user)}))
-
-(rf/reg-event-db
-  :admin/impersonate-user-failure
-  (fn [db [_ error]]
-    (utils/handle-user-api-error db error :admin/impersonating-user :admin/impersonate-error "impersonate user")))
 
 ;; ============================================================================
 ;; Reset User Password Events
@@ -93,9 +67,6 @@
 ;; Subscription moved to app.admin.frontend.subs.users
 
 ;; Security operations events to be migrated here:
-;; - :admin/impersonate-user
-;; - :admin/impersonate-user-success
-;; - :admin/impersonate-user-failure
 ;; - :admin/reset-user-password
 ;; - :admin/reset-user-password-success
 ;; - :admin/reset-user-password-failure

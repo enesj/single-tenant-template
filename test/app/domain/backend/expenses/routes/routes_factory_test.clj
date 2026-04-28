@@ -67,3 +67,35 @@
                    :order-by :created-at
                    :order-dir :desc}
                  @captured-opts)))))))
+
+(deftest build-batch-update-handler-applies-transform-response-to-results
+  (testing "batch update responses honor the entity response transform"
+    (let [id (java.util.UUID/randomUUID)
+          captured-updates (atom nil)
+          handler ((factory/build-batch-update-handler
+                     {:service 'test.expenses.service
+                      :entity-key :expense
+                      :transform-response {:transform (fn [rows]
+                                                        (mapv #(dissoc % :user_id :user-id) rows))}})
+                   :db)]
+      (with-redefs-fn {#'app.domain.backend.expenses.routes.routes-factory/resolve-service-op-fn
+                       (fn [_service _legacy-sym service-op]
+                         (is (= :update! service-op))
+                         (fn [_db expense-id updates]
+                           (reset! captured-updates {:id expense-id
+                                                     :updates updates})
+                           {:id expense-id
+                            :user_id (java.util.UUID/randomUUID)
+                            :notes (:notes updates)}))
+                       #'utils/success-response (fn [body & _]
+                                                  {:status 200
+                                                   :body body})}
+        #(let [response (handler {:body {:items [{:id (str id)
+                                                  :notes "patched"}]}})]
+           (is (= 200 (:status response)))
+           (is (= {:id id
+                   :updates {:notes "patched"}}
+                 @captured-updates))
+           (is (= [{:id id
+                    :notes "patched"}]
+                 (get-in response [:body :data :results]))))))))

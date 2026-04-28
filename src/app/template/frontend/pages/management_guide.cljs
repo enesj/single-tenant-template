@@ -95,16 +95,12 @@
                           :description (t :guide/tool-members-desc)
                           :link "/tenant/members"
                           :link-label (t :guide/open)})
-            ($ tool-card {:title (t :guide/tool-impersonation)
-                          :description (t :guide/tool-impersonation-desc)
-                          :link "/tenant/impersonation"
-                          :link-label (t :guide/open)})
             ($ tool-card {:title (t :guide/tool-profile)
                           :description (t :guide/tool-profile-desc)
                           :link "/profile"
                           :link-label (t :guide/open)}))))
 
-      ;; Admin section (members but not impersonation)
+      ;; Admin section (members only)
       (when (= role "admin")
         ($ :div {:class "mb-6"}
           ($ :h2 {:class "text-lg font-semibold mb-3"} (t :guide/section-workspace))

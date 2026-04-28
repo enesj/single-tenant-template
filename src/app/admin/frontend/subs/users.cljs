@@ -13,11 +13,6 @@
     (boolean (and db (get db :admin/updating-user false)))))
 
 (rf/reg-sub
-  :admin/impersonating-user?
-  (fn [db _]
-    (boolean (and db (get db :admin/impersonating-user false)))))
-
-(rf/reg-sub
   :admin/loading-user-details?
   (fn [db _]
     (boolean (and db (get db :admin/loading-user-details false)))))
@@ -35,11 +30,6 @@
   :admin/user-update-error
   (fn [db _]
     (and db (get db :admin/user-update-error nil))))
-
-(rf/reg-sub
-  :admin/impersonate-error
-  (fn [db _]
-    (and db (get db :admin/impersonate-error nil))))
 
 (rf/reg-sub
   :admin/user-details-error

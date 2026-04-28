@@ -96,13 +96,16 @@
   "Create a fresh Malli coercion instance.
 
   Why: during dev reloads, `clojure.tools.namespace` can reload dependency
-  namespaces like `malli.core` without reloading `reitit.coercion.malli`.
-  The default reitit transformer providers capture transformer instances at load
-  time, which can become invalid after such reloads.
+  namespaces like `malli.core` without reloading `reitit.coercion.malli` or
+  `malli.transform`. Transformer objects created before that reload no longer
+  satisfy the current `malli.core/Transformer` protocol and can fail with
+  `:malli.core/invalid-transformer`.
 
-  We therefore build the transformer instances *fresh* for each router build and
-  pass them in explicitly, avoiding cached providers."
+  We therefore reload `malli.transform` and build transformer instances fresh for
+  each router build, avoiding stale protocol implementations captured in cached
+  providers."
   []
+  (require 'malli.transform :reload)
   (let [strip (mt/strip-extra-keys-transformer)
         defaults (mt/default-value-transformer {})
         json (mt/json-transformer)

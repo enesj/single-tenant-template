@@ -1,52 +1,39 @@
 (ns app.domain.backend.expenses.routes.blocked-resources-test
-  "Unit tests for the impersonation blocking middleware.
+  "Unit tests for admin-private resource blocking middleware.
    No database required — tests middleware behavior directly."
   (:require
-    [app.domain.backend.expenses.routes.middleware :as impersonation-mw]
+    [app.domain.backend.expenses.routes.middleware :as private-resource-mw]
     [app.domain.backend.expenses.routes.route-configs :as route-configs]
     [clojure.test :refer [deftest is testing]]))
 
 (def ^:private pass-through-handler
-  "A handler that returns 200 with the request map."
+  "A handler that would return 200 if private-resource middleware allowed it."
   (fn [request]
     {:status 200 :body {:passed true :uri (:uri request)}}))
 
 (def ^:private wrapped-handler
-  (impersonation-mw/wrap-require-impersonation pass-through-handler))
+  (private-resource-mw/wrap-block-private-admin-resource pass-through-handler))
 
-(deftest wrap-require-impersonation-blocks-without-context
-  (testing "returns 403 when :impersonation is absent from request"
-    (let [request {:uri "/admin/api/expenses/payers"
-                   :admin {:id "admin-1" :role "admin"}}
-          response (wrapped-handler request)]
-      (is (= 403 (:status response))
-        "Should return 403 Forbidden")
-      (is (re-find #"impersonation" (str (:body response)))
-        "Error message should mention impersonation"))))
-
-(deftest wrap-require-impersonation-allows-with-context
-  (testing "passes through when :impersonation is present on request"
-    (let [context {:tenant-id "t-1" :role "viewer" :grant-id "g-1"}
-          request {:uri "/admin/api/expenses/payers"
-                   :admin {:id "admin-1" :role "admin"}
-                   :impersonation context}
-          response (wrapped-handler request)]
-      (is (= 200 (:status response))
-        "Should pass through to handler")
-      (is (true? (get-in response [:body :passed]))
-        "Handler should receive the request"))))
-
-(deftest wrap-require-impersonation-blocks-with-nil-context
-  (testing "returns 403 when :impersonation is explicitly nil"
+(deftest wrap-block-private-admin-resource-always-blocks
+  (testing "returns 403 even if a stale impersonation context is present"
     (let [request {:uri "/admin/api/expenses/payers"
                    :admin {:id "admin-1" :role "admin"}
-                   :impersonation nil}
+                   :impersonation {:tenant-id "t-1" :role "viewer" :grant-id "g-1"}}
           response (wrapped-handler request)]
       (is (= 403 (:status response))
-        "Nil impersonation context should be treated as absent"))))
+        "Private tenant-scoped admin resources should remain unavailable")
+      (is (re-find #"disabled" (str (:body response)))
+        "Error message should explain that admin access is disabled"))))
+
+(deftest payer-and-item-routes-block-private-admin-access
+  (testing "payer and expense-item admin routes keep the private-resource blocker"
+    (is (seq (:route-middleware route-configs/payer-config))
+      "Payer routes should keep blocking middleware")
+    (is (seq (:route-middleware route-configs/expense-item-config))
+      "Expense item routes should keep blocking middleware")))
 
 (deftest admin-expense-routes-no-longer-require-impersonation
-  (testing "expense admin routes are no longer wrapped with impersonation middleware"
+  (testing "expense admin routes are privacy-scrubbed instead of impersonation-gated"
     (is (nil? (:route-middleware route-configs/expense-config))
       "Admin expenses list/detail routes should be directly available to platform admins")))
 

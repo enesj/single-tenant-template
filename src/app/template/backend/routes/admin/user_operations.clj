@@ -3,7 +3,6 @@
   (:require
     [app.template.backend.routes.admin.utils :as utils]
     [app.admin.backend.services.admin.users :as admin-users]
-    [app.admin.backend.services.admin.users.bulk :as admin-users-bulk]
     [app.admin.backend.services.admin.users.security :as user-security]))
 
 (defn force-verify-email-handler
@@ -61,32 +60,6 @@
               (utils/json-response {:activity activity}))))))
     "Failed to get user activity"))
 
-(defn impersonate-user-handler
-  "Create user impersonation session"
-  [db]
-  (utils/with-error-handling
-    (fn [request]
-      (let [user-id (utils/extract-uuid-param request :id)]
-        (if user-id
-          (let [{:keys [ip-address user-agent admin]} (utils/extract-request-context request)
-                result (admin-users-bulk/create-user-impersonation-session! db user-id
-                         (:id admin)
-                         ip-address
-                         user-agent)]
-
-            (utils/log-admin-action "impersonate_user" (:id admin)
-              "user" user-id {})
-
-            (if (:success result)
-              (let [existing-session (or (:session request) {})
-                    ;; IMPORTANT: merge with existing session to avoid wiping :admin-token.
-                    new-session (assoc existing-session :auth-session (:auth-session result))]
-                (-> (utils/json-response (dissoc result :auth-session))
-                  (assoc :session new-session)))
-              (utils/json-response result :status 400)))
-          (utils/error-response "Invalid user ID" :status 400))))
-    "Failed to impersonate user"))
-
 (defn advanced-user-search-handler
   "Advanced user search with multiple criteria"
   [db]
@@ -113,5 +86,4 @@
    ["/verify-email/:id" {:post (force-verify-email-handler db)}]
    ["/reset-password/:id" {:post (reset-user-password-handler db)}]
    ["/activity/:id" {:get (get-user-activity-handler db)}]
-   ["/impersonate/:id" {:post (impersonate-user-handler db)}]
    ["/search" {:get (advanced-user-search-handler db)}]])

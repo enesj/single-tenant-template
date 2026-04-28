@@ -56,25 +56,6 @@
     :invitation/sign-in-different    "Prijavite se drugim računom"
     :invitation/logged-in-as         "Prijavljeni ste kao"
 
-    ;; Impersonation grants page
-    :impersonation/page-title      "Imitacijska ovlaštenja"
-    :impersonation/manage-access   (fn [workspace] (str "Upravljajte administratorskim pristupom " workspace))
-    :impersonation/owners-only     "Samo vlasnici zakupca mogu upravljati imitacijskim ovlaštenjima."
-    :impersonation/dismiss         "Odbaci"
-    :impersonation/explanation     "Imitacijska ovlaštenja omogućuju administratorima platforme pristup vašem radnom prostoru s određenom ulogom za potrebe podrške. Možete opozvati pristup u bilo kom trenutku."
-    :impersonation/grant-access    "Dodijelite administratorski pristup"
-    :impersonation/admin-email     "E-mail administratora"
-    :impersonation/grant-submit    "Dodijelite pristup"
-    :impersonation/active-grants   "Aktivna ovlaštenja"
-    :impersonation/no-grants       "Još nema imitacijskih ovlaštenja."
-    :impersonation/col-admin-email "E-mail administratora"
-    :impersonation/col-role        "Uloga"
-    :impersonation/col-status      "Status"
-    :impersonation/col-created     "Kreirano"
-    :impersonation/col-actions     "Radnje"
-    :impersonation/confirm-revoke  "Potvrdi"
-    :impersonation/revoke          "Opozovi"
-
     ;; Onboarding page
     :onboarding/welcome             "Dobrodošli u vaš radni prostor"
     :onboarding/workspace-intro     (fn [{:keys [name]}] (str "Postavite " name " u nekoliko koraka"))
@@ -144,8 +125,6 @@
     :guide/tool-members              "Članovi"
     :guide/tool-members-desc         "Pozovite, uklonite ili promijenite uloge članova."
     :guide/tool-members-admin-desc   "Pregledajte članove radnog prostora."
-    :guide/tool-impersonation        "Impersonacija"
-    :guide/tool-impersonation-desc   "Pregledajte radni prostor kao drugi korisnik."
     :guide/tool-profile              "Profil i postavke"
     :guide/tool-profile-desc         "Upravljajte imenom radnog prostora i postavkama."}
 
@@ -203,25 +182,6 @@
     :invitation/error-generic        "Unable to accept invitation."
     :invitation/sign-in-different    "Sign in with a different account"
     :invitation/logged-in-as         "Logged in as"
-
-    ;; Impersonation grants page
-    :impersonation/page-title      "Impersonation Grants"
-    :impersonation/manage-access   (fn [workspace] (str "Manage admin access to " workspace))
-    :impersonation/owners-only     "Only tenant owners can manage impersonation grants."
-    :impersonation/dismiss         "Dismiss"
-    :impersonation/explanation     "Impersonation grants allow platform administrators to access your workspace with a specific role for support and troubleshooting purposes. You can revoke access at any time."
-    :impersonation/grant-access    "Grant Admin Access"
-    :impersonation/admin-email     "Admin Email"
-    :impersonation/grant-submit    "Grant Access"
-    :impersonation/active-grants   "Active Grants"
-    :impersonation/no-grants       "No impersonation grants yet."
-    :impersonation/col-admin-email "Admin Email"
-    :impersonation/col-role        "Role"
-    :impersonation/col-status      "Status"
-    :impersonation/col-created     "Created"
-    :impersonation/col-actions     "Actions"
-    :impersonation/confirm-revoke  "Confirm"
-    :impersonation/revoke          "Revoke"
 
     ;; Onboarding page
     :onboarding/welcome             "Welcome to your workspace"
@@ -292,7 +252,5 @@
     :guide/tool-members              "Members"
     :guide/tool-members-desc         "Invite, remove, or change roles for members."
     :guide/tool-members-admin-desc   "View workspace members."
-    :guide/tool-impersonation        "Impersonation"
-    :guide/tool-impersonation-desc   "View the workspace as another user."
     :guide/tool-profile              "Profile & settings"
     :guide/tool-profile-desc         "Manage workspace name and settings."}})

@@ -142,10 +142,42 @@
     true (update :column-config normalize-admin-email-column-map)
     true (update :column-metadata normalize-admin-email-column-map)))
 
+(def ^:private users-identity-default-visible-columns
+  ["email" "full-name" "status" "last-login-at" "created-at" "updated-at" "email-verified" "auth-provider"])
+
+(defn- legacy-user-identity-config?
+  [user-config]
+  (let [default-visible (->> (:default-visible-columns user-config)
+                          (keep normalize-column-name)
+                          set)]
+    (or (contains? default-visible "email-masked")
+      (and (contains? default-visible "user-ref")
+        (not (contains? default-visible "email"))))))
+
+(defn- normalize-user-identity-config
+  [user-config]
+  (let [user-config* (or user-config {})]
+    (cond-> (-> user-config*
+              (update :available-columns #(->> (cons canonical-admin-email-column (or % []))
+                                            normalize-admin-email-column-list))
+              (update :default-visible-columns normalize-admin-email-column-list)
+              (update :filterable-columns normalize-admin-email-column-list)
+              (update :sortable-columns normalize-admin-email-column-list)
+              (update :always-visible normalize-admin-email-column-list)
+              (update :computed-fields normalize-admin-email-column-map)
+              (update :column-config #(merge {:email {:width "220px"}}
+                                        (normalize-admin-email-column-map %)))
+              (update :column-metadata normalize-admin-email-column-map))
+      (legacy-user-identity-config? user-config*)
+      (assoc :default-visible-columns users-identity-default-visible-columns
+        :sortable-columns ["full-name" "status" "created-at"]
+        :always-visible ["email"]))))
+
 (defn normalize-table-columns
   [table-columns]
   (-> (or table-columns {})
     (update :admins normalize-admin-config)
+    (update :users normalize-user-identity-config)
     (update :audit-logs normalize-audit-config)))
 
 ;; =============================================================================

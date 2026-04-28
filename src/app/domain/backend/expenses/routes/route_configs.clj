@@ -1,7 +1,8 @@
 (ns app.domain.backend.expenses.routes.route-configs
   "Configuration maps for expenses domain route generation."
   (:require
-    [app.domain.backend.expenses.routes.middleware :as impersonation-mw]
+    [app.domain.backend.expenses.privacy :as privacy]
+    [app.domain.backend.expenses.routes.middleware :as private-resource-mw]
     [app.domain.backend.expenses.services.service-configs :as svc-configs]
     [app.template.backend.routes.admin.utils :as utils]
     [clojure.string :as str]))
@@ -138,7 +139,7 @@
    :default-order-by "label"
    :required-fields [:label]
    :has-search? false
-   :route-middleware [(fn [handler] (impersonation-mw/wrap-require-impersonation handler))]})
+   :route-middleware [(fn [handler] (private-resource-mw/wrap-block-private-admin-resource handler))]})
 
 (def article-config
   {:entity-key :article
@@ -169,7 +170,8 @@
                    :to :string
                    :supplier-id :uuid
                    :payer-id :uuid
-                   :source :string}})
+                   :source :string}
+   :transform-response {:transform privacy/admin-expenses-view}})
 
 (def expense-item-config
   {:entity-key :expense-item
@@ -182,7 +184,7 @@
    ;; Keeping :required-fields minimal avoids rejecting requests that only send raw_label.
    :required-fields [:expense-id :line-total]
    :has-search? true
-   :route-middleware [(fn [handler] (impersonation-mw/wrap-require-impersonation handler))]
+   :route-middleware [(fn [handler] (private-resource-mw/wrap-block-private-admin-resource handler))]
    :filter-params [:search]})
 
 (def article-alias-config

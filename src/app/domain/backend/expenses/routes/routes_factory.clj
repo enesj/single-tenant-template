@@ -25,6 +25,18 @@
   [data]
   (shared-db/to-app data))
 
+(defn- response-key
+  "Resolve the JSON response key for a transformed response."
+  [transform-response fallback]
+  (or (:response-key transform-response) fallback))
+
+(defn- response-data
+  "Apply the optional response transform, otherwise convert DB rows to app maps."
+  [transform-response data]
+  (if-let [transform (:transform transform-response)]
+    (transform data)
+    (to-app data)))
+
 (defn resolve-fn
   "Require and resolve a var in the given namespace. Accepts namespaced or bare symbols.
    Uses requiring-resolve which handles namespace loading automatically."
@@ -329,11 +341,13 @@
                 date-filters (extract-date-range-filters qp date-range-columns)
                 highlight-date-filters (extract-date-range-filters qp date-range-columns (:field highlight-request))
                 custom-params (when query-params-fn (query-params-fn qp))
+                sort-opts (utils/extract-sort-params qp)
                 query-params (cond-> (merge {:limit (utils/parse-int-param qp :limit default-limit)
                                              :offset (utils/parse-int-param qp :offset 0)
                                              :order-by (order-by->app (get-param qp :order-by) default-order-by)
                                              :order-dir (keyword (or (get-param qp :order-dir) default-dir))}
-                                       custom-params)
+                                       custom-params
+                                       sort-opts)
                                (seq date-filters)
                                (update :extra-filters (fn [existing]
                                                         (into (vec (or existing [])) date-filters))))
@@ -341,10 +355,8 @@
                           (symbol (str "list-" (name entity-plural)))
                           :list)
                 results (list-fn db query-params)
-                response-key (or (:response-key transform-response) entity-plural)
-                response-data (if (:transform transform-response)
-                                ((:transform transform-response) results)
-                                (to-app results))
+                response-key (response-key transform-response entity-plural)
+                response-data (response-data transform-response results)
                 total (when has-count?
                         (try
                           (let [base-count-params (if count-params-fn (count-params-fn qp) {})
@@ -415,10 +427,8 @@
                               :create!)
                   data* (if custom-validation (custom-validation data) data)
                   created (create-fn db (to-db-deep data*))
-                  response-key (or (:response-key transform-response) entity-key)
-                  response-data (if (:transform transform-response)
-                                  ((:transform transform-response) created)
-                                  (to-app created))]
+                  response-key (response-key transform-response entity-key)
+                  response-data (response-data transform-response created)]
               (utils/success-response {response-key response-data} :status 201)))))
       (str "Failed to create " (name entity-key)))))
 
@@ -436,10 +446,8 @@
                        (resolve-service-op-fn service (symbol (str "get-" (name entity-key))) :get))
               result (when id (get-fn db id))]
           (if result
-            (let [response-key (or (:response-key transform-response) entity-key)
-                  response-data (if (:transform transform-response)
-                                  ((:transform transform-response) result)
-                                  (to-app result))]
+            (let [response-key (response-key transform-response entity-key)
+                  response-data (response-data transform-response result)]
               (utils/success-response {response-key response-data}))
             (utils/error-response (str (str/capitalize (name entity-key)) " not found") :status 404))))
       (str "Failed to get " (name entity-key)))))
@@ -459,10 +467,8 @@
               update-fn (resolve-service-op-fn service (symbol (str "update-" (name entity-key) "!")) :update!)
               updated (when id (update-fn db id (to-db-deep data)))]
           (if updated
-            (let [response-key (or (:response-key transform-response) entity-key)
-                  response-data (if (:transform transform-response)
-                                  ((:transform transform-response) updated)
-                                  (to-app updated))]
+            (let [response-key (response-key transform-response entity-key)
+                  response-data (response-data transform-response updated)]
               (utils/success-response {response-key response-data}))
             (utils/error-response (str (str/capitalize (name entity-key)) " not found") :status 404))))
       (str "Failed to update " (name entity-key)))))
@@ -534,7 +540,7 @@
 
   Expects JSON body like:
   {:items [{:id \"uuid\" :field1 \"val1\" ...} ...]}"
-  [{:keys [service entity-key parse-id]}]
+  [{:keys [service entity-key parse-id transform-response]}]
   (fn [db]
     (utils/with-error-handling
       (fn [request]
@@ -561,14 +567,14 @@
                         db-updates (to-db-deep updates)]
                     (log/info "Batch update item" {:id id :updates updates :db-updates db-updates})
                     (if-let [updated (when id (update-fn db id db-updates))]
-                      (swap! results conj (to-app updated))
+                      (swap! results conj updated)
                       (swap! errors conj {:id (str raw-id) :error "not found"})))
                   (catch Exception e
                     (log/error e "Batch update item failed" {:id (:id item)})
                     (swap! errors conj {:id (str (:id item))
                                         :error (.getMessage e)}))))
               (utils/success-response
-                {:data {:results (vec @results)
+                {:data {:results (response-data transform-response (vec @results))
                         :failures (vec @errors)
                         :summary {:total (count items)
                                   :successful (count @results)
@@ -589,10 +595,8 @@
                             (symbol (str "search-" (name entity-plural)))
                             :search))
               results (search-fn db query {:limit limit})
-              response-key (or (:response-key transform-response) entity-plural)
-              response-data (if (:transform transform-response)
-                              ((:transform transform-response) results)
-                              (to-app results))]
+              response-key (response-key transform-response entity-plural)
+              response-data (response-data transform-response results)]
           (utils/success-response {response-key response-data})))
       (str "Failed to search " (name entity-plural)))))
 

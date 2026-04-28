@@ -10,8 +10,7 @@
     app.template.frontend.events.messages
     app.template.frontend.events.onboarding
     app.template.frontend.events.routing
-    app.template.frontend.events.tenant
-    app.template.frontend.events.impersonation))
+    app.template.frontend.events.tenant))
 
 ;; ========================================================================
 ;; Orchestration Layer

@@ -45,13 +45,6 @@
           [:dispatch [:app.template.frontend.events.tenant/fetch-invitations]]]}))
 
 (rf/reg-event-fx
-  :page/init-tenant-impersonation
-  common-interceptors
-  (fn [{:keys [db]} _]
-    {:db (assoc-in db (paths/current-page) :tenant-impersonation)
-     :fx [[:dispatch [:app.template.frontend.events.impersonation/fetch-grants]]]}))
-
-(rf/reg-event-fx
   :page/init-onboarding
   common-interceptors
   (fn [{:keys [db]} _]

@@ -1,16 +1,14 @@
 (ns app.domain.backend.expenses.routes.middleware
-  "Middleware for blocking admin access to tenant-scoped resources
-   unless the admin has an active impersonation grant."
+  "Middleware for private tenant-scoped admin resources that should remain unavailable
+   from the global admin surface."
   (:require
     [app.template.backend.routes.admin.utils :as utils]))
 
-(defn wrap-require-impersonation
-  "Blocks admin access to tenant data unless impersonation is active.
-   Returns 403 when `:impersonation` is absent from the request."
-  [handler]
-  (fn [request]
-    (if (:impersonation request)
-      (handler request)
-      (utils/error-response
-        "Access to tenant data requires an active impersonation grant"
-        :status 403))))
+(defn wrap-block-private-admin-resource
+  "Blocks global admin access to tenant-scoped resources that expose private linkage.
+   Receipt and expense review routes expose dedicated privacy-scrubbed admin views instead."
+  [_handler]
+  (fn [_request]
+    (utils/error-response
+      "Admin access to this tenant-scoped resource is disabled"
+      :status 403)))

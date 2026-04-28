@@ -30,7 +30,7 @@
         admin-role (keyword (:role admin-session))
         role-permissions {:support #{:view-users :view-user-details}
                           :admin #{:view-users :view-user-details :update-user-status}
-                          :super-admin #{:view-users :view-user-details :update-user-status :impersonate-user :delete-user}}]
+                          :super-admin #{:view-users :view-user-details :update-user-status :delete-user}}]
     (contains? (get role-permissions admin-role #{}) required-permission)))
 
 ;; Permission-aware secure operations

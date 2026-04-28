@@ -2,8 +2,7 @@
   (:require
     [app.template.frontend.components.auth :refer [auth-component]]
     [app.template.frontend.components.button :refer [button]]
-    [app.template.frontend.components.icons :refer [admins-icon
-                                                    arrow-up
+    [app.template.frontend.components.icons :refer [arrow-up
                                                     chart-bar
                                                     dashboard-icon
                                                     expense-items-icon
@@ -293,13 +292,7 @@
                                           :route :tenant-members
                                           :icon ($ users-icon {:class "w-6 h-6"})
                                           :active? (active? #{:tenant-members})})])
-                            (when is-owner?
-                              [(nav-item {:id "user-sidebar-impersonation"
-                                          :label (t :nav/impersonation)
-                                          :href (th "/tenant/impersonation")
-                                          :route :tenant-impersonation
-                                          :icon ($ admins-icon {:class "w-6 h-6"})
-                                          :active? (active? #{:tenant-impersonation})})])))
+                            []))
 
         sections (cond-> [{:title (t :nav/section-expenses) :items expense-items}
                           {:title (t :nav/section-operations) :items operations-items}

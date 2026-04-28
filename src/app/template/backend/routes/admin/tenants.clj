@@ -85,7 +85,7 @@
     (->> (jdbc/execute! db (sql/format query)
            {:builder-fn rs/as-unqualified-lower-maps})
       (mapv convert-pg-objects)
-      (mapv email-privacy/routine-tenant-view))))
+      (mapv email-privacy/identity-tenant-view))))
 
 (defn- count-tenants
   "Count tenants matching filters."
@@ -131,7 +131,7 @@
     (some-> (jdbc/execute-one! db (sql/format query)
               {:builder-fn rs/as-unqualified-lower-maps})
       convert-pg-objects
-      email-privacy/routine-tenant-view)))
+      email-privacy/identity-tenant-view)))
 
 (defn- list-tenant-members
   "List all members of a tenant with user info."
@@ -146,7 +146,7 @@
                       :order-by [[:tm.created_at :asc]]})
          {:builder-fn rs/as-unqualified-lower-maps})
     (mapv convert-pg-objects)
-    (mapv email-privacy/routine-membership-view)))
+    (mapv email-privacy/identity-membership-view)))
 
 (defn- get-membership-by-id
   "Get a single membership by ID."

@@ -70,3 +70,29 @@
       (is (= {:width "220px"}
             (get-in admins-config [:column-config :email])))
       (is (nil? (get-in admins-config [:column-config :email-masked]))))))
+
+(deftest load-table-columns-success-migrates-legacy-user-identity-columns
+  (testing "legacy user id/ref defaults are upgraded to email-first identity columns"
+    (setup/reset-db!)
+    (rf/dispatch-sync
+      [:app.admin.frontend.events.settings/load-table-columns-success
+       {:table-columns
+        {:users
+         {:available-columns ["id" "user-ref" "email-masked" "full-name" "status"]
+          :default-visible-columns ["id" "user-ref" "email-masked" "full-name" "status"]
+          :filterable-columns ["status"]
+          :sortable-columns ["user-ref" "status" "created-at"]
+          :always-visible ["id" "user-ref"]
+          :computed-fields {}
+          :column-config {:email-masked {:width "200px"}}}}}])
+    (let [users-config (get-in @rf-db/app-db [:admin :config :table-columns :users])]
+      (is (= ["email" "id" "user-ref" "full-name" "status"]
+            (:available-columns users-config)))
+      (is (= ["email" "full-name" "status" "last-login-at" "created-at" "updated-at" "email-verified" "auth-provider"]
+            (:default-visible-columns users-config)))
+      (is (= ["full-name" "status" "created-at"]
+            (:sortable-columns users-config)))
+      (is (= ["email"] (:always-visible users-config)))
+      (is (= {:width "200px"}
+            (get-in users-config [:column-config :email])))
+      (is (nil? (get-in users-config [:column-config :email-masked]))))))

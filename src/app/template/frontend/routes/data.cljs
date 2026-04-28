@@ -93,11 +93,6 @@
                                    (when token
                                      (rf/dispatch [:app.template.frontend.events.tenant/accept-invitation-init token]))))}]}]
 
-       ["/tenant/impersonation"
-        {:name :tenant-impersonation
-         :view :tenant-impersonation
-         :controllers (controllers/user-guarded-start :page/init-tenant-impersonation)}]
-
        ["/onboarding"
         {:name :onboarding
          :view :onboarding

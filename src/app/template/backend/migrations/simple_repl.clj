@@ -29,6 +29,7 @@
     [automigrate.core :as am]
     [automigrate.generation.extended :as gen-ext]
     [automigrate.util.db :as db-util]
+    [clojure.edn :as edn]
     [clojure.java.io :as io]
     [clojure.java.shell :as shell]
     [clojure.pprint :as pprint]
@@ -143,18 +144,55 @@
                models-file (count merged)))
     merged))
 
+(def ^:private sql-only-schema-actions
+  "Schema actions already represented by explicit SQL migrations.
+
+   Automigrate reconstructs model state from EDN schema migrations only, so SQL-only
+   migrations like 0071_expenses_is_posted_drop can be rediscovered forever.
+   Filtering only these exact actions prevents duplicate non-idempotent generated
+   drops while preserving the canonical source model as the alignment target."
+  #{{:action :drop-column
+     :field-name :is-posted
+     :model-name :expenses}
+    {:action :drop-index
+     :index-name :idx-expenses-is-posted
+     :model-name :expenses}})
+
+(defn- schema-migration-files
+  "Return the current generated schema migration files."
+  []
+  (->> (.listFiles (io/file resources-dir migrations-dir))
+    (filter #(re-matches #"\d+_.*\.edn" (.getName %)))
+    set))
+
+(defn- sanitize-generated-schema-migrations!
+  "Remove exact SQL-only schema actions from newly generated EDN migrations."
+  [before-files]
+  (doseq [file (remove before-files (schema-migration-files))]
+    (let [actions (edn/read-string (slurp file))
+          sanitized-actions (remove sql-only-schema-actions actions)]
+      (when (not= actions sanitized-actions)
+        (if (seq sanitized-actions)
+          (spit file (with-out-str (pprint/pprint sanitized-actions)))
+          (.delete file))
+        (println (format "Filtered %d SQL-only schema action(s) from %s"
+                   (- (count actions) (count sanitized-actions))
+                   (.getPath file)))))))
+
 (defn make-schema-migration!
   "Generate schema migration from consolidated models with function-default preprocessing."
   [& {:keys [name]}]
   (let [models-file-path (str resources-dir "/db/models.edn")
         temp-models-file (str resources-dir "/db/models_processed.edn")
-        preprocessor (requiring-resolve 'app.template.backend.migrations.function-defaults/load-and-preprocess-models)]
+        preprocessor (requiring-resolve 'app.template.backend.migrations.function-defaults/load-and-preprocess-models)
+        before-files (schema-migration-files)]
     (try
       (let [processed (preprocessor models-file-path)]
         (spit temp-models-file (with-out-str (pprint/pprint processed))))
       (am/make {:models-file "db/models_processed.edn"
                 :resources-dir resources-dir
                 :name (or name "schema")})
+      (sanitize-generated-schema-migrations! before-files)
       (finally
         (when (.exists (io/file temp-models-file))
           (.delete (io/file temp-models-file)))))))
@@ -496,6 +534,8 @@
                   sync-frontend-config? false
                   frontend-config-args []}
              :as opts}]
+   ;; Refresh custom HoneySQL clauses in long-lived REPLs before enum/type DDL.
+   (require 'automigrate.util.db :reload)
    (let [migration-res (am/migrate {:jdbc-url (get-jdbc-url profile)})
          report (when verify?
                   (alignment-report profile))

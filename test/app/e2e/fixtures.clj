@@ -80,7 +80,6 @@
 (def ^:private tenant-tables
   "Tables to truncate before the E2E suite (in dependency order)."
   ["audit_logs"
-   "impersonation_grants"
    "tenant_invitations"
    "user_expense_settings"
    "expense_items"

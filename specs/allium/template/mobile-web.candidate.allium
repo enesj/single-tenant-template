@@ -323,7 +323,7 @@ rule MobileLanguageFromUserPreference {
 invariant MobileNoAdminFeatures {
     -- Mobile surfaces never expose admin capabilities:
     -- no member management, reference data editing, alias mapping,
-    -- impersonation, or workspace onboarding.
+    -- login-as-user controls, or workspace onboarding.
 
     true
 }

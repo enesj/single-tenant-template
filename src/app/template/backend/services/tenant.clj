@@ -106,7 +106,7 @@
   (let [configured (vec (or (:expense-categories defaults) []))
         default-category (or (some #(when (same-expense-category-name? locale % default-expense-category-template)
                                       %)
-                              configured)
+                               configured)
                            default-expense-category-template)
         remaining (remove #(same-expense-category-name? locale % default-category)
                     configured)]
@@ -223,7 +223,7 @@
            :user-ref (email-privacy/user-ref (user-id user))
            :email-masked (email-privacy/mask-email (user-email user))
            :payer-count (inc (count payer-defaults))
-            :expense-category-count (count expense-category-defaults)})
+           :expense-category-count (count expense-category-defaults)})
 
         {:tenant tenant :membership membership}))))
 
@@ -241,42 +241,42 @@
   [db-or-tx tenant-id user-id user-email & {:keys [full-name]}]
   (let [t-id (if (string? tenant-id) (java.util.UUID/fromString tenant-id) tenant-id)
         u-id (if (string? user-id) (java.util.UUID/fromString user-id) user-id)
-        now  (java.time.LocalDateTime/now)]
-    (let [label    (or (some-> full-name str/trim not-empty)
-                     (first (str/split (str user-email) #"@")))
-          payer-id (java.util.UUID/randomUUID)
-          payer    (jdbc/execute-one! db-or-tx
-                     (sql/format {:insert-into [:payers]
-                                  :values [{:id            payer-id
-                                            :tenant_id     t-id
-                                            :type          [:cast "system" :payer_type]
-                                            :label         label
-                                            :is_default    false
-                                            :is_active     true
-                                            :created_at    now
-                                            :updated_at    now}]
-                                  :returning [:*]})
-                     {:builder-fn rs/as-unqualified-lower-maps})]
-      ;; Upsert user_expense_settings with this payer as default
-      (jdbc/execute-one! db-or-tx
-        (sql/format {:insert-into [:user_expense_settings]
-                     :values [{:id               (java.util.UUID/randomUUID)
-                               :tenant_id        t-id
-                               :user_id          u-id
-                               :default_payer_id payer-id
-                               :created_at       now
-                               :updated_at       now}]
-                     :on-conflict [:tenant_id :user_id]
-                     :do-update-set {:default_payer_id payer-id
-                                     :updated_at       now}}))
-      (log/info "Provisioned user payer"
-        {:label label
-         :tenant-id t-id
-         :tenant-ref (email-privacy/tenant-ref t-id)
-         :user-id u-id
-         :user-ref (email-privacy/user-ref u-id)
-         :email-masked (email-privacy/mask-email user-email)})
-      payer)))
+        now (java.time.LocalDateTime/now)
+        label (or (some-> full-name str/trim not-empty)
+                (first (str/split (str user-email) #"@")))
+        payer-id (java.util.UUID/randomUUID)
+        payer (jdbc/execute-one! db-or-tx
+                (sql/format {:insert-into [:payers]
+                             :values [{:id payer-id
+                                       :tenant_id t-id
+                                       :type [:cast "system" :payer_type]
+                                       :label label
+                                       :is_default false
+                                       :is_active true
+                                       :created_at now
+                                       :updated_at now}]
+                             :returning [:*]})
+                {:builder-fn rs/as-unqualified-lower-maps})]
+    ;; Upsert user_expense_settings with this payer as default
+    (jdbc/execute-one! db-or-tx
+      (sql/format {:insert-into [:user_expense_settings]
+                   :values [{:id (java.util.UUID/randomUUID)
+                             :tenant_id t-id
+                             :user_id u-id
+                             :default_payer_id payer-id
+                             :created_at now
+                             :updated_at now}]
+                   :on-conflict [:tenant_id :user_id]
+                   :do-update-set {:default_payer_id payer-id
+                                   :updated_at now}}))
+    (log/info "Provisioned user payer"
+      {:label label
+       :tenant-id t-id
+       :tenant-ref (email-privacy/tenant-ref t-id)
+       :user-id u-id
+       :user-ref (email-privacy/user-ref u-id)
+       :email-masked (email-privacy/mask-email user-email)})
+    payer))
 
 ;; ============================================================================
 ;; Lookup

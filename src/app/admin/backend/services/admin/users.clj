@@ -21,7 +21,7 @@
   "Normalize a user row from the database using shared utilities"
   [user]
   (some-> (norm/normalize-admin-result user user-config)
-    email-privacy/routine-user-view))
+    email-privacy/identity-user-view))
 
 (defn- normalize-user-result
   "Normalization fn for admin user queries (handles single row or row collections)."
@@ -30,8 +30,8 @@
                      shared-db/convert-pg-objects
                      (norm/normalize-admin-result user-config))]
     (if (sequential? normalized)
-      (mapv email-privacy/routine-user-view normalized)
-      (some-> normalized email-privacy/routine-user-view))))
+      (mapv email-privacy/identity-user-view normalized)
+      (some-> normalized email-privacy/identity-user-view))))
 
 (def ^:private latest-successful-user-login-query
   {:select [[:le.principal_id :principal_id]

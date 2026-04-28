@@ -468,7 +468,7 @@ surface DashboardNavigation {
     -- Sidebar and in-page navigation related to the dashboard
 
     @guarantee WorkspaceMembersOnDashboard
-        -- The sidebar Workspace section (Members, Impersonation links)
+        -- The sidebar Workspace section (Members links)
         -- is removed for non-power-users. Team management is accessed
         -- via the Team widget on the dashboard instead.
 

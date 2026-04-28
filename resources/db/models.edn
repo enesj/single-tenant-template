@@ -353,39 +353,6 @@
    [:idx_login_events_principal
     :btree
     {:fields [:principal_type :principal_id]}]]},
- :impersonation_grants
- {:fields
-  [[:id :uuid {:primary-key true}]
-   [:tenant_id
-    :uuid
-    {:foreign-key :tenants/id, :null false, :on-delete :cascade}]
-   [:admin_id
-    :uuid
-    {:foreign-key :admins/id, :null false, :on-delete :cascade}]
-   [:granted_by
-    :uuid
-    {:foreign-key :users/id, :null false, :on-delete :cascade}]
-   [:role [:enum :impersonation-role] {:null false}]
-   [:status
-    [:enum :impersonation-status]
-    {:null false, :default "active"}]
-   [:revoked_by_admin
-    :uuid
-    {:foreign-key :admins/id, :on-delete :set-null}]
-   [:revoked_by_user
-    :uuid
-    {:foreign-key :users/id, :on-delete :set-null}]
-   [:created_at :timestamptz {:default [:now]}]
-   [:updated_at :timestamptz {:default [:now]}]],
-  :types
-  [[:impersonation-role
-    :enum
-    {:choices ["owner" "admin" "member" "viewer"]}]
-   [:impersonation-status :enum {:choices ["active" "revoked"]}]],
-  :indexes
-  [[:idx_impersonation_grants_tenant :btree {:fields [:tenant_id]}]
-   [:idx_impersonation_grants_admin :btree {:fields [:admin_id]}]
-   [:idx_impersonation_grants_status :btree {:fields [:status]}]]},
  :daily_exchange_rates
  {:fields
   [[:id :uuid {:primary-key true}]
@@ -459,8 +426,7 @@
    [:last_activity :timestamptz {:null false}]
    [:expires_at :timestamptz {:null false}]
    [:ip_address :text]
-   [:user_agent :text]
-   [:impersonation_context :jsonb]],
+   [:user_agent :text]],
   :indexes
   [[:idx_admin_sessions_token :btree {:fields [:token], :unique true}]
    [:idx_admin_sessions_admin_id :btree {:fields [:admin_id]}]

@@ -78,11 +78,7 @@
     ($ quick-actions-card
       {:title "Actions"
        :bg-gradient "from-warning/10 to-error/10"
-       :actions [{:label "Impersonate"
-                  :icon-path "M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-                  :button-class "ds-btn-info"
-                  :on-click #(dispatch [:admin/impersonate-user id])}
-                 {:label "Reset Password"
+       :actions [{:label "Reset Password"
                   :icon-path "M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"
                   :button-class "ds-btn-warning"
                   :on-click #(dispatch [:admin/reset-user-password id])}
@@ -109,17 +105,24 @@
       {:title "Tenant Memberships"
        :fields (if (seq items)
                  (mapv (fn [membership]
-                         {:label (fmt/tenant-label (or (:tenant-name membership)
-                                                     (:tenant_name membership))
-                                   (or (:tenant-slug membership)
-                                     (:tenant_slug membership)))
-                          :value ($ :div {:class "flex flex-wrap gap-2"}
-                                   (when-let [role (or (:role membership)
-                                                     (:tenant-memberships/role membership))]
-                                     (ui/role-badge role))
-                                   (when-let [status (or (:status membership)
-                                                       (:tenant-memberships/status membership))]
-                                     (ui/status-badge status {:capitalize? true})))})
+                         (let [tenant-label (fmt/tenant-label (or (:tenant-name membership)
+                                                                (:tenant_name membership))
+                                              (or (:tenant-slug membership)
+                                                (:tenant_slug membership)))
+                               membership-key (or (:id membership)
+                                                (:tenant-memberships/id membership)
+                                                (:tenant-id membership)
+                                                (:tenant_id membership)
+                                                tenant-label)]
+                           {:label tenant-label
+                            :value ($ :div {:key membership-key
+                                            :class "flex flex-wrap gap-2"}
+                                     (when-let [role (or (:role membership)
+                                                       (:tenant-memberships/role membership))]
+                                       (ui/role-badge role))
+                                     (when-let [status (or (:status membership)
+                                                         (:tenant-memberships/status membership))]
+                                       (ui/status-badge status {:capitalize? true})))}))
                    items)
                  [{:label "Memberships"
                    :value "No tenant memberships found."}])})))

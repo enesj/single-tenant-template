@@ -49,7 +49,7 @@
 ;; STATUS: Status updates (active/inactive), role changes
 ;; BULK: Bulk status/role updates, user export, batch action panels
 ;; ACTIVITY: User activity viewing and export functionality
-;; SECURITY: User impersonation, password resets, email verification
+;; SECURITY: Password resets, email verification
 ;; TEMPLATE: Template system overrides, form submissions, success handlers
 ;;
 ;; All modules use consistent patterns via shared utilities for:

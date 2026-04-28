@@ -4,7 +4,6 @@
   (:require
     [app.template.frontend.api.http :as http]
     [app.template.frontend.db.db :refer [common-interceptors]]
-    [app.template.frontend.db.paths :as paths]
     [re-frame.core :as rf]
     [taoensso.timbre :as log]))
 

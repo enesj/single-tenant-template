@@ -1,7 +1,6 @@
 (ns app.admin.backend.services.admin.auth
   "Admin auth orchestration; bridge auth service to routes."
   (:require
-    [app.shared.adapters.database :as shared-db]
     [app.shared.type-conversion :as tc]
     [app.template.backend.security.email :as email-privacy]
     [buddy.hashers :as hashers]
@@ -132,12 +131,11 @@
      :expires_at expires-at}))
 
 (defn get-admin-by-session-with-context
-  "Get admin + impersonation context by session token.
-   Returns {:admin <map>, :impersonation-context <map-or-nil>} or nil."
+  "Get admin by session token. The legacy name is retained for callers."
   [db token]
   (let [now (time/instant)
         row (jdbc/execute-one! db
-              (hsql/format {:select [:a.* :s.impersonation_context]
+              (hsql/format {:select [:a.*]
                             :from   [[:admin_sessions :s]]
                             :join   [[:admins :a] [:= :s.admin_id :a.id]]
                             :where  [:and
@@ -146,10 +144,8 @@
               {:builder-fn rs/as-unqualified-lower-maps})]
     (when row
       {:admin (-> row
-                (dissoc :impersonation_context :password_hash :email_ciphertext :email_lookup_hash :email_key_version)
-                (assoc :email (email-privacy/resolve-email row)))
-       :impersonation-context (some-> (:impersonation_context row)
-                                shared-db/convert-pg-objects)})))
+                (dissoc :password_hash :email_ciphertext :email_lookup_hash :email_key_version)
+                (assoc :email (email-privacy/resolve-email row)))})))
 
 (defn update-session-activity!
   "Update last activity timestamp for a session"

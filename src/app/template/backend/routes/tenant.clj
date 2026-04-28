@@ -3,7 +3,6 @@
    All routes require user authentication."
   (:require
     [app.template.backend.auth.tenant :as tenant-auth]
-    [app.template.backend.routes.impersonation :as impersonation-routes]
     [app.template.backend.routes.utils :as route-utils]
     [app.template.backend.security.email :as email-privacy]
     [app.template.backend.services.invitation :as invitation-svc]
@@ -290,8 +289,8 @@
             target-id  (get-in req [:path-params :id])
             new-role   (get-in req [:body-params :role])
             target-membership (first (filter #(= (str (or (:id %) (:tenant_memberships/id %)))
-                                                  (str target-id))
-                                            (tenant-svc/get-tenant-members db tenant-id)))]
+                                                (str target-id))
+                                       (tenant-svc/get-tenant-members db tenant-id)))]
         ;; We need to find the target membership by its id
         ;; Since get-membership is by tenant+user, let's query directly
         (when-not target-membership
@@ -475,9 +474,7 @@
 
    ;; Tenant-level settings (Phase 2 — settings hierarchy)
    ["/settings" {:put {:handler (update-tenant-settings-handler db)}}]
-   ["/name"     {:put {:handler (update-tenant-name-handler db)}}]
-
-   (impersonation-routes/routes db)])
+   ["/name"     {:put {:handler (update-tenant-name-handler db)}}]])
 
 (comment
   ;; (require 'app.template.backend.routes.tenant :reload)

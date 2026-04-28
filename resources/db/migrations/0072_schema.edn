@@ -1,0 +1,10 @@
+({:action :drop-table, :model-name :impersonation_grants}
+ {:action :drop-type,
+  :type-name :impersonation-status,
+  :model-name :impersonation_grants}
+ {:action :drop-column,
+  :field-name :impersonation-context,
+  :model-name :admin_sessions}
+ {:action :drop-type,
+  :type-name :impersonation-role,
+  :model-name :impersonation_grants})

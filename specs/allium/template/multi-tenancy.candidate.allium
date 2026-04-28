@@ -27,7 +27,6 @@ entity Tenant {
 
     -- Relationships
     memberships: TenantMembership with tenant = this
-    impersonation_grants: ImpersonationGrant with tenant = this
 
     -- Projections
     owners: memberships where role = owner and status = active
@@ -60,18 +59,6 @@ entity TenantInvitation {
     expires_at: Timestamp
 
     is_valid: status = pending and expires_at > now
-}
-
-entity ImpersonationGrant {
-    tenant: Tenant
-    admin: auth/Admin                                   -- the platform admin
-    granted_by: auth/User                               -- the tenant owner who approved
-    role: owner | admin | member | viewer               -- what role the admin operates under
-    status: active | revoked
-    revoked_by_admin: auth/Admin?                       -- platform admin ended it
-    revoked_by_user: auth/User?                         -- tenant owner revoked it
-
-    is_active: status = active
 }
 
 -- Note: auth/BrowserSession is extended with:
@@ -128,10 +115,8 @@ entity ImpersonationGrant {
 --     Direct access: expenses and receipts across all tenants.
 --       Routine admin views keep user identity pseudonymous.
 --     Blocked: expense_items, payers, payer_types,
---              tenant aliases — UNLESS impersonating a tenant user.
---     Impersonation: logs in as existing tenant user with that user's permissions.
---       Requires tenant owner approval (set in DB after out-of-band conversation).
---       Either party can end it. Fully audit-logged.
+--              tenant aliases. These surfaces expose tenant/user linkage or
+--              reference data that is not safe for global admin browsing.
 --
 --   Tenant Users (users table + tenant_memberships):
 --     Transactional data scoped to their tenant's rows via tenant_id filtering.
@@ -317,24 +302,6 @@ rule RevokeTenantInvitationStatus {
     ensures: tenantInvitation.status = revoked
 }
 
-rule ActivateImpersonationGrant {
-    when: ImpersonationGrantActivated(impersonationGrant)
-
-    requires: impersonationGrant.status = revoked
-
-    ensures: impersonationGrant.status = active
-    ensures: impersonationGrant.revoked_by_admin = null
-    ensures: impersonationGrant.revoked_by_user = null
-}
-
-rule RevokeImpersonationGrant {
-    when: ImpersonationGrantRevoked(impersonationGrant)
-
-    requires: impersonationGrant.status = active
-
-    ensures: impersonationGrant.status = revoked
-}
-
 rule JoinTenantFromInvitation {
     when: UserAcceptsInvitation(user, invitation_token)
 
@@ -518,9 +485,9 @@ config {
         "cities", "countries"
     }
 
-    -- Platform admin: cannot access these without impersonation.
+    -- Platform admin: cannot access these tenant-scoped private resources.
     platform_admin_blocked_resources: Set<String> = {
-        "expenses", "expense_items", "receipts",
+        "expense_items",
         "payers", "payer_types",
         "supplier_aliases", "store_aliases", "article_aliases"
     }
@@ -718,6 +685,8 @@ rule AllowPlatformAdminAccessOutsideBlockedResources {
         -- articles, categories, subcategories, manufacturers), global geographic (cities,
         -- countries), platform tables, users records, tenant_memberships, and tenants.
         -- Users/memberships CRUD is a superpower — bypasses tenant rule chains.
+        -- Expenses and receipts are exposed only through routine admin views that
+        -- scrub user identifiers and direct user linkage fields.
 }
 
 rule DenyPlatformAdminAccessToBlockedResources {
@@ -727,89 +696,8 @@ rule DenyPlatformAdminAccessToBlockedResources {
 
     ensures: PlatformAdminDataDenied(
         request: request,
-        reason: tenant_data_requires_impersonation
+        reason: admin_private_resource_disabled
     )
-}
-
--- ============================================================
--- IMPERSONATION
--- ============================================================
-
--- Impersonation is implemented at the app level: the platform admin logs in
--- as an existing tenant user and gets exactly that user's permissions.
--- No permission elevation. Fully audit-logged with both identities.
---
--- The grant is lightweight — no request/approve UI flow. Tenant owner creates
--- the grant directly (in DB or via endpoint) after an out-of-band conversation
--- with the platform admin.
-
-rule GrantImpersonation {
-    when: ImpersonationGrantCreated(owner, tenant, admin, role)
-
-    let owner_membership = TenantMembership{tenant: tenant, user: owner}
-
-    requires: exists owner_membership
-    requires: owner_membership.role = owner
-    requires: owner_membership.status = active
-    requires: admin.status = active
-    requires: not exists ImpersonationGrant{tenant: tenant, admin: admin, status: active}
-
-    ensures:
-        ImpersonationGrant.created(
-            tenant: tenant,
-            admin: admin,
-            granted_by: owner,
-            role: role,
-            status: active,
-            revoked_by_admin: null,
-            revoked_by_user: null
-        )
-        ImpersonationGranted(tenant: tenant, admin: admin, role: role)
-}
-
-rule RevokeImpersonationByOwner {
-    when: ImpersonationRevokedByOwner(owner, grant)
-
-    let owner_membership = TenantMembership{tenant: grant.tenant, user: owner}
-
-    requires: exists owner_membership
-    requires: owner_membership.role = owner
-    requires: grant.is_active
-
-    ensures: grant.status = revoked
-    ensures: grant.revoked_by_user = owner
-}
-
-rule RevokeImpersonationByAdmin {
-    when: ImpersonationRevokedByAdmin(admin, grant)
-
-    requires: grant.admin = admin
-    requires: grant.is_active
-
-    ensures: grant.status = revoked
-    ensures: grant.revoked_by_admin = admin
-}
-
-rule ImpersonatedAccessGranted {
-    when: ImpersonatedDataRequested(admin, tenant, resource, action)
-
-    let grant = ImpersonationGrant{tenant: tenant, admin: admin, status: active}
-
-    requires: exists grant
-
-    -- The admin operates under the granted role's permissions.
-    -- Delegate to tenant data access rules using the granted role.
-    ensures: ImpersonatedDataEvaluated(
-        grant: grant,
-        resource: resource,
-        action: action,
-        effective_role: grant.role
-    )
-
-    @guidance
-        -- Implementation creates a synthetic TenantMembership-like context
-        -- from the grant's role and evaluates tenant data rules against it.
-        -- All actions audit-logged as: admin X (impersonating tenant Y at role Z).
 }
 
 -- ============================================================
@@ -938,12 +826,6 @@ surface TenantManagementBoundary {
         InvitationRevoked(viewer, invitation)
             when membership.can_manage_users
 
-        ImpersonationGrantCreated(viewer, membership.tenant, admin, role)
-            when membership.role = owner
-
-        ImpersonationRevokedByOwner(viewer, grant)
-            when membership.role = owner
-
     related:
         TenantMembersView(membership.tenant)
             when membership.can_manage_users
@@ -960,10 +842,6 @@ surface TenantMembersView {
             m.user.email
             m.role
             m.status
-        for g in tenant.impersonation_grants where status = active:
-            g.admin.email
-            g.role
-            g.granted_by.full_name
 
     provides:
         TenantMemberRoleChanged(viewer, tenant, target_user, new_role)
@@ -1000,14 +878,12 @@ surface PlatformTenantAdminView {
             t.owners.count
             t.active_memberships.count
 
-    provides:
-        ImpersonationRevokedByAdmin(admin, grant)
-
     @guidance
         -- Platform admins can view all tenants.
-        -- Platform admins can access expenses and receipts directly.
+        -- Platform admins can access expenses and receipts directly only through
+        -- privacy-scrubbed admin projections.
         -- Tenant expense reference data (expense_items, payers, payer_types, aliases)
-        -- still requires impersonation with tenant owner approval.
+        -- is disabled from global admin surfaces.
         -- Platform admins have superpower CRUD on users and tenant_memberships
         -- across all tenants (bypasses tenant rule chains).
 }
@@ -1033,8 +909,8 @@ surface PlatformTenantAdminView {
 -- resolved: Owner CAN transfer ownership to an admin. Old owner demotes to admin.
 -- resolved: Hybrid URL routing — slug in SPA paths (/t/{slug}/*), session for API auth.
 -- resolved: Rate limiting per-tenant for user API, global for admin API.
--- resolved: Platform admin impersonation implemented at app level (login as existing user).
---           Requires tenant owner approval via DB grant. Either party can revoke.
+-- resolved: Platform admin login-as-user access is removed. Routine admin work
+--           on expenses/receipts uses privacy-scrubbed projections instead.
 -- resolved: Platform admin has superpower CRUD on users/memberships (bypasses tenant rules).
 --           Cannot force-add users to tenants — that's the tenant admin's job via invitations.
 -- resolved: Platform admin manages global catalog quality (dedup, cleanup).

@@ -3,7 +3,6 @@
   (:require
     [app.admin.backend.services.admin.audit :as audit]
     [app.admin.backend.services.admin.users.validation :as validation]
-    [app.shared.data :as shared-data]
     [app.shared.adapters.database :as shared-db]
     [app.shared.adapters.normalization :as norm]
     [app.template.backend.security.email :as email-privacy]
@@ -11,7 +10,6 @@
     [app.shared.type-conversion :as tc]
     [clojure.string :as str]
     [honey.sql :as hsql]
-    [java-time.api :as time]
     [next.jdbc :as jdbc]
     [taoensso.timbre :as log]))
 
@@ -128,78 +126,3 @@
       (log/error e "Failed to export users" {:user_ids user-ids})
       {:error (.getMessage e)})))
 
-;; ============================================================================
-;; User Impersonation
-;; ============================================================================
-
-(defn- user-row->safe-session-user
-  "Convert a DB user row into the shape we store in `:session/:auth-session`.
-
-  Notes:
-  - We *must* use unqualified keys (e.g. :id, :email) because downstream
-    middleware/access helpers look up `[:session :auth-session :user :id]`.
-  - Never include secrets/sensitive values (e.g. password hashes) in the
-    session cookie.
-  - Session data is cookie-backed in this template, so keep it small."
-  [user-row]
-  (let [m (shared-db/convert-pg-objects user-row)
-        ;; Drop any table namespaces (e.g. :users/id -> :id)
-        plain (into {} (map (fn [[k v]] [(keyword (name k)) v])) m)
-        resolved-email (email-privacy/resolve-email m)]
-    (-> plain
-      ;; Strip sensitive fields (support a few naming variants defensively)
-      (dissoc :password_hash :password-hash :email_ciphertext :email_lookup_hash :email_key_version)
-      (cond-> resolved-email (assoc :email resolved-email))
-      ;; Ensure cookie-safe serialization
-      shared-data/sanitize-for-serialization)))
-
-(defn create-user-impersonation-session!
-  "Create an impersonation session for admin to access user account"
-  [db user-id admin-id ip-address user-agent]
-  (try
-    (jdbc/with-transaction [tx db]
-      (jdbc/execute-one! tx ["SET LOCAL app.bypass_rls = true"])
-      (let [user (jdbc/execute-one! tx
-                   (hsql/format {:select [:*]
-                                 :from [:users]
-                                 :where [:and [:= :id user-id]
-                                         [:= :status (tc/cast-for-database :user-status "active")]]}))
-            admin (jdbc/execute-one! tx
-                    (hsql/format {:select [:*]
-                                  :from [:admins]
-                                  :where [:= :id admin-id]}))
-            now (time/instant)]
-
-        (if (and user admin)
-          (let [session-user (user-row->safe-session-user user)
-                auth-session {:user session-user
-                              :provider "impersonation"
-                              ;; Useful for debugging and auditing UI behavior.
-                              :impersonated-by (str admin-id)
-                              :impersonated-at (str now)}]
-
-            ;; Log the impersonation
-            (audit/log-audit! tx {:admin_id admin-id
-                                  :action "user.impersonated"
-                                  :entity-type "user"
-                                  :entity-id user-id
-                                  :changes {:impersonation true}
-                                  :ip-address ip-address
-                                  :user-agent user-agent})
-
-            {:success true
-             ;; Returned so the route handler can set the Ring session.
-             :auth-session auth-session
-             :redirect-url "/dashboard"})
-
-          (do
-            (when (nil? user)
-              (log/warn "Impersonation failed: user not found or not active"
-                {:user-id user-id :admin-id admin-id}))
-            (when (nil? admin)
-              (log/warn "Impersonation failed: admin not found"
-                {:user-id user-id :admin-id admin-id}))
-            {:error "User or admin not found, or user not active"}))))
-    (catch Exception e
-      (log/error e "Failed to create impersonation session" {:user_id user-id :admin_id admin-id})
-      {:error (.getMessage e)})))

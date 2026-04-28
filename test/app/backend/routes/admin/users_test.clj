@@ -44,6 +44,27 @@
     (let [config {:prefixes [] :namespaces #{} :id-fields #{}}]
       (is (nil? (norm/normalize-admin-result nil config))))))
 
+(deftest list-users-exposes-email-for-identity-management-test
+  (testing "admin user listing exposes resolved email while removing encrypted persistence fields"
+    (let [user-id (random-uuid)
+          email "identity-user@example.test"]
+      (with-redefs [persist/execute-admin-query
+                    (fn [_db _query normalize _opts]
+                      (normalize [{:id user-id
+                                   :email email
+                                   :email_ciphertext "ciphertext"
+                                   :email_lookup_hash "lookup-hash"
+                                   :password_hash "secret"
+                                   :full_name "Identity User"
+                                   :status "active"}]))]
+        (let [user (first (users/list-all-users nil {}))]
+          (is (= email (:email user)))
+          (is (= "Identity User" (:full-name user)))
+          (is (some? (:user_ref user)) "Stable backend ref remains available for internal use")
+          (is (nil? (:email-ciphertext user)) "Encrypted email payload is not exposed")
+          (is (nil? (:email-lookup-hash user)) "Email lookup hash is not exposed")
+          (is (nil? (:password-hash user)) "Password hash is not exposed"))))))
+
 ;; ============================================================================
 ;; List Users Query Building Tests
 ;; ============================================================================

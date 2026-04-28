@@ -43,9 +43,10 @@
 ;; ============================================================================
 
 (deftest list-tenants-returns-results
-  (testing "list-tenants returns tenants with member count and owner info"
-    (let [db    fixtures/*test-db*
-          user  (th/ensure-test-user! db {:email "owner@tenants-list.test"})
+  (testing "list-tenants returns tenants with member count and owner email for identity management"
+    (let [db fixtures/*test-db*
+          owner-email "owner@tenants-list.test"
+          user (th/ensure-test-user! db {:email owner-email})
           {:keys [tenant-id]} (th/ensure-test-tenant! db user)
           ;; Use private var via resolve to test the query function directly
           list-fn @(resolve 'app.template.backend.routes.admin.tenants/list-tenants)
@@ -54,8 +55,8 @@
       (let [our-tenant (first (filter #(= (str tenant-id) (str (:id %))) tenants))]
         (is (some? our-tenant) "Our test tenant should be in the list")
         (is (= 1 (:member_count our-tenant)) "Tenant should have 1 member (the owner)")
-        (is (= "owner@tenants-list.test" (:owner_email our-tenant))
-          "Owner email should be joined")))))
+        (is (some? (:owner_ref our-tenant)) "Owner should still have a stable backend reference")
+        (is (= owner-email (:owner_email our-tenant)) "Owner email should be exposed on tenant identity admin views")))))
 
 (deftest count-tenants-matches-list
   (testing "count-tenants returns correct total"
@@ -73,15 +74,17 @@
 ;; ============================================================================
 
 (deftest get-tenant-detail-returns-enriched-info
-  (testing "get-tenant-detail returns tenant with owner info and member count"
-    (let [db    fixtures/*test-db*
-          user  (th/ensure-test-user! db {:email "owner@tenants-detail.test"})
+  (testing "get-tenant-detail returns tenant with owner email and member count"
+    (let [db fixtures/*test-db*
+          owner-email "owner@tenants-detail.test"
+          user (th/ensure-test-user! db {:email owner-email})
           {:keys [tenant-id]} (th/ensure-test-tenant! db user)
           detail-fn @(resolve 'app.template.backend.routes.admin.tenants/get-tenant-detail)
           detail (detail-fn db tenant-id)]
       (is (some? detail) "Should return tenant detail")
       (is (= (str tenant-id) (str (:id detail))) "ID should match")
-      (is (= "owner@tenants-detail.test" (:owner_email detail)) "Owner email joined")
+      (is (some? (:owner_ref detail)) "Owner reference should be present")
+      (is (= owner-email (:owner_email detail)) "Owner email should be exposed on tenant identity admin views")
       (is (= 1 (:member_count detail)) "Should have 1 member"))))
 
 (deftest get-tenant-detail-returns-nil-for-nonexistent
@@ -125,21 +128,23 @@
 ;; Member Listing Tests
 ;; ============================================================================
 
-(deftest list-tenant-members-returns-user-info
-  (testing "list-tenant-members returns members with user email"
-    (let [db    fixtures/*test-db*
-          owner (th/ensure-test-user! db {:email "owner@members-list.test"})
+(deftest list-tenant-members-returns-identity-user-info
+  (testing "list-tenant-members returns member emails for tenant identity management"
+    (let [db fixtures/*test-db*
+          owner-email "owner@members-list.test"
+          member-email "member@members-list.test"
+          owner (th/ensure-test-user! db {:email owner-email})
           {:keys [tenant-id]} (th/ensure-test-tenant! db owner)
           ;; Add a second member
-          user2 (th/ensure-test-user! db {:email "member@members-list.test"})
-          _     (add-membership! db {:tenant-id tenant-id :user-id (:id user2) :role "member"})
+          user2 (th/ensure-test-user! db {:email member-email})
+          _ (add-membership! db {:tenant-id tenant-id :user-id (:id user2) :role "member"})
           list-fn @(resolve 'app.template.backend.routes.admin.tenants/list-tenant-members)
-          members (list-fn db tenant-id)]
+          members (list-fn db tenant-id)
+          emails (set (map :user_email members))]
       (is (= 2 (count members)) "Should have 2 members")
-      (is (some #(= "owner@members-list.test" (:user_email %)) members)
-        "Owner should be in member list")
-      (is (some #(= "member@members-list.test" (:user_email %)) members)
-        "Added member should be in list"))))
+      (is (every? :user_ref members) "Every member should still expose a stable backend user reference")
+      (is (every? :user_display_name members) "Every member should expose a display name")
+      (is (= #{owner-email member-email} emails) "Member emails should be exposed on tenant identity admin views"))))
 
 ;; ============================================================================
 ;; Superpower Role Change Tests
@@ -169,7 +174,6 @@
     (let [db    fixtures/*test-db*
           owner (th/ensure-test-user! db {:email "owner@role-guard.test"})
           {:keys [tenant-id]} (th/ensure-test-tenant! db owner)
-          get-membership-fn @(resolve 'app.template.backend.routes.admin.tenants/get-membership-by-id)
           ;; Find the owner's membership
           members-fn @(resolve 'app.template.backend.routes.admin.tenants/list-tenant-members)
           members (members-fn db tenant-id)

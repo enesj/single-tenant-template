@@ -5,12 +5,10 @@
    - Force verify email
    - Reset user password
    - Get user activity
-   - Impersonate user
    - Advanced user search"
   (:require
     [app.template.backend.routes.admin.user-operations :as user-ops]
     [app.admin.backend.services.admin.users :as admin-users]
-    [app.admin.backend.services.admin.users.bulk :as admin-users-bulk]
     [app.admin.backend.services.admin.users.security :as user-security]
     [app.backend.test-helpers :as h]
     [clojure.test :refer [deftest is testing use-fixtures]]))
@@ -52,11 +50,6 @@
   (testing "get-user-activity-handler returns a function"
     (let [db (h/mock-db)
           handler (user-ops/get-user-activity-handler db)]
-      (is (fn? handler))))
-
-  (testing "impersonate-user-handler returns a function"
-    (let [db (h/mock-db)
-          handler (user-ops/impersonate-user-handler db)]
       (is (fn? handler))))
 
   (testing "advanced-user-search-handler returns a function"
@@ -133,51 +126,6 @@
           (is (vector? (:activity body))))))))
 
 ;; ============================================================================
-;; Impersonate User Tests
-;; ============================================================================
-
-(deftest impersonate-user-handler-test
-  (testing "impersonate-user sets user auth-session and preserves existing session keys"
-    (let [db (h/mock-db)
-          handler (user-ops/impersonate-user-handler db)
-          request (-> (h/mock-admin-request :post (str "/admin/api/users/impersonate/" test-user-id) mock-admin
-                        {:path-params {:id (str test-user-id)}})
-                    (assoc :session {:admin-token "existing-admin-token"
-                                     :other "keep"}))
-          auth-session {:user {:id (str test-user-id)
-                               :email "user@example.com"}
-                        :provider "impersonation"}]
-      (with-redefs [admin-users-bulk/create-user-impersonation-session!
-                    (fn [_db user-id admin-id _ip _ua]
-                      (is (= test-user-id user-id))
-                      (is (= test-admin-id admin-id))
-                      {:success true
-                       :redirect-url "/dashboard"
-                       :auth-session auth-session})]
-        (let [response (handler request)
-              body (h/parse-response-body response)]
-          (is (= 200 (:status response)))
-          (is (= "/dashboard" (:redirect-url body)))
-          (is (= auth-session (get-in response [:session :auth-session])))
-          (is (= "existing-admin-token" (get-in response [:session :admin-token])))
-          (is (= "keep" (get-in response [:session :other])))))))
-
-  (testing "impersonate-user returns 400 and does not set auth-session on failure"
-    (let [db (h/mock-db)
-          handler (user-ops/impersonate-user-handler db)
-          request (-> (h/mock-admin-request :post (str "/admin/api/users/impersonate/" test-user-id) mock-admin
-                        {:path-params {:id (str test-user-id)}})
-                    (assoc :session {:admin-token "existing-admin-token"}))]
-      (with-redefs [admin-users-bulk/create-user-impersonation-session!
-                    (fn [_db _user-id _admin-id _ip _ua]
-                      {:error "nope"})]
-        (let [response (handler request)]
-          (is (= 400 (:status response)))
-          ;; On failure we do not modify the session, so the response will not
-          ;; include a :session key at all.
-          (is (nil? (:session response))))))))
-
-;; ============================================================================
 ;; Advanced User Search Tests
 ;; ============================================================================
 
@@ -215,8 +163,14 @@
 ;; ============================================================================
 
 (deftest routes-test
-  (testing "routes function returns route definitions"
+  (testing "routes function returns route definitions without impersonation endpoint"
     (let [db (h/mock-db)
-          routes (user-ops/routes db {})]
+          routes (user-ops/routes db {})
+          route-paths (set (map first (rest routes)))]
       (is (vector? routes))
-      (is (= "" (first routes))))))
+      (is (= "" (first routes)))
+      (is (contains? route-paths "/verify-email/:id"))
+      (is (contains? route-paths "/reset-password/:id"))
+      (is (contains? route-paths "/activity/:id"))
+      (is (contains? route-paths "/search"))
+      (is (not (contains? route-paths "/impersonate/:id"))))))

@@ -2,6 +2,7 @@
   "Admin API routes for receipt ingestion and approval."
   (:require
     [app.domain.backend.expenses.integrations.ocr-provider :as ocr-provider]
+    [app.domain.backend.expenses.privacy :as privacy]
     [app.domain.backend.expenses.services.expenses :as expenses]
     [app.domain.backend.expenses.services.receipts.approval :as receipt-approval]
     [app.domain.backend.expenses.services.receipts.image-preprocess :as image-preprocess]
@@ -11,8 +12,8 @@
     [app.domain.backend.expenses.services.supplier-aliases :as supplier-aliases]
     [app.domain.backend.expenses.services.suppliers :as suppliers]
     [app.domain.backend.expenses.workers.receipt-ocr.core :as receipt-ocr]
-    [app.template.backend.routes.admin.utils :as utils]
     [app.shared.adapters.database :as shared-db]
+    [app.template.backend.routes.admin.utils :as utils]
     [clojure.string :as str]
     [ring.util.response :as response]
     [taoensso.timbre :as log]))
@@ -116,7 +117,7 @@
     (let [expense-id (or (:expense-id receipt-app) (:expense_id receipt-app))]
       (try
         (if-let [expense (expenses/get-expense-with-items db expense-id)]
-          (assoc receipt-app :linked-expense (to-app expense))
+          (assoc receipt-app :linked-expense (privacy/admin-expense-view expense))
           receipt-app)
         (catch Exception e
           (log/warn e "Failed to enrich posted receipt with linked expense"
@@ -162,10 +163,10 @@
                          :offset (utils/parse-int-param qp :offset 0)}
                    sort-opts
                    text-filters
-                       amount-filters
+                   amount-filters
                    date-filters)
             {:keys [rows total purged-total]} (receipt-queries/list-receipts-page db opts)]
-        (utils/success-response {:receipts (to-app rows)
+        (utils/success-response {:receipts (privacy/admin-receipts-view rows)
                                  :total total
                                  :purged-total purged-total})))
     "Failed to list receipts"))
@@ -186,10 +187,11 @@
                 download-url (when (receipt-storage/resolve-local-receipt-file (:storage-key receipt*))
                                (str "/admin/api/expenses/receipts/" id "/download"))]
             (utils/success-response
-              {:receipt (enrich-with-linked-expense
-                          db
-                          (cond-> receipt*
-                            download-url (assoc :download-url download-url)))}))
+              {:receipt (privacy/scrub-user-linkage
+                          (enrich-with-linked-expense
+                            db
+                            (cond-> receipt*
+                              download-url (assoc :download-url download-url))))}))
           (utils/error-response "Receipt not found" :status 404))
         (utils/error-response "Invalid id" :status 400)))
     "Failed to fetch receipt"))
@@ -263,7 +265,7 @@
         (if-let [deleted (receipt-queries/delete-receipt! db id)]
           ;; Return JSON to keep the frontend XHR pipeline happy (empty bodies can fail JSON parsing).
           (utils/success-response {:deleted true
-                                   :receipt (to-app deleted)})
+                                   :receipt (privacy/admin-receipt-view deleted)})
           (utils/error-response "Receipt not found" :status 404))
         (utils/error-response "Invalid id" :status 400)))
     "Failed to delete receipt"))
@@ -275,8 +277,8 @@
         (if-let [id (utils/parse-uuid-custom (get-in request [:path-params :id]))]
           (let [expense (receipt-approval/approve-and-post! db id body)
                 receipt (receipt-queries/get-receipt db id)]
-            (utils/success-response {:expense (to-app expense)
-                                     :receipt (to-app receipt)}))
+            (utils/success-response {:expense (privacy/admin-expense-view expense)
+                                     :receipt (privacy/admin-receipt-view receipt)}))
           (utils/error-response "Invalid id" :status 400))))
     "Failed to approve receipt"))
 
@@ -286,7 +288,7 @@
       (let [body (:body request)]
         (if-let [id (utils/parse-uuid-custom (get-in request [:path-params :id]))]
           (let [receipt (receipt-approval/save-review! db id body)]
-            (utils/success-response {:receipt (to-app receipt)}))
+            (utils/success-response {:receipt (privacy/admin-receipt-view receipt)}))
           (utils/error-response "Invalid id" :status 400))))
     "Failed to save receipt review"))
 
@@ -295,10 +297,9 @@
     (fn [request]
       (let [body (:body request)]
         (if-let [id (utils/parse-uuid-custom (get-in request [:path-params :id]))]
-          (let [{:keys [expense receipt]}
-                (receipt-approval/update-posted-receipt! db id body)]
-            (utils/success-response {:expense (to-app expense)
-                                     :receipt (to-app receipt)}))
+          (let [{:keys [expense receipt]} (receipt-approval/update-posted-receipt! db id body)]
+            (utils/success-response {:expense (privacy/admin-expense-view expense)
+                                     :receipt (privacy/admin-receipt-view receipt)}))
           (utils/error-response "Invalid id" :status 400))))
     "Failed to update posted receipt"))
 

@@ -45,8 +45,8 @@
             {:id "slug" :label "Slug" :type :text}
             {:id "status" :label "Status" :type :text}
             {:id "member_count" :label "Members" :type :number}
-            {:id "owner_name"
-             :label "Owner"
+            {:id "owner_email"
+             :label "Owner email"
              :type :text}
             {:id "created_at"
              :label "Created"
@@ -100,13 +100,16 @@
 (defui admin-member-row [{:keys [member tenant-id is-admin-owner?]}]
   (let [mid (or (:id member) (:tenant_memberships/id member))
         role (str (or (:role member) (:tenant_memberships/role member)))
-        email-label (or (:email-masked member) (:email_masked member) "Hidden")
+        email-label (or (:email member)
+                      (:user-email member)
+                      (:user_email member)
+                      (:email-masked member)
+                      (:email_masked member)
+                      "—")
         name (or (:user-display-name member)
                (:user_display_name member)
                (:user_full_name member)
                (:full_name member)
-               (:user-ref member)
-               (:user_ref member)
                email-label)
         created (format-date (or (:created_at member) (:joined_at member)))
         is-target-owner? (= role "owner")
@@ -176,10 +179,10 @@
         admin-role (use-subscribe [:admin/current-user-role])
         is-admin-owner? (= admin-role :owner)
         tenant-id (or (:id tenant) (:tenants/id tenant))
-        owner-label (or (:owner_name tenant)
+        owner-label (or (:owner_email tenant)
+                      (:owner-email tenant)
+                      (:owner_name tenant)
                       (:owner-name tenant)
-                      (:owner_ref tenant)
-                      (:owner-ref tenant)
                       "—")]
     ($ :div {:class "p-6 max-w-5xl mx-auto"}
       (when show-back-button?
@@ -228,7 +231,7 @@
                       ($ :thead
                         ($ :tr
                           ($ :th "Name")
-                          ($ :th "Email hint")
+                          ($ :th "Email")
                           ($ :th "Role")
                           ($ :th "Joined")
                           ($ :th "Actions")))

@@ -278,6 +278,29 @@
       (and id (str/blank? (str (row-value row [:full_name :full-name :users/full_name]))))
       (assoc :full_name (user-ref id)))))
 
+(defn identity-user-view
+  "Expose resolved user email for explicit admin identity-management screens.
+
+  Use this only on user/tenant administration surfaces. Routine operational
+  admin views should continue using `routine-user-view` or narrower privacy
+  projections so receipts/expenses cannot be linked back to a real person."
+  [row]
+  (let [id (row-value row [:id :users/id])
+        email (resolve-email row)]
+    (cond-> (-> row
+              (dissoc :email_ciphertext :users/email_ciphertext
+                :email-ciphertext :users/email-ciphertext
+                :email_lookup_hash :users/email_lookup_hash
+                :email-lookup-hash :users/email-lookup-hash
+                :email_key_version :users/email_key_version
+                :email-key-version :users/email-key-version
+                :password_hash :password-hash :users/password_hash))
+      id (assoc :user_ref (user-ref id))
+      email (assoc :email email
+              :email_masked (mask-email email))
+      (and id (str/blank? (str (row-value row [:full_name :full-name :users/full_name]))))
+      (assoc :full_name email))))
+
 (defn routine-admin-view
   "Remove raw email from a routine admin-facing admin projection."
   [row]
@@ -297,19 +320,39 @@
 (defn routine-membership-view
   "Pseudonymize tenant member projections for admin browsing."
   [row]
+  (let [user-id (row-value row [:user_id :user-id])]
+    (cond-> (-> row
+              (dissoc :user_id :user-id
+                :user_email :user-email
+                :user_email_ciphertext :user-email-ciphertext
+                :user_full_name :user-full-name
+                :full_name :full-name
+                :email :owner_email :owner-email
+                :owner_email_ciphertext :owner-email-ciphertext))
+      user-id (assoc :user_ref (user-ref user-id))
+      true (assoc :user_display_name (or (when user-id (user-ref user-id))
+                                       "User")))))
+
+(defn identity-membership-view
+  "Expose member email/name for explicit admin tenant-management screens."
+  [row]
   (let [user-id (row-value row [:user_id :user-id])
         user-name (row-value row [:user_full_name :user-full-name :full_name :full-name])
         user-email (resolve-email row)]
     (cond-> (-> row
-              (dissoc :user_email :user-email
+              (dissoc :user_id :user-id
                 :user_email_ciphertext :user-email-ciphertext
-                :email :owner_email :owner-email
-                :owner_email_ciphertext :owner-email-ciphertext))
+                :email_ciphertext :email-ciphertext
+                :email_lookup_hash :email-lookup-hash
+                :email_key_version :email-key-version))
       user-id (assoc :user_ref (user-ref user-id))
-      user-email (assoc :email_masked (mask-email user-email))
+      user-email (assoc :user_email user-email
+                   :email user-email
+                   :email_masked (mask-email user-email))
       true (assoc :user_display_name (or user-name
+                                       user-email
                                        (when user-id (user-ref user-id))
-                                       (mask-email user-email))))))
+                                       "User")))))
 
 (defn user-display-label
   "Return the preferred routine label for a user-linked record."
@@ -355,6 +398,22 @@
       true (assoc :owner_name (or owner-name
                                 (when owner-id (user-ref owner-id))
                                 (mask-email owner-email))))))
+
+(defn identity-tenant-view
+  "Expose owner email/name for explicit admin tenant-management screens."
+  [row]
+  (let [owner-id (row-value row [:owner_id :owner_user_id :owner-id :owner-user-id])
+        owner-name (row-value row [:owner_name :owner-name])
+        owner-email (resolve-email row)]
+    (cond-> (-> row
+              (dissoc :owner_email_ciphertext :owner-email-ciphertext
+                :owner_id :owner_user_id :owner-id :owner-user-id))
+      owner-id (assoc :owner_ref (user-ref owner-id))
+      owner-email (assoc :owner_email owner-email
+                    :email_masked (mask-email owner-email))
+      true (assoc :owner_name (or owner-name
+                                owner-email
+                                (when owner-id (user-ref owner-id)))))))
 
 (defn redact-email-change
   "Return audit-safe email metadata."

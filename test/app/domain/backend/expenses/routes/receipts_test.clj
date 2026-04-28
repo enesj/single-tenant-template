@@ -2,6 +2,7 @@
   (:require
     [app.domain.backend.expenses.routes.receipts :as receipts-routes]
     [app.domain.backend.expenses.services.expenses :as expenses]
+    [app.domain.backend.expenses.services.receipts.approval :as receipt-approval]
     [app.domain.backend.expenses.services.receipts.image-preprocess :as image-preprocess]
     [app.domain.backend.expenses.services.receipts.queries :as receipt-queries]
     [app.domain.backend.expenses.services.receipts.storage :as receipt-storage]
@@ -67,6 +68,7 @@
 (deftest get-receipt-handler-includes-linked-expense-for-posted-receipts
   (let [receipt-id (java.util.UUID/randomUUID)
         expense-id (java.util.UUID/randomUUID)
+        user-id (java.util.UUID/randomUUID)
         handler (receipts-routes/get-receipt-handler :db)]
     (with-redefs [receipt-queries/get-receipt
                   (fn [_db rid]
@@ -74,6 +76,11 @@
                     {:id rid
                      :status "posted"
                      :expense_id expense-id
+                     :user_id user-id
+                     :created_by user-id
+                     :created_by_user_id user-id
+                     :created_by_name "Private User"
+                     :created_by_email_ciphertext "encrypted-email"
                      :original_filename "receipt.jpg"
                      :content_type "image/jpeg"})
 
@@ -86,6 +93,10 @@
                     (is (= expense-id eid))
                     {:id eid
                      :receipt_id receipt-id
+                     :user_id user-id
+                     :created_by user-id
+                     :created_by_name "Private User"
+                     :email_ciphertext "encrypted-email"
                      :items []})]
       (let [response (handler {:path-params {:id (str receipt-id)}})
             body (json/parse-string (:body response) true)]
@@ -93,7 +104,54 @@
         (is (= true (:success body)))
         (is (= (str receipt-id) (get-in body [:receipt :id])))
         (is (= (str expense-id) (get-in body [:receipt :linked-expense :id])))
-        (is (= [] (get-in body [:receipt :linked-expense :items])))))))
+        (is (= [] (get-in body [:receipt :linked-expense :items])))
+        (is (nil? (get-in body [:receipt :user-id])) "receipt user id is hidden")
+        (is (nil? (get-in body [:receipt :created-by])) "receipt creator id is hidden")
+        (is (nil? (get-in body [:receipt :created-by-user-id])) "receipt creator user id is hidden")
+        (is (nil? (get-in body [:receipt :created-by-name])) "receipt creator name is hidden")
+        (is (nil? (get-in body [:receipt :created-by-email-ciphertext])) "receipt encrypted email is hidden")
+        (is (nil? (get-in body [:receipt :linked-expense :user-id])) "linked expense user id is hidden")
+        (is (nil? (get-in body [:receipt :linked-expense :created-by])) "linked expense creator id is hidden")
+        (is (nil? (get-in body [:receipt :linked-expense :created-by-name])) "linked expense creator name is hidden")
+        (is (nil? (get-in body [:receipt :linked-expense :email-ciphertext])) "linked expense encrypted email is hidden")))))
+
+(deftest update-posted-handler-hides-user-linkage-while-returning-edit-results
+  (let [receipt-id (java.util.UUID/randomUUID)
+        expense-id (java.util.UUID/randomUUID)
+        user-id (java.util.UUID/randomUUID)
+        handler (receipts-routes/update-posted-handler :db)]
+    (with-redefs [receipt-approval/update-posted-receipt!
+                  (fn [_db rid body]
+                    (is (= receipt-id rid))
+                    (is (= {:notes "corrected"} body))
+                    {:expense {:id expense-id
+                               :receipt_id receipt-id
+                               :user_id user-id
+                               :created_by user-id
+                               :created_by_name "Private User"
+                               :total_amount 12.34M}
+                     :receipt {:id receipt-id
+                               :expense_id expense-id
+                               :user_id user-id
+                               :created_by user-id
+                               :created_by_user_id user-id
+                               :created_by_name "Private User"
+                               :status "posted"}})]
+      (let [response (handler {:path-params {:id (str receipt-id)}
+                               :body {:notes "corrected"}})
+            body (json/parse-string (:body response) true)]
+        (is (= 200 (:status response)))
+        (is (= true (:success body)))
+        (is (= (str expense-id) (get-in body [:expense :id])))
+        (is (= (str receipt-id) (get-in body [:receipt :id])))
+        (is (= 12.34 (get-in body [:expense :total-amount])))
+        (is (nil? (get-in body [:expense :user-id])) "updated expense user id is hidden")
+        (is (nil? (get-in body [:expense :created-by])) "updated expense creator id is hidden")
+        (is (nil? (get-in body [:expense :created-by-name])) "updated expense creator name is hidden")
+        (is (nil? (get-in body [:receipt :user-id])) "updated receipt user id is hidden")
+        (is (nil? (get-in body [:receipt :created-by])) "updated receipt creator id is hidden")
+        (is (nil? (get-in body [:receipt :created-by-user-id])) "updated receipt creator user id is hidden")
+        (is (nil? (get-in body [:receipt :created-by-name])) "updated receipt creator name is hidden")))))
 
 (deftest download-receipt-handler-converts-heic-to-jpeg-when-requested
   (let [id (java.util.UUID/randomUUID)
@@ -156,7 +214,9 @@
         (is (= 4 (alength ^bytes (:body resp))))))))
 
 (deftest list-receipts-handler-includes-pagination-totals
-  (let [handler (receipts-routes/list-receipts-handler :db)]
+  (let [handler (receipts-routes/list-receipts-handler :db)
+        user-id (java.util.UUID/randomUUID)
+        receipt-id (java.util.UUID/randomUUID)]
     (with-redefs [receipt-queries/list-receipts-page
                   (fn [_db opts]
                     (is (= {:status "uploaded"
@@ -167,7 +227,12 @@
                             :order-dir :asc
                             :order-by :created-at}
                           opts))
-                    {:rows [{:id (java.util.UUID/randomUUID)
+                    {:rows [{:id receipt-id
+                             :user_id user-id
+                             :created_by user-id
+                             :created_by_user_id user-id
+                             :created_by_name "Private User"
+                             :created_by_email_ciphertext "encrypted-email"
                              :original_filename "receipt-1.jpg"}]
                      :total 192
                      :purged-total 7})]
@@ -179,12 +244,19 @@
             body (json/parse-string (if (string? (:body response))
                                       (:body response)
                                       (slurp (:body response)))
-                   true)]
+                   true)
+            receipt (first (:receipts body))]
         (is (= 200 (:status response)))
         (is (= true (:success body)))
         (is (= 192 (:total body)))
         (is (= 7 (:purged-total body)))
-        (is (= 1 (count (:receipts body))))))))
+        (is (= 1 (count (:receipts body))))
+        (is (= (str receipt-id) (:id receipt)))
+        (is (nil? (:user-id receipt)) "list receipt user id is hidden")
+        (is (nil? (:created-by receipt)) "list receipt creator id is hidden")
+        (is (nil? (:created-by-user-id receipt)) "list receipt creator user id is hidden")
+        (is (nil? (:created-by-name receipt)) "list receipt creator name is hidden")
+        (is (nil? (:created-by-email-ciphertext receipt)) "list encrypted email is hidden")))))
 
 (deftest list-receipts-handler-forwards-text-date-status-and-show-purged-filters
   (let [handler (receipts-routes/list-receipts-handler :db)
@@ -291,5 +363,5 @@
       (is (= "/receipts" (first routes)))
       (is (nil? (:middleware route-options))
         "Root admin receipts route should not define impersonation middleware")
-      (is (= #{"" "/:id/download" "/:id" "/:id/review" "/:id/approve" "/:id/update-posted"}
+      (is (= #{"" "/ocr" "/:id/download" "/:id" "/:id/review" "/:id/approve" "/:id/update-posted"}
             (set (map first children)))))))

@@ -161,13 +161,13 @@
    "supplier_display_name"
    "payer_label"
    "currency"
-    "total_amount"],
+   "total_amount"],
   :filterable-columns
   ["purchased_at"
    "supplier_display_name"
    "payer_label"
    "currency"
-    "total_amount"
+   "total_amount"
    "created_at"
    "updated_at"],
   :sortable-columns
@@ -175,7 +175,7 @@
    "supplier_display_name"
    "payer_label"
    "currency"
-    "total_amount"
+   "total_amount"
    "created_at"
    "updated_at"],
   :always-visible [],
@@ -496,35 +496,34 @@
  :users
  {:available-columns
   ["id"
-   "user-ref"
-   "email-masked"
+   "email"
    "full-name"
    "status"
    "last-login-at"
    "created-at"
    "updated-at"
-   "password-hash"
    "email-verified"
-   "auth-provider"],
-  :default-visible-columns
-  ["id"
+   "auth-provider"
    "user-ref"
    "email-masked"
+   "password-hash"],
+  :default-visible-columns
+  ["email"
    "full-name"
    "status"
    "last-login-at"
    "created-at"
    "updated-at"
-   "password-hash"
    "email-verified"
    "auth-provider"],
   :filterable-columns
   ["status" "last-login-at" "created-at" "updated-at"],
-  :sortable-columns ["user-ref" "status" "created-at"],
-  :always-visible ["id" "user-ref"],
+  :sortable-columns ["full-name" "status" "created-at"],
+  :always-visible ["email"],
   :computed-fields {},
   :column-config
   {:updated-at {:width "140px", :formatter "date"},
+   :email {:width "220px"},
    :user-ref {:width "160px"},
    :email-masked {:width "200px"},
    :last-login-at {:width "160px", :formatter "date"},

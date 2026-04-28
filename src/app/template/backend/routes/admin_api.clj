@@ -11,7 +11,6 @@
     [app.template.backend.routes.admin.auth :as admin-auth]
     [app.template.backend.routes.admin.dashboard :as admin-dashboard]
     [app.template.backend.routes.admin.entities :as admin-entities]
-    [app.template.backend.routes.admin.impersonation :as admin-impersonation]
     [app.template.backend.routes.admin.login-events :as admin-login-events]
     [app.template.backend.routes.admin.password :as admin-password]
     [app.template.backend.routes.admin.settings :as admin-settings]
@@ -65,9 +64,6 @@
 
       ;; Protected password routes
       ["/auth" (admin-password/protected-routes password-db email-service base-url)]
-
-      ;; Impersonation management
-      (admin-impersonation/routes db)
 
       ;; Domain routes (from registry)
       ;; Each domain provides routes under its own path prefix (e.g., /expenses)

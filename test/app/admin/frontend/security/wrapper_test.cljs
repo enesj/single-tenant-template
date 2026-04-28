@@ -34,7 +34,8 @@
     (is (false? (sec/has-permission? :impersonate-user)))
     (reset! rf-db/app-db {:admin/authenticated? true
                           :admin/session {:id 2 :role :super-admin}})
-    (is (true? (sec/has-permission? :impersonate-user)))))
+    (is (false? (sec/has-permission? :impersonate-user)))
+    (is (true? (sec/has-permission? :delete-user)))))
 
 (deftest secure-template-operation-redirects-when-unauthenticated
   (testing "secure-template-operation enforces auth and redirects"

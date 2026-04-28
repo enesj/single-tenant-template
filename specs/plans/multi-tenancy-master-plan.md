@@ -1,3 +1,5 @@
+<!-- markdownlint-disable MD012 MD022 MD024 MD026 MD032 MD040 MD060 -->
+
 # Multi-Tenancy Implementation — Master Plan
 
 > **Spec**: `specs/allium/template/multi-tenancy.candidate.allium`
@@ -15,7 +17,7 @@
 | 1 | Tenant Lifecycle — provisioning, invitations, session context | 0 | `[x]` |
 | 2 | Tenant Data Scoping — tenant_id threading, middleware filtering | 0 | `[x]` |
 | 3 | Access Control — role-based tier rules | 1, 2 | `[x]` |
-| 4 | Platform Admin — blocked resources, superpower CRUD, impersonation | 3 | `[x]` |
+| 4 | Platform Admin — privacy-scrubbed access, blocked resources, superpower CRUD | 3 | `[x]` |
 | 5 | Frontend — tenant switcher, member mgmt, UI state | 1, 3 | `[x]` |
 | 6 | Cleanup & Hardening — per-tenant rate limiting, delete price_observations | 3 | `[x]` |
 
@@ -43,7 +45,7 @@ Phase 0 ──┬──→ Phase 1 ──┬──→ Phase 3 ──┬──→
 ## Phase 0: Foundation — DB Tables & Migrations
 
 **Goal**: Create the new tables and columns that every subsequent phase depends on.
-**Allium refs**: Entity declarations (Tenant, TenantMembership, TenantInvitation, ImpersonationGrant).
+**Allium refs**: Entity declarations (Tenant, TenantMembership, TenantInvitation).
 
 ### Tasks
 
@@ -53,8 +55,6 @@ Phase 0 ──┬──→ Phase 1 ──┬──→ Phase 3 ──┬──→
   - `:membership-status` → `["active" "suspended"]`
   - `:invitation-status` → `["pending" "accepted" "expired" "revoked"]`
   - `:invitation-role` → `["admin" "member" "viewer"]`
-  - `:impersonation-role` → `["owner" "admin" "member" "viewer"]`
-  - `:impersonation-status` → `["active" "revoked"]`
 - [x] **0.2** Create `tenants` table in `resources/db/template/models.edn`:
   - id (UUID PK), name (text), slug (varchar, unique), status (enum: tenant-status), created_at, updated_at
 - [x] **0.3** Create `tenant_memberships` table in `resources/db/template/models.edn`:
@@ -62,8 +62,9 @@ Phase 0 ──┬──→ Phase 1 ──┬──→ Phase 3 ──┬──→
   - Unique index: (tenant_id, user_id)
 - [x] **0.4** Create `tenant_invitations` table in `resources/db/template/models.edn`:
   - id (UUID PK), tenant_id (FK tenants, cascade), email (text), role (enum: invitation-role), invited_by (FK users, cascade), status (enum: invitation-status), token (varchar, unique), expires_at (timestamptz), created_at, updated_at
-- [x] **0.5** Create `impersonation_grants` table in `resources/db/template/models.edn`:
-  - id (UUID PK), tenant_id (FK tenants, cascade), admin_id (FK admins, cascade), granted_by (FK users, cascade), role (enum: impersonation-role), status (enum: impersonation-status), revoked_by_admin (FK admins, nullable, set-null), revoked_by_user (FK users, nullable, set-null), created_at, updated_at
+- [x] **0.5** Keep platform-admin tenant support free of login-as-user grants:
+  - Current schema has no grant table, no grant enums, and no admin-session context column.
+  - Removed deferred artifacts with migration `0072_schema.edn` after privacy hardening.
 - [x] **0.6** Add `tenant_id` (FK tenants, NOT NULL) to tenant-scoped tables in `resources/db/domain/models.edn`:
   - Transactional: `expenses`, `expense_items`, `receipts`, `payers`, `user_expense_settings`
   - Lookup: `payer_types`, `expense_categories`
@@ -84,7 +85,7 @@ Phase 0 ──┬──→ Phase 1 ──┬──→ Phase 3 ──┬──→
 ### Notes
 - Aliases (`supplier_aliases`, `store_aliases`, `article_aliases`) are NOT modified — stay global.
 - Since there's no production data, `tenant_id NOT NULL` can be added directly without backfill.
-- ENUM types for `membership-role` and `impersonation-role` share the same values but are separate types (different semantic meaning, may diverge later).
+- Grant/session artifacts for login-as-user access were removed; routine admin access is direct and privacy-scrubbed.
 
 ---
 
@@ -244,7 +245,7 @@ Phase 0 ──┬──→ Phase 1 ──┬──→ Phase 3 ──┬──→
 ### What Was NOT Done (from original plan)
 - **No centralized resource classification config** — handler-level role-set constants serve the same purpose with less indirection
 - **No centralized authorization middleware** — `ensure-role` pattern is lightweight and explicit at each handler
-- **No full role × resource × action matrix integration tests** — unit tests cover all role-set combinations; integration tests deferred to Phase 4 when impersonation adds complexity
+- **No full role × resource × action matrix integration tests** — unit tests cover all role-set combinations; integration tests deferred to Phase 4 where blocked admin/private surfaces add complexity
 
 ### Dependencies
 - Phase 1 (memberships exist and session context works)
@@ -252,22 +253,20 @@ Phase 0 ──┬──→ Phase 1 ──┬──→ Phase 3 ──┬──→
 
 ---
 
-## Phase 4: Platform Admin — Blocked Resources, Superpower CRUD, Impersonation
+## Phase 4: Platform Admin — Privacy-Scrubbed Access, Blocked Resources, Superpower CRUD
 
-**Goal**: Platform admins get their adjusted access: blocked from tenant expense data unless impersonating, superpower on users/memberships.
-**Allium refs**: `PlatformAdminDataRequest`, `AllowPlatformAdminAccessOutsideBlockedResources`, `DenyPlatformAdminAccessToBlockedResources`, `GrantImpersonation`, `RevokeImpersonation*`, `ImpersonatedAccessGranted`.
+**Goal**: Platform admins can operate on receipts/expenses through privacy-scrubbed projections, remain blocked from private tenant reference/linkage resources, and retain superpower CRUD on users/memberships.
+**Allium refs**: `PlatformAdminDataRequest`, `AllowPlatformAdminAccessOutsideBlockedResources`, `DenyPlatformAdminAccessToBlockedResources`.
 
 **Admin `owner` role** = super_admin. No new DB enum needed.
 
 ### Tasks
 
 - [x] **4.1** Update admin authorization middleware
-  - Added `impersonation_context` jsonb column to `admin_sessions` (migration 0100)
-  - `get-admin-by-session-with-context` in `admin/auth.clj` loads impersonation context in single JOIN
-  - `wrap-admin-authentication` in `middleware/admin.clj` attaches `:impersonation` to request
-  - `wrap-require-impersonation` in `domain/expenses/routes/middleware.clj` returns 403 for blocked resources
-  - Applied to 7 entity configs in `route_configs.clj` + receipts custom routes
-  - **Files**: `admin/auth.clj`, `middleware/admin.clj`, `expenses/routes/middleware.clj`, `route_configs.clj`, `receipts.clj`, `models.edn`
+  - Removed runtime login-as-user context from admin sessions and request auth.
+  - `wrap-block-private-admin-resource` in `domain/expenses/routes/middleware.clj` returns 403 for private tenant-scoped resources.
+  - Applied to private tenant reference/linkage configs while leaving receipts/expenses available through privacy projections.
+  - **Files**: `middleware/admin.clj`, `expenses/routes/middleware.clj`, `route_configs.clj`, `receipts.clj`, `resources/db/template/models.edn`, `resources/db/migrations/0072_schema.edn`
 - [x] **4.2** Superpower CRUD for users and tenant_memberships
   - Admin tenant routes: `routes/admin/tenants.clj` — list/detail/members at `/admin/api/tenants`
   - Membership management: change role (`PUT /:id/members/:member-id/role`), remove (`DELETE /:id/members/:member-id`)
@@ -277,27 +276,18 @@ Phase 0 ──┬──→ Phase 1 ──┬──→ Phase 3 ──┬──→
   - No force-add memberships (spec: "Cannot force-add users to tenants")
   - **Files**: `routes/admin/tenants.clj` (new), `routes/admin/users.clj` (modified), `routes/admin_api.clj` (modified)
   - **Tests**: `test/routes/admin/tenants_test.clj` — 11 tests (listing, detail, members, role change, removal, search, enrichment)
-- [x] **4.3** Impersonation grant management
-  - Service: `services/impersonation.clj` — create, revoke (by owner/admin), find, list grants
-  - User-side routes: `routes/impersonation.clj` — GET/POST/DELETE at `/api/v1/tenant/impersonation-grants` (owner only)
-  - Admin-side routes: `routes/admin/impersonation.clj` — status, grants list, activate, deactivate, self-revoke at `/admin/api/impersonation`
-  - Guard: one active grant per admin+tenant; rejects duplicate
-  - **Files**: `services/impersonation.clj`, `routes/impersonation.clj`, `routes/admin/impersonation.clj`, `routes/tenant.clj`, `routes/admin_api.clj`
-- [x] **4.4** Impersonation session flow
-  - `activate-impersonation!` validates grant active + admin match → writes context to `admin_sessions.impersonation_context` jsonb
-  - `deactivate-impersonation!` clears context from all admin sessions
-  - Revoke (by owner or admin) auto-calls `deactivate-impersonation!`
-  - Context stored as `{"tenant-id": "...", "role": "...", "grant-id": "..."}`
-  - **File**: `services/impersonation.clj`
-- [x] **4.5** Audit logging for impersonation
-  - All grant operations audit-logged: `impersonation_granted`, `impersonation_revoked_by_owner`, `impersonation_revoked_by_admin`, `impersonation_activated`, `impersonation_deactivated`
-  - Uses existing `audit/log-audit!` with entity-type `"impersonation_grant"` or `"admin_session"`
-  - **File**: `services/impersonation.clj`
-- [x] **4.6** Integration tests
-  - `impersonation_test.clj`: 8 service tests (create, duplicate rejection, unknown admin, revoke by owner/admin, activate/deactivate context, list grants) — 8 tests, 13 assertions
-  - `blocked_resources_test.clj`: 3 middleware unit tests (blocks without context, allows with context, blocks nil context) — 3 tests, 5 assertions
-  - End-to-end REPL verification: 403 → activate → 200 → deactivate → 403
-  - **Files**: `test/services/impersonation_test.clj`, `test/routes/blocked_resources_test.clj`
+- [x] **4.3** Routine admin privacy projections
+  - Receipts and expenses are readable/editable by global admins without exposing user identifiers, user email, or direct user-linkage keys.
+  - Admin receipt responses scrub linked expense payloads recursively.
+  - **Files**: `expenses/privacy.clj`, `receipts.clj`, `routes_factory.clj`, `route_configs.clj`
+- [x] **4.4** Remove login-as-user functionality
+  - Removed backend grant service/routes, frontend events/page/routes/sidebar links, and request/session context handling.
+  - Removed schema artifacts: grant table, grant enums, and the obsolete admin-session context column.
+  - **Migration**: `0072_schema.edn` applied to dev and test.
+- [x] **4.5** Privacy/admin tests and checks
+  - Runtime routes no longer expose login-as-user endpoints or UI entry points.
+  - DB alignment verifies the deferred schema artifacts are gone.
+  - Private admin resource middleware returns 403 unconditionally for blocked resources.
 
 ### Dependencies
 - Phase 3 (role-based access rules exist to evaluate against)
@@ -349,21 +339,19 @@ Phase 0 ──┬──→ Phase 1 ──┬──→ Phase 3 ──┬──→
 - **Fix 15**: `java.time.Instant` in `tenant.clj` sanitize — caused 500 on tenant switch
 - **Fix 16**: Namespaced keys in session tenant map — `build-auth-session` now normalizes tenant via `normalize-tenant`; `get-tenant-id` fallbacks added to 3 call sites
 
-### Phase 5b — Impersonation UI, Admin Tenants, Slug Display, Role Gating (COMPLETE ✅)
+### Phase 5b — Admin Tenants, Slug Display, Role Gating (COMPLETE ✅)
 
 - [x] **5.1** Backend SPA fallback for `/t/*` (slug routing)
   - Added `/t/:slug/*path` catch-all → `render-page` in `routes.clj`
-  - Added `/tenant/impersonation` SPA fallback
 - [x] **5.2** Frontend router prefix handling (slug routing)
   - Lightweight slug display: `/t/{slug}/...` in URL bar for context, session stays source of truth
   - `strip-slug-prefix` in `routes.cljs` strips prefix before reitit matches
   - `tenant-href` helper in layout prepends slug to sidebar links
   - `replaceState` updates URL bar after `push-state` for cosmetic slug display
   - Slug set on auth status load + tenant switch success
-- [x] **5.6** Impersonation management UI (tenant owner)
-  - Events: `events/impersonation.cljs` — fetch/create/revoke grants + subs
-  - Page: `pages/impersonation_grants.cljs` — owner guard, grants table, create form, inline revoke confirm
-  - Wired: route `/tenant/impersonation`, page init event, sidebar link (owner only)
+- [x] **5.6** Login-as-user management UI removed
+  - Removed tenant owner grant page, events, route, init event, and sidebar entry.
+  - Global admin receipt/expense work now uses privacy-scrubbed admin projections instead.
 - [x] **5.7** Role-aware UI gating (complete)
   - Settings page: read-only banner + disabled inputs for non-writers
   - Receipt approval: already gated by `:expenses/receipts.approve` capability
@@ -376,7 +364,6 @@ Phase 0 ──┬──→ Phase 1 ──┬──→ Phase 3 ──┬──→
   - Write ops gated by admin `:owner` role in UI
 - [x] **5.9** Frontend tests (ClojureScript)
   - `test/app/template/frontend/events/tenant_test.cljs` — 11 tests (switch, memberships, members, invite, role change, remove, slug, subscriptions)
-  - `test/app/template/frontend/events/impersonation_test.cljs` — 7 tests (fetch/create/revoke grants, clear messages)
   - `test/app/admin/frontend/events/tenants_test.cljs` — 10 tests (fetch/search/detail/members, role change, remove)
 
 ### Dependencies
@@ -425,8 +412,8 @@ Phase 0 ──┬──→ Phase 1 ──┬──→ Phase 3 ──┬──→
 - [x] **6.6** Security audit checklist
   - [x] No query path missing tenant_id filter for scoped resources — all 6 configs have `:tenant-scoped? true`, factory injects WHERE
   - [x] No cross-tenant data leak in any API endpoint — existing `tenant_isolation_test.clj` (6 tests)
-  - [x] Impersonation audit trail complete — existing `impersonation_test.clj` (8 tests)
-  - [x] Platform admin blocked from expense data without impersonation — existing `blocked_resources_test.clj` (3 tests)
+  - [x] Login-as-user privacy bypass removed — runtime routes/UI deleted and schema artifacts dropped in `0072_schema.edn`
+  - [x] Platform admin receipt/expense access uses privacy-scrubbed projections; private tenant reference/linkage resources remain blocked
   - [x] Rate limiting active per-tenant — keys include `:t:{tenant-id}` for regular API routes
 
 ### Dependencies
@@ -436,7 +423,7 @@ Phase 0 ──┬──→ Phase 1 ──┬──→ Phase 3 ──┬──→
 
 ## Working Notes
 
-_Use `scratch-pad` tool during implementation sessions for live phase progress. Flush completed items back to this document's checkboxes when a phase is done._
+*Use `scratch-pad` tool during implementation sessions for live phase progress. Flush completed items back to this document's checkboxes when a phase is done.*
 
 ### Key Files
 - **Model definitions**: `resources/db/template/models.edn` (platform tables), `resources/db/domain/models.edn` (domain tables)
