@@ -49,7 +49,7 @@
   (testing "admin user listing exposes resolved email while removing encrypted persistence fields"
     (let [user-id (random-uuid)
           email "identity-user@example.test"]
-      (with-redefs [email-privacy/decrypt-email (fn [ciphertext]
+      (with-redefs [email-privacy/decrypt-email (fn [ciphertext & _]
                                                   (is (= "ciphertext" ciphertext))
                                                   email)
                     persist/execute-admin-query

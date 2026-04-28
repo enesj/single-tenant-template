@@ -406,7 +406,9 @@
                                       (resolve-entity-name db entity-type-str entity-id*))
                         admin-ref (when is-admin?
                                     (email-privacy/admin-ref actor-id*))]
-                    (cond-> (dissoc normalized :admin-email :admin-name :metadata)
+                    (cond-> (dissoc normalized
+                              :admin-email :admin-name :metadata
+                              :actor-id :target-id)
                       entity-name (assoc :entity-name entity-name)
                       (and is-admin? admin-ref) (assoc :admin-ref admin-ref)
                       is-admin? (assoc :admin-name admin-ref)
@@ -417,7 +419,7 @@
                     (-> log
                       db-audit-log->app
                       (update :changes scrub-routine-audit-changes)
-                      (dissoc :metadata)))))
+                      (dissoc :metadata :actor-id :target-id)))))
           raw-logs))
       (catch Exception e
         (log/error "❌ AUDIT SERVICE: Error executing query:" (.getMessage e))

@@ -121,7 +121,9 @@
       (is (= (email-privacy/user-ref target-id) (:triggering-user-ref changes)))
       (is (not (contains? changes :triggering-user-name)))
       (is (not (contains? result :metadata)))
-      (is (not (contains? result :admin-email))))))
+      (is (not (contains? result :admin-email)))
+      (is (not (contains? result :actor-id)))
+      (is (not (contains? result :target-id))))))
 
 (deftest log-api-failure-uses-triggering-user-ref
   (testing "api failure audit metadata stores a user ref instead of a plaintext name"

@@ -233,7 +233,6 @@
               (-> converted
                 ;; Normalize core fields to flat, non-namespaced keys
                 (assoc :id id-val
-                  :principal-id principal-id-val
                   :principal-type principal-type-val
                   :success success-val
                   :reason reason-val)
@@ -243,6 +242,7 @@
                   principal-ref (assoc :principal-ref principal-ref))
                 (assoc :principal-name principal-name)
                 (dissoc :admin-email :admin-name :user-email :user-name
+                  :principal-id
                   :admins/admin-email :admins/admin-name
                   :users/user-email :users/user-name
                   :login-events/id :login-events/principal-id

@@ -189,7 +189,8 @@
       (is (= (email-privacy/admin-ref principal-id) (:principal-ref result)))
       (is (= (:principal-ref result) (:principal-name result)))
       (is (not= "Private Admin" (:principal-name result)))
-      (is (not (contains? result :principal-email)))))
+      (is (not (contains? result :principal-email)))
+      (is (not (contains? result :principal-id)))))
 
   (testing "successful logins also update the principal last_login_at field"
     (let [calls (atom [])
