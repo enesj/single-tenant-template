@@ -17,8 +17,8 @@ Reduce the impact of database read access and routine global-admin access by min
 | User CSV export hardening | Completed | User CSV export now emits pseudonymous user refs and non-identity account metadata only; raw emails, encrypted email fields, full names, tenant joins, and stale role/tenant columns are omitted. |
 | Reveal-email hardening | Completed | Reveal endpoints are now owner-only break-glass flows requiring structured reason codes plus detailed justification, with structured audit metadata. |
 | Receipt raw content minimization | Completed | Routine admin receipt projections now omit raw OCR JSON, parsed markdown, storage keys, original filenames, and file hashes while preserving derived review metadata and download URL boundaries. |
-| DB relationship privacy strategy | Not started | Larger architecture decision: pseudonymous subject IDs, separate privacy boundary, or DB-level controls. |
-| Plaintext `full_name` strategy | Not started | Decide whether names are identity-management-only, encrypted, pseudonymized, or removed from operational views. |
+| DB relationship privacy strategy | Decision recorded | A true DB-dump relationship privacy fix requires a dedicated schema/migration project; continue using app-layer pseudonymous projections until that project is explicitly scoped. |
+| Plaintext `full_name` strategy | Completed | Names remain identity-management data, while routine operational audit/login-monitoring views now use pseudonymous refs instead of `full_name`. |
 | Key rotation/keyring support | Not started | Add multi-key decrypt and active-key encrypt support. |
 | Dev/staging key policy | Not started | Prevent shared defaults outside local development and document rotation/reset path. |
 | Stale impersonation docs cleanup | Not started | Remove old runtime impersonation references from docs. |
@@ -136,17 +136,32 @@ Reduce the impact of database read access and routine global-admin access by min
   - Introduce pseudonymous subject IDs separated from identity table.
   - Split identity and operational databases/roles.
   - Add row-level/role-level DB controls.
-- **Files likely impacted:** schema EDN, migrations, services, tests, docs.
-- **Validation:** migration checks dev/test plus service-level tests.
-- **Progress:** Not started.
+- **Decision:** Do not attempt an opportunistic partial schema rewrite in this hardening pass. The current app-layer work reduces routine admin exposure, but a DB-only attacker can still follow direct operational foreign keys. Meaningfully changing that requires a dedicated migration project that introduces a separate privacy-subject boundary and updates all operational ownership joins atomically.
+- **Recommended implementation project:**
+  - Introduce pseudonymous subject IDs that operational tables reference instead of identity rows.
+  - Keep identity-to-subject mapping in a narrower identity boundary with stricter DB role access.
+  - Migrate receipts, expenses, expense items, payer ownership, and tenant membership touchpoints in one planned migration sequence.
+  - Add DB role/view restrictions for read-only operational access where practical.
+- **Files likely impacted:** canonical schema EDN, generated migrations, auth/tenant/expenses services, route tests, migration docs.
+- **Validation:** migration checks against dev and test databases, service-level ownership tests, and DB role/view access checks.
+- **Progress:** Decision recorded on 2026-04-28; implementation deferred to a dedicated schema/migration project.
 
 ### 7. Decide plaintext `full_name` policy
 
 - **Goal:** Avoid names acting as plaintext identifiers in operational data.
-- **Approach options:** encrypt, pseudonymize, remove from operational responses, or classify as identity-management-only data.
-- **Files likely impacted:** auth services, admin users/admins, tenant routes, audit views, frontend configs.
-- **Validation:** route tests and frontend table tests.
-- **Progress:** Not started.
+- **Decision:** Classify `full_name` as identity-management data. It may remain visible on explicit identity-management pages such as `/admin/users`, `/admin/admins`, and tenant/member administration, but routine operational monitoring/audit payloads should use pseudonymous refs.
+- **Files impacted:**
+  - `src/app/admin/backend/services/admin/audit.clj`
+  - `src/app/template/backend/services/monitoring/login_events.clj`
+  - `test/app/backend/routes/admin/audit_test.clj`
+  - `test/app/backend/routes/admin/login_events_test.clj`
+- **Validation:** focused admin audit/login-events tests confirm names are ignored even when present in raw rows and API-failure metadata stores a user ref instead of a plaintext triggering-user name.
+- **Progress:** Completed on 2026-04-28.
+- **Implementation notes:**
+  - Audit user/admin entity labels now resolve to `User-...`/`Admin-...` refs rather than querying `full_name`.
+  - Audit list queries no longer join `admins` to select `full_name`; `:admin-name` is kept as a compatibility display field containing the pseudonymous admin ref.
+  - API-failure audit metadata no longer stores `:triggering-user-name`; new entries store `:triggering-user-ref`, old routine metadata is scrubbed when read, and duplicate raw `:metadata` is omitted from routine audit responses.
+  - Login-events list queries no longer join `admins`/`users` for names; `:principal-name` is retained as a compatibility alias for `:principal-ref`.
 
 ### 8. Add real email encryption key rotation/keyring
 
@@ -202,3 +217,4 @@ Reduce the impact of database read access and routine global-admin access by min
 | 2026-04-28 | Focused user CSV export tests | Passed: 7 tests, 36 assertions, 0 failures, 0 errors | `tmp/user-csv-export-tests.txt` |
 | 2026-04-28 | Focused reveal-email hardening tests | Passed: 22 tests, 125 assertions, 0 failures, 0 errors | `tmp/reveal-email-hardening-tests.txt` |
 | 2026-04-28 | Focused receipt raw-content privacy tests | Passed: 14 tests, 109 assertions, 0 failures, 0 errors | `tmp/receipt-raw-content-privacy-tests.txt` |
+| 2026-04-28 | Focused `full_name` operational privacy tests | Passed: 15 tests, 92 assertions, 0 failures, 0 errors | `tmp/full-name-operational-privacy-tests.txt` |

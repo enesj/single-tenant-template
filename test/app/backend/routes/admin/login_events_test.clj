@@ -182,12 +182,13 @@
                :ip "127.0.0.1"
                :user_agent "Test Browser"
                :created_at (java.time.Instant/parse "2026-01-01T00:00:00Z")
-               :admin_name nil}
+               :admin_name "Private Admin"}
           result (first (with-redefs [hsql/format identity
                                       next.jdbc/execute! (fn [_db _query] [row])]
                           (login-monitoring/list-login-events ::db {:limit 1 :offset 0})))]
       (is (= (email-privacy/admin-ref principal-id) (:principal-ref result)))
       (is (= (:principal-ref result) (:principal-name result)))
+      (is (not= "Private Admin" (:principal-name result)))
       (is (not (contains? result :principal-email)))))
 
   (testing "successful logins also update the principal last_login_at field"

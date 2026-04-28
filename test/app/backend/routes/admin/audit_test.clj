@@ -95,7 +95,7 @@
       (let [result (audit/get-audit-logs nil {:limit 5})]
         (is (= 5 (count result))))))
 
-  (testing "routine audit results expose admin refs without raw admin email"
+  (testing "routine audit results expose refs without raw names or raw admin email"
     (let [admin-id (random-uuid)
           target-id (random-uuid)
           raw-log {:id (random-uuid)
@@ -104,19 +104,45 @@
                    :action "update_user"
                    :target_type "user"
                    :target_id target-id
-                   :admin_name nil
+                   :admin_name "Private Admin"
+                   :metadata {:triggering_user_id (str target-id)
+                              :triggering_user_name "Private User"}
                    :created_at (java.time.Instant/parse "2026-01-01T00:00:00Z")}
           results (with-redefs-fn {#'hsql/format identity
-                                   #'jdbc/execute! (fn [_ _] [raw-log])
-                                   #'app.admin.backend.services.admin.audit/resolve-entity-name
-                                   (fn [_ _ _] "Example User")}
+                                   #'jdbc/execute! (fn [_ _] [raw-log])}
                     #(audit/get-audit-logs nil {:limit 1 :offset 0}))
-          result (first results)]
+          result (first results)
+          changes (:changes result)]
       (is (= 1 (count results)))
-      (is (= "Example User" (:entity-name result)))
+      (is (= (email-privacy/user-ref target-id) (:entity-name result)))
       (is (= (email-privacy/admin-ref admin-id) (:admin-ref result)))
       (is (= (:admin-ref result) (:admin-name result)))
+      (is (not= "Private Admin" (:admin-name result)))
+      (is (= (email-privacy/user-ref target-id) (:triggering-user-ref changes)))
+      (is (not (contains? changes :triggering-user-name)))
+      (is (not (contains? result :metadata)))
       (is (not (contains? result :admin-email))))))
+
+(deftest log-api-failure-uses-triggering-user-ref
+  (testing "api failure audit metadata stores a user ref instead of a plaintext name"
+    (let [user-id (random-uuid)
+          inserted (atom nil)]
+      (with-redefs [hsql/format identity
+                    jdbc/execute-one! (fn [_ query]
+                                        (reset! inserted query)
+                                        {})]
+        (audit/log-api-failure! ::db {:api-name :mistral-ocr
+                                      :operation "receipt-ocr"
+                                      :http-status 500
+                                      :error-message "upstream failed"
+                                      :severity :error
+                                      :duration-ms 123
+                                      :user-id user-id
+                                      :user-name "Private User"}))
+      (let [metadata-json (-> @inserted :values first :metadata second)]
+        (is (re-find #"triggering-user-ref" metadata-json))
+        (is (re-find (re-pattern (email-privacy/user-ref user-id)) metadata-json))
+        (is (not (re-find #"Private User" metadata-json)))))))
 
 (deftest get-audit-logs-handler-pagination-metadata-test
   (testing "audit handler returns logs, total, limit, and offset with filter-aware total"

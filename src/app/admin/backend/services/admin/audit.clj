@@ -163,23 +163,27 @@
    - :severity       keyword  — :warning, :error, or :critical
    - :duration-ms    int?     — how long the call took
    - :user-id        uuid?    — triggering user if known
-   - :user-name      string?  — triggering user's name if known"
+   - :user-name      string?  — accepted for backwards compatibility, but not stored"
   [db {:keys [api-name operation http-status error-message error-type
               request-url severity duration-ms user-id user-name]}]
   (try
     (let [actor-id-uuid (maybe-uuid user-id)
-          metadata {:api-name (some-> api-name name)
-                    :operation operation
-                    :http-status http-status
-                    :error-message error-message
-                    :error-type error-type
-                    :request-url request-url
-                    :retry-attempted true
-                    :retry-succeeded false
-                    :triggering-user-id (some-> user-id str)
-                    :triggering-user-name user-name
-                    :severity (some-> (or severity :error) name)
-                    :duration-ms duration-ms}
+          user-ref (when actor-id-uuid
+                     (email-privacy/user-ref actor-id-uuid))
+          metadata (cond-> {:api-name (some-> api-name name)
+                            :operation operation
+                            :http-status http-status
+                            :error-message error-message
+                            :error-type error-type
+                            :request-url request-url
+                            :retry-attempted true
+                            :retry-succeeded false
+                            :triggering-user-id (some-> user-id str)
+                            :triggering-user-ref user-ref
+                            :severity (some-> (or severity :error) name)
+                            :duration-ms duration-ms}
+                     (some? user-name)
+                     (assoc :triggering-user-name-redacted? true))
           safe-metadata (shared-db/convert-pg-objects metadata)
           metadata-value [:cast (json/generate-string safe-metadata) :jsonb]
           actor-type-db (tc/cast-for-database :audit-actor-type "system")]
@@ -277,47 +281,24 @@
         nil))))
 
 (defn- resolve-user-name
-  "Get user full name by ID"
-  [db user-id]
-  (when user-id
-    (try
-      (let [sql-query (hsql/format
-                        {:select [[:u.full_name :full_name]]
-                         :from [[:users :u]]
-                         :where [:= :u.id [:cast user-id :uuid]]})
-            result (jdbc/execute-one! db sql-query)
-            normalized (shared-db/to-app result)]
-        (:full-name normalized))
-      (catch Exception e
-        (log/error "❌ AUDIT BACKEND: Error resolving user name for" user-id ":" (.getMessage e))
-        nil))))
+  "Return a pseudonymous user ref for routine audit displays."
+  [_db user-id]
+  (email-privacy/user-ref user-id))
 
 (defn- resolve-admin-name
-  "Get admin name by ID"
-  [db admin-id]
-  (when admin-id
-    (try
-      (let [sql-query (hsql/format
-                        {:select [[:a.full_name :full_name]]
-                         :from [[:admins :a]]
-                         :where [:= :a.id [:cast admin-id :uuid]]})
-            result (jdbc/execute-one! db sql-query)
-            normalized (shared-db/to-app result)]
-        (:full-name normalized))
-      (catch Exception e
-        (log/error "❌ AUDIT BACKEND: Error resolving admin name for" admin-id ":" (.getMessage e))
-        nil))))
+  "Return a pseudonymous admin ref for routine audit displays."
+  [_db admin-id]
+  (email-privacy/admin-ref admin-id))
 
 (defn- resolve-entity-name
-  "Get entity name by type and ID"
+  "Get a routine-safe display label by entity type and ID."
   [db entity-type entity-id]
   (when (and entity-type entity-id)
     (case entity-type
       "tenant" (resolve-tenant-name db entity-id)
       "user" (resolve-user-name db entity-id)
-      "users" (resolve-user-name db entity-id)              ; Handle plural 'users' entity type
+      "users" (resolve-user-name db entity-id)
       "admin" (resolve-admin-name db entity-id)
-      ;; Add more entity types as needed
       (do
         (log/warn "🔍 AUDIT BACKEND: Unknown entity type:" entity-type)
         nil))))
@@ -328,7 +309,7 @@
    :actor-type :al/actor_type
    :target-type :al/target_type
    :admin-ref :al/actor_id
-   :admin-name :a/full_name})
+   :admin-name :al/actor_id})
 
 (defn- build-audit-filters-map
   [{:keys [admin-id entity-type entity-id action from-date to-date]}]
@@ -344,11 +325,8 @@
 
 (defn- build-audit-list-query
   [{:keys [limit offset sorts order-by order-dir] :as opts}]
-  (let [join-clause [[:admins :a] [:= :al.actor_id :a.id]]
-        base-query {:select [:al.*
-                             [:a.full_name :admin_name]]
-                    :from [[:audit_logs :al]]
-                    :left-join join-clause}
+  (let [base-query {:select [:al.*]
+                    :from [[:audit_logs :al]]}
         base-options {:filters (build-audit-filters-map opts)
                       :pagination {:limit limit :offset offset}}
         order-clauses (shared-qb/resolve-order-by-clauses
@@ -377,6 +355,21 @@
         total (or (:total row) (some-> row vals first) 0)]
     (long total)))
 
+(defn- scrub-routine-audit-changes
+  "Remove plaintext identity display names from routine audit metadata."
+  [changes]
+  (if (map? changes)
+    (let [triggering-user-id (or (:triggering-user-id changes)
+                               (:triggering_user_id changes))
+          triggering-user-ref (or (:triggering-user-ref changes)
+                                (:triggering_user_ref changes)
+                                (email-privacy/user-ref triggering-user-id))]
+      (cond-> (dissoc changes
+                :triggering-user-name
+                :triggering_user_name)
+        triggering-user-ref (assoc :triggering-user-ref triggering-user-ref)))
+    changes))
+
 (defn get-audit-logs
   "Get audit logs with optional filters.
 
@@ -396,10 +389,12 @@
                        hsql/format
                        (jdbc/execute! db))]
         (log/info "📊 AUDIT SERVICE: Query executed successfully, found" (count raw-logs) "logs")
-        ;; Resolve names for each audit log using normalized data
         (mapv (fn [log]
                 (try
-                  (let [normalized (db-audit-log->app log)
+                  (let [normalized (-> log
+                                     db-audit-log->app
+                                     (update :changes scrub-routine-audit-changes)
+                                     (dissoc :metadata))
                         actor-type-str (some-> (:actor-type normalized) str)
                         actor-id* (:actor-id normalized)
                         is-system? (= actor-type-str "system")
@@ -409,24 +404,20 @@
                         entity-name (when (and (not is-system?)
                                             entity-type-str entity-id*)
                                       (resolve-entity-name db entity-type-str entity-id*))
-                        admin-name (some-> (:admin-name normalized) str str/trim not-empty)
                         admin-ref (when is-admin?
-                                    (email-privacy/admin-ref actor-id*))
-                        ;; For system entries, extract display info from metadata
-                        metadata-map (:changes normalized)]
-                    (cond-> (dissoc normalized :admin-email)
+                                    (email-privacy/admin-ref actor-id*))]
+                    (cond-> (dissoc normalized :admin-email :admin-name :metadata)
                       entity-name (assoc :entity-name entity-name)
                       (and is-admin? admin-ref) (assoc :admin-ref admin-ref)
-                      is-admin? (assoc :admin-name (or admin-name admin-ref))
-                      ;; Enrich system entries with actor display info
+                      is-admin? (assoc :admin-name admin-ref)
                       is-system? (assoc :actor-display-name "System"
-                                   :is-api-failure true)
-                      (and is-system? (:triggering-user-name metadata-map))
-                      (assoc :triggering-user-name (:triggering-user-name metadata-map))))
+                                   :is-api-failure true)))
                   (catch Exception e
                     (log/error "❌ AUDIT BACKEND: Error processing log:" (.getMessage e))
-                    ;; Return the log without computed fields
-                    (db-audit-log->app log))))
+                    (-> log
+                      db-audit-log->app
+                      (update :changes scrub-routine-audit-changes)
+                      (dissoc :metadata)))))
           raw-logs))
       (catch Exception e
         (log/error "❌ AUDIT SERVICE: Error executing query:" (.getMessage e))

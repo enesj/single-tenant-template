@@ -137,7 +137,7 @@
    :success :login_events.success
    :reason :login_events.reason
    :principal-ref :login_events.principal_id
-   :principal-name [:raw "COALESCE(admins.full_name, users.full_name)"]})
+   :principal-name :login_events.principal_id})
 
 (defn- build-login-events-conditions
   [{:keys [principal-type success?]}]
@@ -166,12 +166,8 @@
                       :login_events.reason
                       :login_events.ip
                       :login_events.user_agent
-                      :login_events.created_at
-                      [:admins.full_name :admin_name]
-                      [:users.full_name :user_name]]
+                      :login_events.created_at]
              :from [[:login_events]]
-             :left-join [[:admins :admins] [:= :admins.id :login_events.principal_id]
-                         [:users :users] [:= :users.id :login_events.principal_id]]
              :order-by order-clauses
              :limit limit
              :offset offset}
@@ -228,16 +224,12 @@
                                 (:login-events/success converted))
                   reason-val (or (:reason converted)
                                (:login-events/reason converted))
-                  admin-name (or (:admin-name converted)
-                               (:admins/admin-name converted))
-                  user-name (or (:user-name converted)
-                              (:users/user-name converted))
                   principal-type-key (some-> principal-type-val name keyword)
                   principal-ref (case principal-type-key
                                   :admin (email-privacy/admin-ref principal-id-val)
                                   :user (email-privacy/user-ref principal-id-val)
                                   nil)
-                  principal-name (or admin-name user-name principal-ref)]
+                  principal-name principal-ref]
               (-> converted
                 ;; Normalize core fields to flat, non-namespaced keys
                 (assoc :id id-val
