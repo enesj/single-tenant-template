@@ -805,8 +805,7 @@
                       ($ :div {:id (str "table-scroll-viewport-" (kw/ensure-name entity-name))
                                :class "min-h-0 flex-1 overflow-auto scroll-smooth overscroll-contain"
                                :style {:scrollbarGutter "stable"
-                                       :WebkitOverflowScrolling "touch"
-                                       :willChange "scroll-position"}}
+                                       :WebkitOverflowScrolling "touch"}}
                         ($ table
                           {:headers table-headers
                            :rows items-vec

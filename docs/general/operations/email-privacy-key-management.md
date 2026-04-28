@@ -45,7 +45,7 @@ Encryption key lookup order for a requested version is:
 1. per-version env var, e.g. `EMAIL_PRIVACY_ENCRYPTION_KEY_V1_B64`
 2. `EMAIL_PRIVACY_ENCRYPTION_KEYRING_B64`
 3. `EMAIL_PRIVACY_ENCRYPTION_KEY_B64` when the requested version is the active `EMAIL_PRIVACY_KEY_VERSION`
-4. local development default key only outside production-like profiles
+4. bundled development default key only for `:dev`, `:local`, and `:test` profiles
 
 ## Safe Current Operating Mode
 
@@ -250,6 +250,8 @@ Do **not** store production values in:
 ### Local development
 
 Use local environment variables or a gitignored local secret mechanism.
+
+Bundled development defaults are available only when the active profile is `:dev`, `:local`, or `:test`. Any other profile, including `:staging`, must provide explicit email privacy keys and will fail fast if they are absent.
 
 Acceptable local options:
 

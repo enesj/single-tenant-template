@@ -33,8 +33,9 @@
              (System/getProperty "app.environment")
              "dev")))
 
-(defn- prod-profile? []
-  (= :prod (active-profile)))
+(defn- local-key-default-profile?
+  []
+  (contains? #{:dev :local :test} (active-profile)))
 
 (defn- decode-base64
   [env-key raw]
@@ -51,13 +52,15 @@
 
 (defn- load-key-bytes
   [env-key default-b64]
-  (let [raw (or (getenv* env-key)
-              (when-not (prod-profile?) default-b64))]
+  (let [profile (active-profile)
+        raw (or (getenv* env-key)
+              (when (local-key-default-profile?) default-b64))]
     (when-not raw
       (throw
         (ex-info (str "Missing required email privacy key: " env-key)
           {:type :email-privacy/missing-key
-           :env-key env-key})))
+           :env-key env-key
+           :profile profile})))
     (->> raw
       (decode-base64 env-key)
       (validate-key-bytes env-key))))
@@ -110,13 +113,14 @@
   [key-version]
   (let [active-version (current-key-version)
         version (or (normalize-key-version key-version) active-version)
+        profile (active-profile)
         version-env-key (encryption-key-env-key version)
         keyring (configured-encryption-keyring)
         raw (or (getenv* version-env-key)
               (get keyring version)
               (when (= version active-version)
                 (getenv* "EMAIL_PRIVACY_ENCRYPTION_KEY_B64"))
-              (when-not (prod-profile?)
+              (when (local-key-default-profile?)
                 default-dev-encryption-key-b64))
         source-env-key (cond
                          (getenv* version-env-key) version-env-key
@@ -128,7 +132,8 @@
         (ex-info (str "Missing required email privacy encryption key for version: " version)
           {:type :email-privacy/missing-key
            :env-key source-env-key
-           :key-version version})))
+           :key-version version
+           :profile profile})))
     (->> raw
       (decode-base64 source-env-key)
       (validate-key-bytes source-env-key))))

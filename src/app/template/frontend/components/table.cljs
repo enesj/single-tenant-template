@@ -89,16 +89,18 @@
                            :right {:right 0}
                            {})))
 
+        ;; Sticky cells repaint during vertical scrolling. Keep them opaque and
+        ;; avoid transition/backdrop-filter classes so SVG icons do not shimmer
+        ;; while the scroll viewport moves.
         header-class (when is-header?
                        (str "bg-base-100 shadow-[inset_0_-1px_0_rgba(15,23,42,0.08)] "
-                         (when sticky? "backdrop-blur-md ")
                          (case sticky-position
                            :left "border-r border-base-300/60 "
                            :right "border-l border-base-300/60 "
                            "")))
 
         sticky-body-class (when (and sticky? (not is-header?))
-                            (str "bg-base-100/95 backdrop-blur-md "
+                            (str "bg-base-100 "
                               (case sticky-position
                                 :left "border-r border-base-300/40 shadow-[8px_0_16px_-12px_rgba(15,23,42,0.22)] "
                                 :right "border-l border-base-300/40 shadow-[-8px_0_16px_-12px_rgba(15,23,42,0.22)] "
@@ -113,7 +115,6 @@
     ($ cell-type
       {:key index
        :class (str "table-cell relative "
-                (when sticky? "transition-all duration-200 ")
                 (when resizing? "select-none ")
                 (when-not is-header? "p-2 ")
                 (when is-header? "px-3 py-4 align-top text-left font-medium text-base-content border-r border-base-300/30 last:border-r-0 ")

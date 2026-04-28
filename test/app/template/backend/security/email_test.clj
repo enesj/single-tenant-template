@@ -61,6 +61,32 @@
       (is (= :email-privacy/missing-key (-> ex ex-data :type)))
       (is (= "v1" (-> ex ex-data :key-version))))))
 
+(deftest default-dev-keys-are-local-only
+  (testing "local/test profiles can use bundled development defaults"
+    (with-env {"AERO_PROFILE" "dev"}
+      #(is (= "dev@example.com"
+             (email/decrypt-email (email/encrypt-email "Dev@Example.COM" "v1")
+               "v1"))))
+    (with-env {"AERO_PROFILE" "test"}
+      #(is (string? (email/email->lookup-hash "test@example.com")))))
+
+  (testing "staging-like profiles must configure explicit encryption and lookup keys"
+    (let [encryption-ex (with-env {"AERO_PROFILE" "staging"
+                                   "EMAIL_PRIVACY_KEY_VERSION" "v1"}
+                          #(try
+                             (email/encrypt-email "Stage@Example.COM" "v1")
+                             nil
+                             (catch clojure.lang.ExceptionInfo e e)))
+          lookup-ex (with-env {"AERO_PROFILE" "staging"}
+                      #(try
+                         (email/email->lookup-hash "stage@example.com")
+                         nil
+                         (catch clojure.lang.ExceptionInfo e e)))]
+      (is (= :email-privacy/missing-key (-> encryption-ex ex-data :type)))
+      (is (= :staging (-> encryption-ex ex-data :profile)))
+      (is (= :email-privacy/missing-key (-> lookup-ex ex-data :type)))
+      (is (= :staging (-> lookup-ex ex-data :profile))))))
+
 (deftest raw-email-takes-precedence-over-ciphertext
   (testing "explicit email values are returned without decrypting ciphertext"
     (with-env {"AERO_PROFILE" "prod"

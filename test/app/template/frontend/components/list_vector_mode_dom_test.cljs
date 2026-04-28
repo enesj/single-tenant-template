@@ -707,6 +707,47 @@
             "Header wrapper should stretch so inner header layouts can use full cell height"))
         (done)))))
 
+(deftest sticky-table-cells-avoid-scroll-repaint-classes
+  (async done
+    (mount-component!
+      ($ :table
+        ($ :thead
+          ($ :tr
+            ($ table/resizable-cell
+              {:is-header? true
+               :index 0
+               :sticky? true
+               :sticky-position :left
+               :fixed-width "50px"}
+              "Pinned")))
+        ($ :tbody
+          ($ :tr
+            ($ table/resizable-cell
+              {:is-header? false
+               :index 0
+               :sticky? true
+               :sticky-position :right
+               :fixed-width "150px"}
+              ($ :span "Actions")))))
+      (fn [container]
+        (let [header (.querySelector container "th")
+              body (.querySelector container "td")
+              header-class (.-className header)
+              body-class (.-className body)]
+          (is (some? header) "Expected sticky header cell to render")
+          (is (some? body) "Expected sticky body cell to render")
+          (is (not (str/includes? header-class "transition-all"))
+            "Sticky header cells should not animate all properties during scroll")
+          (is (not (str/includes? body-class "transition-all"))
+            "Sticky body cells should not animate all properties during scroll")
+          (is (not (str/includes? header-class "backdrop-blur"))
+            "Sticky header cells should avoid backdrop filters while scrolling")
+          (is (not (str/includes? body-class "backdrop-blur"))
+            "Sticky body cells should avoid backdrop filters while scrolling")
+          (is (str/includes? body-class "bg-base-100")
+            "Sticky body cells should keep an opaque background behind icons"))
+        (done)))))
+
 (deftest table-header-keeps-filter-controls-below-long-labels
   (async done
     (with-redefs [i18n/use-t (fn [] (fn [_ & _] "Filter by"))]
