@@ -192,6 +192,7 @@
 
   Query params:
   - status (optional, string or comma-separated)
+  - posted receipts are always excluded from this user-facing list
   - limit (default 50)
   - offset (default 0)
   - order-dir (default desc)
@@ -222,6 +223,7 @@
                                 :updated-at-from :updated-at-to])
                 sort-opts (h/parse-sort-params qp)
                 opts (cond-> (merge {:status status
+                                     :exclude-status "posted"
                                      :show-purged? show-purged?
                                      :limit (parse-long-param qp :limit 50)
                                      :offset (parse-long-param qp :offset 0)}

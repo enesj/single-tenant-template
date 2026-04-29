@@ -46,6 +46,22 @@
         (is (re-find #"file_purged_at is null" default-sql))
         (is (not (re-find #"file_purged_at is null" show-purged-sql)))))))
 
+(deftest list-user-receipts-excludes-status-when-requested-test
+  (testing "user receipts queries can exclude posted receipts from user-facing pages"
+    (let [captured-sql (atom nil)]
+      (with-redefs [jdbc/execute! (fn [_db sql-params _opts]
+                                    (reset! captured-sql sql-params)
+                                    [])]
+        (receipt-queries/list-user-receipts
+          :db
+          (UUID/randomUUID)
+          {:limit 20
+           :offset 0
+           :exclude-status "posted"})
+        (let [sql-lc (some-> @captured-sql first str str/lower-case)]
+          (is (string? sql-lc))
+          (is (re-find #"receipts\.status <> cast\(\? as receipt_status\)" sql-lc)))))))
+
 (deftest list-user-receipts-selects-purchased-at-guess-for-list-view-test
   (testing "user receipts list projection includes purchased_at_guess so the visible column can render"
     (let [captured-sql (atom nil)]

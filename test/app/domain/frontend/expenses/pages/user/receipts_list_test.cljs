@@ -37,10 +37,24 @@
     (let [entity-spec (#'app.domain.frontend.expenses.pages.user.receipts-list/receipts-entity-spec (fn [k] (name k)))
           status-field (some #(when (= :status (:id %)) %) (:fields entity-spec))
           option-values (mapv :value (:options status-field))]
-      (is (= ["extracted" "review_required" "posted" "failed"]
+      (is (= ["extracted" "review_required" "failed"]
             option-values))
-      (is (not-any? #{"uploaded" "parsing" "parsed" "extracting" "refining" "approved"}
+      (is (not-any? #{"uploaded" "parsing" "parsed" "extracting" "refining" "approved" "posted"}
             option-values)))))
+
+(deftest receipt-post-allowed-only-for-unposted-approvable-receipts
+  (testing "row Objavi button is limited to extracted/review-required receipts that are not linked or purged"
+    (let [post-allowed? #'app.domain.frontend.expenses.pages.user.receipts-list/receipt-post-allowed?]
+      (is (true? (post-allowed? {:status "extracted"})))
+      (is (true? (post-allowed? {:status "review_required"})))
+      (is (false? (post-allowed? {:status "posted"})))
+      (is (false? (post-allowed? {:status "uploaded"})))
+      (is (false? (post-allowed? {:status "extracted"
+                                  :expense-id "expense-1"})))
+      (is (false? (post-allowed? {:status "extracted"
+                                  :file-purged-at "2026-04-29T00:00:00Z"})))
+      (is (false? (post-allowed? {:status "review_required"
+                                  :refine-pending true}))))))
 
 (deftest present-receipt-populates-translated-status-display
   (testing "presented receipts carry translated status labels for badge rendering"

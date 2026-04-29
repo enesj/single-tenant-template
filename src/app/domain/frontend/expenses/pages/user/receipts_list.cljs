@@ -4,7 +4,9 @@
     [app.domain.frontend.expenses.components.receipt-detail-modal :as receipt-detail-ui]
     [app.domain.frontend.expenses.components.user-expense-form :refer [user-expense-add-form-modal]]
 
+    [app.template.frontend.components.button :refer [button]]
     [app.template.frontend.components.dropdown.action :as dropdown]
+    [app.template.frontend.components.icons :refer [check-circle]]
     [app.template.frontend.components.list :refer [list-view]]
     [app.template.frontend.components.list.cells :as list-cells]
     [app.template.frontend.events.list.ui-state :as list-ui-state-events]
@@ -18,7 +20,6 @@
 (def ^:private stable-receipt-status-filter-options
   [{:value "extracted" :label :receipts/status-extracted}
    {:value "review_required" :label :receipts/status-review-required}
-   {:value "posted" :label :receipts/status-posted}
    {:value "failed" :label :receipts/status-failed}])
 
 (defn- receipts-entity-spec
@@ -120,6 +121,8 @@
            (:receipts/expense-id receipt)
            (:receipts/expense_id receipt))))
 
+(declare receipt-purged?)
+
 (defn- receipt-ocr-allowed?
   "Check if OCR action should be shown for a receipt.
    Returns true for statuses where OCR makes sense and the receipt is not already linked to an expense."
@@ -128,6 +131,15 @@
     (and (not (receipt-linked? receipt))
       (contains? #{"uploaded" "failed" "review_required" "extracted" "parsing" "parsed" "extracting"}
         status))))
+
+(defn- receipt-post-allowed?
+  "Return true when a receipt can be posted directly from the list row."
+  [receipt]
+  (let [status (or (:status receipt) (:receipts/status receipt))]
+    (and (not (receipt-linked? receipt))
+      (not (receipt-purged? receipt))
+      (not (receipt-refine-pending? receipt))
+      (contains? #{"extracted" "review_required"} status))))
 
 (defn- receipt-actions
   [t can-ocr? receipt]
@@ -150,7 +162,7 @@
          :position :portal}))))
 
 (defn- render-receipt-actions
-  [t can-ocr? open-receipt-detail! receipt]
+  [t can-ocr? action-loading? open-receipt-detail! receipt]
   ($ :div {:class "flex items-center gap-2"}
     (when (not (false? (:show-edit? receipt)))
       ($ list-cells/edit-button
@@ -164,6 +176,23 @@
         {:entity-name :receipts
          :item-id (id-utils/extract-entity-id receipt)
          :disabled? (boolean (:delete-disabled? receipt))}))
+    (when (receipt-post-allowed? receipt)
+      (let [receipt-id (id-utils/extract-entity-id receipt)]
+        ($ button {:id (str "btn-post-receipt-" receipt-id)
+                   :type "button"
+                   :btn-type :success
+                   :shape "circle"
+                   :title (if can-ocr?
+                            (t :receipts/post-one-tooltip)
+                            (t :receipts/tooltip-no-post))
+                   :aria-label (t :receipts/post-one)
+                   :disabled (or (not can-ocr?) action-loading?)
+                   :on-click (fn [e]
+                               (.stopPropagation e)
+                               (.preventDefault e)
+                               (when (and can-ocr? (not action-loading?))
+                                 (rf/dispatch [:user-expenses/post-selected [receipt-id]])))}
+          ($ check-circle))))
     (receipt-actions t can-ocr? receipt)))
 
 (defn- receipt-purged?
@@ -442,6 +471,6 @@
                    :rows-override display-receipts
 
                    :render-actions (fn [receipt]
-                                     (render-receipt-actions t can-ocr? open-receipt-detail-from-edit! receipt))
+                                     (render-receipt-actions t can-ocr? action-loading? open-receipt-detail-from-edit! receipt))
                    :on-add-click #(rf/dispatch [:navigate-to "/expenses/upload"])}))))))
       ($ receipt-detail-modal))))

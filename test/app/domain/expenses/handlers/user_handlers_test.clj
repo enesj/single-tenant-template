@@ -63,6 +63,7 @@
                     (fn [_db actual-user-id opts]
                       (is (= user-id actual-user-id))
                       (is (= "uploaded" (:status opts)))
+                      (is (= "posted" (:exclude-status opts)))
                       (is (false? (:show-purged? opts)))
                       (is (= 2 (:limit opts)))
                       (is (= 1 (:offset opts)))
@@ -98,6 +99,7 @@
                     (fn [_db actual-user-id opts]
                       (is (= user-id actual-user-id))
                       (is (= "uploaded" (:status opts)))
+                      (is (= "posted" (:exclude-status opts)))
                       (is (true? (:show-purged? opts)))
                       (is (= 20 (:limit opts)))
                       (is (= 40 (:offset opts)))

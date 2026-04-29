@@ -178,6 +178,23 @@
     :else (throw (ex-info "status filter must be a string, sequential, or nil"
                    {:status status :type (type status)}))))
 
+(defn- build-status-exclusion-clause
+  "Build WHERE clause for excluding raw receipt statuses."
+  [exclude-status]
+  (cond
+    (string? exclude-status)
+    [:<> :receipts.status (storage/receipt-status-cast exclude-status)]
+
+    (sequential? exclude-status)
+    (let [statuses (->> exclude-status (remove nil?) vec)]
+      (when (seq statuses)
+        [:not-in :receipts.status (mapv storage/receipt-status-cast statuses)]))
+
+    (nil? exclude-status) nil
+
+    :else (throw (ex-info "exclude-status must be a string, sequential, or nil"
+                   {:exclude-status exclude-status :type (type exclude-status)}))))
+
 (defn- build-receipts-where-clause
   "Build WHERE clause for receipt list/count queries.
 
@@ -188,8 +205,9 @@
   When `tenant-id` is provided, scopes to that tenant.
 
   Column references are qualified with `receipts.` for JOIN safety."
-  [status user-id helpers & {:keys [tenant-id show-purged? purged-only?]}]
+  [status user-id helpers & {:keys [tenant-id show-purged? purged-only? exclude-status]}]
   (let [status-clause (build-status-clause status helpers)
+        status-exclusion-clause (build-status-exclusion-clause exclude-status)
         visibility-clause (when user-id
                             [:or
                              (privacy-subject/user-match-clause
@@ -202,7 +220,7 @@
                         purged-only? [:not [:is :receipts.file_purged_at nil]]
                         show-purged? nil
                         :else [:is :receipts.file_purged_at nil])
-        clauses (remove nil? [tenant-clause visibility-clause status-clause purged-clause])]
+        clauses (remove nil? [tenant-clause visibility-clause status-clause status-exclusion-clause purged-clause])]
     (case (count clauses)
       0 nil
       1 (first clauses)
@@ -337,7 +355,7 @@
   Optional :tenant-id in opts scopes to a specific tenant.
   Text filter keys: :original-filename, :supplier-guess.
   Numeric range filter keys: :total-amount-guess-min/max (alias: :total-display-min/max)."
-  [db {:keys [status tenant-id limit offset sorts order-dir order-by
+  [db {:keys [status exclude-status tenant-id limit offset sorts order-dir order-by
               original-filename supplier-guess show-purged?
               purchased-at-guess-from purchased-at-guess-to
               created-at-from created-at-to
@@ -349,7 +367,8 @@
         {:keys [lines-total-sql effective-status-sql]} helpers
         where-clause (build-receipts-where-clause status nil helpers
                        :tenant-id tenant-id
-                       :show-purged? show-purged?)
+                       :show-purged? show-purged?
+                       :exclude-status exclude-status)
         order-clauses (build-receipt-order-clauses sorts order-by order-dir effective-status-sql)
         text-filters {:original-filename original-filename
                       :supplier-guess supplier-guess}
@@ -400,7 +419,7 @@
 
   Returns a lightweight projection for list views (detail endpoints return
   raw_extract_json / parsed_markdown, etc.)."
-  [db user-id {:keys [status tenant-id limit offset sorts order-dir order-by
+  [db user-id {:keys [status exclude-status tenant-id limit offset sorts order-dir order-by
                       original-filename supplier-guess show-purged?
                       purchased-at-guess-from purchased-at-guess-to
                       created-at-from created-at-to
@@ -414,7 +433,8 @@
         {:keys [lines-total-sql effective-status-sql]} helpers
         where-clause (build-receipts-where-clause status user-id helpers
                        :tenant-id tenant-id
-                       :show-purged? show-purged?)
+                       :show-purged? show-purged?
+                       :exclude-status exclude-status)
         order-clauses (build-receipt-order-clauses sorts order-by order-dir effective-status-sql)
         text-filters {:original-filename original-filename
                       :supplier-guess supplier-guess}
@@ -455,7 +475,7 @@
   Optional :tenant-id in opts scopes to a specific tenant.
   Text filter keys: :original-filename, :supplier-guess.
   Numeric range filter keys: :total-amount-guess-min/max (alias: :total-display-min/max)."
-  [db {:keys [status tenant-id original-filename supplier-guess show-purged?
+  [db {:keys [status exclude-status tenant-id original-filename supplier-guess show-purged?
               purchased-at-guess-from purchased-at-guess-to
               created-at-from created-at-to
               updated-at-from updated-at-to
@@ -464,7 +484,8 @@
   (let [helpers (build-status-query-helpers)
         where-clause (build-receipts-where-clause status nil helpers
                        :tenant-id tenant-id
-                       :show-purged? show-purged?)
+             :show-purged? show-purged?
+             :exclude-status exclude-status)
         text-filters {:original-filename original-filename
                       :supplier-guess supplier-guess}
         query (-> (cond-> {:select [[[:count :*] :total]]
@@ -489,7 +510,7 @@
   Optional :tenant-id in opts scopes to a specific tenant.
   Text filter keys: :original-filename, :supplier-guess.
   Numeric range filter keys: :total-amount-guess-min/max (alias: :total-display-min/max)."
-  [db user-id {:keys [status tenant-id original-filename supplier-guess show-purged?
+  [db user-id {:keys [status exclude-status tenant-id original-filename supplier-guess show-purged?
                       purchased-at-guess-from purchased-at-guess-to
                       created-at-from created-at-to
                       updated-at-from updated-at-to
@@ -500,7 +521,8 @@
   (let [helpers (build-status-query-helpers)
         where-clause (build-receipts-where-clause status user-id helpers
                        :tenant-id tenant-id
-                       :show-purged? show-purged?)
+             :show-purged? show-purged?
+             :exclude-status exclude-status)
         text-filters {:original-filename original-filename
                       :supplier-guess supplier-guess}
         query (-> {:select [[[:count :*] :total]]
@@ -522,7 +544,7 @@
 
 (defn count-purged-receipts
   "Count purged receipts using the same status/text/date/numeric filters as `list-receipts`."
-  [db {:keys [status tenant-id original-filename supplier-guess
+  [db {:keys [status exclude-status tenant-id original-filename supplier-guess
               purchased-at-guess-from purchased-at-guess-to
               created-at-from created-at-to
               updated-at-from updated-at-to
@@ -531,7 +553,8 @@
   (let [helpers (build-status-query-helpers)
         where-clause (build-receipts-where-clause status nil helpers
                        :tenant-id tenant-id
-                       :purged-only? true)
+             :purged-only? true
+             :exclude-status exclude-status)
         text-filters {:original-filename original-filename
                       :supplier-guess supplier-guess}
         query (-> (cond-> {:select [[[:count :*] :total]]
@@ -553,7 +576,7 @@
 
 (defn count-user-purged-receipts
   "Count purged receipts visible to `user-id` using the same filters as `list-user-receipts`."
-  [db user-id {:keys [status tenant-id original-filename supplier-guess
+  [db user-id {:keys [status exclude-status tenant-id original-filename supplier-guess
                       purchased-at-guess-from purchased-at-guess-to
                       created-at-from created-at-to
                       updated-at-from updated-at-to
@@ -564,7 +587,8 @@
   (let [helpers (build-status-query-helpers)
         where-clause (build-receipts-where-clause status user-id helpers
                        :tenant-id tenant-id
-                       :purged-only? true)
+             :purged-only? true
+             :exclude-status exclude-status)
         text-filters {:original-filename original-filename
                       :supplier-guess supplier-guess}
         query (-> {:select [[[:count :*] :total]]
