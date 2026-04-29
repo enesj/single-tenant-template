@@ -764,16 +764,16 @@
                           unselected-locked? (and hardcoded-view-options
                                                (contains? hardcoded-view-options :show-unselected-rows?))
                           row-toggles (cond-> []
-                                        (not selected-locked?)
-                                        (conj {:id (str "toggle-selected-rows-" (kw/ensure-name entity-name))
-                                               :label (t :list/toggle-selected-rows)
-                                               :active? (:show-selected-rows? merged-display-settings)
-                                               :on-click #(rf/dispatch [::ui-events/toggle-selected-rows entity-kw])})
                                         (not unselected-locked?)
                                         (conj {:id (str "toggle-unselected-rows-" (kw/ensure-name entity-name))
                                                :label (t :list/toggle-unselected-rows)
                                                :active? (:show-unselected-rows? merged-display-settings)
-                                               :on-click #(rf/dispatch [::ui-events/toggle-unselected-rows entity-kw])}))
+                                               :on-click #(rf/dispatch [::ui-events/toggle-unselected-rows entity-kw])})
+                                        (not selected-locked?)
+                                        (conj {:id (str "toggle-selected-rows-" (kw/ensure-name entity-name))
+                                               :label (t :list/toggle-selected-rows)
+                                               :active? (:show-selected-rows? merged-display-settings)
+                                               :on-click #(rf/dispatch [::ui-events/toggle-selected-rows entity-kw])}))
                           extra-groups (:extra-settings-toggle-groups props)]
                       ($ :div {:class "flex items-center justify-between gap-4 flex-wrap"}
                         ($ :div {:id (str "selected-count-" (kw/ensure-name entity-name))
@@ -789,9 +789,9 @@
                                   (str ", " hidden-selected-count " " (t :common/hidden)))
                                 ")"))))
                         ($ :div {:class "flex items-center gap-2 flex-wrap"}
+                          (map toggle-group-pill extra-groups)
                           (toggle-group-pill {:id (str "toggle-group-row-visibility-" (kw/ensure-name entity-name))
-                                              :toggles row-toggles})
-                          (map toggle-group-pill extra-groups))))
+                                              :toggles row-toggles}))))
 
                     ($ :div {:id (str "table-shell-" (kw/ensure-name entity-name))
                              :ref shell-ref

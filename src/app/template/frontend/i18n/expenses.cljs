@@ -319,6 +319,8 @@
     :expenses-list/delete-title           "Obriši trošak"
     :expenses-list/delete-msg             "Želite li obrisati ovaj trošak?"
     :expenses-list/view-details           "Detalji"
+    :expenses-list/source-manual          "Ručni unos"
+    :expenses-list/source-receipts        "Računi"
 
     ;; Unmapped items page
     :unmapped-items/breadcrumb-dashboard  "Nadzorna ploča"
@@ -638,6 +640,8 @@
     :expenses-list/delete-title           "Delete expense"
     :expenses-list/delete-msg             "Do you want to delete this expense?"
     :expenses-list/view-details           "View Details"
+    :expenses-list/source-manual          "Manual"
+    :expenses-list/source-receipts        "Receipts"
 
     ;; Unmapped items page
     :unmapped-items/breadcrumb-dashboard  "Dashboard"

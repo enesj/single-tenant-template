@@ -683,6 +683,78 @@
             "Loading placeholder text should still render when there are no rows to keep mounted")
           (done))))))
 
+(deftest list-view-keeps-selected-toggle-rightmost
+  (async done
+    (with-redefs [rf/dispatch (fn [_] nil)
+                  column-config/vector-config? (constantly false)
+                  list-table/make-table-headers (fn [_] [])
+                  list-ui/header-section (fn [_] ($ :div {:id "list-header-stub"} "Expenses"))
+                  table/table (fn [_] ($ :div {:id "table-content-stub"}))
+                  i18n/use-t (fn []
+                               (fn [k & _]
+                                 (case k
+                                   :common/record-singular "zapis"
+                                   :common/record-plural "zapisa"
+                                   :common/selected "odabrano"
+                                   :common/hidden "skriveno"
+                                   :list/toggle-selected-rows "Odabrano"
+                                   :list/toggle-unselected-rows "Neodabrano"
+                                   nil)))
+                  uix-rf/use-subscribe (fn [query]
+                                         (cond
+                                           (= query [:admin/config-loaded?]) false
+                                           (= (first query) :app.template.frontend.subs.entity/paginated-entities) []
+                                           (= (first query) :app.template.frontend.subs.entity/loading?) false
+                                           (= (first query) :app.template.frontend.subs.entity/error) nil
+                                           (= (first query) :app.template.frontend.subs.list/total-pages) 1
+                                           (= (first query) :app.template.frontend.subs.entity/current-page) 1
+                                           (= (first query) :app.template.frontend.subs.list/selected-ids) #{}
+                                           (= (first query) :app.template.frontend.subs.ui/editing) nil
+                                           (= (first query) :app.template.frontend.subs.ui/show-add-form) false
+                                           (= (first query) :app.template.frontend.subs.ui/recently-updated-entities) #{}
+                                           (= (first query) :app.template.frontend.subs.ui/recently-created-entities) #{}
+                                           (= (first query) :app.template.frontend.subs.ui/hardcoded-view-options) {}
+                                           (= (first query) :app.template.frontend.subs.ui/entity-display-settings) {}
+                                           (= (first query) :app.template.frontend.subs.ui/filterable-fields) []
+                                           (= (first query) :app.template.frontend.events.list.settings/filterable-fields) {}
+                                           (= (first query) :app.template.frontend.subs.list/sorts) []
+                                           (= (first query) :app.template.frontend.subs.list/active-filters) {}
+                                           (= (first query) :app.template.frontend.subs.list/batch-edit-inline) {:open? false}
+                                           (= (first query) :app.template.frontend.subs.list/entity-ui-state) {}
+                                           (= (first query) :app.template.frontend.events.list.settings/table-width) 1200
+                                           (= (first query) :app.template.frontend.subs.ui/entity-display-prefs) {}
+                                           (= (first query) :form-entity-specs/by-name) {:fields []}
+                                           (= (first query) :app.template.frontend.subs.ui/visible-columns) {}
+                                           :else nil))]
+      (mount-component!
+        ($ list/list-view
+          {:entity-name :expenses
+           :entity-spec {:fields []}
+           :title "Expenses"
+           :extra-settings-toggle-groups [{:id "toggle-group-expense-source"
+                                           :toggles [{:id "toggle-show-manual-expenses"
+                                                      :label "Ručni unos"
+                                                      :active? true
+                                                      :on-click (fn [_] nil)}
+                                                     {:id "toggle-show-receipt-expenses"
+                                                      :label "Računi"
+                                                      :active? true
+                                                      :on-click (fn [_] nil)}]}]})
+        (fn [container]
+          (let [source-group (.querySelector container "#toggle-group-expense-source")
+                row-group (.querySelector container "#toggle-group-row-visibility-expenses")
+                unselected-toggle (.querySelector container "#toggle-unselected-rows-expenses")
+                selected-toggle (.querySelector container "#toggle-selected-rows-expenses")]
+            (is (some? source-group) "Expected custom expense-source toggle group to render")
+            (is (some? row-group) "Expected row visibility toggle group to render")
+            (is (pos? (bit-and (.compareDocumentPosition source-group row-group)
+                        (.-DOCUMENT_POSITION_FOLLOWING js/Node)))
+              "Row visibility controls should render after custom toggle groups")
+            (is (pos? (bit-and (.compareDocumentPosition unselected-toggle selected-toggle)
+                        (.-DOCUMENT_POSITION_FOLLOWING js/Node)))
+              "The selected toggle should be the rightmost segment in the row visibility pill"))
+          (done))))))
+
 (deftest table-header-cells-stick-to-top-of-scroll-viewport
   (async done
     (mount-component!

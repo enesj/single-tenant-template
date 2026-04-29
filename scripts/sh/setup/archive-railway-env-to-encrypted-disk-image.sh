@@ -14,6 +14,7 @@ umask 077
 
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 DEFAULT_PROJECT_NAME="$(basename "$REPO_ROOT")"
+DEFAULT_PROJECTS_ROOT="$(dirname "$REPO_ROOT")"
 DEFAULT_SECRETS_DIR="$HOME/Library/Application Support/single-tenant-template/secrets"
 DEFAULT_IMAGE_PATH="$DEFAULT_SECRETS_DIR/Secrets.sparsebundle"
 DEFAULT_MOUNT_POINT="$DEFAULT_SECRETS_DIR/Secrets-mounted"
@@ -22,11 +23,17 @@ IMAGE_PATH="$DEFAULT_IMAGE_PATH"
 MOUNT_POINT="$DEFAULT_MOUNT_POINT"
 VOLUME_NAME="Secrets"
 IMAGE_SIZE="200m"
-ENV_FILE="$REPO_ROOT/.env"
-SECRETS_EDN_FILE="$REPO_ROOT/config/.secrets.edn"
+PROJECTS_ROOT="$DEFAULT_PROJECTS_ROOT"
+PROJECT_ROOT=""
+ENV_FILE=""
+SECRETS_EDN_FILE=""
+ENV_FILE_SET=false
+SECRETS_EDN_FILE_SET=false
 RAILWAY_VARS_FILE=""
 RAILWAY_SERVICE="$DEFAULT_PROJECT_NAME"
+RAILWAY_SERVICE_SET=false
 RAILWAY_ENVIRONMENT="production"
+INCLUDE_RAILWAY=false
 OVERWRITE=false
 PASSPHRASE_STDIN=false
 PASSPHRASE_GUI=false
@@ -42,6 +49,21 @@ SELECTED_REPO_PATH=""
 SELECTED_CONTENT_PATH=""
 SELECTED_LABEL=""
 COMMIT_RESULT=""
+COLOR_RESET=""
+COLOR_BOLD=""
+COLOR_DIM=""
+COLOR_CYAN=""
+COLOR_GREEN=""
+COLOR_YELLOW=""
+
+if [[ -t 1 && -z "${NO_COLOR:-}" && "${TERM:-}" != "dumb" ]] && command -v tput >/dev/null 2>&1; then
+  COLOR_RESET="$(tput sgr0 2>/dev/null || true)"
+  COLOR_BOLD="$(tput bold 2>/dev/null || true)"
+  COLOR_DIM="$(tput dim 2>/dev/null || true)"
+  COLOR_CYAN="$(tput setaf 6 2>/dev/null || true)"
+  COLOR_GREEN="$(tput setaf 2 2>/dev/null || true)"
+  COLOR_YELLOW="$(tput setaf 3 2>/dev/null || true)"
+fi
 
 usage() {
   cat <<'EOF'
@@ -53,9 +75,14 @@ By default this creates/uses:
   repos:   Projects/ and General/ inside the mounted volume
 
 What it does:
-  - Projects mode: stores Railway vars + project .env + config/.secrets.edn in
-    Projects/<project-name>/ and commits the Projects git repo.
+  - Projects mode: copies .env and config/.secrets.edn from
+    <projects-root>/<project-name>/ into Projects/<project-name>/ and commits
+    the Projects git repo.
   - General mode: commits manual changes already made inside the General git repo.
+
+Railway variables are not exported by default because not every project uses
+Railway. Use --include-railway or --railway-vars-file when a project needs a
+Railway variables snapshot.
 
 If the encrypted disk is already mounted, the script reuses the mounted volume
 and does not ask for the passphrase again. After writing, the volume remains
@@ -65,6 +92,9 @@ Options:
   --projects                Target the Projects repo (default when non-interactive)
   --general                 Target the General repo
   --project-name NAME       Project folder name under Projects/
+  --projects-root PATH      Local folder containing project folders
+                            default: parent folder of this repo
+  --project-root PATH       Explicit local project folder for source secret files
   --commit-message MESSAGE  Git commit message to use
   --commit-only             Skip writing project files; only stage/commit existing changes
   --interactive             Prompt for scope and project name interactively
@@ -78,9 +108,10 @@ Options:
                             default: project .env
   --secrets-file PATH       Local config/.secrets.edn path
                             default: project config/.secrets.edn
+  --include-railway         Export Railway variables for the selected project
   --railway-vars-file PATH  Use an existing Railway variables export instead of calling Railway CLI
   --railway-service NAME    Railway service for variable export
-                            default: current repo folder name
+                            default: selected project name
   --railway-environment ENV Railway environment for variable export
                             default: production
   --overwrite               Replace existing target files for Projects mode
@@ -93,6 +124,7 @@ Options:
 Examples:
   bb archive-secrets
   bb archive-secrets --projects --project-name single-tenant-template
+  bb archive-secrets --projects --project-name single-tenant-template --include-railway
   bb archive-secrets --general
   bb secrets-commit-projects
   bb secrets-commit-general "2026-04-29 12:30 UTC"
@@ -140,6 +172,16 @@ while [[ $# -gt 0 ]]; do
       PROJECT_NAME="$2"
       shift 2
       ;;
+    --projects-root)
+      [[ $# -ge 2 ]] || die "--projects-root requires a path"
+      PROJECTS_ROOT="$2"
+      shift 2
+      ;;
+    --project-root)
+      [[ $# -ge 2 ]] || die "--project-root requires a path"
+      PROJECT_ROOT="$2"
+      shift 2
+      ;;
     --commit-message)
       [[ $# -ge 2 ]] || die "--commit-message requires a value"
       COMMIT_MESSAGE="$2"
@@ -176,21 +218,29 @@ while [[ $# -gt 0 ]]; do
     --env-file)
       [[ $# -ge 2 ]] || die "--env-file requires a path"
       ENV_FILE="$2"
+      ENV_FILE_SET=true
       shift 2
       ;;
     --secrets-file)
       [[ $# -ge 2 ]] || die "--secrets-file requires a path"
       SECRETS_EDN_FILE="$2"
+      SECRETS_EDN_FILE_SET=true
       shift 2
+      ;;
+    --include-railway)
+      INCLUDE_RAILWAY=true
+      shift
       ;;
     --railway-vars-file)
       [[ $# -ge 2 ]] || die "--railway-vars-file requires a path"
       RAILWAY_VARS_FILE="$2"
+      INCLUDE_RAILWAY=true
       shift 2
       ;;
     --railway-service)
       [[ $# -ge 2 ]] || die "--railway-service requires a name"
       RAILWAY_SERVICE="$2"
+      RAILWAY_SERVICE_SET=true
       shift 2
       ;;
     --railway-environment)
@@ -420,10 +470,11 @@ should_prompt() {
 prompt_scope() {
   local answer=""
 
-  echo "Choose secrets target:"
-  echo "  1) Projects (default)"
-  echo "  2) General"
-  read -r -p "Selection [1]: " answer
+  printf '%s%s%s\n' "$COLOR_BOLD$COLOR_CYAN" "Choose secrets target:" "$COLOR_RESET"
+  printf '  %s1)%s %sProjects%s %s(default)%s\n' "$COLOR_GREEN" "$COLOR_RESET" "$COLOR_BOLD" "$COLOR_RESET" "$COLOR_DIM" "$COLOR_RESET"
+  printf '  %s2)%s %sGeneral%s\n' "$COLOR_GREEN" "$COLOR_RESET" "$COLOR_BOLD" "$COLOR_RESET"
+  printf '%sSelection [1]: %s' "$COLOR_YELLOW" "$COLOR_RESET"
+  read -r answer
 
   case "$answer" in
     ""|1|projects|Projects)
@@ -442,11 +493,11 @@ collect_existing_projects() {
   local path=""
   EXISTING_PROJECTS=()
 
-  if [[ -d "$PROJECTS_DIR" ]]; then
+  if [[ -d "$PROJECTS_ROOT" ]]; then
     while IFS= read -r path; do
       [[ -n "$path" ]] || continue
       EXISTING_PROJECTS+=("$(basename "$path")")
-    done < <(find "$PROJECTS_DIR" -mindepth 1 -maxdepth 1 -type d ! -name '.*' | sort)
+    done < <(find "$PROJECTS_ROOT" -mindepth 1 -maxdepth 1 -type d ! -name '.*' | sort)
   fi
 }
 
@@ -458,17 +509,18 @@ prompt_project_name() {
 
   collect_existing_projects
 
-  echo "Available project folders under Projects/:"
+  printf '%s%s%s %s\n' "$COLOR_BOLD$COLOR_CYAN" "Available local project folders under:" "$COLOR_RESET" "$PROJECTS_ROOT"
   if [[ ${#EXISTING_PROJECTS[@]} -eq 0 ]]; then
-    echo "  (none yet)"
+    printf '  %s(none yet)%s\n' "$COLOR_DIM" "$COLOR_RESET"
   else
     for project in "${EXISTING_PROJECTS[@]}"; do
-      echo "  $index) $project"
+      printf '  %s%s)%s %s%s%s\n' "$COLOR_GREEN" "$index" "$COLOR_RESET" "$COLOR_BOLD" "$project" "$COLOR_RESET"
       index=$((index + 1))
     done
   fi
-  echo "Press Enter for default: $default_name"
-  read -r -p "Project name [$default_name]: " answer
+  printf '%sPress Enter for default:%s %s\n' "$COLOR_DIM" "$COLOR_RESET" "$default_name"
+  printf '%sProject name [%s]: %s' "$COLOR_YELLOW" "$default_name" "$COLOR_RESET"
+  read -r answer
 
   if [[ -z "$answer" ]]; then
     PROJECT_NAME="$default_name"
@@ -510,6 +562,7 @@ resolve_scope_and_project() {
       SELECTED_REPO_PATH="$PROJECTS_DIR"
       SELECTED_CONTENT_PATH="$PROJECTS_DIR/$PROJECT_NAME"
       SELECTED_LABEL="Projects/$PROJECT_NAME"
+      resolve_project_source_paths
       ;;
     general)
       [[ -z "$PROJECT_NAME" ]] || die "--project-name can only be used with --projects"
@@ -521,6 +574,26 @@ resolve_scope_and_project() {
       die "Unknown scope: $SCOPE"
       ;;
   esac
+}
+
+resolve_project_source_paths() {
+  if [[ -z "$PROJECT_ROOT" ]]; then
+    PROJECT_ROOT="$PROJECTS_ROOT/$PROJECT_NAME"
+  fi
+
+  [[ -d "$PROJECT_ROOT" ]] || die "Selected local project folder does not exist: $PROJECT_ROOT"
+
+  if [[ "$ENV_FILE_SET" != "true" ]]; then
+    ENV_FILE="$PROJECT_ROOT/.env"
+  fi
+
+  if [[ "$SECRETS_EDN_FILE_SET" != "true" ]]; then
+    SECRETS_EDN_FILE="$PROJECT_ROOT/config/.secrets.edn"
+  fi
+
+  if [[ "$RAILWAY_SERVICE_SET" != "true" ]]; then
+    RAILWAY_SERVICE="$PROJECT_NAME"
+  fi
 }
 
 default_commit_message() {
@@ -543,16 +616,21 @@ write_text_file() {
   mv "$temp_file" "$target_file"
 }
 
-copy_source_file_if_present() {
+sync_source_file() {
   local source_file="$1"
   local target_file="$2"
   local label="$3"
 
   if [[ -f "$source_file" ]]; then
     cat "$source_file" | write_text_file "$target_file"
-    echo "   • Saved $label"
+    echo "   • Saved $label from: $source_file"
   else
-    echo "   • Source not found for $label; left any existing stored copy untouched"
+    if [[ -e "$target_file" ]]; then
+      rm -f "$target_file"
+      echo "   • Source not found for $label; removed stale stored copy"
+    else
+      echo "   • Source not found for $label; nothing stored"
+    fi
   fi
 }
 
@@ -585,9 +663,14 @@ ensure_target_writable() {
     return 0
   fi
 
-  for existing_path in "$target_dir/railway-$RAILWAY_ENVIRONMENT.env" "$target_dir/.env" "$target_dir/.secrets.edn"; do
+  for existing_path in "$target_dir/.env" "$target_dir/.secrets.edn"; do
     [[ ! -e "$existing_path" ]] || die "Target already exists: $existing_path (use --overwrite to replace it)"
   done
+
+  if [[ "$INCLUDE_RAILWAY" == "true" ]]; then
+    existing_path="$target_dir/railway-$RAILWAY_ENVIRONMENT.env"
+    [[ ! -e "$existing_path" ]] || die "Target already exists: $existing_path (use --overwrite to replace it)"
+  fi
 }
 
 write_project_snapshot() {
@@ -597,9 +680,19 @@ write_project_snapshot() {
   ensure_target_writable "$target_dir"
 
   echo "📦 Writing project snapshot into: $SELECTED_LABEL"
-  write_railway_export_file "$target_dir/railway-$RAILWAY_ENVIRONMENT.env"
-  copy_source_file_if_present "$ENV_FILE" "$target_dir/.env" "project .env"
-  copy_source_file_if_present "$SECRETS_EDN_FILE" "$target_dir/.secrets.edn" "config/.secrets.edn"
+  echo "   Source project: $PROJECT_ROOT"
+  sync_source_file "$ENV_FILE" "$target_dir/.env" "project .env"
+  sync_source_file "$SECRETS_EDN_FILE" "$target_dir/.secrets.edn" "config/.secrets.edn"
+
+  if [[ "$INCLUDE_RAILWAY" == "true" ]]; then
+    write_railway_export_file "$target_dir/railway-$RAILWAY_ENVIRONMENT.env"
+    echo "   • Saved Railway variables for service=$RAILWAY_SERVICE environment=$RAILWAY_ENVIRONMENT"
+  elif [[ -e "$target_dir/railway-$RAILWAY_ENVIRONMENT.env" ]]; then
+    rm -f "$target_dir/railway-$RAILWAY_ENVIRONMENT.env"
+    echo "   • Railway variables skipped; removed stale railway-$RAILWAY_ENVIRONMENT.env"
+  else
+    echo "   • Railway variables skipped; use --include-railway or --railway-vars-file when needed"
+  fi
 }
 
 commit_repo_changes() {
