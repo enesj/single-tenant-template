@@ -232,8 +232,8 @@
                       (assoc-in [:session :cookie-attrs :same-site] :strict)  ; CSRF protection
                       (assoc-in [:session :cookie-attrs :http-only] true)     ; XSS protection
                       (assoc-in [:session :cookie-attrs :secure] true)        ; HTTPS only (ignored on localhost)
-                      (assoc-in [:session :cookie-attrs :max-age] 3600)       ; 1 hour expiration
-                      (assoc-in [:session :timeout] 3600)                     ; Server-side timeout
+                      (assoc-in [:session :cookie-attrs :max-age] 10800)      ; 3 hour expiration
+                      (assoc-in [:session :timeout] 10800)                    ; Server-side timeout
                       ;; Enable secure cookies in production, but allow HTTP in development
                       (assoc-in [:session :cookie-attrs :secure]
                         (not (or (= (System/getenv "ENV") "development")
