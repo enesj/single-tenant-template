@@ -154,6 +154,7 @@ Reduce the impact of database read access and routine global-admin access by min
 - **Schema cleanup:** Generated `resources/db/migrations/0074_schema.edn` from canonical EDN and applied it to dev and test. It drops `expenses.user_id`, `expenses.created_by`, `receipts.user_id`, `receipts.created_by`, and `user_expense_settings.user_id`. Redundant generated index-drop actions for indexes PostgreSQL removes with the dropped columns are filtered by the migration helper.
 - **Files impacted:** canonical schema EDN, generated migration/model EDN, privacy-subject helper, expenses/receipts/settings/payers/report/profile handlers, tenant/member provisioning, migration tooling, route/service tests, operations docs.
 - **Validation:** migration checks against dev and test databases, pre/post-drop completion gates, focused backend tests, dry-run backfill validation, and editor diagnostics.
+- **Production/external DB rollout checklist:** See `docs/general/operations/email-privacy-key-management.md#production--external-db-subject-ref-rollout-verification-checklist` for the environment-level verification sequence required before claiming this cutover on any non-local database.
 - **Progress:** First non-destructive subject-ref slice, dry-run-first backfill/cutover tooling, local dev/test cutover, completion gate, app-level legacy read fallback removal, and direct-link column removal completed on 2026-04-28.
 
 ### 7. Decide plaintext `full_name` policy

@@ -138,6 +138,130 @@ Notes:
 - App-level legacy read fallbacks have been removed.
 - In the current schema, migration `0074_schema.edn` removes `expenses.user_id`, `expenses.created_by`, `receipts.user_id`, `receipts.created_by`, and `user_expense_settings.user_id` after cutover verification. Do not apply that migration to any environment until `--check-complete` reports `:complete? true` and `:remaining-link-count 0` there.
 
+## Production / External DB Subject-Ref Rollout Verification Checklist
+
+Use this checklist for any non-local environment where the subject-ref cutover and direct-link column drop still need to be proven. This is the verification sequence that turns “implemented in code” into “verified on the target database”.
+
+### 1. Pre-flight
+
+Before making any writes in the target environment:
+
+- confirm the target deployment has a stable `PRIVACY_SUBJECT_KEY_B64`
+- confirm the running app version includes:
+  - subject-ref write/read paths
+  - removed app-level legacy read fallbacks
+  - `bb privacy-subject-backfill`
+  - migration `0074_schema.edn`
+- take a fresh database backup using the environment’s approved backup process
+- ensure you can run app-level tasks in the target environment with the same secrets as the app process
+- do **not** use ad-hoc SQL or `psql` to compute subject refs; they require the application secret and app logic
+
+### 2. Dry-run the cutover first
+
+Run the app-level backfill in dry-run mode against the target environment and review the generated report:
+
+```bash
+railway run bb privacy-subject-backfill prod --cutover --limit 100 --pretty
+```
+
+Verify from the report:
+
+- the command can read the target DB successfully
+- missing `subject_ref` rows are detected as expected
+- candidate counts look reasonable for `expenses`, `receipts`, and `user_expense_settings`
+- no unexpected entity/table appears in scope
+
+If the dry-run output is surprising, stop there and resolve the discrepancy before any apply step.
+
+### 3. Apply the cutover
+
+Once the dry-run looks correct, run the live cutover through the deployment environment:
+
+```bash
+railway run bb privacy-subject-backfill prod --cutover --apply --pretty
+```
+
+Success criteria:
+
+- missing `subject_ref` values are filled where possible
+- direct operational user links are nulled only where the matching subject ref exists or can be computed
+- the command completes without partial-failure ambiguity
+
+Record the command output in the rollout notes for the environment.
+
+### 4. Run the read-only completion gate
+
+Immediately after apply, run the completion gate in the same target environment:
+
+```bash
+railway run bb privacy-subject-backfill prod --check-complete --pretty
+```
+
+Required result before any schema drop:
+
+- `:complete? true`
+- `:remaining-link-count 0`
+- no missing-subject counts for `expenses`, `receipts`, or `user_expense_settings`
+
+If the completion gate fails, do **not** apply `0074_schema.edn` yet.
+
+### 5. Apply the direct-link drop migration
+
+Only after the completion gate passes in the target environment, apply the normal migration workflow for that environment so `0074_schema.edn` drops the direct operational link columns.
+
+After migration, verify that the target DB no longer has these columns:
+
+- `expenses.user_id`
+- `expenses.created_by`
+- `receipts.user_id`
+- `receipts.created_by`
+- `user_expense_settings.user_id`
+
+And verify that these columns still exist:
+
+- `expenses.subject_ref`
+- `expenses.created_by_subject_ref`
+- `receipts.subject_ref`
+- `receipts.created_by_subject_ref`
+- `user_expense_settings.subject_ref`
+
+### 6. Re-run completion and smoke checks after the schema drop
+
+After the migration is applied:
+
+- re-run `bb privacy-subject-backfill prod --check-complete --pretty`
+- confirm the check still reports `:complete? true` and `:remaining-link-count 0`
+- confirm there are no missing-column errors in the checker output
+- perform a small live smoke check through the running app:
+  - a user can still see their own expenses/receipts/settings
+  - a different user cannot see another user’s operational data
+  - admin operational receipt/expense views still work without exposing `subject_ref`
+
+### 7. Evidence to capture for sign-off
+
+For each target environment, save or record:
+
+- backup identifier / timestamp
+- dry-run output summary
+- apply output summary
+- completion-gate output before schema drop
+- migration success/status output for the environment
+- completion-gate output after schema drop
+- a short application smoke-test note
+
+Do not copy secrets into the rollout notes.
+
+### 8. Rollout stop conditions
+
+Stop the rollout and investigate before proceeding if any of the following happens:
+
+- the target environment does not have the expected `PRIVACY_SUBJECT_KEY_B64`
+- dry-run candidate counts are unexpectedly high or unexpectedly zero
+- the apply step reports partial failures or ambiguous write counts
+- the completion gate reports anything other than `:complete? true` with `:remaining-link-count 0`
+- user-owned expense/receipt/settings reads fail after cutover
+- admin operational screens start depending on dropped direct-link columns
+
 ## Required Future Work Before Any Key Rotation
 
 Before rotating keys in production, confirm compatibility support is deployed.
