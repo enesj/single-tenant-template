@@ -30,39 +30,6 @@
                                       (subs line (inc idx))]))))
                          (into {}))
                        {}))))
-         ;; iTerm2 session renaming helper
-         iterm-rename
-         {:doc "Rename terminal session. Usage: bb iterm-rename [session-name]",
-          :task (let [[name] *command-line-args*]
-                  (if (empty? name)
-                    (do (println "Usage: bb iterm-rename [session-name]")
-                      (println "Example: bb iterm-rename \"Development Session\"")
-                      (println "Supported terminals: iTerm2, Terminal.app, most modern terminal emulators"))
-                    (do (when (and (not= "dumb" (System/getenv "TERM"))
-                                (not= "unknown" (System/getenv "TERM")))
-                          (printf "\033]0;%s\007" name)
-                          (flush))
-                      (println (str "📝 Session renamed to: " name)))))},
-
-  ;; Helper function to set session name (used by other tasks)
-         set-session-name
-         {:doc "Internal helper to set session name with emoji support",
-          :task (fn [name]
-                  (let [term (System/getenv "TERM")]
-                    (when (and term (not= "dumb" term) (not= "unknown" term))
-                      (printf "\033]0;%s\007" name)
-                      (flush))))},
-
-  ;; Reset session name to default
-         reset-session
-         {:doc "Reset terminal session name to default",
-          :task (do
-                  (let [term (System/getenv "TERM")]
-                    (when (and term (not= "dumb" term) (not= "unknown" term))
-                      (printf "\033]0;🏠 Hosting Development\007")
-                      (flush)))
-                  (println "📝 Session reset to default: Hosting Development"))}
-
          check-deps
          {:doc "Check for available dependency upgrades without making any changes",
           :task (shell "neil dep upgrade --dry-run")},
@@ -473,9 +440,9 @@
                   (if (and env backup-file)
                     (let [process-env (dotenv)]
                       (println "🔄 Step 1/2: Cleaning database...")
-                      (shell {:extra-env process-env} "clj" "-M" "scripts/bb/database/clean-db.clj" env)
+                      (shell {:extra-env process-env} "clj" "-M" "scripts/bb/database/clean_db.clj" env)
                       (println "🔄 Step 2/2: Restoring from backup...")
-                      (shell {:extra-env process-env} "clj" "-M" "scripts/bb/database/restore-db.clj" env backup-file))
+                      (shell {:extra-env process-env} "clj" "-M" "scripts/bb/database/restore_db_script.clj" env backup-file))
                     (do (println "Usage: bb clean-restore-db --dev backup_file.sql or bb clean-restore-db --test backup_file.sql")
                       (println "  --dev   Clean restore to development database")
                       (println "  --test  Clean restore to test database")
@@ -514,7 +481,7 @@
         Examples:
           bb md-to-pdf docs/linked-in/article.md
           bb md-to-pdf readme.md output/readme.pdf",
-          :task (apply shell "bb" "scripts/bb/project-management/md-to-pdf.clj" *command-line-args*)},
+          :task (apply shell "bb" "scripts/bb/project-management/md_to_pdf.clj" *command-line-args*)},
 
          clean-db
          {:doc "Clean database by truncating all tables. Usage: bb clean-db --dev or bb clean-db --test",
@@ -524,7 +491,7 @@
                             (some #{"--test"} args) "test"
                             :else nil)]
                   (if env
-                    (shell {:extra-env (dotenv)} "clj" "-M" "scripts/bb/database/clean-db.clj" env)
+                    (shell {:extra-env (dotenv)} "clj" "-M" "scripts/bb/database/clean_db.clj" env)
                     (do (println "Usage: bb clean-db --dev or bb clean-db --test")
                       (println "  --dev   Clean development database")
                       (println "  --test  Clean test database"))))},
@@ -831,70 +798,6 @@
         Usage: bb analyze-longest-files",
           :task (shell "bb" "scripts/bb/project-management/analyze_longest_files.clj")},
 
-         set-model
-         {:doc "Switch between AI models for Claude CLI
-
-        Usage: bb set-model [options]
-
-        Options:
-          --model MODEL           Model to use (default: glm-4.5)
-          --base-url URL          Base URL for API (default: https://api.z.ai/api/anthropic)
-          --token TOKEN           Auth token (default: z.ai token)
-          --small-model MODEL     Small/fast model (default: same as --model)
-          --help                  Show this help
-
-        Examples:
-          bb set-model
-          bb set-model --model claude-3-5-sonnet-20241022
-          bb set-model --model glm-4.5 --base-url https://api.z.ai/api/anthropic",
-          :task (let [args *command-line-args*
-                      help? (some #{"--help"} args)
-                      parse-arg (fn [flag args]
-                                  (when-let [idx (some (fn [i] (when (= flag (nth args i)) i)) (range (count args)))]
-                                    (when (< (inc idx) (count args))
-                                      (nth args (inc idx)))))
-;; Find the first argument that doesn't start with -- as the prompt
-                      prompt (first (filter (fn [arg] (not (.startsWith arg "--"))) args))
-                      model (or (parse-arg "--model" args) "glm-4.7")
-                      model-small (or (parse-arg "--model" args) "lm-4.5-air")
-                      base-url (or (parse-arg "--base-url" args) "https://api.z.ai/api/anthropic")
-                      token (or (parse-arg "--token" args) "6189b03087e74486bff8234fcab6d678.JOWIHK3u9TANnRhO")
-                      small-model (or (parse-arg "--small-model" args) model)]
-                  (cond
-                    help?
-                    (do (println "Usage: bb set-model [options] [prompt]")
-                      (println "")
-                      (println "Options:")
-                      (println "  --model MODEL           Model to use (default: glm-4.7)")
-                      (println "  --base-url URL          Base URL for API (default: https://api.z.ai/api/anthropic)")
-                      (println "  --token TOKEN           Auth token (default: z.ai token)")
-                      (println "  --small-model MODEL     Small/fast model (default: same as --model)")
-                      (println "  --help                  Show this help")
-                      (println "")
-                      (println "Arguments:")
-                      (println "  prompt                  Optional prompt to execute after switching models")
-                      (println "")
-                      (println "Examples:")
-                      (println "  bb set-model")
-                      (println "  bb set-model --model claude-3-5-sonnet-20241022")
-                      (println "  bb set-model --model glm-4.5 --base-url https://api.z.ai/api/anthropic")
-                      (println "  bb set-model \"fix the login bug\"")
-                      (println "  bb set-model --model claude-3-5-sonnet-20241022 \"analyze the codebase\""))
-
-                    :else
-                    (do (printf "\033]0;🤖 AI Model: %s\007" model)
-                      (flush)
-                      (println (str "🔧 Switching to " model " model..."))
-                      (shell "bash" "-c" (str "export ANTHROPIC_BASE_URL=" base-url
-                                           " && export ANTHROPIC_DEFAULT_OPUS_MODEL=" model
-                                           " && export ANTHROPIC_DEFAULT_SONNET_MODEL=" model
-                                           " && export ANTHROPIC_DEFAULT_HAIKU_MODEL=" model-small
-                                           " && export ANTHROPIC_AUTH_TOKEN=" token
-                                           " && echo 'Environment variables exported successfully'"
-                                           (if prompt
-                                             (str " && claude -p '" prompt "'")
-                                             " && exec claude"))))))}
-
          find-snake-case
          {:doc "Find snake_case keywords in Clojure files and analyze their usage patterns.
 
@@ -935,45 +838,4 @@
         • Identifying files that need refactoring priority
         • Planning migration from snake_case to kebab-case
         • Code quality auditing with manageable output",
-          :task (apply shell "bb" "scripts/bb/code_quality/find_snake_case_keywords.clj" *command-line-args*)}
-
-         run-karma
-         {:doc "Extract browser test failures as structured JSON data
-
-        This script runs the test runner with JSON-only output to extract
-        failed tests with detailed information including test names, expected/actual
-        values, file locations, and assertion types.
-
-        Usage: bb run-karma
-
-        Output:
-        • Creates test-failures.json with structured failure data
-        • Shows summary statistics (total tests, failures, errors, success rate)
-        • Groups failures by type and file for analysis
-        • Provides quick jq commands for further analysis
-
-        Features:
-        📊 JSON-only test runner output
-        🔍 Structured JSON output with complete failure details
-        📋 Summary statistics and categorization
-        🎯 File-level analysis with line numbers
-        🔧 Powerful jq query examples for further investigation
-
-        Examples:
-          bb extract-test-failures                    # Extract all failures
-
-        Quick Analysis Commands:
-          cat test-failures.json | jq '.failures[]'  # View all failures
-          cat test-failures.json | jq '.summary'      # View summary only
-          cat test-failures.json | jq '.failures[] | select(.file == \"admin_page_wrapper_test.cljs\")'  # Filter by file
-
-        Use Cases:
-        • CI/CD pipeline failure reporting
-        • Development debugging and analysis
-        • Test quality tracking over time
-        • Automated test health monitoring
-
-        Requirements:
-        • Chrome/Chromium available for test execution
-        • jq installed for JSON processing",
-          :task (shell {"JSON_ONLY" "1"} "/Users/enes/Projects/hosting/scripts/sh/tests/run-karma.sh")}}}
+          :task (apply shell "bb" "scripts/bb/code_quality/find_snake_case_keywords.clj" *command-line-args*)}}}

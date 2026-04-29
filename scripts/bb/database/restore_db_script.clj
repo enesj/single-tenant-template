@@ -113,10 +113,10 @@
             (System/exit 1)))
         (do
           (println (str "❌ Invalid environment: " env))
-          (println "Usage: clj -M scripts/bb/database/restore-db.clj [dev|test] backup_file.sql")
+          (println "Usage: clj -M scripts/bb/database/restore_db_script.clj [dev|test] backup_file.sql")
           (System/exit 1))))
     (do
-      (println "Usage: clj -M scripts/bb/database/restore-db.clj [dev|test] backup_file.sql")
+      (println "Usage: clj -M scripts/bb/database/restore_db_script.clj [dev|test] backup_file.sql")
       (println "📥 This restores a database from a backup file")
       (println)
       (println "  dev         Restore to development database")
@@ -124,8 +124,8 @@
       (println "  backup_file Path to SQL backup file")
       (println)
       (println "Examples:")
-      (println "  clj -M scripts/bb/database/restore-db.clj dev backups/backup_dev_2025-06-27_19-58-16.sql")
-      (println "  clj -M scripts/bb/database/restore-db.clj test backups/backup_dev_2025-06-27_19-58-16.sql")
+      (println "  clj -M scripts/bb/database/restore_db_script.clj dev backups/backup_dev_2025-06-27_19-58-16.sql")
+      (println "  clj -M scripts/bb/database/restore_db_script.clj test backups/backup_dev_2025-06-27_19-58-16.sql")
       (println)
       (println "Available backup files:")
       (let [backups-dir (java.io.File. "backups")]

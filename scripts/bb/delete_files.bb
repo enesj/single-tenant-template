@@ -5,8 +5,6 @@
 ;;   bb scripts/bb/delete_files.bb path/to/file1 path/to/file2
 ;;   bb scripts/bb/delete_files.bb --dry-run path1 path2
 ;;
-;; Backwards-compatible wrapper exists at scripts/bb/delete-files.bb
-
 (ns scripts.bb.delete-files
   (:require
     [babashka.fs :as fs]
@@ -14,7 +12,6 @@
 
 (defn- usage []
   (println "Usage: bb scripts/bb/delete_files.bb [--dry-run] [--yes] path1 path2 ...")
-  (println "   or: bb scripts/bb/delete-files.bb [--dry-run] [--yes] path1 path2 ...")
   (System/exit 1))
 
 (defn- prompt-delete [paths]

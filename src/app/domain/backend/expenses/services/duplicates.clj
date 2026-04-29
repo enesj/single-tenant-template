@@ -13,10 +13,11 @@
 
   Each strategy returns clusters: vectors of entity maps belonging together."
   (:require
-    [app.domain.backend.expenses.services.service-configs.normalization :as normalize]
+    [app.domain.backend.expenses.services.duplicates.config :as dup-config]
+    [app.domain.backend.expenses.services.duplicates.context :as dup-context]
+    [app.domain.backend.expenses.services.duplicates.similarity :as dup-sim]
     [buddy.core.codecs :as codecs]
     [buddy.core.hash :as hash]
-    [clojure.set :as set]
     [clojure.string :as str]
     [honey.sql :as sql]
     [next.jdbc :as jdbc]
@@ -26,71 +27,16 @@
 ;; Entity Configuration
 ;; ============================================================================
 
-(def ^:private entity-configs
-  "Per-entity config for duplicate detection.
-
-  :group-col (optional) — when set, candidates are only compared within the
-  same group (e.g. stores must share the same supplier_id, and articles must
-  share the same unit, to be considered duplicates). Applies to all
-  strategies.
-
-  :display-cols (optional) — extra columns to include in duplicate candidate
-  payloads for UI context without affecting grouping.
-
-  :normalize-fn (optional) — derive a detection key from the display name when
-  the entity does not persist a normalized_key column."
-  {:suppliers {:table "suppliers"
-               :name-col :display_name
-               :key-col :normalized_key
-               :fk-tables {:expenses {:col :supplier_id}
-                           :stores {:col :supplier_id}
-                           :supplier_aliases {:col :supplier_id}
-                           :article_aliases {:col :supplier_id}}}
-   :articles {:table "articles"
-              :name-col :canonical_name
-              :key-col :normalized_key
-              :group-col :unit
-              :display-cols [:unit]
-              :fk-tables {:expense_items {:col :article_id}
-                          :article_aliases {:col :article_id}}}
-   :stores {:table "stores"
-            :name-col :display_name
-            :key-col :normalized_key
-            :group-col :supplier_id
-            :fk-tables {:expenses {:col :store_id}
-                        :store_aliases {:col :store_id}}}
-   :manufacturers {:table "manufacturers"
-                   :name-col :display_name
-                   :key-col :normalized_key
-                   :fk-tables {:articles {:col :manufacturer_id}}}
-   :subcategories {:table "subcategories"
-                   :name-col :name
-                   :normalize-fn normalize/normalize-store-key
-                   :fk-tables {:articles {:col :subcategory_id}}}})
-
 (def ^:private default-prefix-fetch-limit
-  5000)
-
-(def ^:private max-prefix-fetch-limit
-  20000)
+  dup-config/default-prefix-fetch-limit)
 
 (defn- normalize-fetch-limit
-  "Normalize fetch-limit to a bounded positive integer.
-
-  - nil -> default
-  - values < 1 -> 1
-  - values > max -> max"
   [fetch-limit]
-  (-> (or fetch-limit default-prefix-fetch-limit)
-    (max 1)
-    (min max-prefix-fetch-limit)))
+  (dup-config/normalize-fetch-limit fetch-limit))
 
 (defn- get-entity-config!
   [entity-type]
-  (or (get entity-configs entity-type)
-    (throw (ex-info (str "Unknown entity type: " entity-type)
-             {:entity-type entity-type
-              :valid-types (keys entity-configs)}))))
+  (dup-config/get-entity-config! entity-type))
 
 ;; ============================================================================
 ;; Helpers
@@ -193,37 +139,6 @@
 ;; Union-Find for Clustering Pairs
 ;; ============================================================================
 
-(defn- make-union-find
-  "Create a mutable union-find structure (atom of parent map)."
-  [ids]
-  (atom (zipmap ids ids)))
-
-(defn- uf-find
-  "Find root with path compression."
-  [uf x]
-  (let [parent (get @uf x x)]
-    (if (= parent x)
-      x
-      (let [root (uf-find uf parent)]
-        (swap! uf assoc x root)
-        root))))
-
-(defn- uf-union
-  "Merge the sets containing x and y."
-  [uf x y]
-  (let [rx (uf-find uf x)
-        ry (uf-find uf y)]
-    (when (not= rx ry)
-      (swap! uf assoc ry rx))))
-
-(defn- uf-clusters
-  "Return clusters (groups of >=2 items) from the union-find."
-  [uf]
-  (->> (keys @uf)
-    (group-by #(uf-find uf %))
-    vals
-    (filter #(> (count %) 1))))
-
 ;; ============================================================================
 ;; Strategy: Prefix Grouping
 ;; ============================================================================
@@ -241,97 +156,20 @@
       (mapv #(prepare-detection-row config %)))))
 
 (defn- clusters-from-pairs
-  [rows pairs {:keys [limit max-cluster-size] :or {limit 50 max-cluster-size 10}}]
-  (let [all-ids (distinct (concat (map :id_a pairs) (map :id_b pairs)))
-        uf (make-union-find all-ids)]
-    (doseq [{:keys [id_a id_b]} pairs]
-      (uf-union uf id_a id_b))
-    (let [clusters (uf-clusters uf)
-          id->row (zipmap (map :id rows) rows)]
-      (->> clusters
-        (filter #(<= (count %) max-cluster-size))
-        (mapv (fn [ids]
-                {:members (->> ids
-                            (mapv id->row)
-                            (remove nil?)
-                            vec)
-                 :count   (count ids)}))
-        (sort-by #(- (:count %)))
-        (take limit)
-        vec))))
-
-(defn- same-group?
-  [group-col row-a row-b]
-  (or (nil? group-col)
-    (= (get row-a group-col) (get row-b group-col))))
-
-(defn- trigram-set
-  [s]
-  (let [value (str "  " (or s "") "  ")]
-    (if (<= (count value) 3)
-      #{value}
-      (->> (range 0 (- (count value) 2))
-        (map (fn [idx] (subs value idx (+ idx 3))))
-        set))))
+  [rows pairs opts]
+  (dup-sim/clusters-from-pairs rows pairs opts))
 
 (defn- trigram-similarity
   [a b]
-  (let [ta (trigram-set a)
-        tb (trigram-set b)
-        denom (+ (count ta) (count tb))]
-    (if (zero? denom)
-      0.0
-      (/ (* 2.0 (count (set/intersection ta tb))) denom))))
+  (dup-sim/trigram-similarity a b))
 
 (defn- levenshtein-distance
   [a b]
-  (let [a (vec (or a ""))
-        b (vec (or b ""))
-        n (count a)
-        m (count b)]
-    (cond
-      (zero? n) m
-      (zero? m) n
-      :else
-      (loop [i 1
-             prev (vec (range (inc m)))]
-        (if (> i n)
-          (peek prev)
-          (let [curr (loop [j 1
-                            row [i]]
-                       (if (> j m)
-                         (vec row)
-                         (let [cost (if (= (nth a (dec i)) (nth b (dec j))) 0 1)
-                               deletion (inc (nth prev j))
-                               insertion (inc (peek row))
-                               substitution (+ (nth prev (dec j)) cost)]
-                           (recur (inc j) (conj row (min deletion insertion substitution))))))]
-            (recur (inc i) curr)))))))
+  (dup-sim/levenshtein-distance a b))
 
 (defn- detect-similar-pairs-in-memory
   [rows group-col score-fn matches?]
-  (let [rows* (vec rows)
-        total (count rows*)]
-    (reduce
-      (fn [acc idx]
-        (let [row-a (nth rows* idx)
-              key-a (:normalized_key row-a)]
-          (if-not key-a
-            acc
-            (reduce
-              (fn [acc2 jdx]
-                (let [row-b (nth rows* jdx)
-                      key-b (:normalized_key row-b)
-                      score (when (and key-b (same-group? group-col row-a row-b))
-                              (score-fn key-a key-b))]
-                  (if (and score (matches? score))
-                    (conj acc2 {:id_a (:id row-a)
-                                :id_b (:id row-b)})
-                    acc2)))
-              acc
-              (range (inc idx) total)))))
-      []
-      (range total))))
+  (dup-sim/detect-similar-pairs-in-memory rows group-col score-fn matches?))
 
 (defn detect-prefix-duplicates
   "Group entities by first N hyphen-tokens of normalized_key.
@@ -557,177 +395,17 @@
 ;; Usage Count Enrichment
 ;; ============================================================================
 
-(defn- derive-price-label
-  [{:keys [unit_price qty line_total currency]}]
-  (let [amount (cond
-                 (some? unit_price) (bigdec unit_price)
-                 (and (some? line_total)
-                   (some? qty)
-                   (not (zero? (bigdec qty))))
-                 (.divide (bigdec line_total) (bigdec qty) 2 java.math.RoundingMode/HALF_UP)
-
-                 (some? line_total) (bigdec line_total)
-                 :else nil)]
-    (when amount
-      (str (.setScale amount 2 java.math.RoundingMode/HALF_UP)
-        (when (seq (str currency))
-          (str " " currency))))))
-
-(defn- article-price-labels-by-id
-  [db all-ids]
-  (let [direct-rows (jdbc/execute!
-                      db
-                      (sql/format {:select [[:ei.article_id :entity_id]
-                                            :ei.unit_price
-                                            :ei.qty
-                                            :ei.line_total
-                                            [:e.currency :currency]]
-                                   :from [[:expense_items :ei]]
-                                   :left-join [[:expenses :e] [:= :e.id :ei.expense_id]]
-                                   :where [:in :ei.article_id all-ids]})
-                      {:builder-fn rs/as-unqualified-lower-maps})
-        alias-rows (jdbc/execute!
-                     db
-                     (sql/format {:select [[:aa.article_id :entity_id]
-                                           :ei.unit_price
-                                           :ei.qty
-                                           :ei.line_total
-                                           [:e.currency :currency]]
-                                  :from [[:article_aliases :aa]]
-                                  :join [[:expense_items :ei] [:= :ei.alias_id :aa.id]]
-                                  :left-join [[:expenses :e] [:= :e.id :ei.expense_id]]
-                                  :where [:in :aa.article_id all-ids]})
-                     {:builder-fn rs/as-unqualified-lower-maps})]
-    (reduce
-      (fn [acc {:keys [entity_id] :as row}]
-        (if-let [label (derive-price-label row)]
-          (update acc entity_id (fnil conj []) label)
-          acc))
-      {}
-      (concat direct-rows alias-rows))))
-
-(defn- article-manufacturer-names-by-id
-  [db all-ids]
-  (->> (jdbc/execute!
-         db
-         (sql/format {:select [[:a.id :entity_id]
-                               [:m.display_name :manufacturer_name]]
-                      :from [[:articles :a]]
-                      :left-join [[:manufacturers :m] [:= :m.id :a.manufacturer_id]]
-                      :where [:in :a.id all-ids]})
-         {:builder-fn rs/as-unqualified-lower-maps})
-    (reduce (fn [acc {:keys [entity_id manufacturer_name]}]
-              (if (some? manufacturer_name)
-                (assoc acc entity_id {:manufacturer-name manufacturer_name})
-                acc))
-      {})))
-
-(defn- store-supplier-names-by-id
-  [db all-ids]
-  (->> (jdbc/execute!
-         db
-         (sql/format {:select [[:st.id :entity_id]
-                               [:s.display_name :supplier_display_name]]
-                      :from [[:stores :st]]
-                      :join [[:suppliers :s] [:= :s.id :st.supplier_id]]
-                      :where [:in :st.id all-ids]})
-         {:builder-fn rs/as-unqualified-lower-maps})
-    (reduce (fn [acc {:keys [entity_id supplier_display_name]}]
-              (assoc acc entity_id {:supplier-display-name supplier_display_name}))
-      {})))
-
-(defn- subcategory-category-names-by-id
-  [db all-ids]
-  (->> (jdbc/execute!
-         db
-         (sql/format {:select [[:sc.id :entity_id]
-                               [:c.name :category_name]]
-                      :from [[:subcategories :sc]]
-                      :join [[:categories :c] [:= :c.id :sc.category_id]]
-                      :where [:in :sc.id all-ids]})
-         {:builder-fn rs/as-unqualified-lower-maps})
-    (reduce (fn [acc {:keys [entity_id category_name]}]
-              (assoc acc entity_id {:category-name category_name}))
-      {})))
-
-(defn- contextual-info-by-id
-  [db entity-type all-ids]
-  (case entity-type
-    :articles
-    (merge-with merge
-      (->> (article-price-labels-by-id db all-ids)
-        (reduce-kv (fn [acc entity-id labels]
-                     (assoc acc entity-id {:price-labels (->> labels distinct sort vec)}))
-          {}))
-      (article-manufacturer-names-by-id db all-ids))
-
-    :stores
-    (store-supplier-names-by-id db all-ids)
-
-    :subcategories
-    (subcategory-category-names-by-id db all-ids)
-
-    {}))
-
 (defn enrich-members-with-context
   "Attach entity-specific display context to standalone candidate rows."
   [db entity-type members]
-  (let [all-ids (->> members
-                  (map :id)
-                  distinct
-                  vec)]
-    (if (empty? all-ids)
-      (vec members)
-      (let [context-by-id (contextual-info-by-id db entity-type all-ids)]
-        (mapv (fn [member]
-                (merge member (get context-by-id (:id member) {})))
-          members)))))
+  (dup-context/enrich-members-with-context db entity-type members))
 
 (defn enrich-with-usage-counts
   "For each member in each cluster, sum FK reference counts across referencing tables.
 
   Adds :usage-count and any entity-specific display context to each member map."
   [db entity-type clusters]
-  (let [config (get-entity-config! entity-type)
-        fk-tables (:fk-tables config)
-        all-ids (->> clusters
-                  (mapcat :members)
-                  (map :id)
-                  distinct
-                  vec)]
-    (if (empty? all-ids)
-      clusters
-      (let [counts-by-id
-            (if (empty? fk-tables)
-              {}
-              (reduce
-                (fn [acc [fk-table {:keys [col]}]]
-                  (let [rows (jdbc/execute!
-                               db
-                               (sql/format {:select [[col :entity_id]
-                                                     [[:count :*] :cnt]]
-                                            :from [(keyword (name fk-table))]
-                                            :where [:in col all-ids]
-                                            :group-by [col]})
-                               {:builder-fn rs/as-unqualified-lower-maps})]
-                    (reduce
-                      (fn [a {:keys [entity_id cnt]}]
-                        (update a entity_id (fnil + 0) cnt))
-                      acc
-                      rows)))
-                {}
-                fk-tables))
-            context-by-id (contextual-info-by-id db entity-type all-ids)]
-        (mapv
-          (fn [cluster]
-            (update cluster :members
-              (fn [members]
-                (mapv (fn [member]
-                        (merge member
-                          {:usage-count (get counts-by-id (:id member) 0)}
-                          (get context-by-id (:id member) {})))
-                  members))))
-          clusters)))))
+  (dup-context/enrich-with-usage-counts db entity-type clusters))
 
 (defn filter-article-clusters-with-distinct-manufacturers
   "Remove article clusters when every member has a known, distinct manufacturer.
@@ -736,22 +414,7 @@
   merge candidates. Clusters with any missing manufacturer stay visible so admins
   can still review genuinely ambiguous cases."
   [entity-type clusters]
-  (if (= entity-type :articles)
-    (->> clusters
-      (remove (fn [{:keys [members]}]
-                (let [manufacturer-names (->> members
-                                           (keep (fn [member]
-                                                   (some-> (or (:manufacturer-name member)
-                                                             (:manufacturer_name member))
-                                                     str
-                                                     str/trim
-                                                     not-empty))))]
-                  (and (> (count members) 1)
-                    (= (count manufacturer-names) (count members))
-                    (= (count (distinct manufacturer-names))
-                      (count members))))))
-      vec)
-    (vec clusters)))
+  (dup-context/filter-article-clusters-with-distinct-manufacturers entity-type clusters))
 
 (comment
   ;; REPL usage examples

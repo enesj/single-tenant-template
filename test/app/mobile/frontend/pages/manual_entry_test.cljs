@@ -1,13 +1,15 @@
 (ns app.mobile.frontend.pages.manual-entry-test
   (:require
     [app.domain.frontend.expenses.components.manual-expense-form.smart-input.constants :as smart-input-constants]
-    [app.mobile.frontend.pages.manual-entry :as sut]
+    [app.mobile.frontend.pages.manual-entry.components :as components]
+    [app.mobile.frontend.pages.manual-entry.events :as events]
+    [app.mobile.frontend.pages.manual-entry.helpers :as helpers]
     [cljs.test :refer [deftest is testing]]
     [re-frame.core :as rf]
     [re-frame.db :as rf-db]))
 
 (deftest add-context-entry-keeps-supplier-and-store-in-sync
-  (let [add-context-entry @#'sut/add-context-entry]
+  (let [add-context-entry helpers/add-context-entry]
     (testing "selecting a supplier drops an existing store from another supplier"
       (is (= {:supplier {:id "sup-2" :label "New Supplier"}}
             (add-context-entry
@@ -30,7 +32,7 @@
                :supplier_display_name "Supplier 9"}))))))
 
 (deftest mobile-submit-error-key-matches-phase-one-save-validation
-  (let [submit-error-key @#'sut/submit-error-key]
+  (let [submit-error-key helpers/submit-error-key]
     (testing "requires at least one prepared line item"
       (is (= :smart-expense/err-no-items
             (submit-error-key [] "payer-1"))))
@@ -47,7 +49,7 @@
                   "payer-1"))))))
 
 (deftest phase-one-category-picks-stay-visible-when-category-is-missing
-  (let [phase-one-category-picks @#'sut/phase-one-category-picks
+  (let [phase-one-category-picks helpers/phase-one-category-picks
         categories (mapv (fn [n]
                            {:id (str "cat-" n)
                             :name (str "Category " n)})
@@ -61,7 +63,7 @@
       (is (empty? (phase-one-category-picks categories {} "kup"))))))
 
 (deftest phase-one-history-picks-show-mobile-store-and-article-chips
-  (let [phase-one-history-picks @#'sut/phase-one-history-picks
+  (let [phase-one-history-picks helpers/phase-one-history-picks
         history {:stores [{:id "store-1" :display_name "Store 1"}
                           {:id "store-2" :display_name "Store 2"}]
                  :articles [{:id "article-1" :canonical_name "Article 1" :last_price 4.25}
@@ -79,7 +81,7 @@
       (is (empty? (:articles picks-with-item))))))
 
 (deftest mobile-visible-suggestions-dedupe-store-labels-and-backfill-suppliers
-  (let [visible-mobile-suggestions @#'sut/visible-mobile-suggestions
+  (let [visible-mobile-suggestions @#'components/visible-mobile-suggestions
         suggestions {:suppliers [{:id "sup-bingo" :display_name "BINGO"}]
                      :stores [{:id "store-bingo-1"
                                :label "BINGO Rajlovac"
@@ -117,8 +119,8 @@
             (mapv :label (:suppliers visible)))))))
 
 (deftest mobile-suggestion-color-map-links-suppliers-and-stores-by-slot
-  (let [build-suggestion-supplier-color-map @#'sut/build-suggestion-supplier-color-map
-        suggestion-chip-class @#'sut/suggestion-chip-class
+  (let [build-suggestion-supplier-color-map @#'components/build-suggestion-supplier-color-map
+        suggestion-chip-class @#'components/suggestion-chip-class
         suppliers [{:id "sup-1" :display_name "BINGO"}
                    {:id "sup-2" :display_name "KONZUM"}]
         stores [{:id "store-1" :display_name "PJ 91" :supplier_id "sup-1"}
@@ -135,8 +137,8 @@
             (suggestion-chip-class color-map :store (first stores)))))))
 
 (deftest mobile-store-suggestions-keep-paired-colors-without-visible-supplier-chips
-  (let [build-suggestion-supplier-color-map @#'sut/build-suggestion-supplier-color-map
-        suggestion-chip-class @#'sut/suggestion-chip-class
+  (let [build-suggestion-supplier-color-map @#'components/build-suggestion-supplier-color-map
+        suggestion-chip-class @#'components/suggestion-chip-class
         stores [{:id "store-9" :display_name "Branch 9" :supplier_id "sup-9"}]
         color-map (build-suggestion-supplier-color-map [] stores)]
     (testing "store-only suggestion sections still assign a supplier-based palette slot"
@@ -146,7 +148,7 @@
             (suggestion-chip-class color-map :store (first stores)))))))
 
 (deftest item-label-edit-clears-stale-article-id
-  (let [update-item-label-entry @#'sut/update-item-label-entry]
+  (let [update-item-label-entry @#'components/update-item-label-entry]
     (is (= {:label "dun" :qty "1" :unit-price "6.90"}
           (update-item-label-entry {:label "Cigarete Dunhill Distinct"
                                     :article-id "article-1"
@@ -155,7 +157,7 @@
             "dun")))))
 
 (deftest apply-item-article-selection-preserves-row-and-fills-price
-  (let [apply-item-article-selection @#'sut/apply-item-article-selection]
+  (let [apply-item-article-selection @#'components/apply-item-article-selection]
     (testing "selecting a searched article swaps in the canonical label and article id"
       (is (= {:label "Cigarete Dunhill Distinct"
               :article-id "article-9"
@@ -209,7 +211,7 @@
           (get-in @rf-db/app-db [:mobile :cooccurring-articles])))))
 
 (deftest entity-search-uri-covers-irregular-endpoints
-  (let [entity-search-uri @#'sut/entity-search-uri]
+  (let [entity-search-uri @#'events/entity-search-uri]
     (testing "category lookups use the expense-categories endpoint instead of a naive plural"
       (is (= "/api/v1/expenses/expense-categories" (entity-search-uri :category)))
       (is (= "/api/v1/expenses/expense-categories" (entity-search-uri :expense-category))))

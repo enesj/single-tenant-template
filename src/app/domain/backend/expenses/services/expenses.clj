@@ -2,17 +2,14 @@
   "Expense creation/update with line items."
   (:require
     [app.domain.backend.expenses.services.article-aliases :as aliases]
-    [app.domain.backend.expenses.services.articles :as articles]
-    [app.domain.backend.expenses.services.exchange-rates :as exchange-rates]
+    [app.domain.backend.expenses.services.expenses.parsing :as parsing]
+    [app.domain.backend.expenses.services.expenses.queries :as queries]
     [clojure.string :as str]
     [honey.sql :as sql]
     [next.jdbc :as jdbc]
-    [next.jdbc.result-set :as rs]
-    [taoensso.timbre :as log])
+    [next.jdbc.result-set :as rs])
   (:import
-    [java.math RoundingMode]
-    [java.time Instant LocalDate LocalDateTime OffsetDateTime ZoneId ZoneOffset]
-    [java.util Date UUID]))
+    [java.util UUID]))
 
 ;; ============================================================================
 ;; Helpers
@@ -20,163 +17,23 @@
 
 (defn- require-keys!
   [m ks]
-  (doseq [k ks]
-    (when-not (get m k)
-      (throw (ex-info (str (name k) " is required")
-               {:status 400
-                :field k
-                :data m})))))
-
-(defn- blank->nil
-  [v]
-  (cond
-    (nil? v) nil
-    (and (string? v) (str/blank? v)) nil
-    :else v))
+  (parsing/require-keys! m ks))
 
 (defn- parse-uuid!
   [field v]
-  (let [v (blank->nil v)]
-    (cond
-      (nil? v) nil
-      (instance? UUID v) v
-      :else
-      (try
-        (UUID/fromString (str v))
-        (catch IllegalArgumentException _
-          (throw (ex-info (str "Invalid " (name field))
-                   {:status 400
-                    :field field
-                    :value v})))))))
-
-(defn- parse-bigdec!
-  [field v]
-  (let [v (blank->nil v)]
-    (cond
-      (nil? v) nil
-      (instance? java.math.BigDecimal v) v
-      (number? v) (bigdec v)
-      (string? v)
-      (try
-        (bigdec v)
-        (catch Exception _
-          (throw (ex-info (str "Invalid " (name field))
-                   {:status 400
-                    :field field
-                    :value v}))))
-      :else
-      (throw (ex-info (str "Invalid " (name field))
-               {:status 400
-                :field field
-                :value v})))))
-
-(defn- parse-instant!
-  [field v]
-  (let [v (blank->nil v)]
-    (cond
-      (nil? v) nil
-      (instance? Instant v) v
-      (instance? Date v) (.toInstant ^Date v)
-      (number? v) (Instant/ofEpochMilli (long v))
-      (string? v)
-      (or
-        (try
-          (Instant/parse v)
-          (catch Exception _ nil))
-        (try
-          (-> (OffsetDateTime/parse v) .toInstant)
-          (catch Exception _ nil))
-        ;; Support HTML `datetime-local` values like "2025-12-12T12:34".
-        (try
-          (-> (LocalDateTime/parse v)
-            (.atZone (ZoneId/systemDefault))
-            .toInstant)
-          (catch Exception _ nil))
-        (try
-          (-> (LocalDate/parse v) (.atStartOfDay ZoneOffset/UTC) .toInstant)
-          (catch Exception _ nil))
-        (throw (ex-info (str "Invalid " (name field))
-                 {:status 400
-                  :field field
-                  :value v})))
-      :else
-      (throw (ex-info (str "Invalid " (name field))
-               {:status 400
-                :field field
-                :value v})))))
+  (parsing/parse-uuid! field v))
 
 (defn- update-if-present
-  "Update map key only when it exists (avoids inserting optional columns with nil values)."
   [m k f]
-  (if (contains? m k)
-    (update m k f)
-    m))
-
-(defn- derive-unit-price
-  "Derive a unit price from line total and quantity.
-
-  Receipts often omit an explicit unit price; when qty is missing we treat the
-  line total as the unit price (i.e. assume qty=1).
-  Returns nil when qty is zero or negative (bad OCR data)."
-  [qty line-total]
-  (cond
-    (nil? line-total) nil
-    (nil? qty) line-total
-    (pos? qty) (.divide ^java.math.BigDecimal line-total
-                 ^java.math.BigDecimal qty
-                 2
-                 RoundingMode/HALF_UP)
-    :else (do
-            (log/warn "derive-unit-price: non-positive qty; unit price will be nil"
-              {:qty qty :line-total line-total})
-            nil)))
-
-(defn- inconsistent-item-unit-price?
-  [{:keys [qty unit_price line_total]}]
-  (let [expected (when (and qty unit_price)
-                   (.multiply ^java.math.BigDecimal qty
-                     ^java.math.BigDecimal unit_price))
-        diff (when (and expected line_total)
-               (.abs (.subtract ^java.math.BigDecimal expected
-                       ^java.math.BigDecimal line_total)))]
-    (and qty
-      unit_price
-      line_total
-      (pos? (.signum ^java.math.BigDecimal qty))
-      diff
-      (pos? (.compareTo ^java.math.BigDecimal diff (bigdec "0.01"))))))
+  (parsing/update-if-present m k f))
 
 (defn- normalize-expense-item
   [item]
-  (let [item* (-> item
-                (update-if-present :id #(parse-uuid! :id %))
-                (update-if-present :alias_id #(parse-uuid! :alias_id %))
-                (update-if-present :raw_label #(some-> % str str/trim))
-                (update-if-present :unit #(some-> % str str/trim str/lower-case blank->nil))
-                (update-if-present :qty #(parse-bigdec! :qty %))
-                (update-if-present :unit_price #(parse-bigdec! :unit_price %))
-                (update-if-present :line_total #(parse-bigdec! :line_total %)))
-        derived-unit-price (when (nil? (:unit_price item*))
-                             (derive-unit-price (:qty item*) (:line_total item*)))
-        repaired-unit-price (when (and (:unit_price item*)
-                                    (inconsistent-item-unit-price? item*))
-                              (derive-unit-price (:qty item*) (:line_total item*)))]
-    (cond-> item*
-      derived-unit-price (assoc :unit_price derived-unit-price)
-      repaired-unit-price (assoc :unit_price repaired-unit-price))))
-
-(def ^:private min-alias-normalized-length
-  "Minimum length of a normalized alias label to be considered valid.
-
-  This prevents creating/looking up aliases for blank/garbage labels like \" \", \"A\", or \"##\"."
-  2)
+  (parsing/normalize-expense-item item))
 
 (defn- valid-alias-label?
   [raw-label]
-  (let [raw-label* (some-> raw-label str str/trim)
-        normalized (articles/normalize-alias-label raw-label*)]
-    (and (not (str/blank? raw-label*))
-      (>= (count (or normalized "")) min-alias-normalized-length))))
+  (parsing/valid-alias-label? raw-label))
 
 (defn- resolve-alias!
   "Resolve or create an article alias for an expense item.
@@ -213,79 +70,13 @@
 
 (defn- normalize-expense-data
   [expense-data]
-  (-> expense-data
-    (update-if-present :supplier_id #(parse-uuid! :supplier_id %))
-    (update-if-present :payer_id #(parse-uuid! :payer_id %))
-
-    (update-if-present :subject_ref blank->nil)
-    (update-if-present :created_by_subject_ref blank->nil)
-    (update-if-present :receipt_id #(parse-uuid! :receipt_id %))
-    (update-if-present :store_id #(parse-uuid! :store_id %))
-    (update-if-present :expense_category_id #(parse-uuid! :expense_category_id %))
-    (update-if-present :article_id #(parse-uuid! :article_id %))
-    (update-if-present :purchased_at #(parse-instant! :purchased_at %))
-    (update-if-present :total_amount #(parse-bigdec! :total_amount %))
-    (update-if-present :currency #(some-> % str str/trim blank->nil))
-    (update-if-present :notes blank->nil)))
-
-(defn- expense-rate-date
-  "Derive the LocalDate used for exchange-rate lookup."
-  [{:keys [purchased_at]}]
-  (if (instance? Instant purchased_at)
-    (LocalDate/ofInstant purchased_at ZoneOffset/UTC)
-    (LocalDate/now)))
-
-(defn- compute-bam-amount
-  [total-amount rate]
-  (some-> (.multiply ^java.math.BigDecimal total-amount
-            ^java.math.BigDecimal rate)
-    (.setScale 2 RoundingMode/HALF_UP)))
+  (parsing/normalize-expense-data expense-data))
 
 (defn normalize-expense-amounts
-  "Populate derived monetary fields so all expense write paths persist
-   consistent values.
-
-   - BAM expenses persist original_amount = bam_amount = total_amount.
-   - Non-BAM expenses use the cached daily exchange rate when available.
-   - If no rate is cached yet, bam_amount falls back to total_amount so it is
-     never left nil in reporting queries."
   ([db expense-data]
-   (normalize-expense-amounts db expense-data nil))
-  ([db expense-data {:keys [app-config ensure-rates?]}]
-   (let [total-amount (:total_amount expense-data)
-         currency (or (:currency expense-data) "BAM")]
-     (if-not total-amount
-       (assoc expense-data :currency currency)
-       (if (= "BAM" currency)
-         (assoc expense-data
-           :currency currency
-           :original_amount total-amount
-           :bam_amount total-amount
-           :exchange_rate nil
-           :rate_fetched_at nil)
-         (let [rate-date (expense-rate-date expense-data)
-               _ (when (and ensure-rates? app-config)
-                   (try
-                     (exchange-rates/ensure-daily-rates!
-                       db
-                       (exchange-rates/build-config app-config))
-                     (catch Exception e
-                       (log/warn e "Failed to ensure daily rates"
-                         {:currency currency
-                          :rate-date (str rate-date)}))))
-               rate (or (:exchange_rate expense-data)
-                      (exchange-rates/get-conversion-rate db currency rate-date))
-               bam-amount (or (when rate
-                                (compute-bam-amount total-amount rate))
-                            total-amount)]
-           (assoc expense-data
-             :currency currency
-             :original_amount total-amount
-             :bam_amount bam-amount
-             :exchange_rate rate
-             :rate_fetched_at (when rate
-                                (or (:rate_fetched_at expense-data)
-                                  (Instant/now))))))))))
+   (parsing/normalize-expense-amounts db expense-data))
+  ([db expense-data opts]
+   (parsing/normalize-expense-amounts db expense-data opts)))
 
 (defn- revert-linked-receipt-after-expense-delete!
   "If the deleted expense was created from a receipt, revert the receipt so it can be
@@ -346,111 +137,25 @@
 
 (defn get-expense-with-items
   "Get an expense with its items. Optional `tenant-id` scopes to a specific tenant."
-  ([db id] (get-expense-with-items db id nil))
-  ([db id tenant-id]
-   (let [where (if tenant-id
-                 [:and [:= :e.id id] [:= :e.tenant_id tenant-id]]
-                 [:= :e.id id])
-         expense (jdbc/execute-one!
-                   db
-                   (sql/format {:select [[:e.*]
-                                         [:s.display_name :supplier_display_name]
-                                         [:s.normalized_key :supplier_normalized_key]
-                                         [:p.label :payer_label]
-                                         [:p.type :payer_type]
-                                         [:ec.name :expense_category_name]]
-                                :from [[:expenses :e]]
-                                :left-join [[:suppliers :s] [:= :s.id :e.supplier_id]
-                                            [:payers :p] [:= :p.id :e.payer_id]
-                                            [:expense_categories :ec] [:= :ec.id :e.expense_category_id]]
-                                :where where})
-                   {:builder-fn rs/as-unqualified-lower-maps})
-         items (when expense
-                 (jdbc/execute!
-                   db
-                   (sql/format {:select [[:ei.*]
-                                         [:aa.raw_label :raw_label]
-                                         [:aa.raw_label_normalized :raw_label_normalized]
-                                         [:a.canonical_name :article_canonical_name]]
-                                :from [[:expense_items :ei]]
-                                :left-join [[:article_aliases :aa] [:= :aa.id :ei.alias_id]
-                                            [:articles :a] [:= :a.id :aa.article_id]]
-                                :where [:= :ei.expense_id id]
-                                :order-by [[:ei.created_at :asc]]})
-                   {:builder-fn rs/as-unqualified-lower-maps}))]
-     (when expense
-       (assoc expense :items items)))))
+  ([db id] (queries/get-expense-with-items db id))
+  ([db id tenant-id] (queries/get-expense-with-items db id tenant-id)))
 
 (defn get-expense
   "Get an expense (with items). Wrapper expected by the generic admin routes factory."
   [db id]
   (get-expense-with-items db id))
 
-(defn- source-clause
-  "Build a WHERE fragment for the :source filter.
-   \"manual\"  → receipt_id IS NULL
-   \"receipt\" → receipt_id IS NOT NULL
-   \"none\"    → always false (both toggles off)
-   other/nil  → no filter"
-  [col source]
-  (case (some-> source str)
-    "manual"  [:is col nil]
-    "receipt" [:is-not col nil]
-    "none"    [:= 1 0]
-    nil))
-
 (defn list-expenses
   "List expenses with common filters.
    opts: :from, :to, :supplier-id, :payer-id, :tenant-id, :source, :limit, :offset."
-  [db {:keys [from to supplier-id payer-id tenant-id source limit offset order-dir]
-       :or {limit 50 offset 0 order-dir :desc}}]
-  (let [from (try (parse-instant! :from from) (catch Exception _ nil))
-        to (try (parse-instant! :to to) (catch Exception _ nil))
-        source-where (source-clause :e.receipt_id source)
-        base-where (cond-> [:and]
-                     tenant-id (conj [:= :e.tenant_id tenant-id])
-                     from (conj [:>= :e.purchased_at from])
-                     to (conj [:<= :e.purchased_at to])
-                     supplier-id (conj [:= :e.supplier_id supplier-id])
-                     payer-id (conj [:= :e.payer_id payer-id])
-                     source-where (conj source-where))
-        query {:select [[:e.*]
-                        [:s.display_name :supplier_display_name]
-                        [:s.normalized_key :supplier_normalized_key]
-                        [:p.label :payer_label]
-                        [:p.type :payer_type]
-                        [:ec.name :expense_category_name]]
-               :from [[:expenses :e]]
-               :left-join [[:suppliers :s] [:= :s.id :e.supplier_id]
-                           [:payers :p] [:= :p.id :e.payer_id]
-                           [:expense_categories :ec] [:= :ec.id :e.expense_category_id]]
-               :where base-where
-               :order-by [[:e.purchased_at order-dir]]
-               :limit limit
-               :offset offset}]
-    (jdbc/execute! db (sql/format query) {:builder-fn rs/as-unqualified-lower-maps})))
+  [db opts]
+  (queries/list-expenses db opts))
 
 (defn count-expenses
   "Count expenses with the same filters as `list-expenses`.
    opts: :from, :to, :supplier-id, :payer-id, :tenant-id, :source."
-  [db {:keys [from to supplier-id payer-id tenant-id source]}]
-  (let [from (try (parse-instant! :from from) (catch Exception _ nil))
-        to (try (parse-instant! :to to) (catch Exception _ nil))
-        source-where (source-clause :receipt_id source)
-        base-where (cond-> [:and]
-                     tenant-id (conj [:= :tenant_id tenant-id])
-                     from (conj [:>= :purchased_at from])
-                     to (conj [:<= :purchased_at to])
-                     supplier-id (conj [:= :supplier_id supplier-id])
-                     payer-id (conj [:= :payer_id payer-id])
-                     source-where (conj source-where))
-        row (jdbc/execute-one!
-              db
-              (sql/format {:select [[[:count :*] :total]]
-                           :from [:expenses]
-                           :where base-where})
-              {:builder-fn rs/as-unqualified-lower-maps})]
-    {:total (long (or (:total row) 0))}))
+  [db opts]
+  (queries/count-expenses db opts))
 
 (defn- lookup-tenant-id
   [db table-name entity-id]

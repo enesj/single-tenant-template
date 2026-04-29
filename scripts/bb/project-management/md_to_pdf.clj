@@ -124,7 +124,7 @@ li {
 
 (defn print-help []
   (println "Markdown to PDF Converter")
-  (println "Usage: bb scripts/bb/project-management/md-to-pdf.clj <input.md> [output.pdf]")
+  (println "Usage: bb scripts/bb/project-management/md_to_pdf.clj <input.md> [output.pdf]")
   (println "")
   (println "Arguments:")
   (println "  input.md     Path to the markdown file to convert")
@@ -134,8 +134,8 @@ li {
   (println "  - pandoc: brew install pandoc")
   (println "")
   (println "Examples:")
-  (println "  bb scripts/bb/project-management/md-to-pdf.clj article.md")
-  (println "  bb scripts/bb/project-management/md-to-pdf.clj docs/readme.md output/readme.pdf"))
+  (println "  bb scripts/bb/project-management/md_to_pdf.clj article.md")
+  (println "  bb scripts/bb/project-management/md_to_pdf.clj docs/readme.md output/readme.pdf"))
 
 (defn generate-output-filename
   "Generate output filename by replacing .md with .pdf."

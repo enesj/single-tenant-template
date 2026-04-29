@@ -55,15 +55,6 @@ cat > "$OUTPUT_FILE" << 'EOF'
 # Generated automatically by update-fish-completions.sh
 # Last updated: $(date)
 
-function __bb_script_completions
-    set -l scripts_dir "cli-tools/test_scripts"
-    if test -d $scripts_dir
-        for script in $scripts_dir/*.sh
-            basename $script .sh
-        end
-    end
-end
-
 function __bb_lib_completions
     echo "org.clojure/clojure"
     echo "re-frame/re-frame"
@@ -112,9 +103,6 @@ done <<< "$ALL_COMMANDS"
 # Add subcommand completions
 cat >> "$OUTPUT_FILE" << 'EOF'
 
-# Complete script names for 'bb script'
-complete -c bb -n '__fish_seen_subcommand_from script' -a '(__bb_script_completions)' -d 'Available test scripts'
-
 # Complete library names for dependency commands
 complete -c bb -n '__fish_seen_subcommand_from single-dep-upgrade' -a '(__bb_lib_completions)' -d 'Library to upgrade'
 complete -c bb -n '__fish_seen_subcommand_from show-versions' -a '(__bb_lib_completions)' -d 'Library to check'
@@ -131,7 +119,6 @@ complete -c bb -n '__fish_seen_subcommand_from fix-lint' -l interactive -d 'Inte
 complete -c bb -n '__fish_seen_subcommand_from fe-test-node' -a start -d 'Start test server'
 complete -c bb -n '__fish_seen_subcommand_from format-edn' -l indent width -d 'Formatting options'
 complete -c bb -n '__fish_seen_subcommand_from md-to-pdf' -l output template -d 'PDF options'
-complete -c bb -n '__fish_seen_subcommand_from set-model' -l list default -d 'Model options'
 complete -c bb -n '__fish_seen_subcommand_from clear-folder' -l all tmp backups -d 'Folder options'
 complete -c bb -n '__fish_seen_subcommand_from find-lib' -l limit source -d 'Search options'
 complete -c bb -n '__fish_seen_subcommand_from show-versions' -l latest stable limit -d 'Version options'

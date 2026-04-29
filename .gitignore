@@ -71,6 +71,8 @@ slips/
 # Local test output artifacts
 be_test_output.txt
 scripts/bb/code_quality/check_unused_reframe/unused_keywords.edn
+scripts/sh/setup/_bb-completion.zsh
+scripts/sh/setup/bb-completion.fish
 
 # Clojure MCP scratch pad
 .clojure-mcp/scratch_pad.edn

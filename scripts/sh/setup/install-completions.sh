@@ -26,31 +26,6 @@ if [[ "$SHELL" == *"fish"* ]]; then
         exit 1
     fi
 
-elif [[ "$SHELL" == *"bash"* ]]; then
-    echo "🐚 Installing Bash completion..."
-
-    # Try different locations for bash completion
-    if [[ -d "/usr/local/etc/bash_completion.d" ]]; then
-        # Homebrew bash completion directory
-        sudo cp "$COMPLETIONS_DIR/bb-completion.bash" /usr/local/etc/bash_completion.d/bb
-        echo "✅ Bash completion installed to /usr/local/etc/bash_completion.d/"
-    elif [[ -d "/etc/bash_completion.d" ]]; then
-        # System bash completion directory
-        sudo cp "$COMPLETIONS_DIR/bb-completion.bash" /etc/bash_completion.d/bb
-        echo "✅ Bash completion installed to /etc/bash_completion.d/"
-    else
-        # User-specific installation
-        mkdir -p ~/.bash_completion.d
-        cp "$COMPLETIONS_DIR/bb-completion.bash" ~/.bash_completion.d/bb
-
-        # Add to .bashrc if not already there
-        if ! grep -q "~/.bash_completion.d/bb" ~/.bashrc 2>/dev/null; then
-            echo "source ~/.bash_completion.d/bb" >> ~/.bashrc
-            echo "✅ Bash completion installed to ~/.bash_completion.d/"
-            echo "💡 Added to ~/.bashrc - restart your shell or run: source ~/.bashrc"
-        fi
-    fi
-
 elif [[ "$SHELL" == *"zsh"* ]]; then
     echo "🔩 Installing Zsh completion..."
     echo "📟 Generating dynamic Zsh completions..."
@@ -94,8 +69,8 @@ elif [[ "$SHELL" == *"zsh"* ]]; then
 else
     echo "❓ Unknown shell: $SHELL"
     echo "💡 Manual installation:"
-    echo "   - Bash: source "$COMPLETIONS_DIR/bb-completion.bash""
     echo "   - Fish: cp "$COMPLETIONS_DIR/bb-completion.fish" ~/.config/fish/completions/bb.fish"
+    echo "   - Zsh: run "$COMPLETIONS_DIR/update-zsh-completions.sh" and copy _bb-completion.zsh into your completions path"
 fi
 
 echo ""
@@ -103,7 +78,6 @@ echo "💡 Dynamic completions: Fish and Zsh completions are generated from actu
 echo ""
 echo "🎉 Autocompletion features:"
 echo "   • Tab complete bb tasks: bb <TAB>"
-echo "   • Complete test scripts: bb script <TAB>"
 echo "   • Complete library names: bb single-dep-upgrade <TAB>"
 echo "   • Complete command options: bb commit --<TAB>"
 echo ""

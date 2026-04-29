@@ -14,23 +14,23 @@
      :refer [build-quick-pick-groups]]
     [app.domain.frontend.expenses.components.manual-expense-form.smart-input.constants
      :refer [create-events create-field-names supplier-color-palette]]
-    [app.domain.frontend.expenses.components.manual-expense-form.smart-input.context-phase
-     :refer [context-phase-view]]
+    [app.domain.frontend.expenses.components.manual-expense-form.smart-input.render
+     :as smart-render]
+    [app.domain.frontend.expenses.components.manual-expense-form.smart-input.search-helpers
+     :as smart-search-helpers]
     [app.domain.frontend.expenses.components.manual-expense-form.smart-input.helpers
      :refer [build-quick-pick-supplier-color-map colorize-quick-pick-groups
              compute-items-total context-phase-initial-sub-stage
              current-related-context default-category-chip-to-preselect
              focused-search-types items-phase-quick-pick-types
              payer-default-id prepare-submit-values validate-form]]
-    [app.domain.frontend.expenses.components.manual-expense-form.smart-input.items-phase
-     :refer [items-phase-view]]
     [app.domain.frontend.expenses.events.supplier-stores :as supplier-stores-events]
     [app.domain.frontend.expenses.ui.currencies :as currency-ui]
     [app.template.frontend.i18n :refer [use-t]]
     app.domain.frontend.expenses.events.user-expenses.quick-add-search
     [clojure.string :as str]
     [re-frame.core :as rf]
-    [uix.core :refer [$ defui use-effect use-ref use-state]]
+    [uix.core :refer [defui use-effect use-ref use-state]]
     [uix.re-frame :refer [use-subscribe]]))
 
 ;; ─────────────────────────────────────────────
@@ -110,33 +110,22 @@
         available-search-types (focused-search-types context article-mode?)
         ;; Build a price map from related articles (supplier/store related data)
         ;; so local search results can show prices even before the backend search responds.
-        related-article-prices (reduce
-                                 (fn [m a]
-                                   (if-let [p (:last_price a)]
-                                     (assoc m (str (:id a)) p)
-                                     m))
-                                 {}
-                                 (get-in quick-add-related [:related :articles]))
-        articles-with-prices (if (seq related-article-prices)
-                               (mapv (fn [a]
-                                       (if-let [p (get related-article-prices (str (:id a)))]
-                                         (assoc a :last_price p)
-                                         a))
-                                 articles)
-                               articles)
-        local-search-results (when (and dropdown-open?
-                                     (>= (count (str/trim input-text)) 2))
-                               (-> (search/search-all-entities
-                                     input-text
-                                     {:suppliers suppliers
-                                      :stores stores
-                                      :categories expense-categories
-                                      :articles articles-with-prices}
-                                     {:selected-supplier-id (some-> context :supplier :id)})
-                                 (search/filter-results-by-entity-types available-search-types)))
-        filtered-quick-search-results (search/filter-results-by-entity-types quick-search-results available-search-types)
-        search-results (when dropdown-open?
-                         (search/merge-search-results local-search-results filtered-quick-search-results 10))
+        related-article-prices (smart-search-helpers/build-related-article-prices quick-add-related)
+        articles-with-prices (smart-search-helpers/attach-article-prices articles related-article-prices)
+        local-search-results (smart-search-helpers/build-local-search-results
+                               dropdown-open?
+                               input-text
+                               suppliers
+                               stores
+                               expense-categories
+                               articles-with-prices
+                               available-search-types
+                               context)
+        search-results (smart-search-helpers/build-search-results
+                         dropdown-open?
+                         local-search-results
+                         quick-search-results
+                         available-search-types)
         selected-supplier-id (some-> context :supplier :id)
         selected-supplier-id-str (some-> selected-supplier-id str)
         ;; Per-supplier full store pool — populated lazily by
@@ -148,10 +137,10 @@
         supplier-stores-pool (or (use-subscribe [:user-expenses/supplier-stores-pool
                                                  selected-supplier-id-str])
                                [])
-        phase-two-stores (if (and selected-supplier-id-str
-                               (seq supplier-stores-pool))
-                           supplier-stores-pool
-                           stores)
+        phase-two-stores (smart-search-helpers/resolve-phase-two-stores
+                   selected-supplier-id-str
+                   supplier-stores-pool
+                   stores)
         related-context (current-related-context context)
         related-matches? (and related-context
                            (= (:entity-type quick-add-related) (:entity-type related-context))
@@ -579,156 +568,60 @@
           (fn [] (.removeEventListener js/document "click" handler))))
       [])
 
-    (if-not ready?
-      ;; Loading state
-      ($ :div {:class "flex flex-col items-center justify-center p-16 gap-4"}
-        ($ :span {:class "ds-loading ds-loading-spinner ds-loading-lg text-primary"})
-        ($ :p {:class "text-base-content/50 text-lg"} (t :smart-expense/loading)))
-
-      ;; Form
-      ($ :form {:id "smart-expense-form"
-                :on-submit handle-submit
-                :class "space-y-6"}
-
-        ;; Error banner
-        (when error
-          ($ :div {:class "ds-alert ds-alert-error text-base flex items-center justify-between"}
-            ($ :span error)
-            ($ :button {:type "button"
-                        :class "ds-btn ds-btn-ghost ds-btn-sm"
-                        :on-click #(set-error! nil)}
-              "\u00D7")))
-
-        ;; Phase 1: Items Entry
-        (when (= phase :items)
-          ($ items-phase-view
-            {:t t
-             :items items
-             :context context
-             :input-text input-text
-             :input-ref input-ref
-             :article-mode? article-mode?
-             :dropdown-open? dropdown-open?
-             :highlight-idx highlight-idx
-             :type-picker-text type-picker-text
-             :creating? creating?
-             :search-results search-results
-             :quick-search-loading? quick-search-loading?
-             :cooccurring-pick-items cooccurring-pick-items
-             :focused-quick-pick-groups focused-quick-pick-groups
-             :available-search-types available-search-types
-             :items-total items-total
-             :currency currency
-             :total-dropdown-count total-dropdown-count
-             ;; default chips
-             :payer-name payer-name
-             :purchased-date purchased-date
-             :on-clear-payer #(set-payer-id! nil)
-             :on-clear-date #(set-purchased-at! nil)
-             :on-clear-currency #(set-currency! nil)
-             ;; handlers
-             :on-input-change handle-input-change
-             :on-input-keydown handle-input-keydown
-             :on-select-result handle-select-result
-             :on-create-inline handle-create-inline
-             :on-type-pick handle-type-pick
-             :on-remove-context remove-context!
-             :on-update-item update-item!
-             :on-remove-item remove-item!
-             :on-focus-input focus-input!
-             :on-cancel-type-picker #(set-type-picker-text! nil)
-             :on-set-error set-error!
-             :focus-item-id focus-item-id
-             :on-focus-handled #(set-focus-item-id! nil)}))
-
-        ;; Phase 1 footer: save or jump straight to store selection
-        (when (= phase :items)
-          ($ :div {:class (str "sticky bottom-0 bg-white/95 backdrop-blur-sm "
-                            "border-t border-base-200 pt-3 pb-3 -mx-6 px-6 "
-                            "flex items-center gap-3")}
-            ($ :button {:id "btn-add-store"
-                        :type "button"
-                        :class "ds-btn ds-btn-outline ds-btn-lg text-lg mr-auto"
-                        :disabled (or submitting? (empty? items) (some? (:store context)))
-                        :on-click (fn [e]
-                                    (.preventDefault e)
-                                    (begin-context-phase! :store-search))}
-              (t :smart-expense/add-store))
-            (when on-cancel
-              ($ :button {:id "btn-cancel-smart-expense"
-                          :type "button"
-                          :class "ds-btn ds-btn-lg text-lg"
-                          :disabled submitting?
-                          :on-click (fn [e] (.preventDefault e) (on-cancel))}
-                (t :smart-expense/cancel)))
-            ($ :button {:id "btn-save-smart-expense"
-                        :type "submit"
-                        :class "ds-btn ds-btn-primary ds-btn-lg text-lg px-8"
-                        :disabled (or submitting? submit-disabled? (empty? items))}
-              (if submitting? (t :smart-expense/saving) (t :smart-expense/save)))))
-
-        ;; Phase 2: Context + Review
-        (when (= phase :context)
-          ($ context-phase-view
-            {:t t
-             :items items
-             :context context
-             :input-text input-text
-             :input-ref input-ref
-             :dropdown-open? dropdown-open?
-             :highlight-idx highlight-idx
-             :type-picker-text type-picker-text
-             :creating? creating?
-             :search-results search-results
-             :quick-search-loading? quick-search-loading?
-             :context-suggestions context-suggestions
-             :items-total items-total
-             :currency currency
-             :currency-options currency-options
-             :payers payers
-             :payer-id payer-id
-             :purchased-at purchased-at
-             :payer-name payer-name
-             :purchased-date purchased-date
-             :on-clear-payer #(set-payer-id! nil)
-             :on-clear-date #(set-purchased-at! nil)
-             :on-clear-currency #(set-currency! nil)
-             :initial-sub-stage context-initial-sub-stage
-             :suppliers suppliers
-             :stores phase-two-stores
-             :expense-categories expense-categories
-             :articles articles
-             ;; handlers
-             :on-input-change handle-input-change
-             :on-input-keydown handle-input-keydown
-             :on-select-result handle-select-result
-             :on-create-inline handle-create-inline
-             :on-type-pick handle-type-pick
-             :on-remove-context remove-context!
-             :on-set-phase (fn [next-phase]
-                             (when (= next-phase :items)
-                               (set-context-initial-sub-stage! nil))
-                             (set-phase! next-phase))
-             :on-focus-input focus-input!
-             :on-set-payer-id set-payer-id!
-             :on-set-purchased-at set-purchased-at!
-             :on-set-currency set-currency!
-             :on-cancel-type-picker #(set-type-picker-text! nil)}))
-
-        ;; ── Sticky footer ──────────────────────────────────────
-        (when (= phase :context)
-          ($ :div {:class (str "sticky bottom-0 bg-white/95 backdrop-blur-sm "
-                            "border-t border-base-200 pt-3 pb-3 -mx-6 px-6 "
-                            "flex justify-end gap-3")}
-            (when on-cancel
-              ($ :button {:id "btn-cancel-smart-expense"
-                          :type "button"
-                          :class "ds-btn ds-btn-lg text-lg"
-                          :disabled submitting?
-                          :on-click (fn [e] (.preventDefault e) (on-cancel))}
-                (t :smart-expense/cancel)))
-            ($ :button {:id "btn-save-smart-expense"
-                        :type "submit"
-                        :class "ds-btn ds-btn-primary ds-btn-lg text-lg px-8"
-                        :disabled (or submitting? submit-disabled?)}
-              (if submitting? (t :smart-expense/saving) (t :smart-expense/save)))))))))
+    (smart-render/render-smart-expense-form
+      {:t t
+       :ready? ready?
+       :handle-submit handle-submit
+       :error error
+       :set-error! set-error!
+       :phase phase
+       :items items
+       :context context
+       :input-text input-text
+       :input-ref input-ref
+       :article-mode? article-mode?
+       :dropdown-open? dropdown-open?
+       :highlight-idx highlight-idx
+       :type-picker-text type-picker-text
+       :creating? creating?
+       :search-results search-results
+       :quick-search-loading? quick-search-loading?
+       :cooccurring-pick-items cooccurring-pick-items
+       :focused-quick-pick-groups focused-quick-pick-groups
+       :available-search-types available-search-types
+       :items-total items-total
+       :currency currency
+       :total-dropdown-count total-dropdown-count
+       :payer-name payer-name
+       :purchased-date purchased-date
+       :set-payer-id! set-payer-id!
+       :set-purchased-at! set-purchased-at!
+       :set-currency! set-currency!
+       :handle-input-change handle-input-change
+       :handle-input-keydown handle-input-keydown
+       :handle-select-result handle-select-result
+       :handle-create-inline handle-create-inline
+       :handle-type-pick handle-type-pick
+       :remove-context! remove-context!
+       :update-item! update-item!
+       :remove-item! remove-item!
+       :focus-input! focus-input!
+       :set-type-picker-text! set-type-picker-text!
+       :focus-item-id focus-item-id
+       :set-focus-item-id! set-focus-item-id!
+       :submitting? submitting?
+       :submit-disabled? submit-disabled?
+       :begin-context-phase! begin-context-phase!
+       :on-cancel on-cancel
+       :context-suggestions context-suggestions
+       :currency-options currency-options
+       :payers payers
+       :payer-id payer-id
+       :purchased-at purchased-at
+       :context-initial-sub-stage context-initial-sub-stage
+       :suppliers suppliers
+       :phase-two-stores phase-two-stores
+       :expense-categories expense-categories
+       :articles articles
+       :set-context-initial-sub-stage! set-context-initial-sub-stage!
+       :set-phase! set-phase!})))

@@ -94,29 +94,13 @@ done <<< "$ALL_COMMANDS"
 cat >> "$OUTPUT_FILE" << 'EOF'
     )
 
-    # Get script names for bb script subcommand
-    local script_names=()
-    if [[ -d "cli-tools/test_scripts" ]]; then
-        script_names=($(find cli-tools/test_scripts -name "*.sh" -type f -exec basename {} .sh \; 2>/dev/null | sort))
-    fi
-
     # Main completion logic
     case $state in
         command)
             _describe 'command' commands
             ;;
-        script)
-            _describe 'test script' script_names
-            ;;
         *)
-            case $line[1] in
-                script)
-                    _arguments '1: :_bb_script' && ret=0
-                    ;;
-                *)
-                    _arguments '1: :_bb_command' && ret=0
-                    ;;
-            esac
+            _arguments '1: :_bb_command' && ret=0
             ;;
     esac
 }
@@ -135,14 +119,6 @@ done <<< "$ALL_COMMANDS"
 cat >> "$OUTPUT_FILE" << 'EOF'
     )
     _describe 'command' commands
-}
-
-_bb_script() {
-    local script_names=()
-    if [[ -d "cli-tools/test_scripts" ]]; then
-        script_names=($(find cli-tools/test_scripts -name "*.sh" -type f -exec basename {} .sh \; 2>/dev/null | sort))
-    fi
-    _describe 'test script' script_names
 }
 
 _bb "$@"

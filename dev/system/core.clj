@@ -13,6 +13,54 @@
   [e]
   (stacktrace/print-stack-trace e))
 
+(declare current-web-port)
+
+(defn- root-cause
+  "Return the deepest cause in a Throwable chain."
+  [e]
+  (loop [cause e]
+    (if-let [next-cause (some-> cause .getCause)]
+      (recur next-cause)
+      cause)))
+
+(defn- exception-class-name
+  [e]
+  (some-> e class .getName))
+
+(defn- bind-exception-details
+  [root]
+  (when (instance? BindException root)
+    {:failure-category :port-bind
+     :suggested-action "Another process is already listening on the configured web port. Stop the existing dev server or change [:webserver :port]."}))
+
+(defn- exception-summary
+  "Return structured exception details that remain visible even when stderr is suppressed."
+  [e]
+  (let [root (root-cause e)]
+    (cond-> {:exception-class (exception-class-name e)
+             :exception-message (some-> e .getMessage)
+             :root-cause-class (exception-class-name root)
+             :root-cause-message (some-> root .getMessage)}
+      (ex-data e)
+      (assoc :exception-data (ex-data e))
+
+      (and root (ex-data root))
+      (assoc :root-cause-data (ex-data root))
+
+      (bind-exception-details root)
+      (merge (bind-exception-details root)))))
+
+(defn- failure-log
+  ([event e]
+   (failure-log event e nil))
+  ([event e extra]
+   (cond-> (merge {:event event
+                   :cwd (System/getProperty "user.dir")
+                   :thread (.getName (Thread/currentThread))
+                   :web-port (current-web-port)}
+             (exception-summary e))
+     extra (merge extra))))
+
 (set-refresh-dirs "src" "dev" "config")
 
 (log/info {:event :system/refresh-dirs-set
@@ -45,7 +93,7 @@
                                         (publishing-state state)))
                       (catch Exception e
                         ;; Avoid relying on stderr (dev/core may suppress it).
-                        (log/error e {:event :system/start-failed})
+                        (log/error e (failure-log :system/start-failed e))
                         (write-exception e)
                         (throw e))))
       (try
@@ -55,7 +103,7 @@
         (log/info {:event :system/start-submitted
                    :instance-realized? (realized? @instance)})
         (catch Exception e
-          (log/error e {:event :system/start-submit-failed})
+          (log/error e (failure-log :system/start-submit-failed e))
           (throw e))))))
 
 (defn- normalize-port [port]
@@ -143,14 +191,14 @@
           (catch java.util.concurrent.ExecutionException e
             (let [shutdown-status (await-stop-complete! web-port)]
               (log-port-not-cleared! shutdown-status)
-              (log/warn e {:event :system/stop-recoverable-error
-                           :reason :prior-instance-failed})
+              (log/warn e (failure-log :system/stop-recoverable-error e
+                            {:reason :prior-instance-failed}))
               (log/info (merge {:event :system/stop-finished
                                 :reason :prior-instance-failed}
                           shutdown-status))
               shutdown-status))
           (catch Exception e
-            (log/error e {:event :system/stop-error})
+            (log/error e (failure-log :system/stop-error e))
             (throw e)))))))
 
 (defn- code-file? [filename]
@@ -195,6 +243,6 @@
                       :filename filename}))
          (catch Exception e
            ;; Avoid relying on stderr (dev/core may suppress it).
-           (log/error e {:event :system/restart-failed
-                         :filename filename})
+           (log/error e (failure-log :system/restart-failed e
+                          {:filename filename}))
            (write-exception e)))))))
