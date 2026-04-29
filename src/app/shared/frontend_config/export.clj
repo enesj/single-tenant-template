@@ -9,10 +9,10 @@
     [app.shared.specs.view-options :as view-options-spec]))
 
 (def ^:private admin-kinds-list
-  [:view-options :form-fields :table-columns])
+  [:view-options :form-fields :table-columns :navigation])
 
 (def ^:private user-kinds-list
-  [:entities :view-options :form-fields :table-columns])
+  [:entities :view-options :form-fields :table-columns :navigation])
 
 (defn admin-kinds []
   admin-kinds-list)
@@ -91,10 +91,12 @@
     [:admin :view-options] (view-options-spec/validate-view-options-strict data)
     [:admin :form-fields] (form-fields-spec/validate-form-fields-strict data)
     [:admin :table-columns] (table-columns-spec/validate-table-columns-strict data)
+    [:admin :navigation] {:valid? true}
     [:domain :entities] (entities-spec/validate-user-entities data)
     [:domain :view-options] (view-options-spec/validate-view-options-strict data)
     [:domain :form-fields] (form-fields-spec/validate-form-fields-strict data)
     [:domain :table-columns] (table-columns-spec/validate-table-columns-strict data)
+    [:domain :navigation] {:valid? true}
     {:valid? false
      :errors [(str "Unsupported export target: " [scope kind])] }))
 
@@ -102,8 +104,8 @@
   "Build an export plan from runtime snapshots and discovered bundles.
 
   `runtime-config` shape:
-    {:admin {:view-options ... :form-fields ... :table-columns ...}
-     :user  {:entities ... :view-options ... :form-fields ... :table-columns ...}}"
+    {:admin {:view-options ... :form-fields ... :table-columns ... :navigation ...}
+     :user  {:entities ... :view-options ... :form-fields ... :table-columns ... :navigation ...}}"
   [bundles runtime-config]
   (let [bundles-by-key (into {}
                          (map (fn [bundle]

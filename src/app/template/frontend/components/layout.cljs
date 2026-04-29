@@ -22,6 +22,8 @@
     [app.template.frontend.events.onboarding :as onboarding]
     [app.template.frontend.events.tenant :as tenant]
     [app.template.frontend.i18n :refer [use-t]]
+    [app.template.frontend.subs.ui :as ui-subs]
+    [app.template.frontend.utils.navigation-config :as nav-config]
     [re-frame.core :as rf]
     [reitit.frontend.easy :as rtfe]
     [uix.core :refer [$ defui use-state]]
@@ -54,8 +56,9 @@
           (set! (.-href js/window.location) href))))))
 
 (defn- nav-item
-  [{:keys [id label href route icon active?]}]
+  [{:keys [id nav-id label href route icon active?]}]
   {:id id
+   :nav-id nav-id
    :label label
    :href href
    :icon icon
@@ -174,17 +177,20 @@
         route-name (or (get-in current-route [:data :name]) (:name current-route))
         active? (fn [names] (contains? names route-name))
         user-display-name (or (:full-name current-user) (:email current-user) "User")
+        navigation (use-subscribe [::ui-subs/domain-navigation])
         th (fn [path] (tenant-href slug path))
 
         expense-items (vec
                         (concat
                           [(nav-item {:id "user-sidebar-search"
+                                      :nav-id :search
                                       :label (t :nav/search)
                                       :href (th "/search")
                                       :route :expense-search
                                       :icon ($ search-icon {:class "w-6 h-6"})
                                       :active? (active? #{:expense-search})})
                            (nav-item {:id "user-sidebar-dashboard"
+                                      :nav-id :dashboard
                                       :label (t :nav/dashboard)
                                       :href (th "/dashboard")
                                       :route :user-dashboard
@@ -193,6 +199,7 @@
                                                           :expenses-dashboard
                                                           :expenses-dashboard-alias})})
                            (nav-item {:id "user-sidebar-expenses-list"
+                                      :nav-id :expenses-list
                                       :label (t :nav/expenses)
                                       :href (th "/expenses/list")
                                       :route :expenses-list
@@ -201,12 +208,14 @@
                                                           :expense-detail})})]
                           (when power-user?
                             [(nav-item {:id "user-sidebar-receipts"
+                                        :nav-id :receipts
                                         :label (t :nav/receipts)
                                         :href (th "/receipts")
                                         :route :receipts
                                         :icon ($ receipts-icon {:class "w-6 h-6"})
                                         :active? (active? #{:receipts :receipt-detail})})
                              (nav-item {:id "user-sidebar-expense-items"
+                                        :nav-id :expense-items
                                         :label (t :nav/expense-items)
                                         :href (th "/expense-items")
                                         :route :expense-items
@@ -217,12 +226,14 @@
                            (concat
                              (when can-upload?
                                [(nav-item {:id "user-sidebar-expenses-upload"
+                                           :nav-id :upload
                                            :label (t :nav/upload)
                                            :href (th "/expenses/upload")
                                            :route :expense-upload
                                            :icon ($ arrow-up {:class "w-6 h-6"})
                                            :active? (active? #{:expense-upload})})])
                              [(nav-item {:id "user-sidebar-expenses-reports"
+                                         :nav-id :reports
                                          :label (t :nav/reports)
                                          :href (th "/expenses/reports")
                                          :route :expense-reports
@@ -230,6 +241,7 @@
                                          :active? (active? #{:expense-reports})})]
                              (when power-user?
                                [(nav-item {:id "user-sidebar-unmapped-items"
+                                           :nav-id :unmapped-items
                                            :label (t :nav/unmapped-aliases)
                                            :href (th "/unmapped-items")
                                            :route :unmapped-items
@@ -239,12 +251,14 @@
         reference-items (vec
                           (concat
                             [(nav-item {:id "user-sidebar-suppliers"
+                                        :nav-id :suppliers
                                         :label (t :nav/suppliers)
                                         :href (th "/suppliers")
                                         :route :expense-suppliers
                                         :icon ($ suppliers-icon {:class "w-6 h-6"})
                                         :active? (active? #{:expense-suppliers})})
                              (nav-item {:id "user-sidebar-payers"
+                                        :nav-id :payers
                                         :label (t :nav/payers)
                                         :href (th "/payers")
                                         :route :expense-payers
@@ -252,12 +266,14 @@
                                         :active? (active? #{:expense-payers})})]
                             (when power-user?
                               [(nav-item {:id "user-sidebar-expense-categories"
+                                          :nav-id :expense-categories
                                           :label (t :nav/expense-categories)
                                           :href (th "/expense-categories")
                                           :route :expense-categories-catalog
                                           :icon ($ suppliers-icon {:class "w-6 h-6"})
                                           :active? (active? #{:expense-categories-catalog})})
                                (nav-item {:id "user-sidebar-stores"
+                                          :nav-id :stores
                                           :label (t :nav/stores)
                                           :href (th "/stores")
                                           :route :expense-stores
@@ -271,6 +287,7 @@
                           (concat
                             (when onboarding-active?
                               [(nav-item {:id "user-sidebar-onboarding"
+                                          :nav-id :onboarding
                                           :label (t :onboarding/sidebar-label)
                                           :href (th "/onboarding")
                                           :route :onboarding
@@ -280,6 +297,7 @@
                                                    "/" (:total onboarding-summary 0))})])
                             (when power-user?
                               [(nav-item {:id "user-sidebar-management-guide"
+                                          :nav-id :management-guide
                                           :label (t :nav/management-guide)
                                           :href (th "/management-guide")
                                           :route :management-guide
@@ -287,6 +305,7 @@
                                           :active? (active? #{:management-guide})})])
                             (when power-user?
                               [(nav-item {:id "user-sidebar-members"
+                                          :nav-id :members
                                           :label (t :nav/members)
                                           :href (th "/tenant/members")
                                           :route :tenant-members
@@ -294,13 +313,23 @@
                                           :active? (active? #{:tenant-members})})])
                             []))
 
-        sections (cond-> [{:title (t :nav/section-expenses) :items expense-items}
-                          {:title (t :nav/section-operations) :items operations-items}
-                          {:title (t :nav/section-reference) :items reference-items}]
-                   (seq workspace-items)
-                   (conj {:title (t :nav/section-workspace) :items workspace-items}))]
+        fallback-sections (cond-> [{:nav-id :expenses
+                                    :title (t :nav/section-expenses)
+                                    :items expense-items}
+                                   {:nav-id :operations
+                                    :title (t :nav/section-operations)
+                                    :items operations-items}
+                                   {:nav-id :reference
+                                    :title (t :nav/section-reference)
+                                    :items reference-items}]
+                            (seq workspace-items)
+                            (conj {:nav-id :workspace
+                                   :title (t :nav/section-workspace)
+                                   :items workspace-items}))
+        sections (nav-config/apply-navigation navigation fallback-sections)
+        sidebar-title (or (:title navigation) (t :nav/app-title))]
     ($ sidebar
-      {:title (t :nav/app-title)
+      {:title sidebar-title
        :sections sections
        :open? open?
        :footer ($ sidebar-footer {:user-display-name user-display-name

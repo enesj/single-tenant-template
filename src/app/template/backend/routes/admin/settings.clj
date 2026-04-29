@@ -19,8 +19,10 @@
   [db]
   (utils/with-error-handling
     (fn [_request]
-      (let [view-options (settings-io/read-view-options db)]
-        (utils/json-response {:view-options view-options})))
+      (let [view-options (settings-io/read-view-options db)
+            navigation (settings-io/read-navigation db)]
+        (utils/json-response {:view-options view-options
+                              :navigation navigation})))
     "Failed to read view options"))
 
 (defn update-view-options-handler
@@ -30,22 +32,28 @@
     (fn [request]
       (let [body (:body request)
             new-view-options (:view-options body)
+            navigation (:navigation body)
             admin-id (utils/get-admin-id request)
             context (utils/extract-request-context request)]
-        (if new-view-options
+        (if (or new-view-options navigation)
           (do
             (utils/log-admin-action-with-context
               "update-view-options"
               admin-id
               "settings"
               nil
-              {:changes new-view-options}
+              {:changes new-view-options
+               :navigation-changed? (boolean navigation)}
               (:ip-address context)
               (:user-agent context))
-            (settings-io/write-view-options! db new-view-options)
+            (when new-view-options
+              (settings-io/write-view-options! db new-view-options))
+            (when navigation
+              (settings-io/write-navigation! db navigation))
             (utils/success-response {:message "View options updated successfully"
-                                     :view-options new-view-options}))
-          (utils/error-response "Missing view-options in request body" :status 400))))
+                                     :view-options (or new-view-options (settings-io/read-view-options db))
+                                     :navigation (or navigation (settings-io/read-navigation db))}))
+          (utils/error-response "Missing view-options or navigation in request body" :status 400))))
     "Failed to update view options"))
 
 (defn update-entity-setting-handler
@@ -225,11 +233,13 @@
       (let [entities (settings-io/read-user-entities db)
             view-options (settings-io/read-user-view-options db)
             form-fields (settings-io/read-user-form-fields db)
-            table-columns (settings-io/read-user-table-columns db)]
+            table-columns (settings-io/read-user-table-columns db)
+            navigation (settings-io/read-user-navigation db)]
         (log/info "Loaded user-ui-config for admin settings"
           {:entities-count (count entities)
            :view-options-count (count view-options)
            :form-fields-count (count form-fields)
+           :navigation-sections-count (count (:sections navigation))
            :table-columns-count (count table-columns)
            :articles-table-columns? (contains? table-columns :articles)
            :article-aliases-table-columns? (contains? table-columns :article-aliases)
@@ -239,7 +249,8 @@
           {:entities entities
            :view-options view-options
            :form-fields form-fields
-           :table-columns table-columns})))
+           :table-columns table-columns
+           :navigation navigation})))
     "Failed to read user UI config"))
 
 (defn update-user-ui-config-handler
@@ -249,7 +260,8 @@
   - :entities
   - :view-options
   - :form-fields
-  - :table-columns"
+  - :table-columns
+  - :navigation"
   [db]
   (utils/with-error-handling
     (fn [request]
@@ -258,9 +270,10 @@
             view-options (:view-options body)
             form-fields (:form-fields body)
             table-columns (:table-columns body)
+            navigation (:navigation body)
             admin-id (utils/get-admin-id request)
             context (utils/extract-request-context request)]
-        (when-not (or entities view-options form-fields table-columns)
+          (when-not (or entities view-options form-fields table-columns navigation)
           (throw (ex-info "No config provided" {:status 400})))
 
         (utils/log-admin-action-with-context
@@ -271,7 +284,8 @@
           {:updated-keys (->> {:entities (boolean entities)
                                :view-options (boolean view-options)
                                :form-fields (boolean form-fields)
-                               :table-columns (boolean table-columns)}
+             :table-columns (boolean table-columns)
+             :navigation (boolean navigation)}
                            (filter (comp true? val))
                            (map key)
                            vec)}
@@ -282,13 +296,15 @@
         (when view-options (settings-io/write-user-view-options! db view-options))
         (when form-fields (settings-io/write-user-form-fields! db form-fields))
         (when table-columns (settings-io/write-user-table-columns! db table-columns))
+          (when navigation (settings-io/write-user-navigation! db navigation))
 
         (utils/success-response
           {:message "User UI config updated successfully"
            :entities (or entities (settings-io/read-user-entities db))
            :view-options (or view-options (settings-io/read-user-view-options db))
            :form-fields (or form-fields (settings-io/read-user-form-fields db))
-           :table-columns (or table-columns (settings-io/read-user-table-columns db))})))
+            :table-columns (or table-columns (settings-io/read-user-table-columns db))
+            :navigation (or navigation (settings-io/read-user-navigation db))})))
     "Failed to update user UI config"))
 
 (defn routes

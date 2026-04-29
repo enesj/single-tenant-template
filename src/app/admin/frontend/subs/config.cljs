@@ -50,6 +50,11 @@
   (fn [db _]
     (boolean (:admin/config-loading? db))))
 
+(rf/reg-sub
+  :admin/navigation
+  (fn [db _]
+    (get-in db [:admin :config :navigation] {})))
+
 ;; =============================================================================
 ;; Advanced Configuration
 ;; =============================================================================

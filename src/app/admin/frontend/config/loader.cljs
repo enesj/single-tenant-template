@@ -11,7 +11,9 @@
    :view-options {:url "/admin/api/settings"
                   :response-key :view-options}
    :form-fields {:url "/admin/api/settings/form-fields"
-                 :response-key :form-fields}})
+                 :response-key :form-fields}
+   :navigation {:url "/admin/api/settings"
+                :response-key :navigation}})
 
 (defn- fetch-config
   "Fetch config data from the admin API and return a Clojure map"
@@ -55,7 +57,8 @@
   (js/Promise.all
     #js [(load-config! :table-columns)
          (load-config! :view-options)
-         (load-config! :form-fields)]))
+         (load-config! :form-fields)
+         (load-config! :navigation)]))
 
 (defn load-all-configs
   "Get all configuration data from cache (synchronous version)"

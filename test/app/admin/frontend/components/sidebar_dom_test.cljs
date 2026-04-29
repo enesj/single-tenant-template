@@ -45,3 +45,46 @@
           (let [active-link (.querySelector container "a.ds-active")]
             (is (some? active-link) "There should be an active link")
             (is (= "Dashboard" (.-textContent active-link)))))))))
+
+(deftest sidebar-hides-links-disabled-in-navigation-config
+  (testing "navigation config can hide an admin sidebar link"
+    (with-redefs [uix-rf/use-subscribe (fn [query]
+                                         (cond
+                                           (= query [:current-route]) {:data {:name :admin-dashboard}}
+                                           (= query [:admin/current-user-role]) :owner
+                                           (= query [:admin/unread-api-failure-count]) 0
+                                             (= query [:admin/navigation]) {:sections [{:id :system-administration
+                                                          :items [{:id :dashboard}
+                                                            {:id :backlog :visible? false}
+                                                            {:id :tenants}
+                                                            {:id :users}
+                                                            {:id :admins}
+                                                            {:id :audit-logs}
+                                                            {:id :login-events}]}
+                                                         {:id :expenses
+                                                          :items [{:id :reports}
+                                                            {:id :expenses-settings}
+                                                            {:id :search}
+                                                            {:id :expenses}
+                                                            {:id :receipts}
+                                                            {:id :articles}
+                                                            {:id :manufacturers}
+                                                            {:id :categories}
+                                                            {:id :subcategories}
+                                                            {:id :suppliers}
+                                                            {:id :stores}
+                                                            {:id :countries}
+                                                            {:id :cities}
+                                                            {:id :unmapped-aliases}
+                                                            {:id :article-aliases}
+                                                            {:id :supplier-aliases}
+                                                            {:id :store-aliases}
+                                                            {:id :duplicates}]}]}
+                                           :else nil))]
+      (mount-component!
+        ($ layout/admin-sidebar)
+        (fn [container]
+          (is (nil? (.querySelector container "#admin-sidebar-backlog"))
+            "Backlog link should not be rendered when hidden in navigation config")
+          (is (some? (.querySelector container "#admin-sidebar-dashboard"))
+            "Other links should still render"))))))

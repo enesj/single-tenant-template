@@ -9,7 +9,7 @@
     {:null false,
      :check
      [:raw
-      "config_key IN ('entities', 'view-options', 'form-fields', 'table-columns')"]}]
+      "config_key IN ('entities', 'view-options', 'form-fields', 'table-columns', 'navigation')"]}]
    [:config_edn :text {:null false}]
    [:created_at :timestamptz {:null false, :default [:now]}]
    [:updated_at :timestamptz {:null false, :default [:now]}]],

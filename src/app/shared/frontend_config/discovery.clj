@@ -13,7 +13,8 @@
   {:entities "entities.edn"
    :view-options "view-options.edn"
    :form-fields "form-fields.edn"
-   :table-columns "table-columns.edn"})
+  :table-columns "table-columns.edn"
+  :navigation "navigation.edn"})
 
 (defn- file-exists?
   [path]

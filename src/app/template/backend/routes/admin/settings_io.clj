@@ -452,6 +452,16 @@
        :warnings (:warnings validation)})
     (write-runtime-override! db admin-scope :table-columns sanitized-table-columns)))
 
+(defn read-navigation
+  "Read admin navigation config from the runtime store."
+  [db]
+  (read-runtime-override db admin-scope :navigation))
+
+(defn write-navigation!
+  "Persist admin navigation config in the runtime store."
+  [db navigation]
+  (write-runtime-override! db admin-scope :navigation (or navigation {})))
+
 ;; ---------------------------------------------------------------------------
 ;; User config — read / write
 ;; ---------------------------------------------------------------------------
@@ -527,3 +537,12 @@
       {:errors (:errors validation)
        :warnings (:warnings validation)})
     (write-runtime-override! db user-scope :table-columns sanitized-table-columns)))
+
+(defn read-user-navigation
+  "Read user-facing navigation config from the runtime store."
+  [db]
+  (read-runtime-override db user-scope :navigation))
+
+(defn write-user-navigation!
+  [db navigation]
+  (write-runtime-override! db user-scope :navigation (or navigation {})))

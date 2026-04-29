@@ -14,6 +14,20 @@
   ;; Ensure we don't reuse cached subscription computations between tests.
   (rf/clear-subscription-cache!))
 
+(def ^:private all-receipt-status-options
+  [{:value "uploaded" :label "Uploaded"}
+   {:value "parsing" :label "Parsing"}
+   {:value "parsed" :label "Parsed"}
+   {:value "extracting" :label "Extracting"}
+   {:value "extracted" :label "Extracted"}
+   {:value "review_required" :label "Review required"}
+   {:value "approved" :label "Approved"}
+   {:value "posted" :label "Posted"}
+   {:value "failed" :label "Failed"}])
+
+(def ^:private stable-receipt-status-values
+  ["extracted" "review_required" "posted" "failed"])
+
 (def ^:private models-data
   ;; Minimal models metadata keyed in snake_case, as it often arrives from the DB layer.
   ;; We want subscriptions to tolerate callers using snake_case entity identifiers.
@@ -79,6 +93,23 @@
                                   {:value "custom" :label "custom"}]}}
    :column-metadata
    {"payer_type_label" {:label-key :common/payer-type}}})
+
+(def ^:private receipts-models-data
+  {:receipts
+   {:fields
+    [[:id :uuid {:null false}]
+     [:status [:enum :receipt-status] {:null false :default "uploaded"}]
+     [:created_at :timestamptz {:null false}]]
+    :types [[:receipt-status :enum {:choices ["uploaded" "parsing" "parsed" "extracting"
+                                              "extracted" "review_required" "approved"
+                                              "posted" "failed"]}]]}})
+
+(def ^:private receipts-table-columns
+  {:available-columns ["status" "created_at"]
+   :computed-fields {}
+   :column-config {"status" {:type "select"
+                             :input-type "select"
+                             :options all-receipt-status-options}}})
 
 (deftest entity-specs-by-name-normalizes-entity-key
   (testing ":entity-specs/by-name resolves the same spec for snake_case and kebab-case entity identifiers"
@@ -153,6 +184,23 @@
       (is (= [{:value "system" :label "system"}
               {:value "custom" :label "custom"}]
             (:options payer-type-field))))))
+
+(deftest entity-specs-by-name-receipts-status-filter-keeps-only-stable-options
+  (testing ":entity-specs/by-name sanitizes receipt status options used by list filters"
+    (reset-db!
+      {:models-data receipts-models-data
+       :domain {:config {:table-columns {:receipts receipts-table-columns}}}})
+    (rf/dispatch-sync [::entity-specs/initialize-entity-specs])
+
+    (let [spec @(rf/subscribe [:entity-specs/by-name :receipts])
+          status-field (some (fn [field]
+                               (when (= "status" (:id field))
+                                 field))
+                         spec)
+          option-values (mapv :value (:options status-field))]
+      (is (= stable-receipt-status-values option-values))
+      (is (not-any? #{"uploaded" "parsing" "parsed" "extracting" "refining" "approved"}
+            option-values)))))
 
 (deftest entity-specs-by-name-uses-label-key-for-current-locale
   (testing ":entity-specs/by-name resolves :label-key via the current locale"

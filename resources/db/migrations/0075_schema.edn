@@ -1,0 +1,17 @@
+({:action :alter-column,
+  :field-name :config-key,
+  :model-name :frontend_runtime_configs,
+  :options
+  {:null false,
+   :check
+   [:raw
+    "config_key IN ('entities', 'view-options', 'form-fields', 'table-columns', 'navigation')"],
+   :type [:varchar 64]},
+  :changes
+  {:check
+   {:from
+    [:raw
+     "config_key IN ('entities', 'view-options', 'form-fields', 'table-columns')"],
+    :to
+    [:raw
+     "config_key IN ('entities', 'view-options', 'form-fields', 'table-columns', 'navigation')"]}}})

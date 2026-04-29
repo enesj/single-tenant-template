@@ -23,7 +23,7 @@
 
 (defui edit-mode-content
   [{:keys [scope selected-entity admin-config user-draft tab on-tab-change
-           admin-form-fields admin-table-columns]}]
+           admin-form-fields admin-table-columns admin-navigation]}]
   (let [;; Admin handlers
         on-admin-change (fn [entity-name setting-key new-state]
                           (rf/dispatch [::admin-settings-events/set-display-setting-draft
@@ -43,6 +43,25 @@
         on-admin-action-gate-change (fn [entity-name action-key gate-id]
                                       (rf/dispatch [::admin-settings-events/set-action-gate-draft
                                                     entity-name action-key gate-id]))
+        on-admin-navigation-title-change (fn [title]
+                   (rf/dispatch [::admin-settings-events/set-navigation-title-draft title]))
+        on-admin-navigation-section-title-change (fn [section-id title]
+                     (rf/dispatch [::admin-settings-events/set-navigation-section-title-draft
+                       section-id title]))
+        on-admin-navigation-item-label-change (fn [item-id label]
+                  (rf/dispatch [::admin-settings-events/set-navigation-item-label-draft
+                          item-id label]))
+        on-admin-navigation-item-visible-change (fn [item-id visible?]
+             (rf/dispatch [::admin-settings-events/set-navigation-item-visible-draft
+               item-id visible?]))
+        on-admin-navigation-move-item (fn [item-id direction]
+                (rf/dispatch [::admin-settings-events/move-navigation-item-draft
+                        item-id direction]))
+        on-admin-navigation-move-item-to-section (fn [item-id section-id]
+                     (rf/dispatch [::admin-settings-events/move-navigation-item-to-section-draft
+                       item-id section-id]))
+        on-admin-navigation-reset (fn []
+                  (rf/dispatch [::admin-settings-events/reset-navigation-draft]))
         normalize-form-field-id (fn [x]
                                   (some-> x model-naming/ensure-app-keyword))
         form-field->storage (fn [x]
@@ -71,6 +90,25 @@
         on-user-action-gate-change (fn [entity-kw action-key gate-id]
                                      (rf/dispatch [::user-settings-events/set-action-gate-draft
                                                    entity-kw action-key gate-id]))
+        on-user-navigation-title-change (fn [title]
+                  (rf/dispatch [::user-settings-events/set-navigation-title-draft title]))
+        on-user-navigation-section-title-change (fn [section-id title]
+                    (rf/dispatch [::user-settings-events/set-navigation-section-title-draft
+                      section-id title]))
+        on-user-navigation-item-label-change (fn [item-id label]
+                       (rf/dispatch [::user-settings-events/set-navigation-item-label-draft
+                         item-id label]))
+        on-user-navigation-item-visible-change (fn [item-id visible?]
+                        (rf/dispatch [::user-settings-events/set-navigation-item-visible-draft
+                          item-id visible?]))
+        on-user-navigation-move-item (fn [item-id direction]
+                     (rf/dispatch [::user-settings-events/move-navigation-item-draft
+                       item-id direction]))
+        on-user-navigation-move-item-to-section (fn [item-id section-id]
+                    (rf/dispatch [::user-settings-events/move-navigation-item-to-section-draft
+                      item-id section-id]))
+        on-user-navigation-reset (fn []
+                 (rf/dispatch [::user-settings-events/reset-navigation-draft]))
         on-user-reset (fn [entity-kw]
                         (rf/dispatch [::user-settings-events/reset-entity-display-draft entity-kw]))
         ;; User form-fields/table-columns handlers
@@ -87,7 +125,37 @@
         on-user-table-column-label-set (fn [entity-kw col-name label]
                                          (rf/dispatch [::user-settings-events/set-table-column-label-draft
                                                        entity-kw col-name label]))]
-    (if-not selected-entity
+    (if (= tab "navigation")
+      (case scope
+        :admin
+        ($ :div {:class "max-w-4xl"}
+          ($ editors/config-tabs {:tab tab :on-tab-change on-tab-change})
+          ($ editors/navigation-editor
+            {:navigation admin-navigation
+             :on-title-change on-admin-navigation-title-change
+             :on-section-title-change on-admin-navigation-section-title-change
+             :on-item-label-change on-admin-navigation-item-label-change
+             :on-item-visible-change on-admin-navigation-item-visible-change
+             :on-move-item on-admin-navigation-move-item
+             :on-move-item-to-section on-admin-navigation-move-item-to-section
+             :on-reset on-admin-navigation-reset}))
+
+        :user
+        ($ :div {:class "max-w-4xl"}
+          ($ editors/config-tabs {:tab tab :on-tab-change on-tab-change})
+          ($ editors/navigation-editor
+            {:navigation (:navigation user-draft)
+             :on-title-change on-user-navigation-title-change
+             :on-section-title-change on-user-navigation-section-title-change
+             :on-item-label-change on-user-navigation-item-label-change
+             :on-item-visible-change on-user-navigation-item-visible-change
+             :on-move-item on-user-navigation-move-item
+             :on-move-item-to-section on-user-navigation-move-item-to-section
+             :on-reset on-user-navigation-reset}))
+
+        ($ :div {:class "ds-alert ds-alert-warning"}
+          ($ :span "Unknown scope")))
+      (if-not selected-entity
       ($ :div {:class "ds-alert ds-alert-info"}
         ($ :span "Select an entity to edit its settings."))
       (case scope
@@ -320,7 +388,7 @@
                  :on-reset on-user-reset}))))
 
         ($ :div {:class "ds-alert ds-alert-warning"}
-          ($ :span "Unknown scope"))))))
+          ($ :span "Unknown scope")))))))
 
 ;; =============================================================================
 ;; Main Page Component
@@ -345,6 +413,7 @@
         admin-config-scoped (select-keys (or admin-config {}) admin-scope-entities)
         admin-form-fields (use-subscribe [::admin-settings-events/form-fields])
         admin-table-columns (use-subscribe [::admin-settings-events/table-columns])
+        admin-navigation (use-subscribe [::admin-settings-events/navigation])
         admin-tab (use-subscribe [::admin-settings-events/config-tab])
 
         ;; User config
@@ -430,6 +499,7 @@
              :admin-config admin-config-scoped
              :admin-form-fields admin-form-fields
              :admin-table-columns admin-table-columns
+             :admin-navigation admin-navigation
              :user-draft user-draft
              :tab tab
              :on-tab-change on-tab-change}))))))

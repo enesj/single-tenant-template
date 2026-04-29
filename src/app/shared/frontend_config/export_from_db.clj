@@ -72,11 +72,13 @@
   [db]
   {:admin {:view-options (settings-io/read-view-options db)
            :form-fields (settings-io/read-form-fields db)
-           :table-columns (settings-io/read-table-columns db)}
+           :table-columns (settings-io/read-table-columns db)
+           :navigation (settings-io/read-navigation db)}
    :user {:entities (settings-io/read-user-entities db)
           :view-options (settings-io/read-user-view-options db)
           :form-fields (settings-io/read-user-form-fields db)
-          :table-columns (settings-io/read-user-table-columns db)}})
+          :table-columns (settings-io/read-user-table-columns db)
+          :navigation (settings-io/read-user-navigation db)}})
 
 (defn- decorate-plan
   [plan]

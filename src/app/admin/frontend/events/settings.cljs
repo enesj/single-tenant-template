@@ -3,6 +3,7 @@
   (:require
     ;; Side-effect requires: registers events/subs.
     [app.admin.frontend.events.settings.form-fields]
+    [app.admin.frontend.events.settings.navigation]
     [app.admin.frontend.events.settings.subs]
     [app.admin.frontend.events.settings.table-columns]
     [app.admin.frontend.events.settings.ui]

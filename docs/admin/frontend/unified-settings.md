@@ -2,7 +2,7 @@
 
 # Unified Settings (Admin & User)
 
-This guide covers the unified Settings UI — a shared page component that manages display options, form fields, table columns, and list behavior for every entity in the application, across both admin and user scopes.
+This guide covers the unified Settings UI — a shared page component that manages display options, form fields, table columns, list behavior, and left-sidebar navigation for the application, across both admin and user scopes.
 
 ## Routes
 
@@ -22,7 +22,7 @@ The settings system has two independent configuration scopes:
 - **Admin scope** — Controls admin panel pages (`/admin/articles`, `/admin/suppliers`, etc.). Settings are stored with `scope=admin` in the database.
 - **User scope** — Controls user-facing domain pages (`/expenses/articles`, `/t/:tenant/receipts`, etc.). Settings are stored with `scope=user` in the database.
 
-Each scope has three configuration categories: **View Options**, **Form Fields**, and **Table Columns**.
+Each scope has four configuration categories: **View Options**, **Form Fields**, **Table Columns**, and **Sidebar Navigation**.
 
 ### Data Flow
 
@@ -61,16 +61,16 @@ Settings are persisted in the `frontend_runtime_configs` database table:
 | Column | Description |
 |--------|-------------|
 | `scope` | `admin` or `user` |
-| `config_key` | `view-options`, `form-fields`, or `table-columns` |
+| `config_key` | `view-options`, `form-fields`, `table-columns`, or `navigation` |
 | `config_edn` | EDN-encoded configuration map |
 
 Source-controlled EDN files provide bootstrap defaults that seed the DB for fresh environments (read once at startup, not at request time):
 
 | Scope | Files (bootstrap defaults) |
 |-------|-------|
-| Admin | `src/app/admin/frontend/config/{view-options,form-fields,table-columns}.edn` |
-| User (template) | `src/app/template/frontend/config/{view-options,form-fields,table-columns}.edn` |
-| User (domain) | `src/app/domain/frontend/expenses/config/{view-options,form-fields,table-columns}.edn` |
+| Admin | `src/app/admin/frontend/config/{view-options,form-fields,table-columns,navigation}.edn` |
+| User (template) | `src/app/template/frontend/config/{view-options,form-fields,table-columns,navigation}.edn` |
+| User (domain) | `src/app/domain/frontend/expenses/config/{view-options,form-fields,table-columns,navigation}.edn` |
 
 ### Resolution Precedence
 
@@ -115,7 +115,7 @@ Each entity card shows:
 Activated by clicking **"Edit Settings"** (button toggles to **"Stop Editing"**).
 
 - An **entity selector** dropdown appears for choosing which entity to configure
-- Three **editor tabs** appear: View Options, Form Fields, Table Columns
+- Four **editor tabs** appear: View Options, Form Fields, Table Columns, Sidebar
 - **Save/Discard** buttons appear when changes are pending (dirty state)
 
 **Important behaviors:**
@@ -175,6 +175,23 @@ The hardcoded fallback default is `25` (defined in `resolver.cljs`).
 #### Save Semantics
 
 View Options and List Behavior use a **draft model**: changes are accumulated locally and persisted only when clicking **"Save settings"**. The save dispatches `PUT /admin/api/settings` with the full payload.
+
+### Sidebar (🧭)
+
+Configures the left sidebar structure for the current scope.
+
+Supported edits:
+
+- **Sidebar title** — changes the title shown at the top of the sidebar.
+- **Group label** — changes section/group headings, including Bosnian user-facing labels.
+- **Item label** — changes individual navigation item labels.
+- **Show** — hides or reveals an individual sidebar link without deleting it from the config.
+- **Up / Down** — moves an item within its current group.
+- **Group dropdown** — moves an item between sidebar groups.
+
+The navigation config intentionally stores only editable structure (`:title`, `:sections`, item `:id`, item `:label`, optional item `:visible?`). Runtime-only data such as icons, routes, active states, permission checks, badges, and tenant URL prefixes remains in code so settings changes cannot create broken links or bypass access control.
+
+Save semantics: **draft model** with the shared Save/Discard buttons. Admin scope saves `navigation` through `PUT /admin/api/settings`; user scope saves it through `PUT /admin/api/settings/user-ui-config`.
 
 ### Form Fields (📄)
 

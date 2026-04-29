@@ -44,6 +44,7 @@
     :form-fields (form-fields-spec/validate-form-fields-strict data)
     :table-columns (table-columns-spec/validate-table-columns-strict data)
     :view-options (view-options-spec/validate-view-options-strict data)
+    :navigation {:valid? true}
     {:valid? false :errors [(str "Unknown config kind: " kind)]}))
 
 (defn- unknown-values
@@ -192,6 +193,7 @@
                                    :form-fields (semantic-issues-form-fields value schema-index allowlist)
                                    :table-columns (semantic-issues-table-columns value schema-index computed allowlist)
                                    :view-options (semantic-issues-view-options value schema-index computed allowlist)
+                                   :navigation {:unknown-entities [] :unknown-fields {} :missing-fields {}}
                                    {:unknown-entities [] :unknown-fields {} :missing-fields {}})
                                  {:unknown-entities [] :unknown-fields {} :missing-fields {}})
                       semantic-errors? (or (seq (:unknown-entities semantic))

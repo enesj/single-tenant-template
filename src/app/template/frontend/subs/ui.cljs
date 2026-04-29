@@ -51,6 +51,11 @@
   (fn [db _]
     (boolean (:template/config-loaded? db))))
 
+(rf/reg-sub
+  ::domain-navigation
+  (fn [db _]
+    (get-in db [:domain :config :navigation] {})))
+
 ;; ============================================================================
 ;; Default Display Settings (kept for backward compatibility)
 ;; ============================================================================

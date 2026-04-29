@@ -66,6 +66,25 @@
       computed-config
       always-visible-config)))
 
+(def ^:private stable-receipt-status-options
+  [{:value "extracted" :label "Extracted"}
+   {:value "review_required" :label "Review required"}
+   {:value "posted" :label "Posted"}
+   {:value "failed" :label "Failed"}])
+
+(defn- receipt-status-column?
+  [entity-keyword column-key]
+  (and (= :receipts (model-naming/ensure-app-keyword entity-keyword))
+    (= :status (model-naming/ensure-app-keyword column-key))))
+
+(defn- stabilize-receipt-status-column
+  [entity-keyword column-key column-spec]
+  (cond-> column-spec
+    (receipt-status-column? entity-keyword column-key)
+    (merge {:type "select"
+            :input-type "select"
+            :options stable-receipt-status-options})))
+
 ;; Read from Re-frame DB with route-aware fallback via resolver.
 (defn- generate-admin-entity-spec-from-db
   "Generate admin entity spec using vector-based configuration from Re-frame DB.
@@ -94,13 +113,16 @@
                                        specific-config (or (resolver/lookup-column-entry column-config column-key) {})
                                        base-field-spec (resolver/lookup-column-entry fields-by-id column-key)
                                        is-always-visible (contains? always-visible-set normalized-column)]
-                                   (create-column-spec-from-config
-                                     locale
+                                   (stabilize-receipt-status-column
+                                     entity-keyword
                                      column-key
-                                     (assoc specific-config :always-visible is-always-visible)
-                                     computed-fields
-                                     column-metadata
-                                     base-field-spec)))
+                                     (create-column-spec-from-config
+                                       locale
+                                       column-key
+                                       (assoc specific-config :always-visible is-always-visible)
+                                       computed-fields
+                                       column-metadata
+                                       base-field-spec))))
                            available-columns)]
         {:id entity-keyword
          :fields column-specs

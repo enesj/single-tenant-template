@@ -22,6 +22,7 @@
                                                     unmapped-items-icon
                                                     user-settings-icon
                                                     users-icon]]
+                            [app.template.frontend.utils.navigation-config :as nav-config]
     [re-frame.core :as rf]
     [uix.core :refer [$ defui use-effect use-state]]
     [uix.re-frame :refer [use-subscribe]]))
@@ -32,141 +33,173 @@
         current-admin-role (use-subscribe [:admin/current-user-role])
         is-owner? (= current-admin-role :owner)
         unread-api-failures (use-subscribe [:admin/unread-api-failure-count])
+        navigation (use-subscribe [:admin/navigation])
 
         system-admin-items (cond-> [{:id "admin-sidebar-dashboard"
+                   :nav-id :dashboard
                                      :label "Dashboard"
                                      :href "/admin/dashboard"
                                      :icon ($ dashboard-icon {:class "w-6 h-6"})
                                      :active? (contains? #{:admin-dashboard :admin-dashboard-alt} route-name)}
                                     {:id "admin-sidebar-backlog"
+                   :nav-id :backlog
                                      :label "Backlog"
                                      :href "/admin/backlog"
                                      :icon ($ suppliers-icon {:class "w-6 h-6"})
                                      :active? (= route-name :admin-backlog)}
                                     {:id "admin-sidebar-tenants"
+                   :nav-id :tenants
                                      :label "Tenants & Memberships"
                                      :href "/admin/tenants"
                                      :icon ($ admins-icon {:class "w-6 h-6"})
                                      :active? (= route-name :admin-tenants)}
                                     {:id "admin-sidebar-users"
+                   :nav-id :users
                                      :label "User Accounts"
                                      :href "/admin/users"
                                      :icon ($ users-icon {:class "w-6 h-6"})
                                      :active? (= route-name :admin-users)}]
                              is-owner?
-                             (conj {:label "Admins"
+                             (conj {:id "admin-sidebar-admins"
+                               :nav-id :admins
+                               :label "Admins"
                                     :href "/admin/admins"
                                     :icon ($ admins-icon {:class "w-6 h-6"})
                                     :active? (= route-name :admin-admins)})
 
                              true
-                             (into [{:label "Audit Logs"
+                             (into [{:id "admin-sidebar-audit-logs"
+                                :nav-id :audit-logs
+                                :label "Audit Logs"
                                      :href "/admin/audit"
                                      :icon ($ audit-icon {:class "w-6 h-6"})
                                      :active? (= route-name :admin-audit)
                                      :badge unread-api-failures}
-                                    {:label "Login Events"
+                               {:id "admin-sidebar-login-events"
+                                :nav-id :login-events
+                                :label "Login Events"
                                      :href "/admin/login-events"
                                      :icon ($ login-events-icon {:class "w-6 h-6"})
                                      :active? (= route-name :admin-login-events)}]))
 
         expenses-items [{:id "admin-sidebar-expenses-reports"
+                              :nav-id :reports
                          :label "Reports"
                          :href "/admin/reports"
                          :icon ($ chart-bar {:class "w-6 h-6"})
                          :active? (= route-name :admin-reports)}
                         {:id "admin-sidebar-expenses-settings"
+                              :nav-id :expenses-settings
                          :label "Settings"
                          :href "/admin/expenses-settings"
                          :icon ($ settings-icon {:class "w-6 h-6"})
                          :active? (= route-name :admin-expenses-settings)}
                         {:id "admin-sidebar-expenses-search"
+                              :nav-id :search
                          :label "Search"
                          :href "/admin/search"
                          :icon ($ search-icon {:class "w-6 h-6"})
                          :active? (= route-name :admin-search)}
                         {:id "admin-sidebar-expenses-expenses"
+                              :nav-id :expenses
                          :label "Expenses"
                          :href "/admin/expenses"
                          :icon ($ expenses-icon {:class "w-6 h-6"})
                          :active? (= route-name :admin-expenses)}
                         {:id "admin-sidebar-expenses-receipts"
+                              :nav-id :receipts
                          :label "Receipts"
                          :href "/admin/receipts"
                          :icon ($ receipts-icon {:class "w-6 h-6"})
                          :active? (= route-name :admin-receipts)}
                         {:id "admin-sidebar-expenses-articles"
+                              :nav-id :articles
                          :label "Articles"
                          :href "/admin/articles"
                          :icon ($ articles-icon {:class "w-6 h-6"})
                          :active? (= route-name :admin-articles)}
                         {:id "admin-sidebar-expenses-manufacturers"
+                              :nav-id :manufacturers
                          :label "Manufacturers"
                          :href "/admin/manufacturers"
                          :icon ($ suppliers-icon {:class "w-6 h-6"})
                          :active? (= route-name :admin-manufacturers)}
                         {:id "admin-sidebar-expenses-categories"
+                              :nav-id :categories
                          :label "Categories"
                          :href "/admin/categories"
                          :icon ($ suppliers-icon {:class "w-6 h-6"})
                          :active? (= route-name :admin-categories)}
                         {:id "admin-sidebar-expenses-subcategories"
+                              :nav-id :subcategories
                          :label "Subcategories"
                          :href "/admin/subcategories"
                          :icon ($ suppliers-icon {:class "w-6 h-6"})
                          :active? (= route-name :admin-subcategories)}
                         {:id "admin-sidebar-expenses-suppliers"
+                              :nav-id :suppliers
                          :label "Suppliers"
                          :href "/admin/suppliers"
                          :icon ($ suppliers-icon {:class "w-6 h-6"})
                          :active? (= route-name :admin-suppliers)}
                         {:id "admin-sidebar-expenses-stores"
+                              :nav-id :stores
                          :label "Stores"
                          :href "/admin/stores"
                          :icon ($ suppliers-icon {:class "w-6 h-6"})
                          :active? (= route-name :admin-stores)}
                         {:id "admin-sidebar-expenses-countries"
+                              :nav-id :countries
                          :label "Countries"
                          :href "/admin/countries"
                          :icon ($ suppliers-icon {:class "w-6 h-6"})
                          :active? (= route-name :admin-countries)}
                         {:id "admin-sidebar-expenses-cities"
+                              :nav-id :cities
                          :label "Cities"
                          :href "/admin/cities"
                          :icon ($ suppliers-icon {:class "w-6 h-6"})
                          :active? (= route-name :admin-cities)}
                         {:id "admin-sidebar-expenses-unmapped-aliases"
+                              :nav-id :unmapped-aliases
                          :label "Unmapped Aliases"
                          :href "/admin/unmapped-aliases"
                          :icon ($ unmapped-items-icon {:class "w-6 h-6"})
                          :active? (= route-name :admin-unmapped-aliases)}
                         {:id "admin-sidebar-expenses-article-aliases"
+                              :nav-id :article-aliases
                          :label "Article Aliases"
                          :href "/admin/article-aliases"
                          :icon ($ article-aliases-icon {:class "w-6 h-6"})
                          :active? (= route-name :admin-article-aliases)}
                         {:id "admin-sidebar-expenses-supplier-aliases"
+                              :nav-id :supplier-aliases
                          :label "Supplier Aliases"
                          :href "/admin/supplier-aliases"
                          :icon ($ article-aliases-icon {:class "w-6 h-6"})
                          :active? (= route-name :admin-supplier-aliases)}
                         {:id "admin-sidebar-expenses-store-aliases"
+                              :nav-id :store-aliases
                          :label "Store Aliases"
                          :href "/admin/store-aliases"
                          :icon ($ article-aliases-icon {:class "w-6 h-6"})
                          :active? (= route-name :admin-store-aliases)}
                         {:id "admin-sidebar-expenses-duplicates"
+                              :nav-id :duplicates
                          :label "Dedup & Merge"
                          :href "/admin/duplicates"
                          :icon ($ articles-icon {:class "w-6 h-6"})
                          :active? (= route-name :admin-duplicates)}]
 
-        sections [{:title "System Administration" :items system-admin-items}
-                  {:title "Domain"
-                   :subsections [{:id "admin-sidebar-domain-expenses"
-                                  :title "Expenses"
-                                  :items expenses-items}]}]]
-    ($ sidebar {:title "Admin Panel"
+                       fallback-sections [{:nav-id :system-administration
+                            :title "System Administration"
+                            :items system-admin-items}
+                                {:nav-id :expenses
+                            :title "Expenses"
+                            :items expenses-items}]
+                       sections (nav-config/apply-navigation navigation fallback-sections)
+                       sidebar-title (or (:title navigation) "Admin Panel")]
+                        ($ sidebar {:title sidebar-title
                 :open? open?
                 :sections sections
                 :footer ($ :div {:class "p-3 border-t border-base-300"}

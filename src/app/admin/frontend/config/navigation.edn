@@ -1,0 +1,31 @@
+{:title "Admin Panel"
+ :sections
+ [{:id :system-administration
+   :title "System Administration"
+   :items [{:id :dashboard :label "Dashboard"}
+           {:id :backlog :label "Backlog"}
+           {:id :tenants :label "Tenants & Memberships"}
+           {:id :users :label "User Accounts"}
+           {:id :admins :label "Admins"}
+           {:id :audit-logs :label "Audit Logs"}
+           {:id :login-events :label "Login Events"}]}
+  {:id :expenses
+   :title "Expenses"
+   :items [{:id :reports :label "Reports"}
+           {:id :expenses-settings :label "Settings"}
+           {:id :search :label "Search"}
+           {:id :expenses :label "Expenses"}
+           {:id :receipts :label "Receipts"}
+           {:id :articles :label "Articles"}
+           {:id :manufacturers :label "Manufacturers"}
+           {:id :categories :label "Categories"}
+           {:id :subcategories :label "Subcategories"}
+           {:id :suppliers :label "Suppliers"}
+           {:id :stores :label "Stores"}
+           {:id :countries :label "Countries"}
+           {:id :cities :label "Cities"}
+           {:id :unmapped-aliases :label "Unmapped Aliases"}
+           {:id :article-aliases :label "Article Aliases"}
+           {:id :supplier-aliases :label "Supplier Aliases"}
+           {:id :store-aliases :label "Store Aliases"}
+           {:id :duplicates :label "Dedup & Merge"}]}]}

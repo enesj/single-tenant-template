@@ -28,15 +28,18 @@
 (def ^:private admin-view-options-path "src/app/admin/frontend/config/view-options.edn")
 (def ^:private admin-form-fields-path "src/app/admin/frontend/config/form-fields.edn")
 (def ^:private admin-table-columns-path "src/app/admin/frontend/config/table-columns.edn")
+(def ^:private admin-navigation-path "src/app/admin/frontend/config/navigation.edn")
 
 (def ^:private validators
   {"admin" {:view-options view-options-spec/validate-view-options-strict
             :form-fields form-fields-spec/validate-form-fields-strict
-            :table-columns table-columns-spec/validate-table-columns-strict}
+        :table-columns table-columns-spec/validate-table-columns-strict
+        :navigation (constantly {:valid? true})}
    "user" {:entities entities-spec/validate-user-entities
            :view-options view-options-spec/validate-view-options-strict
            :form-fields form-fields-spec/validate-form-fields-strict
-           :table-columns table-columns-spec/validate-table-columns-strict}})
+       :table-columns table-columns-spec/validate-table-columns-strict
+       :navigation (constantly {:valid? true})}})
 
 (def ^:private expense-categories-entity :expense-categories)
 
@@ -250,7 +253,8 @@
         admin-path (case config-key
                      :view-options admin-view-options-path
                      :form-fields admin-form-fields-path
-                     :table-columns admin-table-columns-path)
+                     :table-columns admin-table-columns-path
+                     :navigation admin-navigation-path)
         admin-config (read-edn-default! "admin" config-key admin-path)
         merged (apply deep-merge (concat domain-configs [admin-config]))]
     (validate-defaults! "admin" config-key merged)))
@@ -286,7 +290,9 @@
 
    Channels seeded:
      admin/view-options, admin/form-fields, admin/table-columns
+     admin/navigation
      user/entities, user/view-options, user/form-fields, user/table-columns
+     user/navigation
 
    Safe to call on every startup — idempotent.
    Bootstrap fails closed: unreadable or invalid defaults abort startup rather
@@ -299,12 +305,14 @@
     (seed-channel! db "admin" :view-options (admin-defaults :view-options))
     (seed-channel! db "admin" :form-fields (admin-defaults :form-fields))
     (seed-channel! db "admin" :table-columns (admin-defaults :table-columns))
+    (seed-channel! db "admin" :navigation (admin-defaults :navigation))
 
     ;; User channels
     (seed-channel! db "user" :entities (user-defaults :entities))
     (seed-channel! db "user" :view-options (user-defaults :view-options))
     (seed-channel! db "user" :form-fields (user-defaults :form-fields))
     (seed-channel! db "user" :table-columns (user-defaults :table-columns))
+    (seed-channel! db "user" :navigation (user-defaults :navigation))
 
     (reconcile-expense-category-default-config! db)
 

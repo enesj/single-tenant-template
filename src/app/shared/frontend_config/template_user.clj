@@ -9,4 +9,5 @@
   {:entities (str root-dir "/entities.edn")
    :view-options (str root-dir "/view-options.edn")
    :form-fields (str root-dir "/form-fields.edn")
-   :table-columns (str root-dir "/table-columns.edn")})
+  :table-columns (str root-dir "/table-columns.edn")
+  :navigation (str root-dir "/navigation.edn")})

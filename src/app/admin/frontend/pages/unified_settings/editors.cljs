@@ -3,6 +3,7 @@
     [app.admin.frontend.components.settings-views.cards :as cards]
     [app.admin.frontend.components.tabs :as tabs]
     [app.admin.frontend.settings.definitions :as defs]
+    [app.admin.frontend.utils.navigation-config :as nav-config]
     [app.shared.model-naming :as model-naming]
     [app.template.frontend.events.list.ui-state :as list-ui-events]
     [app.template.frontend.settings.resolver :as resolver]
@@ -29,7 +30,10 @@
                     :on-select #(on-tab-change "form-fields")})
     (tabs/tab-link {:label "📊 Table Columns"
                     :active? (= tab "table-columns")
-                    :on-select #(on-tab-change "table-columns")})))
+                    :on-select #(on-tab-change "table-columns")})
+    (tabs/tab-link {:label "🧭 Sidebar"
+                    :active? (= tab "navigation")
+                    :on-select #(on-tab-change "navigation")})))
 (defui form-fields-editor
   "Editor for form-fields.edn - create/edit/batch-edit field lists.
 
@@ -476,6 +480,112 @@
                                      :checked (contains? sortable col)
                                      :disabled (not in-table?)
                                      :on-change #(on-toggle entity-kw :sortable-columns col)}))))))))))))))
+
+(defui navigation-editor
+  "Editor for the left sidebar navigation structure."
+  [{:keys [navigation on-title-change on-section-title-change on-item-label-change
+           on-item-visible-change on-move-item on-move-item-to-section on-reset]}]
+  (let [navigation (nav-config/normalize-navigation navigation)
+        sections (:sections navigation)
+        section-options (mapv (fn [section]
+                                {:id (nav-config/section-id section)
+                                 :title (nav-config/section-title section (name (nav-config/section-id section)))})
+                          sections)]
+    ($ :div {:class "space-y-4"}
+      ($ :div {:class "ds-card bg-base-100 shadow-md"}
+        ($ :div {:class "ds-card-body p-4"}
+          ($ :div {:class "flex items-center justify-between mb-4"}
+            ($ :div
+              ($ :h3 {:class "ds-card-title text-lg"} "Sidebar Navigation")
+              ($ :p {:class "text-xs text-base-content/60 mt-1"}
+                "Edit labels, move items up/down, move items between sidebar groups, or hide links from the sidebar. Save settings to persist changes."))
+            (when on-reset
+              ($ :button {:type "button"
+                          :id "navigation-reset"
+                          :class "ds-btn ds-btn-xs ds-btn-ghost"
+                          :on-click on-reset}
+                "Reset")))
+          ($ :label {:class "ds-form-control w-full max-w-md"}
+            ($ :span {:class "ds-label-text font-medium"} "Sidebar title")
+            ($ :input {:type "text"
+                       :id "navigation-title-input"
+                       :class "ds-input ds-input-sm ds-input-bordered w-full"
+                       :value (or (:title navigation) "")
+                       :on-change #(on-title-change (.. % -target -value))}))))
+
+      (if (seq sections)
+        (for [section sections
+              :let [section-id (nav-config/section-id section)
+                    section-title (nav-config/section-title section (name section-id))
+                    items (vec (:items section))]]
+          ($ :div {:key (name section-id)
+                   :id (str "navigation-section-" (name section-id))
+                   :class "ds-card bg-base-100 shadow-md"}
+            ($ :div {:class "ds-card-body p-4"}
+              ($ :label {:class "ds-form-control w-full max-w-md mb-3"}
+                ($ :span {:class "ds-label-text font-medium"} "Group label")
+                ($ :input {:type "text"
+                           :id (str "navigation-section-title-" (name section-id))
+                           :class "ds-input ds-input-sm ds-input-bordered w-full"
+                           :value section-title
+                           :on-change #(on-section-title-change section-id (.. % -target -value))}))
+              (if (seq items)
+                ($ :div {:class "space-y-2"}
+                  (for [[idx item] (map-indexed vector items)
+                        :let [item-id (nav-config/item-id item)
+                              item-label (nav-config/item-label item (name item-id))
+                              visible? (nav-config/item-visible? item)]]
+                    ($ :div {:key (name item-id)
+                             :id (str "navigation-item-" (name item-id))
+                             :class (str "grid grid-cols-1 md:grid-cols-[auto_auto_1fr_180px_auto] gap-2 items-center p-2 rounded-lg bg-base-200"
+                                      (when-not visible? " opacity-70"))}
+                      ($ :div {:class "flex items-center gap-1"}
+                        ($ :button {:type "button"
+                                    :id (str "navigation-move-up-" (name item-id))
+                                    :class "ds-btn ds-btn-xs ds-btn-ghost"
+                                    :disabled (zero? idx)
+                                    :title "Move up"
+                                    :on-click #(on-move-item item-id :up)}
+                          "↑")
+                        ($ :button {:type "button"
+                                    :id (str "navigation-move-down-" (name item-id))
+                                    :class "ds-btn ds-btn-xs ds-btn-ghost"
+                                    :disabled (= idx (dec (count items)))
+                                    :title "Move down"
+                                    :on-click #(on-move-item item-id :down)}
+                          "↓"))
+                      ($ :div {:class "flex flex-col gap-1"}
+                        ($ :span {:class "font-mono text-xs text-base-content/60"}
+                          (name item-id))
+                        (when-not visible?
+                          ($ :span {:class "ds-badge ds-badge-xs ds-badge-ghost w-fit"}
+                            "Hidden")))
+                      ($ :input {:type "text"
+                                 :id (str "navigation-label-" (name item-id))
+                                 :class "ds-input ds-input-sm ds-input-bordered w-full"
+                                 :value item-label
+                                 :on-change #(on-item-label-change item-id (.. % -target -value))})
+                      ($ :select {:id (str "navigation-group-" (name item-id))
+                                  :class "ds-select ds-select-sm ds-select-bordered w-full"
+                                  :value (name section-id)
+                                  :on-change #(on-move-item-to-section item-id (keyword (.. % -target -value)))}
+                        (for [{option-id :id option-title :title} section-options]
+                          ($ :option {:key (name option-id)
+                                      :value (name option-id)}
+                            option-title)))
+                      ($ :label {:class "flex items-center gap-2 justify-self-start md:justify-self-end text-sm cursor-pointer"
+                                 :htmlFor (str "navigation-visible-" (name item-id))}
+                        ($ :input {:id (str "navigation-visible-" (name item-id))
+                                   :type "checkbox"
+                                   :class "ds-checkbox ds-checkbox-sm"
+                                   :checked visible?
+                                   :on-change #(on-item-visible-change item-id (.. % -target -checked))})
+                        ($ :span {:class "text-xs font-medium whitespace-nowrap"}
+                          "Show")))))
+                ($ :p {:class "text-sm text-base-content/60"}
+                  "No sidebar items in this group.")))))
+        ($ :div {:class "ds-alert ds-alert-info"}
+          ($ :span "No sidebar groups configured."))))))
 
 ;; =============================================================================
 ;; Edit Mode Content - Single Scope Editor

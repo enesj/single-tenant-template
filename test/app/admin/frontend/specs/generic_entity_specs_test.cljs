@@ -18,6 +18,20 @@
            [(model-naming/ensure-app-keyword (:id field)) field]))
     fields))
 
+(def ^:private all-receipt-status-options
+  [{:value "uploaded" :label "Uploaded"}
+   {:value "parsing" :label "Parsing"}
+   {:value "parsed" :label "Parsed"}
+   {:value "extracting" :label "Extracting"}
+   {:value "extracted" :label "Extracted"}
+   {:value "review_required" :label "Review required"}
+   {:value "approved" :label "Approved"}
+   {:value "posted" :label "Posted"}
+   {:value "failed" :label "Failed"}])
+
+(def ^:private stable-receipt-status-values
+  ["extracted" "review_required" "posted" "failed"])
+
 (deftest admin-entity-spec-preserves-model-derived-field-types
   (testing ":admin/entity-spec keeps model field typing/options for vector-config columns"
     (reset-db!
@@ -49,3 +63,29 @@
         "currency should keep enum options so filter UI can render a dropdown")
       (is (= "string" (:type supplier))
         "computed column type should still come from table computed-fields config"))))
+
+(deftest admin-receipts-status-filter-keeps-only-stable-options
+  (testing "admin receipts status filters ignore transient/legacy receipt statuses"
+    (reset-db!
+      {:current-route {:data {:name :admin/receipts}}
+       :admin {:config {:table-columns
+                        {:receipts {:available-columns ["status" "created_at"]
+                                    :computed-fields {}
+                                    :column-config {"status" {:type "select"
+                                                              :input-type "select"
+                                                              :options all-receipt-status-options}}
+                                    :always-visible []}}}}
+       :entities {:specs
+                  {:receipts [{:id "status"
+                               :label "Status"
+                               :type "select"
+                               :input-type "select"
+                               :options all-receipt-status-options}
+                              {:id "created-at" :label "Created at" :input-type "datetime-local"}]}}})
+
+    (let [spec @(rf/subscribe [:admin/entity-spec :receipts])
+          status-field (get (fields-by-id (:fields spec)) :status)
+          option-values (mapv :value (:options status-field))]
+      (is (= stable-receipt-status-values option-values))
+      (is (not-any? #{"uploaded" "parsing" "parsed" "extracting" "refining" "approved"}
+            option-values)))))

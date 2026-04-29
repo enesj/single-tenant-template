@@ -19,6 +19,25 @@
     kw/ensure-keyword
     model-naming/db-keyword->app))
 
+(def ^:private stable-receipt-status-options
+  [{:value "extracted" :label "Extracted"}
+   {:value "review_required" :label "Review required"}
+   {:value "posted" :label "Posted"}
+   {:value "failed" :label "Failed"}])
+
+(defn- receipt-status-field?
+  [entity-kw field]
+  (and (= :receipts entity-kw)
+    (= :status (some-> (:id field) model-naming/ensure-app-keyword))))
+
+(defn- stabilize-receipt-status-field
+  [entity-kw field]
+  (cond-> field
+    (receipt-status-field? entity-kw field)
+    (merge {:type "select"
+            :input-type "select"
+            :options stable-receipt-status-options})))
+
 ;; Event handler for initializing entity specs
 (rf/reg-event-db
   ::initialize-entity-specs
@@ -85,14 +104,16 @@
                       field-spec*    (if (map? col-cfg)
                                        (merge field-spec col-cfg)
                                        field-spec)]
-                  (resolver/apply-column-label-override locale table-config k field-spec*)))
+            (stabilize-receipt-status-field entity-kw
+              (resolver/apply-column-label-override locale table-config k field-spec*))))
           available-cols)
         ;; Fallback: preserve backend/models-derived field order, and append any
         ;; computed fields not already present.
         (let [base-ids         (set (keep field-id->kw base-fields))
               base-fields*     (mapv (fn [field]
                                        (if-let [field-id (field-id->kw field)]
-                                         (resolver/apply-column-label-override locale table-config field-id field)
+                                         (stabilize-receipt-status-field entity-kw
+                                           (resolver/apply-column-label-override locale table-config field-id field))
                                          field))
                                  base-fields)
               missing-computed (remove base-ids computed-cols)]

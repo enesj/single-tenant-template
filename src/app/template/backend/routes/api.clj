@@ -34,7 +34,8 @@
   {:entities entities-spec/validate-user-entities
    :view-options view-options-spec/validate-view-options-strict
    :form-fields form-fields-spec/validate-form-fields-strict
-   :table-columns table-columns-spec/validate-table-columns-strict})
+    :table-columns table-columns-spec/validate-table-columns-strict
+    :navigation (constantly {:valid? true})})
 
 (defn- safe-read-edn-file
   "Read an EDN file from disk. Returns {} when missing/unreadable.
@@ -62,7 +63,8 @@
   {:entities (settings-io/read-user-entities db)
    :view-options (settings-io/read-user-view-options db)
    :form-fields (settings-io/read-user-form-fields db)
-   :table-columns (settings-io/read-user-table-columns db)})
+  :table-columns (settings-io/read-user-table-columns db)
+  :navigation (settings-io/read-user-navigation db)})
 
 (defn- load-domain-ui-config
   "Load user-facing UI config.

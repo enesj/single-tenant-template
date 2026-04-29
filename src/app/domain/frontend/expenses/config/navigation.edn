@@ -1,0 +1,25 @@
+{:title "Troškovi"
+ :sections
+ [{:id :expenses
+   :title "Troškovi"
+   :items [{:id :search :label "Pretraga"}
+           {:id :dashboard :label "Nadzorna ploča"}
+           {:id :expenses-list :label "Troškovi"}
+           {:id :receipts :label "Računi"}
+           {:id :expense-items :label "Stavke troškova"}]}
+  {:id :operations
+   :title "Operacije"
+   :items [{:id :upload :label "Učitaj"}
+           {:id :reports :label "Izvještaji"}
+           {:id :unmapped-items :label "Nemapirani aliasi"}]}
+  {:id :reference
+   :title "Reference"
+   :items [{:id :suppliers :label "Dobavljači"}
+           {:id :payers :label "Kupci"}
+           {:id :expense-categories :label "Kategorije troškova"}
+           {:id :stores :label "Trgovine"}]}
+  {:id :workspace
+   :title "Radni prostor"
+   :items [{:id :onboarding :label "Postavljanje"}
+           {:id :management-guide :label "Vodič"}
+           {:id :members :label "Članovi"}]}]}

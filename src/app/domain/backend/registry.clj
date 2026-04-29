@@ -18,7 +18,8 @@
            :paths {:entities "src/app/domain/frontend/expenses/config/entities.edn"
                    :view-options "src/app/domain/frontend/expenses/config/view-options.edn"
                    :form-fields "src/app/domain/frontend/expenses/config/form-fields.edn"
-                   :table-columns "src/app/domain/frontend/expenses/config/table-columns.edn"}}}
+               :table-columns "src/app/domain/frontend/expenses/config/table-columns.edn"
+               :navigation "src/app/domain/frontend/expenses/config/navigation.edn"}}}
 
    :redirects
    {:post-login-path "/expenses"}

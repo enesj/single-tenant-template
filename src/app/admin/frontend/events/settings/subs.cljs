@@ -10,8 +10,11 @@
 (rf/reg-sub
   :app.admin.frontend.events.settings/view-options-dirty?
   (fn [db _]
-    (not= (utils/safe-map (get-in db [:admin :settings :view-options]))
-      (utils/safe-map (get-in db [:admin :settings :view-options-saved])))))
+    (or
+      (not= (utils/safe-map (get-in db [:admin :settings :view-options]))
+        (utils/safe-map (get-in db [:admin :settings :view-options-saved])))
+      (not= (utils/safe-map (get-in db [:admin :settings :navigation]))
+        (utils/safe-map (get-in db [:admin :settings :navigation-saved]))))))
 
 ;; =============================================================================
 ;; Subscriptions
@@ -41,6 +44,11 @@
   :app.admin.frontend.events.settings/table-columns
   (fn [db _]
     (get-in db [:admin :settings :table-columns] {})))
+
+(rf/reg-sub
+  :app.admin.frontend.events.settings/navigation
+  (fn [db _]
+    (get-in db [:admin :settings :navigation] {})))
 
 (rf/reg-sub
   :app.admin.frontend.events.settings/config-tab

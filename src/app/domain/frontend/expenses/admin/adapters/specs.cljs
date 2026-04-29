@@ -12,13 +12,8 @@
    {:value "USD" :label "USD"}])
 
 (def ^:private receipt-status-select-options
-  [{:value "uploaded" :label "Uploaded"}
-   {:value "parsing" :label "Parsing"}
-   {:value "parsed" :label "Parsed"}
-   {:value "extracting" :label "Extracting"}
-   {:value "extracted" :label "Extracted"}
+  [{:value "extracted" :label "Extracted"}
    {:value "review_required" :label "Review required"}
-   {:value "approved" :label "Approved"}
    {:value "posted" :label "Posted"}
    {:value "failed" :label "Failed"}])
 
