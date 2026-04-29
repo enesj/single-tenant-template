@@ -323,6 +323,10 @@
          {:doc "Install bb task autocompletion for your shell",
           :task (shell "./scripts/sh/setup/install-completions.sh")},
 
+         archive-secrets
+         {:doc "Archive Railway variables plus project .env and config/.secrets.edn into an encrypted macOS disk image. Usage: bb archive-secrets [script args...]",
+          :task (apply shell "bash" "scripts/sh/setup/archive-railway-env-to-encrypted-disk-image.sh" "--gui-passphrase" "--overwrite" *command-line-args*)},
+
          create-new-app
          {:doc "Create a new Clojure application based on the hosting app template.
 
