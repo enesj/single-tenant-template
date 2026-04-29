@@ -324,8 +324,48 @@
           :task (shell "./scripts/sh/setup/install-completions.sh")},
 
          archive-secrets
-         {:doc "Archive Railway variables plus project .env and config/.secrets.edn into an encrypted macOS disk image. Usage: bb archive-secrets [script args...]",
+         {:doc "Manage the encrypted local Secrets disk. Defaults to interactive Projects/General selection, stores project snapshots under Projects/<project-name>, and commits the selected local repo. Usage: bb archive-secrets [script args...]",
           :task (apply shell "bash" "scripts/sh/setup/archive-railway-env-to-encrypted-disk-image.sh" "--gui-passphrase" "--overwrite" *command-line-args*)},
+
+         secrets-commit-projects
+         {:doc "Commit changes in the encrypted Secrets Projects repo. Defaults to a UTC timestamp message and prompts for the project folder when needed. Usage: bb secrets-commit-projects [message] [script args...]",
+          :task (let [args *command-line-args*
+                      first-arg (first args)
+                      message-provided? (and first-arg (not (.startsWith first-arg "--")))
+                      message (if message-provided?
+                                first-arg
+                                (str "Projects " (java.time.ZonedDateTime/now java.time.ZoneOffset/UTC)))
+                      extra-args (if message-provided?
+                                   (rest args)
+                                   args)]
+                  (apply shell "bash"
+                    "scripts/sh/setup/archive-railway-env-to-encrypted-disk-image.sh"
+                    "--gui-passphrase"
+                    "--projects"
+                    "--commit-only"
+                    "--commit-message"
+                    message
+                    extra-args))},
+
+         secrets-commit-general
+         {:doc "Commit changes in the encrypted Secrets General repo. Defaults to a UTC timestamp message. Usage: bb secrets-commit-general [message] [script args...]",
+          :task (let [args *command-line-args*
+                      first-arg (first args)
+                      message-provided? (and first-arg (not (.startsWith first-arg "--")))
+                      message (if message-provided?
+                                first-arg
+                                (str "General " (java.time.ZonedDateTime/now java.time.ZoneOffset/UTC)))
+                      extra-args (if message-provided?
+                                   (rest args)
+                                   args)]
+                  (apply shell "bash"
+                    "scripts/sh/setup/archive-railway-env-to-encrypted-disk-image.sh"
+                    "--gui-passphrase"
+                    "--general"
+                    "--commit-only"
+                    "--commit-message"
+                    message
+                    extra-args))},
 
          create-new-app
          {:doc "Create a new Clojure application based on the hosting app template.
