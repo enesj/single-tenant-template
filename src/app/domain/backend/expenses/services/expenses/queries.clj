@@ -1,9 +1,35 @@
 (ns app.domain.backend.expenses.services.expenses.queries
   (:require
     [app.domain.backend.expenses.services.expenses.parsing :as parsing]
+    [app.shared.model-naming :as model-naming]
+    [app.shared.query-builders :as shared-qb]
     [honey.sql :as sql]
     [next.jdbc :as jdbc]
     [next.jdbc.result-set :as rs]))
+
+(def ^:private allowed-admin-expenses-order-by
+  "Allowlisted sort keys for the admin expenses list. Keys are app keywords."
+  {:purchased-at :e.purchased_at
+   :expense-date :e.purchased_at
+   :created-at :e.created_at
+   :updated-at :e.updated_at
+   :total-amount :e.total_amount
+   :currency :e.currency
+   :supplier-display-name :s.display_name
+   :payer-label :p.label
+   :expense-category-name :ec.name
+   :item-count :item_count})
+
+(defn- normalize-sort-entry
+  [{:keys [field] :as sort-entry}]
+  (cond-> sort-entry
+    field (assoc :field (model-naming/ensure-app-keyword field))))
+
+(defn- normalize-sorts
+  [sorts]
+  (->> (or sorts [])
+    (map normalize-sort-entry)
+    vec))
 
 (defn source-clause
   [col source]
@@ -50,11 +76,19 @@
        (assoc expense :items items)))))
 
 (defn list-expenses
-  [db {:keys [from to supplier-id payer-id tenant-id source limit offset order-dir]
+  [db {:keys [from to supplier-id payer-id tenant-id source limit offset sorts order-by order-dir]
        :or {limit 50 offset 0 order-dir :desc}}]
   (let [from (try (parsing/parse-instant! :from from) (catch Exception _ nil))
         to (try (parsing/parse-instant! :to to) (catch Exception _ nil))
         source-where (source-clause :e.receipt_id source)
+        order-clauses (shared-qb/resolve-order-by-clauses
+                        {:sorts (normalize-sorts sorts)
+                         :order-by (some-> order-by model-naming/ensure-app-keyword)
+                         :order-dir order-dir
+                         :allowed-order-by allowed-admin-expenses-order-by
+                         :default-order-by :created-at
+                         :default-order-dir :desc
+                         :tie-breaker [:e.id :asc]})
         base-where (cond-> [:and]
                      tenant-id (conj [:= :e.tenant_id tenant-id])
                      from (conj [:>= :e.purchased_at from])
@@ -67,13 +101,19 @@
                         [:s.normalized_key :supplier_normalized_key]
                         [:p.label :payer_label]
                         [:p.type :payer_type]
+                        [{:select [[[:count :*] :n]]
+                          :from [[:expense_items :ei]]
+                          :where [:and
+                                  [:= :ei.expense_id :e.id]
+                                  [:= :ei.tenant_id :e.tenant_id]]}
+                         :item_count]
                         [:ec.name :expense_category_name]]
                :from [[:expenses :e]]
                :left-join [[:suppliers :s] [:= :s.id :e.supplier_id]
                            [:payers :p] [:= :p.id :e.payer_id]
                            [:expense_categories :ec] [:= :ec.id :e.expense_category_id]]
                :where base-where
-               :order-by [[:e.purchased_at order-dir]]
+               :order-by order-clauses
                :limit limit
                :offset offset}]
     (jdbc/execute! db (sql/format query) {:builder-fn rs/as-unqualified-lower-maps})))

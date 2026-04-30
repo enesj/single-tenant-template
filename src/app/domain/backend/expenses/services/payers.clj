@@ -35,7 +35,6 @@
 (def ^:private delete-payer!* (:delete! service))
 
 (def ^:private list-payers* (:list service))
-(def ^:private get-payer* (:get service))
 
 (defn- resolve-payer-email [row]
   (let [email (email-privacy/resolve-email row)]
@@ -46,13 +45,6 @@
   "List payers with the linked user's email resolved from ciphertext."
   [db opts]
   (mapv resolve-payer-email (list-payers* db opts)))
-
-(defn get-payer
-  "Get a payer by id with the linked user's email resolved from ciphertext."
-  ([db payer-id]
-   (get-payer db payer-id nil))
-  ([db payer-id opts]
-   (some-> (get-payer* db payer-id opts) resolve-payer-email)))
 
 (defn- system-payer-type?
   [value]

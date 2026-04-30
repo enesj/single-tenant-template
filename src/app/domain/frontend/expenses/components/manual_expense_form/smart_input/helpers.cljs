@@ -6,8 +6,6 @@
 
 (def payer-default-id manual-entry/payer-default-id)
 
-(def expense-category-default-id manual-entry/expense-category-default-id)
-
 (def default-category-chip-to-preselect manual-entry/default-category-chip-to-preselect)
 
 (def compute-items-total manual-entry/compute-items-total)

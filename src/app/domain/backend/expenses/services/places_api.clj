@@ -242,16 +242,15 @@
                        :field-mask mask
                        :raw-body-snippet (safe-body-snippet (:body resp))}
                       (parsed-error-info data)))
-                  (do
-                    (when-let [db (:db cfg)]
-                      (audit/log-api-failure! db
-                        {:api-name :google-places :operation "search-text"
-                         :http-status status
-                         :error-message (or (safe-body-snippet (:body resp)) "Non-200 response")
-                         :error-type "http-error" :request-url (:base-url cfg) :severity :error
-                         :user-id (:user-id cfg) :user-name (:user-name cfg)}))
-                    {:places []
-                     :error (response->error "Places API error" resp data)})))
+                  (when-let [db (:db cfg)]
+                    (audit/log-api-failure! db
+                      {:api-name :google-places :operation "search-text"
+                       :http-status status
+                       :error-message (or (safe-body-snippet (:body resp)) "Non-200 response")
+                       :error-type "http-error" :request-url (:base-url cfg) :severity :error
+                       :user-id (:user-id cfg) :user-name (:user-name cfg)}))
+                  {:places []
+                   :error (response->error "Places API error" resp data)}))
 
               :exception
               (if (< attempt max-retries)

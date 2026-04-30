@@ -369,9 +369,6 @@
 ;; Subscriptions
 ;; ============================================================================
 
-(rf/reg-sub ::loading-by-strategy
-  (fn [db _] (get-in db (conj state-path :loading-by-strategy) {})))
-
 (rf/reg-sub ::loading-for-strategy?
   (fn [db [_ strategy]]
     (get-in db (conj state-path :loading-by-strategy strategy) false)))

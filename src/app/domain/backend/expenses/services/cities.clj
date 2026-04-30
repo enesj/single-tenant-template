@@ -2,14 +2,9 @@
   "Facade namespace for city ZIP-based lookup services."
   (:require
     [app.domain.backend.expenses.services.cities-normalize :as normalize]
-    [app.domain.backend.expenses.services.cities-repository :as repository]
     [app.domain.backend.expenses.services.cities-resolver :as resolver]
     [app.domain.backend.expenses.services.service-configs :as configs]
     [app.domain.backend.expenses.services.services-factory :as factory]))
-
-(defn find-city-by-normalized-key
-  [db normalized-key]
-  (repository/find-city-by-normalized-key db normalized-key))
 
 (defn normalize-zip
   [zip-value]
@@ -18,10 +13,6 @@
 (defn extract-zip-from-text
   [text]
   (normalize/extract-zip-from-text text))
-
-(defn find-city-by-country-and-zip
-  [db country zip]
-  (repository/find-city-by-country-and-zip db country zip))
 
 (defn resolve-city-id-from-text
   ([db text]

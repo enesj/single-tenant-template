@@ -152,16 +152,22 @@
    :unit {:label-key :common/unit}}},
  :expenses
  {:available-columns
-  ["purchased_at" "supplier_display_name" "payer_label" "currency" "total_amount" "notes" "id" "receipt_id" "created_at" "updated_at" "supplier_id" "payer_id" "store_id" "tenant_id" "expense_category_id"],
+  ["purchased_at" "supplier_display_name" "payer_label" "currency" "total_amount" "item_count" "notes" "id" "receipt_id" "created_at" "updated_at" "supplier_id" "payer_id" "store_id" "tenant_id" "expense_category_id"],
   :computed-fields
   {:supplier_display_name {:type "string", :label "Supplier"},
+   :item_count {:label-key :common/items
+                :type :number
+                :admin {:visible-in-table? true
+                        :filterable? false
+                        :sortable? true}},
    :payer_label {:type "string", :label "Payer"}},
   :default-visible-columns
   ["purchased_at"
    "supplier_display_name"
    "payer_label"
    "currency"
-   "total_amount"],
+   "total_amount"
+   "item_count"],
   :filterable-columns
   ["purchased_at"
    "supplier_display_name"
@@ -176,6 +182,7 @@
    "payer_label"
    "currency"
    "total_amount"
+    "item_count"
    "created_at"
    "updated_at"],
   :always-visible [],

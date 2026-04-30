@@ -95,20 +95,6 @@
       (:field primary-sort) (assoc :order-by (:field primary-sort))
       (:direction primary-sort) (assoc :order-dir (:direction primary-sort)))))
 
-(defn parse-order-by
-  "Parse the primary sort field from query params.
-
-  Legacy convenience wrapper around `parse-sort-params`."
-  [params]
-  (:order-by (parse-sort-params params)))
-
-(defn parse-order-dir
-  "Parse the primary sort direction from query params.
-
-  Legacy convenience wrapper around `parse-sort-params`."
-  [params]
-  (:order-dir (parse-sort-params params)))
-
 (def ^:private max-page-limit
   "Maximum rows a paginated endpoint will return."
   500)

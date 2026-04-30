@@ -290,7 +290,8 @@
    :store-display-name :st.display_name
    :payer-label :p.label
    :payer-type :pt.label
-   :expense-category-name :ec.name})
+  :expense-category-name :ec.name
+  :item-count :item_count})
 
 (defn- parse-decimal-param
   [raw]

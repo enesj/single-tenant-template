@@ -48,7 +48,7 @@
                         ratio (if (pos? day-pattern-max) (/ total day-pattern-max) 0)]
                     ($ :button {:id (str "btn-day-filter-" (:day_key row))
                                 :key (str "dow-" iso-day)
-                                :class (str "w-full text-left group transition-all duration-200")
+                                :class "w-full text-left group transition-all duration-200"
                                 :on-click #(rf/dispatch [:user-expenses/reports-toggle-day-of-week iso-day])}
                       ($ :div {:class "flex items-end justify-between gap-2 mb-1"}
                         ($ :div {:class "flex items-baseline gap-2"}

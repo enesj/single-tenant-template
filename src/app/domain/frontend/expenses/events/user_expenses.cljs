@@ -11,7 +11,6 @@
     app.domain.frontend.expenses.events.user-expenses.expense-categories
     app.domain.frontend.expenses.events.user-expenses.cities
     app.domain.frontend.expenses.events.user-expenses.crud
-    app.domain.frontend.expenses.events.user-expenses.dashboard
     app.domain.frontend.expenses.events.user-expenses.detail
     app.domain.frontend.expenses.events.user-expenses.supplier-detail
     app.domain.frontend.expenses.events.user-expenses.export

@@ -52,23 +52,6 @@
             {:builder-fn rs/as-unqualified-lower-maps})
         db-adapter/to-app))))
 
-(defn provision-tenant-settings!
-  "Create default tenant settings for a new tenant.
-   No-op if settings already exist (idempotent)."
-  [db tenant-id]
-  (when-not (instance? UUID tenant-id)
-    (throw (ex-info "tenant-id must be a UUID" {:tenant-id tenant-id})))
-  (-> (jdbc/execute-one!
-        db
-        [(str "INSERT INTO tenant_settings (id, tenant_id, email_notifications) "
-           "VALUES (?, ?, true) "
-           "ON CONFLICT (tenant_id) DO NOTHING "
-           "RETURNING *")
-         (UUID/randomUUID)
-         tenant-id]
-        {:builder-fn rs/as-unqualified-lower-maps})
-    db-adapter/to-app))
-
 (comment
   ;; (require '[app.domain.backend.expenses.services.tenant-settings :as ts] :reload)
   ;; (ts/get-tenant-settings db tenant-id)

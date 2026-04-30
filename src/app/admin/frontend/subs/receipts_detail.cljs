@@ -26,11 +26,6 @@
     (get-in db [:admin :receipts :form :error])))
 
 (rf/reg-sub
-  :admin/receipt-form-loading?
-  (fn [db _]
-    (boolean (get-in db [:admin :receipts :form :loading?] false))))
-
-(rf/reg-sub
   :admin/receipt-detail-error
   (fn [db _]
     (get-in db (conj base-path :error))))

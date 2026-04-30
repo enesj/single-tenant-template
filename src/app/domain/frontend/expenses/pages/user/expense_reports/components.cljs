@@ -52,7 +52,7 @@
         first-selection-name (some-> (first selected-ids*) option-name-by-id)
         button-label (cond
                        (zero? selected-count) (or all-label (str "All " (str/lower-case (or field-label "items"))))
-                       (= 1 selected-count) (or first-selection-name (or all-label "Select"))
+                       (= 1 selected-count) (or first-selection-name all-label "Select")
                        :else (str selected-count " selected"))
         toggle-option! (fn [option-id]
                          (let [next-selected (if (contains? selected-set option-id)

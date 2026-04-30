@@ -54,7 +54,6 @@
   "Infer {:city-name <string> :zip <string>} from free text via Places."
   [text {:keys [places-cfg user-region] :as _opts} & {:keys [expected-zip candidate query-text]}]
   (let [text* (some-> text str str/trim not-empty)
-        explicit-query? (boolean (some-> query-text str str/trim not-empty))
         query* (some-> (or query-text text*) str str/trim not-empty)
         expected-zip* (some-> expected-zip normalize/normalize-zip)
         candidate* (some-> candidate str str/trim not-empty)

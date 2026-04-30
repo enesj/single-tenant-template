@@ -96,3 +96,27 @@
       (is (= {:width "200px"}
             (get-in users-config [:column-config :email])))
       (is (nil? (get-in users-config [:column-config :email-masked]))))))
+
+(deftest load-table-columns-success-adds-expenses-item-count-column
+  (testing "existing runtime admin Expenses table config gains the Items count column"
+    (setup/reset-db!)
+    (rf/dispatch-sync
+      [:app.admin.frontend.events.settings/load-table-columns-success
+       {:table-columns
+        {:expenses
+         {:available-columns ["purchased_at" "supplier_display_name" "total_amount"]
+          :default-visible-columns ["purchased_at" "supplier_display_name" "total_amount"]
+          :computed-fields {:supplier_display_name {:type "string" :label "Supplier"}}
+          :column-metadata {}}}}])
+    (let [expenses-config (get-in @rf-db/app-db [:admin :config :table-columns :expenses])]
+      (is (some #{"item_count"} (:available-columns expenses-config)))
+      (is (some #{"item_count"} (:default-visible-columns expenses-config)))
+            (is (some #{"item_count"} (:sortable-columns expenses-config)))
+      (is (= {:label-key :common/items
+              :type :number
+              :admin {:visible-in-table? true
+                      :filterable? false
+                        :sortable? true}}
+            (get-in expenses-config [:computed-fields :item_count])))
+      (is (= {:label-key :common/items}
+            (get-in expenses-config [:column-metadata :item_count]))))))

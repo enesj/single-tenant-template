@@ -64,9 +64,4 @@
   {:supplier :display_name
    :store    :display_name
    :category :name
-   :article  :canonical_name})
-
-(def currency-options
-  [{:label "BAM" :value "BAM"}
-   {:label "EUR" :value "EUR"}
-   {:label "USD" :value "USD"}])
+  :article  :canonical_name})

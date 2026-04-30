@@ -43,7 +43,7 @@
 
 (rf/reg-sub
   :admin/report-detail
-  (fn [[_ detail-key detail-id]]
+  (fn [_]
     (rf/subscribe [:admin/reports]))
   (fn [reports [_ detail-key detail-id]]
     (get-in reports (rest (detail-path detail-key detail-id)))))

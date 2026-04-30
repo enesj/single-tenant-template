@@ -4,49 +4,6 @@
     [app.template.frontend.db.paths :as paths]
     [re-frame.core :as rf]))
 
-;; Summary
-(rf/reg-sub
-  :user-expenses/summary
-  (fn [db _]
-    (get-in db [:user-expenses :summary :data])))
-
-(rf/reg-sub
-  :user-expenses/summary-loading?
-  (fn [db _]
-    (get-in db [:user-expenses :summary :loading?])))
-
-(rf/reg-sub
-  :user-expenses/summary-error
-  (fn [db _]
-    (get-in db [:user-expenses :summary :error])))
-
-;; Recent expenses list
-(rf/reg-sub
-  :user-expenses/recent
-  (fn [db _]
-    (get-in db [:user-expenses :recent :items])))
-
-(rf/reg-sub
-  :user-expenses/recent-loading?
-  (fn [db _]
-    (get-in db [:user-expenses :recent :loading?])))
-
-(rf/reg-sub
-  :user-expenses/recent-error
-  (fn [db _]
-    (get-in db [:user-expenses :recent :error])))
-
-;; Aggregations
-(rf/reg-sub
-  :user-expenses/by-month
-  (fn [db _]
-    (get-in db [:user-expenses :by-month :data])))
-
-(rf/reg-sub
-  :user-expenses/by-month-loading?
-  (fn [db _]
-    (get-in db [:user-expenses :by-month :loading?])))
-
 (rf/reg-sub
   :user-expenses/by-supplier
   (fn [db _]
@@ -192,16 +149,6 @@
   :user-expenses/purged-receipts-total
   (fn [db _]
     (long (or (get-in db [:user-expenses :receipts :purged-total]) 0))))
-
-(rf/reg-sub
-  :user-expenses/filtered-receipts
-  (fn [[_ _]]
-    [(rf/subscribe [:user-expenses/receipts])
-     (rf/subscribe [:user-expenses/show-purged-receipts?])])
-  (fn [[receipts show-purged?]]
-    (if show-purged?
-      (vec receipts)
-      (filterv (comp nil? :file-purged-at) receipts))))
 
 (rf/reg-sub
   :user-expenses/receipts-error

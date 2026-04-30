@@ -96,13 +96,3 @@
   :<- [:workspace-dashboard/data]
   (fn [data _]
     (:unmapped-alias-count data)))
-
-;; Derived: has any data at all?
-(rf/reg-sub
-  :workspace-dashboard/has-data?
-  :<- [:workspace-dashboard/data]
-  (fn [data _]
-    (let [d30 (:last-30-days data)
-          d6m (:last-6-months data)]
-      (or (pos? (or (:expense_count d30) 0))
-        (pos? (or (:expense_count d6m) 0))))))

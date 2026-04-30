@@ -34,11 +34,6 @@
 ;; ============================================================================
 
 (rf/reg-sub
-  :admin/audit-logs-loading?
-  (fn [db _]
-    (get-in db [:admin :audit :loading?] false)))
-
-(rf/reg-sub
   :admin/audit-logs-error
   (fn [db _]
     (get-in db [:admin :audit :error])))

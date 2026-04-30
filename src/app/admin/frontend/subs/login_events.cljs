@@ -4,11 +4,6 @@
     [re-frame.core :as rf]))
 
 (rf/reg-sub
-  :admin/login-events-loading?
-  (fn [db _]
-    (get-in db [:admin :login-events :loading?] false)))
-
-(rf/reg-sub
   :admin/login-events-error
   (fn [db _]
     (get-in db [:admin :login-events :error])))

@@ -57,6 +57,19 @@
       (let [sql-str (first @captured-sql)]
         (is (re-find #"(?i)order\s+by\s+st\.display_name\s+asc" sql-str))))))
 
+(deftest list-user-expenses-supports-item-count-sorting
+  (let [captured-sql (atom nil)]
+    (with-redefs [jdbc/execute! (fn [_db sql _opts]
+                                  (reset! captured-sql sql)
+                                  [])]
+      (user-expenses/list-user-expenses :db nil (UUID/randomUUID)
+        {:limit 10
+         :offset 0
+         :order-by :item-count
+         :order-dir :desc})
+      (let [sql-str (first @captured-sql)]
+        (is (re-find #"(?i)order\s+by\s+item_count\s+desc" sql-str))))))
+
 (deftest user-expenses-support-currency-and-total-amount-filters
   (let [list-sql (atom nil)
         count-sql (atom nil)

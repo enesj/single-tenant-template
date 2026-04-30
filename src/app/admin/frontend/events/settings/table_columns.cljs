@@ -173,11 +173,44 @@
         :sortable-columns ["full-name" "status" "created-at"]
         :always-visible ["email"]))))
 
+(def ^:private expenses-item-count-column "item_count")
+
+(def ^:private expenses-item-count-computed-field
+  {:label-key :common/items
+   :type :number
+   :admin {:visible-in-table? true
+           :filterable? false
+           :sortable? true}})
+
+(defn- ensure-column-present
+  [columns column]
+  (let [columns* (vec (or columns []))]
+    (if (some #{column} columns*)
+      columns*
+      (conj columns* column))))
+
+(defn- normalize-expenses-config
+  [expenses-config]
+  (-> (or expenses-config {})
+    (update :available-columns ensure-column-present expenses-item-count-column)
+    (update :default-visible-columns ensure-column-present expenses-item-count-column)
+    (update :sortable-columns ensure-column-present expenses-item-count-column)
+    (update :computed-fields #(assoc (or % {}) :item_count expenses-item-count-computed-field))
+    (update :column-metadata #(assoc (or % {}) :item_count {:label-key :common/items}))))
+
+(defn- normalize-entity-config
+  [entity-kw entity-config]
+  (case entity-kw
+    :audit-logs (normalize-audit-config entity-config)
+    :expenses (normalize-expenses-config entity-config)
+    entity-config))
+
 (defn normalize-table-columns
   [table-columns]
   (-> (or table-columns {})
     (update :admins normalize-admin-config)
     (update :users normalize-user-identity-config)
+    (update :expenses normalize-expenses-config)
     (update :audit-logs normalize-audit-config)))
 
 ;; =============================================================================
@@ -218,9 +251,7 @@
   :app.admin.frontend.events.settings/update-table-columns-entity
   (fn [{:keys [db]} [_ entity-name entity-config]]
     (let [entity-kw (if (keyword? entity-name) entity-name (keyword entity-name))
-          entity-config* (if (= :audit-logs entity-kw)
-                           (normalize-audit-config entity-config)
-                           entity-config)]
+          entity-config* (normalize-entity-config entity-kw entity-config)]
       {:db (-> db
              (assoc-in [:admin :settings :saving?] true)
              ;; Optimistically update
@@ -236,9 +267,7 @@
 (rf/reg-event-fx
   :app.admin.frontend.events.settings/update-table-columns-success
   (fn [{:keys [db]} [_ entity-kw entity-config _response]]
-    (let [entity-config* (if (= :audit-logs entity-kw)
-                           (normalize-audit-config entity-config)
-                           entity-config)]
+    (let [entity-config* (normalize-entity-config entity-kw entity-config)]
       (log/info "Table columns updated successfully" {:entity entity-kw})
       ;; Update config-loader cache
       (config-loader/register-preloaded-config! :table-columns entity-kw entity-config*)
