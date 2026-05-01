@@ -16,14 +16,6 @@
       (assoc :admin/batch-user-actions-visible? true)
       (assoc :admin/batch-selected-user-ids selected-user-ids))))
 
-(rf/reg-event-db
-  :admin/hide-batch-user-actions
-  (fn [db _]
-    (utils/log-user-operation "Hiding batch user actions panel")
-    (-> db
-      (dissoc :admin/batch-user-actions-visible?)
-      (dissoc :admin/batch-selected-user-ids))))
-
 ;; ============================================================================
 ;; Bulk Operations Subscriptions
 ;; ============================================================================

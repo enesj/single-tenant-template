@@ -313,8 +313,7 @@
                  (assoc-in (conj form-path' :loading?) false)
                  (assoc-in (conj form-path' :error) nil)
                  (assoc-in (conj form-path' :last-created) entity-id))
-           :dispatch-n [[:admin/refresh-entity entity-key entity]
-                        [:admin/navigate-client (str "/admin/" (name entity-key) "/" entity-id)]]})))
+               :dispatch [:admin/navigate-client (str "/admin/" (name entity-key) "/" entity-id)]})))
 
     ;; create-entry-failed event
     (rf/reg-event-fx

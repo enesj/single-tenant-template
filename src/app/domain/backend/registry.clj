@@ -69,21 +69,6 @@
            [(:id manifest) (get-in manifest [:ui-config :user :paths])]))
     enabled-domains))
 
-(defn primary-user-ui-config-paths
-  "Return user-facing UI config paths for the primary domain.
-
-   This is a backwards-compat helper for call sites that still treat domain UI
-   config as a single flat structure (single-domain setups).
-
-   When multiple domains are enabled, this returns the first domain's paths
-   (treating it as the primary domain).
-
-   Returns nil when no domains are enabled."
-  []
-  (let [all-paths (get-ui-config-paths)]
-    (when (seq all-paths)
-      (val (first all-paths)))))
-
 (defn get-admin-ui-config-paths
   "Get the ADMIN UI config path maps for all enabled domains.
 

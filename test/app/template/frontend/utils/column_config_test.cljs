@@ -24,7 +24,7 @@
 
 (deftest toggle-events-test
   (testing "toggle-column-event returns admin toggle event"
-    (is (= [:admin/toggle-column-visibility :items :name]
+    (is (= [:app.admin.frontend.events.config/toggle-column-visibility :items :name]
           (column-config/toggle-column-event :items :name))))
 
   (testing "toggle-filter-event returns template settings event"

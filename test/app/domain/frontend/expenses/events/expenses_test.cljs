@@ -13,8 +13,6 @@
     ;; Keep tests deterministic: no real HTTP, no timers.
     (rf/reg-fx :http-xhrio (fn [_] nil))
     (rf/reg-fx :dispatch-later (fn [_] nil))
-    ;; Avoid warnings / failures due to admin-only wiring not present in tests.
-    (rf/reg-event-fx :admin/refresh-entity (fn [_ _] {}))
     true))
 
 (defn- reset-db! []

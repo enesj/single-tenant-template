@@ -32,9 +32,7 @@
              (assoc-in (conj form-path :last-created) (:id entity))
              (cond-> highlight-id
                (crud-success/track-recently-created :expenses highlight-id)))
-       :dispatch-n [[:admin/refresh-entity :expenses entity]
-                    ;; Reload the list to show the new expense
-                    [::load-list {}]]
+       :dispatch-n [[::load-list {}]]
        ;; Call the success callback (closes modal)
        :fx [(when on-success [:dispatch-later {:ms 100 :dispatch [::call-modal-callback on-success]}])]})))
 
@@ -48,9 +46,7 @@
              (assoc-in (conj form-path :error) nil)
              (cond-> highlight-id
                (crud-success/track-recently-updated :expenses highlight-id)))
-       :dispatch-n [[:admin/refresh-entity :expenses entity]
-                    ;; Reload the list to show updated expense
-                    [::load-list {}]]
+       :dispatch-n [[::load-list {}]]
        ;; Call the success callback (closes modal)
        :fx [(when on-success [:dispatch-later {:ms 100 :dispatch [::call-modal-callback on-success]}])]})))
 

@@ -271,8 +271,7 @@
       (let [response (handler {:query-params {:status "uploaded"
                                               :limit "25"
                                               :offset "50"
-                                              :order-dir "asc"
-                                              :order-by "created_at"}})
+                                              :sort "created-at:asc"}})
             body (json/parse-string (if (string? (:body response))
                                       (:body response)
                                       (slurp (:body response)))
@@ -307,7 +306,6 @@
                             :order-by :status
                             :original-filename "IMG_3885"
                             :supplier-guess "SAMON"
-                            :created-by-name "Jane Admin"
                             :total-amount-guess-min 2M
                             :total-amount-guess-max 10.50M
                             :purchased-at-guess-from purchased-at-from
@@ -322,11 +320,9 @@
                                               "show-purged" "true"
                                               "limit" "25"
                                               "offset" "50"
-                                              "order-dir" "asc"
-                                              "order-by" "status"
+                                              "sort" "status:asc"
                                               "original-filename" "IMG_3885"
                                               "supplier-guess" "SAMON"
-                                              "created-by-name" "Jane Admin"
                                               "total-display-min" "2"
                                               "total-amount-guess-max" "10.50"
                                               "purchased-at-guess-from" "2026-03-01T10:15:30Z"

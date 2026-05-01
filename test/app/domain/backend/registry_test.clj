@@ -85,20 +85,6 @@
         (is (string? path))
         (is (.endsWith path ".edn"))))))
 
-(deftest primary-user-ui-config-paths-test
-  (testing "primary-user-ui-config-paths returns paths map for single-domain setups"
-    (let [paths (domain-registry/primary-user-ui-config-paths)]
-      (is (map? paths))
-      (is (contains? paths :entities))
-      (is (contains? paths :view-options))
-      (is (contains? paths :form-fields))
-      (is (contains? paths :table-columns))))
-
-  (testing "primary-user-ui-config-paths returns nil when no domains are enabled"
-    (clojure.core/with-redefs-fn {#'domain-registry/enabled-domains []}
-      (fn []
-        (is (nil? (domain-registry/primary-user-ui-config-paths)))))))
-
 (deftest get-admin-ui-config-paths-test
   (testing "returns vector of path maps for enabled domains"
     (let [paths (domain-registry/get-admin-ui-config-paths)]

@@ -29,7 +29,7 @@
     (rf/dispatch-sync [:user-expenses/fetch-report-filter-options])
 
     (let [uris (set (map sup/req-uri @sup/captured-http-requests))]
-      (is (contains? uris "/api/v1/expenses/summary"))
+      (is (contains? uris "/api/v1/expenses/reports/summary"))
       (is (contains? uris "/api/v1/expenses/reports/day-of-week"))
       (is (contains? uris "/api/v1/expenses/reports/size-distribution"))
       (is (contains? uris "/api/v1/expenses/reports/daily-heatmap"))
@@ -68,7 +68,7 @@
     (rf/dispatch-sync [:user-expenses/fetch-report-filter-options])
 
     (let [requests @sup/captured-http-requests
-          summary-req (first (filter #(= "/api/v1/expenses/summary" (sup/req-uri %)) requests))
+          summary-req (first (filter #(= "/api/v1/expenses/reports/summary" (sup/req-uri %)) requests))
           day-req (first (filter #(= "/api/v1/expenses/reports/day-of-week" (sup/req-uri %)) requests))
           filter-req (first (filter #(= "/api/v1/expenses/reports/filter-options" (sup/req-uri %)) requests))
           summary-params (sup/req-params summary-req)

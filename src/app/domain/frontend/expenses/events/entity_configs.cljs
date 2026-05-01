@@ -58,7 +58,8 @@
    :api-endpoint "/admin/api/expenses/receipts"
    :detail-response-key :receipt
    :has-forms? false
-   :server-filter-keys {:supplier-guess :supplier-guess
+   :server-filter-keys {:original-filename :original-filename
+                        :supplier-guess :supplier-guess
                         :status         :status}})
 
 (def expenses-config

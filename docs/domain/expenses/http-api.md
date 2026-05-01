@@ -12,6 +12,7 @@ Shared HTTP shapes and auth expectations are described in [Template HTTP API](..
 ## Admin API (mounted at `/admin/api/expenses`)
 
 ### Suppliers
+
 - `GET /admin/api/expenses/suppliers` – list (search, pagination, order-by/order-dir).
 - `POST /admin/api/expenses/suppliers` – create; requires `display_name`.
 - `GET /admin/api/expenses/suppliers/count` – total (optional `search`).
@@ -21,6 +22,7 @@ Shared HTTP shapes and auth expectations are described in [Template HTTP API](..
 - `DELETE /admin/api/expenses/suppliers/:id` – delete supplier (hard delete; returns `409` if referenced by expenses).
 
 ### Manufacturers (new 2026-01-28)
+
 - `GET /admin/api/expenses/manufacturers` – list (search, pagination, order-by/order-dir).
 - `POST /admin/api/expenses/manufacturers` – create; requires `display_name`.
 - `GET /admin/api/expenses/manufacturers/count` – total (optional `search`).
@@ -29,6 +31,7 @@ Shared HTTP shapes and auth expectations are described in [Template HTTP API](..
 - `DELETE /admin/api/expenses/manufacturers/:id` – delete manufacturer (hard delete).
 
 ### Payers
+
 - `GET /admin/api/expenses/payers` – list (optional `type`).
 - `POST /admin/api/expenses/payers` – create; requires `type`, `label`.
 - `GET /admin/api/expenses/payers/count` – total (optional `type`).
@@ -37,7 +40,8 @@ Shared HTTP shapes and auth expectations are described in [Template HTTP API](..
 - `GET /admin/api/expenses/payers/:id` – fetch; `PUT` update; `DELETE` remove.
   - Delete may return `409` when the record is referenced (foreign key violation).
 
-### Receipts
+### Admin Receipts
+
 - `GET /admin/api/expenses/receipts` – list; filters `status`, `limit/offset`, `order-by`, `order-dir`.
 - `GET /admin/api/expenses/receipts/pending` – pending for processing.
 - `POST /admin/api/expenses/upload` – multipart upload (`file`); stores under `upload/stripes/` and creates a receipt (status `uploaded`). Optional `payer_id` (UUID) overrides the user’s default payer for that upload.
@@ -54,6 +58,7 @@ Shared HTTP shapes and auth expectations are described in [Template HTTP API](..
 - `POST /admin/api/expenses/receipts/:id/ocr` – trigger async OCR for a single receipt (requires API key for selected `RECEIPT_OCR_WORKFLOW`).
 
 ### Expenses
+
 - `GET /admin/api/expenses/entries` – list; filters `from/to`, `supplier-id`, `payer-id`, pagination.
 - `POST /admin/api/expenses/entries` – create expense with `items`.
 - `GET /admin/api/expenses/entries/:id` – fetch with items.
@@ -61,6 +66,7 @@ Shared HTTP shapes and auth expectations are described in [Template HTTP API](..
 - `DELETE /admin/api/expenses/entries/:id` – delete expense (hard delete).
 
 ### Expense Items (new 2025-12-25)
+
 - `GET /admin/api/expenses/expense-items` – list expense items with pagination and filters.
 - `POST /admin/api/expenses/expense-items` – create standalone expense item; requires `expense_id`, `line_total` and **either** `raw_label` (text) **or** `alias_id` (UUID). (Optional: `qty`, `unit_price`.)
 - `GET /admin/api/expenses/expense-items/count` – total count with optional search.
@@ -69,6 +75,7 @@ Shared HTTP shapes and auth expectations are described in [Template HTTP API](..
 - `DELETE /admin/api/expenses/expense-items/:id` – delete expense item (hard delete).
 
 ### Articles / Price History
+
 - `GET /admin/api/expenses/articles` – list/search.
 - `POST /admin/api/expenses/articles` – create; requires `canonical_name`.
 - `GET /admin/api/expenses/articles/:id` – fetch article.
@@ -85,6 +92,7 @@ Shared HTTP shapes and auth expectations are described in [Template HTTP API](..
 > Note (2026-01-28): Article records no longer contain a legacy `manufacturer` field. Manufacturers are managed as a dedicated entity (see “Manufacturers”).
 
 ### Article Aliases
+
 - `GET /admin/api/expenses/article-aliases` – list aliases with optional filters.
 - `POST /admin/api/expenses/article-aliases` – create new alias.
 - `GET /admin/api/expenses/article-aliases/:id` – fetch alias.
@@ -92,6 +100,7 @@ Shared HTTP shapes and auth expectations are described in [Template HTTP API](..
 - `DELETE /admin/api/expenses/article-aliases/:id` – delete alias.
 
 ### Reports
+
 - `GET /admin/api/expenses/reports/summary` – totals for range.
 - `GET /admin/api/expenses/reports/payers` – breakdown by payer.
 - `GET /admin/api/expenses/reports/suppliers` – breakdown by supplier.
@@ -102,11 +111,13 @@ Shared HTTP shapes and auth expectations are described in [Template HTTP API](..
 ## User API (mounted at `/api/v1/expenses`)
 
 ### Summary + Settings
-- `GET /api/v1/expenses/summary` – Expense summary metrics.
-- `GET /api/v1/expenses/by-month` – Monthly spending breakdown.
-- `GET /api/v1/expenses/by-supplier` – Supplier spending breakdown.
+
+- `GET /api/v1/expenses/reports/summary` – Expense summary metrics.
+- `GET /api/v1/expenses/reports/by-month` – Monthly spending breakdown.
+- `GET /api/v1/expenses/reports/by-supplier` – Supplier spending breakdown.
 
 ### Reports (user analytics)
+
 - `GET /api/v1/expenses/reports/supplier-deep-dive` – supplier-focused breakdown (requires `supplier_id`; optional `alias_limit`, default 10, max 100). Includes summary/trend plus supplier alias rows containing `alias_label` and `article_canonical_name`.
 - `GET /api/v1/expenses/reports/day-of-week` – spending grouped by ISO day-of-week.
 - `GET /api/v1/expenses/reports/top-items` – top item/alias spending rows (optional `limit`, default 20, max 100), including `alias_label` and `article_canonical_name`.
@@ -121,17 +132,20 @@ Shared HTTP shapes and auth expectations are described in [Template HTTP API](..
 Common optional query params supported by report endpoints (where applicable): `from`, `to`, `supplier_id`, `payer_id`, `currency`, `month`, `category_id`, `subcategory_id`, `expense_category_id`, `manufacturer_id`.
 
 Filter applicability note:
+
 - `expense_category_id` applies to expense-backed and item-backed report slices.
 - `category_id`, `subcategory_id`, and `manufacturer_id` apply to item-backed slices (`top-items`, `category-allocation`, and supplier deep-dive alias rows).
 
 All user report endpoints require an authenticated user with an expenses-read role (`viewer|member|admin|owner`).
 
-**User expense settings (per-user, persisted)**
+#### User expense settings (per-user, persisted)
+
 - `GET /api/v1/expenses/settings` – fetch effective user settings (defaults + any persisted values).
 - `PUT /api/v1/expenses/settings` – update settings (**partial updates supported**).
   - Supported keys: `default-currency` (required when present), `default-payer-id` (UUID or blank to clear), `notifications-enabled` (boolean), `receipt-refine-enabled` (boolean).
 
 ### Export & Danger Zone
+
 - `GET /api/v1/expenses/export` – export user expenses (currently `format=csv` supported).
 - `DELETE /api/v1/expenses/all` – hard-delete all user expenses (**admin/owner only**; requires confirmation token `DELETE_ALL_EXPENSES`).
 
@@ -145,14 +159,16 @@ Suppliers and stores are global tables but user-facing list endpoints filter to 
 - `PUT /api/v1/expenses/suppliers/:id` – update supplier (role-gated to `member|admin`).
 - `DELETE /api/v1/expenses/suppliers/:id` – delete supplier (hard delete; may return `409` when expenses exist).
 
-**Manufacturers (admin/owner only; new 2026-01-28)**
+#### Manufacturers (admin/owner only; new 2026-01-28)
+
 - `GET /api/v1/expenses/manufacturers` – list manufacturers (optional `search`, pagination).
 - `POST /api/v1/expenses/manufacturers` – create manufacturer (`display_name`).
 - `PUT /api/v1/expenses/manufacturers/:id` – update manufacturer.
 - `DELETE /api/v1/expenses/manufacturers/:id` – delete manufacturer.
 
-**Supplier detail lists (used by supplier detail UI)**
-- `GET /api/v1/expenses/article-aliases` – list article aliases (typically filtered by supplier); supports optional `search`, pagination, `order-by`, `order-dir`.
+#### Supplier detail lists (used by supplier detail UI)
+
+- `GET /api/v1/expenses/article-aliases` – list article aliases (typically filtered by supplier); supports optional `search`, pagination, and `sort=field:dir`.
 
 - `GET /api/v1/expenses/payers` – list payers.
 - `POST /api/v1/expenses/payers` – create payer (role-gated to `member|admin`).
@@ -160,13 +176,15 @@ Suppliers and stores are global tables but user-facing list endpoints filter to 
 - `DELETE /api/v1/expenses/payers/:id` – delete payer (role-gated to `member|admin`; may return `409` on FK violations).
 
 ### Power-user Endpoints (admin/owner only)
-- `GET /api/v1/expenses/expense-items` – list expense items (pagination, `order-by`, `order-dir`).
+
+- `GET /api/v1/expenses/expense-items` – list expense items (pagination, `sort=field:dir`).
 - `PUT /api/v1/expenses/expense-items/:id` – update expense item.
 - `DELETE /api/v1/expenses/expense-items/:id` – delete expense item.
 
-### Receipts
+### User Receipts
+
 - `POST /api/v1/expenses/upload` – multipart upload (`file`); creates a receipt (status `uploaded`). Optional `payer_id` (UUID) overrides the user’s default payer for that upload.
-- `GET /api/v1/expenses/receipts` – list receipts (filters `status`, `limit`, `offset`, `order-by`, `order-dir`).
+- `GET /api/v1/expenses/receipts` – list receipts (filters `status`, `limit`, `offset`, `sort=field:dir`).
   - **Visibility**: member/admin/owner see all tenant receipts; viewer sees only own.
   - `status` accepts a single value or multiple values (comma-separated or repeated params).
   - Response includes pagination metadata: `{:data [...], :total n, :limit n, :offset n}`.
@@ -180,6 +198,7 @@ Suppliers and stores are global tables but user-facing list endpoints filter to 
 - `POST /api/v1/expenses/receipts/:id/ocr` – trigger async OCR for a single receipt (requires API key for selected `RECEIPT_OCR_WORKFLOW`).
 
 ### Articles + Auto-matching (admin/owner only)
+
 - `GET /api/v1/expenses/articles` – list/search articles.
 - `POST /api/v1/expenses/articles` – create article.
 - `GET /api/v1/expenses/articles/unmapped-aliases` – list unmapped article aliases.
@@ -190,12 +209,13 @@ Suppliers and stores are global tables but user-facing list endpoints filter to 
 
 **Visibility**: member/admin/owner see all tenant expenses; viewer sees only own. Write operations (update/delete) still enforce ownership for member role.
 
-- `GET /api/v1/expenses` – List expenses (pagination, `order-by`, `order-dir`).
+- `GET /api/v1/expenses` – List expenses (pagination, `sort=field:dir`).
 - `POST /api/v1/expenses` – Create new expense.
 - `GET /api/v1/expenses/:id` – Fetch specific expense.
 - `PUT /api/v1/expenses/:id` – Update expense.
 - `DELETE /api/v1/expenses/:id` – Delete expense.
 
 ### Batch Operations
+
 - `PUT /api/v1/expenses/batch` – batch update expenses.
 - `POST /api/v1/expenses/batch-delete` – batch delete expenses.

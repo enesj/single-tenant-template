@@ -85,48 +85,6 @@
     (when (seq summary-parts)
       (str/join " • " summary-parts))))
 
-(def ^:private legacy-audit-visible-order
-  [:action :entity-name :admin-email :admin-name])
-
-(def ^:private enhanced-audit-visible-order
-  [:created-at :action :actor-display-name :entity-name :context-summary])
-
-(defn- normalize-visible-order
-  [visible-order]
-  (->> (or visible-order [])
-    (keep #(some-> % name keyword))
-    vec))
-
-(defn- audit-prefs-migration-needed?
-  [visible-order visible-map]
-  (let [normalized-order (normalize-visible-order visible-order)]
-    (and (= legacy-audit-visible-order normalized-order)
-      (= false (get visible-map :created-at))
-      (not (contains? visible-map :actor-display-name))
-      (not (contains? visible-map :context-summary)))))
-
-(defn- migrate-legacy-audit-visible-prefs
-  [db]
-  (let [prefs-key :admin/audit-logs
-        visible-order-path (paths/entity-prefs-columns-visible-order prefs-key)
-        order-path (paths/entity-prefs-columns-order prefs-key)
-        visible-path (paths/entity-prefs-columns-visible prefs-key)
-        visible-order (get-in db visible-order-path)
-        visible-map (or (get-in db visible-path) {})]
-    (if (audit-prefs-migration-needed? visible-order visible-map)
-      (-> db
-        (assoc-in visible-order-path enhanced-audit-visible-order)
-        (assoc-in order-path enhanced-audit-visible-order)
-        (assoc-in visible-path
-          (-> visible-map
-            (dissoc :admin-email :admin-name)
-            (assoc :created-at true
-              :action true
-              :actor-display-name true
-              :entity-name true
-              :context-summary true))))
-      db)))
-
 ;; Transform namespaced keys to simple keys for template system
 (defn audit-log->template-entity
   "Normalize audit log data for the template entity store.
@@ -203,17 +161,16 @@
           selected-ids-path (paths/entity-selected-ids :audit-logs)
           ;; Seed only current-page and preserve existing pagination (including per-page) if present.
           ;; Per-page defaults are seeded by list-view from entities.edn (:display-settings :per-page).
-          db* (-> (db-utils/assoc-paths db
-                    [[(conj metadata-path :sort) {:field :created-at :direction :desc}]
-                     [(conj metadata-path :filters) {}]
-                     [ui-state-path {:sort {:field :created-at :direction :desc}
-                                     :pagination-mode :server
-                                     :refresh-event [:admin/load-audit-logs]
-                                     :pagination (-> (merge {:current-page 1}
-                                                       (:pagination (get-in db ui-state-path)))
-                                                   (assoc :mode :server))}]
-                     [selected-ids-path #{}]])
-                (migrate-legacy-audit-visible-prefs))
+            db* (db-utils/assoc-paths db
+              [[(conj metadata-path :sort) {:field :created-at :direction :desc}]
+               [(conj metadata-path :filters) {}]
+               [ui-state-path {:sort {:field :created-at :direction :desc}
+                       :pagination-mode :server
+                       :refresh-event [:admin/load-audit-logs]
+                       :pagination (-> (merge {:current-page 1}
+                                 (:pagination (get-in db ui-state-path)))
+                               (assoc :mode :server))}]
+               [selected-ids-path #{}]])
           fetch-config (db-utils/maybe-fetch-config db)]
       (cond-> {:db db*}
         fetch-config (assoc :dispatch-n [fetch-config])))))

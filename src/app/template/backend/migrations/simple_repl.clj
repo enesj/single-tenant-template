@@ -668,15 +668,12 @@
   ;;     (migrate-to! 10)
   (migrate-to! 10)
 
-  ;; Quick setup - creates admin user and test data
+  ;; Quick setup - creates admin user
   (setup/setup-all!)
 
   ;; Or step by step:
   ;; Create admin user only
-  (setup/setup-test-admin!)
-
-  ;; Create test data only
-  (setup/create-test-data!))
+  (setup/setup-test-admin!))
   ;;
   ;; Notes
   ;; - RLS enablement: define `enable_rls_on_tenant_tables` in

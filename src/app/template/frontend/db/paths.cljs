@@ -247,9 +247,15 @@
        :direction direction})))
 
 (defn resolved-list-sorts
-  "Resolve an entity list's current ordered sort entries from canonical list UI state."
+  "Resolve an entity list's current ordered sort entries from list UI state.
+
+  Prefer canonical `:sorts`, while still reading a single `:sort` map because
+  a few list initializers and persisted UI states still seed that shape."
   [db entity-type]
-  (->> (or (get-in db (list-sorts entity-type)) [])
+  (->> (or (get-in db (list-sorts entity-type))
+         (when-let [sort (get-in db (conj (list-ui-state entity-type) :sort))]
+           [sort])
+         [])
     (keep normalize-sort-entry)
     vec))
 

@@ -126,7 +126,7 @@
     receipt-app))
 
 (def ^:private receipt-text-filter-keys
-  [:supplier-guess])
+  [:original-filename :supplier-guess])
 
 (def ^:private receipt-date-range-fields
   [:purchased-at-guess :created-at :updated-at])

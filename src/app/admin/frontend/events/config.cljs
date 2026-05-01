@@ -185,15 +185,7 @@
                    (assoc :last-started-at now-ts)
                    (assoc :last-requested-at now-ts)
                    (dissoc :last-error))))
-         :fx [[:dispatch [::async-load-configs]]
-              [:dispatch [::load-entity-configs]]]}))))
-
-(rf/reg-event-fx
-  ::load-entity-configs
-  (fn [_ _]
-    ;; Entity configs are preloaded via app.admin.frontend.config.preload
-    ;; so this event is now a no-op kept for backward compatibility.
-    {}))
+         :fx [[:dispatch [::async-load-configs]]]}))))
 
 (rf/reg-event-fx
   ::async-load-configs
@@ -229,19 +221,3 @@
       (assoc :admin/config-loading? false)
       (assoc-in [:admin :config :bootstrap :last-error] (failure-info error)))))
 
-;; =============================================================================
-;; Legacy Compatibility Events
-;; =============================================================================
-
-;; Backward compatibility with old naming
-(rf/reg-event-fx
-  :admin/toggle-column-visibility
-  (fn [_ [_ entity-keyword column-key]]
-    (rf/dispatch [::toggle-column-visibility entity-keyword column-key])
-    {}))
-
-(rf/reg-event-fx
-  :admin/reorder-columns
-  (fn [_ [_ entity-keyword column-order]]
-    (rf/dispatch [::reorder-columns entity-keyword column-order])
-    {}))

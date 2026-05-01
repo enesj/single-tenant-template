@@ -32,7 +32,7 @@
   :mobile/fetch-report-monthly
   (fn [_ _]
     {:http-xhrio {:method :get
-                  :uri "/api/v1/expenses/by-month"
+                  :uri "/api/v1/expenses/reports/by-month"
                   :params {:months_back 6}
                   :response-format (ajax/json-response-format {:keywords? true})
                   :on-success [:mobile/report-loaded :by-month]

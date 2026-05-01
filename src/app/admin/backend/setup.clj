@@ -33,12 +33,6 @@
      (catch Exception e
        (println "Error creating admin:" (.getMessage e))))))
 
-(defn create-test-data!
-  "No-op placeholder for multi-tenant seed data. Left here to keep API compatibility."
-  ([] (create-test-data! (get-db)))
-  ([_db]
-   (println "Skipping multi-tenant test data generation (single-tenant template).")))
-
 (defn setup-all!
   "Setup admin user; kept for compatibility with multi-tenant workflow."
   []

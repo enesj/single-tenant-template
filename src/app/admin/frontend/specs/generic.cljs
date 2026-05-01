@@ -133,38 +133,12 @@
           (log/warn "No table config found for entity:" entity-keyword "available entities:" (keys (get-in db [:admin :config :table-columns]))))
         nil))))
 
-;; LEGACY: Keep the old function for backward compatibility (but mark it as reading from cache)
-
-;; Legacy functions maintained for backward compatibility
-
-;; Admin-specific entity spec overrides for vector config entities
-;; This ensures column visibility panels show correct labels from vector config
-
-(defn- create-admin-entity-specs-override-from-db
-  "Create admin-specific entity specs with proper labels from vector config in Re-frame DB"
-  [db entity-keyword]
-  (let [spec (generate-admin-entity-spec-from-db db entity-keyword)]
-    (when spec
-      ;; Convert vector config spec to format expected by template system.
-      ;; (Currently the spec shape is already compatible.)
-      spec)))
-
-;; Removed unused create-admin-entity-specs-override function
-
-;; FIXED: Admin-specific entity specs subscription - reads from Re-frame DB
+;; Admin-specific entity specs subscription - reads from Re-frame DB
 ;; Now returns the full entity-spec map instead of just fields vector
 (rf/reg-sub
   :admin/entity-specs-by-name
   (fn [db [_ entity-name]]
     (generate-admin-entity-spec-from-db db entity-name)))
-
-;; Backward compatibility subscription for :admin/entity-spec
-(rf/reg-sub
-  :admin/entity-spec
-  (fn [db [_ entity-name]]
-    (create-admin-entity-specs-override-from-db db entity-name)))
-
-;; Backward compatibility subscription for :entity-specs/<entity> format
 
 ;; =============================================================================
 ;; Admin Form Entity Specs - form-fields.edn based configuration

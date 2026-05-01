@@ -1,8 +1,8 @@
 (ns app.admin.frontend.events.entity-sync
   "Bridge events that sync domain-specific admin responses into the shared template entity store.
 
-  This namespace provides generic `:admin/refresh-entity-list` and `:admin/refresh-entity`
-  events that dispatch to domain-owned sync events via the domain registry.
+  This namespace provides a generic `:admin/refresh-entity-list` event that
+  dispatches to domain-owned sync events via the domain registry.
   
   Domain adapters register their sync events, and this namespace acts as a dispatcher
   without concrete domain knowledge."
@@ -43,13 +43,3 @@
           (when (pos? count*)
             (log/debug "No sync handler registered for entity" {:entity entity-key}))
           {})))))
-
-(rf/reg-event-fx
-  :admin/refresh-entity
-  (fn [{:keys [_db]} [_ entity-key entity]]
-    ;; For now we rely on list reloads (or CRUD bridge defaults) to refresh the template
-    ;; entity store after single-entity mutations. Keeping this event as a no-op avoids
-    ;; accidentally replacing the entire list with a single entity.
-    (log/debug "admin/refresh-entity (no-op)"
-      {:entity-key entity-key :id (:id entity)})
-    {}))

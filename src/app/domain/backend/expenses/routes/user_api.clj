@@ -52,13 +52,11 @@
    ;; New workspace dashboard (single endpoint, all widgets)
    ["/dashboard" {:get {:handler (user-dashboard/dashboard-handler db)}}]
 
-   ;; Legacy summary endpoints (kept for backwards compat)
-   ["/summary" {:get {:handler (user-expenses-summary/expense-summary-handler db)}}]
-   ["/by-month" {:get {:handler (user-expenses-summary/spending-by-month-handler db)}}]
-   ["/by-supplier" {:get {:handler (user-expenses-summary/spending-by-supplier-handler db)}}]
-
    ;; Tenant-scoped report endpoints (reports grouping by global entities are in admin API)
    ["/reports"
+     ["/summary" {:get {:handler (user-expenses-summary/expense-summary-handler db)}}]
+     ["/by-month" {:get {:handler (user-expenses-summary/spending-by-month-handler db)}}]
+     ["/by-supplier" {:get {:handler (user-expenses-summary/spending-by-supplier-handler db)}}]
     ["/day-of-week" {:get {:handler (user-expenses-reports/day-of-week-spending-handler db)}}]
     ["/size-distribution" {:get {:handler (user-expenses-reports/expense-size-distribution-handler db)}}]
     ["/daily-heatmap" {:get {:handler (user-expenses-reports/daily-heatmap-handler db)}}]

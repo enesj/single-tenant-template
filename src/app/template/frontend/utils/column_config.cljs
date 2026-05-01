@@ -63,7 +63,7 @@
 (defn toggle-column-event
   "Dispatch vector for toggling a column's visibility."
   [entity-kw field-id]
-  [:admin/toggle-column-visibility entity-kw field-id])
+  [:app.admin.frontend.events.config/toggle-column-visibility entity-kw field-id])
 
 (defn toggle-filter-event
   "Dispatch vector for toggling a column's filterable state."

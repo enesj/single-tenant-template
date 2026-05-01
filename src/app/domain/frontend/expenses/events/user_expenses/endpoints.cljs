@@ -4,13 +4,13 @@
     [app.template.frontend.api :as api]))
 
 (def dashboard-endpoint (api/versioned-endpoint "/expenses/dashboard"))
-(def summary-endpoint (api/versioned-endpoint "/expenses/summary"))
 (def list-endpoint (api/versioned-endpoint "/expenses"))
-(def by-month-endpoint (api/versioned-endpoint "/expenses/by-month"))
-(def by-supplier-endpoint (api/versioned-endpoint "/expenses/by-supplier"))
 (def expense-detail-endpoint (api/versioned-endpoint "/expenses"))
 
 (def reports-endpoint (api/versioned-endpoint "/expenses/reports"))
+(def summary-endpoint (str reports-endpoint "/summary"))
+(def by-month-endpoint (str reports-endpoint "/by-month"))
+(def by-supplier-endpoint (str reports-endpoint "/by-supplier"))
 (def reports-day-of-week-endpoint (str reports-endpoint "/day-of-week"))
 (def reports-size-distribution-endpoint (str reports-endpoint "/size-distribution"))
 (def reports-daily-heatmap-endpoint (str reports-endpoint "/daily-heatmap"))

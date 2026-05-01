@@ -71,24 +71,19 @@
 (defn parse-sort-params
   "Parse canonical sort params from user expenses query params.
 
-  Accepts the new `sort` query param (`field:dir,field2:dir`) and also tolerates
-  legacy `order-by` / `order-dir` during the cutover.
+  Accepts the canonical `sort` query param (`field:dir,field2:dir`).
 
   Returns:
   - :sorts     ordered sort entries
-  - :order-by  first sort field (legacy convenience)
-  - :order-dir first sort direction (legacy convenience)"
+  - :order-by  first sort field for existing service-layer option maps
+  - :order-dir first sort direction for existing service-layer option maps"
   [params]
-  (let [sorts (or (some-> (get-param params :sort)
-                    str
-                    (str/split #",")
-                    (->> (keep parse-sort-entry)
-                      seq
-                      vec))
-                (let [order-by (normalize-sort-field (get-param params :order-by))
-                      order-dir (normalize-sort-direction (get-param params :order-dir))]
-                  (when (and order-by order-dir)
-                    [{:field order-by :direction order-dir}])))
+  (let [sorts (some-> (get-param params :sort)
+                str
+                (str/split #",")
+                (->> (keep parse-sort-entry)
+                  seq
+                  vec))
         primary-sort (first sorts)]
     (cond-> {}
       (seq sorts) (assoc :sorts sorts)

@@ -69,12 +69,12 @@
 
 (defn register-entity-spec-sub!
   "Register an `:entity-specs/<entity>` subscription that proxies to
-  `[:admin/entity-spec <entity>]`. Accepts optional `:spec-keys` collection when
+  `[:admin/entity-specs-by-name <entity>]`. Accepts optional `:spec-keys` collection when
   multiple admin spec keys should be checked (first non-nil wins).
 
   Options:
   - `:entity-key`: keyword for the entity (required)
-  - `:spec-keys`: collection of keys queried from `:admin/entity-spec`
+  - `:spec-keys`: collection of keys queried from `:admin/entity-specs-by-name`
   - `:sub-id`: override the subscription id keyword
   - `:value-fn`: custom handler `(fn [values _])`
 
@@ -83,7 +83,7 @@
     :or {spec-keys nil}}]
   (let [spec-keys (seq (or spec-keys [entity-key]))
         sub-id (or sub-id (keyword "entity-specs" (name entity-key)))
-        signal-args (mapcat (fn [k] [:<- [:admin/entity-spec k]]) spec-keys)
+        signal-args (mapcat (fn [k] [:<- [:admin/entity-specs-by-name k]]) spec-keys)
         multi? (> (count spec-keys) 1)
         handler (or value-fn
                   (if multi?

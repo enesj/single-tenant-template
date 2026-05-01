@@ -33,7 +33,7 @@
   ["extracted" "review_required" "posted" "failed"])
 
 (deftest admin-entity-spec-preserves-model-derived-field-types
-  (testing ":admin/entity-spec keeps model field typing/options for vector-config columns"
+  (testing ":admin/entity-specs-by-name keeps model field typing/options for vector-config columns"
     (reset-db!
       {:admin {:config {:table-columns
                         {:expenses {:available-columns ["purchased_at" "currency" "supplier_display_name"]
@@ -50,7 +50,7 @@
                                          {:value "EUR" :label "EUR"}
                                          {:value "USD" :label "USD"}]}]}}})
 
-    (let [spec @(rf/subscribe [:admin/entity-spec :expenses])
+    (let [spec @(rf/subscribe [:admin/entity-specs-by-name :expenses])
           by-id (fields-by-id (:fields spec))
           purchased-at (get by-id :purchased-at)
           currency (get by-id :currency)
@@ -83,7 +83,7 @@
                                :options all-receipt-status-options}
                               {:id "created-at" :label "Created at" :input-type "datetime-local"}]}}})
 
-    (let [spec @(rf/subscribe [:admin/entity-spec :receipts])
+    (let [spec @(rf/subscribe [:admin/entity-specs-by-name :receipts])
           status-field (get (fields-by-id (:fields spec)) :status)
           option-values (mapv :value (:options status-field))]
       (is (= stable-receipt-status-values option-values))

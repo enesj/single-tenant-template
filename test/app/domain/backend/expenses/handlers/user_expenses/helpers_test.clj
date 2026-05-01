@@ -52,3 +52,25 @@
 (deftest parse-page-offset-non-numeric-returns-zero
   (is (= 0 (h/parse-page-offset {:offset "abc"})))
   (is (= 0 (h/parse-page-offset {:offset ""}))))
+
+;; ============================================================================
+;; parse-sort-params
+;; ============================================================================
+
+(deftest parse-sort-params-reads-canonical-sort-param
+  (is (= {:sorts [{:field :created-at :direction :desc}
+                  {:field :status :direction :asc}]
+          :order-by :created-at
+          :order-dir :desc}
+        (h/parse-sort-params {:sort "created-at:desc,status:asc"}))))
+
+(deftest parse-sort-params-ignores-legacy-order-by-order-dir
+  (is (= {}
+        (h/parse-sort-params {:order-by "created-at"
+                              :order-dir "desc"}))))
+
+(deftest parse-sort-params-drops-invalid-sort-entries
+  (is (= {:sorts [{:field :status :direction :asc}]
+          :order-by :status
+          :order-dir :asc}
+        (h/parse-sort-params {:sort "created-at:sideways,status:asc"}))))

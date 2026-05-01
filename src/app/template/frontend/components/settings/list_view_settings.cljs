@@ -24,7 +24,7 @@
   [vector-mode? entity-kw field-id]
   (rf/dispatch
     (if vector-mode?
-      [:admin/toggle-column-visibility entity-kw field-id]
+      [:app.admin.frontend.events.config/toggle-column-visibility entity-kw field-id]
       [::settings-events/toggle-column-visibility entity-kw field-id])))
 
 (defn- toggle-field-filtering! [entity-kw field-id]
@@ -86,7 +86,7 @@
         dispatch-reorder! (fn [new-order]
                             (rf/dispatch
                               (if vector-mode?
-                                [:admin/reorder-columns entity-kw new-order]
+                                [:app.admin.frontend.events.config/reorder-columns entity-kw new-order]
                                 [::settings-events/set-column-order entity-kw new-order])))
         reorder-fields! (fn [from-id to-id]
                           (let [from-index (.indexOf ordered-field-ids from-id)
@@ -221,11 +221,14 @@
      {:id       string — DOM id
       :label    string — button text
       :active?  boolean — shown-bold when true
-      :on-click (fn [] ...) — dispatched on click}"
+      :on-click (fn [] ...) — dispatched on click}
+
+   :extra-toggle-groups (optional) — vector of grouped domain-specific toggles:
+     {:id string, :label string, :toggles [extra-toggle-spec ...]}"
   [{:keys [entity-name _show-timestamps? _show-edit? _show-delete? _show-highlights? _show-select? _show-filtering?
            global-settings? current-entity-name compact? entity-spec hardcoded-display-settings
            per-page on-per-page-change rows-per-page-options measured-table-height measured-table-width
-           extra-toggles]}]
+           extra-toggles extra-toggle-groups]}]
 
   (let [t (use-t)
         ;; Normalize entity name to keyword consistently
@@ -253,8 +256,6 @@
         curr-show-add-button? (:show-add-button? entity-settings)
         curr-show-batch-edit? (:show-batch-edit? entity-settings)
         curr-show-batch-delete? (:show-batch-delete? entity-settings)
-        curr-show-selected-rows? (:show-selected-rows? entity-settings)
-        curr-show-unselected-rows? (:show-unselected-rows? entity-settings)
 
         ;; Helper component for toggle buttons
         ;; Locked settings (from resolver) are hidden from the UI
@@ -375,6 +376,25 @@
             ($ :span {:class (str "text-sm "
                                (if active? "font-bold" "font-light"))}
               label)))
+
+            (for [{:keys [id label toggles]} extra-toggle-groups
+              :when (and id label (seq toggles))]
+              ($ :div {:key id
+               :id id
+               :class "flex items-center gap-2 p-1 rounded-md"}
+            ($ :span {:class "text-sm font-medium"}
+              label)
+            (for [{toggle-id :id toggle-label :label active? :active? on-click :on-click} toggles
+              :when (and toggle-id toggle-label on-click)]
+              ($ :button {:key toggle-id
+                  :id toggle-id
+                  :type "button"
+                  :class (str "btn btn-xs "
+                       (if active? "btn-primary" "btn-ghost"))
+                  :on-click (fn [e]
+                      (.preventDefault e)
+                      (on-click))}
+                toggle-label))))
 
         ;; Table width control
         (let [current-width (use-subscribe [::settings-events/table-width entity-kw])

@@ -264,8 +264,8 @@
   [config-key]
   (let [all-path-maps (into []
                         (remove nil?)
-                        [template-user/paths
-                         (domain-registry/primary-user-ui-config-paths)])]
+                        (cons template-user/paths
+                          (vals (domain-registry/get-ui-config-paths))))]
     (->> all-path-maps
       (keep #(get % config-key))
       vec)))

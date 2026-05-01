@@ -5,7 +5,6 @@
     [app.admin.frontend.handlers.generic :as generic-handlers]
     [app.admin.frontend.renderers.content :as content-renderer]
     [app.admin.frontend.renderers.modals :as modal-renderer]
-    [app.template.frontend.utils.id :as id-utils]
     [app.template.frontend.subs.entity :as entity-subs]
     [uix.core :refer [$ defui use-memo]]
     [uix.re-frame :refer [use-subscribe]]))
@@ -56,20 +55,12 @@
         entity-data (use-subscribe [::entity-subs/paginated-entities actual-entity-key])
         {:keys [page-title page-description adapter-init-fn features components] :as config} (or merged-config {})
         {:keys [modals custom-header custom-body-top]} components
-        entity-ids (->> entity-data (map id-utils/extract-entity-id) (filter some?) vec)
-        selection-change-handler (use-memo #(generic-handlers/create-generic-selection-handler actual-entity-key)
-                                   [actual-entity-key])
         additional-effects (use-memo #(when merged-config
                                         (generic-handlers/create-generic-additional-effects config))
                              [merged-config config])
         render-main-content (when merged-config (content-renderer/create-main-content-renderer config))
         header-render (use-memo #(build-header-renderer custom-header) [custom-header])
-        body-top-render (use-memo #(build-body-top-renderer custom-body-top) [custom-body-top])
-        ;; Always call the hook, but pass conditional parameters to handle logic inside
-        _ (generic-handlers/use-deletion-constraints
-            actual-entity-key
-            entity-ids
-            (and merged-config (true? (:deletion-constraints? features))))]
+        body-top-render (use-memo #(build-body-top-renderer custom-body-top) [custom-body-top])]
 
     (when ^boolean js/goog.DEBUG
       (js/console.log "generic-admin-entity-page state"
@@ -89,7 +80,6 @@
            :page-description page-description
            :adapter-init-fn adapter-init-fn
            :additional-effects additional-effects
-           :selection-change-handler selection-change-handler
            :custom-header-content header-render
            :custom-body-top body-top-render
            :render-main-content render-main-content

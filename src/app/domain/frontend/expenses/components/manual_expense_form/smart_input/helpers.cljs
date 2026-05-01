@@ -66,22 +66,20 @@
 
 (defn items-phase-quick-pick-types
   "Return which entity types should be surfaced as visible quick-pick chips
-   in phase 1. Suppliers and stores are intentionally excluded from phase 1
-   quick-picks so that articles get the prominent slot. Users can still search
-   for suppliers/stores via the search input."
+   in phase 1. From a blank state, suppliers and stores are intentionally
+   excluded so that category and articles get the prominent slot. Once context
+   narrows the search, keep the remaining context chips visible so a selected
+   supplier can immediately surface its stores."
   [available-search-types context article-mode?]
   (cond
     article-mode?
     []
 
-    (< (count available-search-types) 4)
-    (vec (remove #{:supplier :store} available-search-types))
-
     (empty? context)
     [:category :article]
 
     :else
-    [:article]))
+    (vec (remove #{:supplier} available-search-types))))
 
 (defn items-phase-quick-pick-layout
   "Split phase-1 quick-pick groups into a top slot and the normal lower slot.

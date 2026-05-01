@@ -32,9 +32,8 @@
     (rf/dispatch-sync [:admin/load-audit-logs])
 
     (let [req (setup/last-http-request)]
-      (is (= "created-at" (get-in req [:params :order-by])))
-      (is (= "desc" (get-in req [:params :order-dir])))
-      (is (not= "timestamp" (get-in req [:params :order-by]))
+      (is (= "created-at:desc" (get-in req [:params :sort])))
+      (is (not= "timestamp:desc" (get-in req [:params :sort]))
         "Audit requests should not use the legacy timestamp sort field"))))
 
 (deftest load-audit-logs-prefers-template-pagination-over-legacy-admin-state

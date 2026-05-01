@@ -252,7 +252,7 @@
           payload (:params req)]
       (is (= :put (:method req)))
       (is (= "/admin/api/settings/user-ui-config" (:uri req)))
-      (is (= #{:entities :view-options :form-fields :table-columns}
+      (is (= #{:entities :view-options :form-fields :table-columns :navigation}
             (set (keys payload))))
       (is (= false (get-in payload [:view-options :expenses :display-defaults :show-edit?]))))
 

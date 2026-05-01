@@ -228,7 +228,7 @@
             (let [btn (button-by-text container "Currency")]
               (is (some? btn) "Currency toggle button should render")
               (.click btn)
-              (is (= [:admin/toggle-column-visibility :expenses :currency]
+              (is (= [:app.admin.frontend.events.config/toggle-column-visibility :expenses :currency]
                     @dispatched)
                 "Admin pages must dispatch admin vector-config toggle event")
               (done))))))))
@@ -267,7 +267,7 @@
               (is (not (str/includes? (.-className btn) "font-semibold"))
                 "Hidden column should not render as visible when id is namespaced")
               (.click btn)
-              (is (= [:admin/toggle-column-visibility :admins :email]
+              (is (= [:app.admin.frontend.events.config/toggle-column-visibility :admins :email]
                     @dispatched)
                 "Click must dispatch a normalized (non-namespaced) column key")
               (done))))))))
