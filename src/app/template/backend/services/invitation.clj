@@ -72,6 +72,26 @@
     (cond-> (dissoc row :token)
       email (assoc :email email))))
 
+(defn- run-optional-db-step!
+  "Run optional work inside a savepoint so a caught SQL error does not abort
+  the surrounding invitation-accept transaction. PostgreSQL keeps a transaction
+  in an aborted state after a failed statement until a rollback happens."
+  [tx step-name context f]
+  (let [savepoint (.setSavepoint tx)]
+    (try
+      (let [result (f)]
+        (try
+          (.releaseSavepoint tx savepoint)
+          (catch Exception _))
+        result)
+      (catch Exception e
+        (.rollback tx savepoint)
+        (try
+          (.releaseSavepoint tx savepoint)
+          (catch Exception _))
+        (log/warn e step-name context)
+        nil))))
+
 ;; ============================================================================
 ;; CRUD
 ;; ============================================================================
@@ -179,44 +199,45 @@
         user-email (resolve-user-email db user)
         now (java.time.LocalDateTime/now)
         member-id (java.util.UUID/randomUUID)]
-    (jdbc/with-transaction [tx db]
-      (let [membership (convert-pg-objects
-                         (jdbc/execute-one! tx
-                           (sql/format {:insert-into [:tenant_memberships]
-                                        :values [{:id member-id
-                                                  :tenant_id tenant-id
-                                                  :user_id user-id
-                                                  :role [:cast (name role) :membership_role]
-                                                  :status [:cast "active" :membership_status]
-                                                  :invited_by invited-by
-                                                  :created_at now
-                                                  :updated_at now}]
-                                        :returning [:*]})))]
-        (jdbc/execute-one! tx
-          (sql/format {:update [:tenant_invitations]
-                       :set {:status [:cast "accepted" :invitation_status]
-                             :updated_at now}
-                       :where [:= :id inv-id]}))
+    (jdbc/transact db
+      (fn [tx]
+        (let [membership (convert-pg-objects
+                           (jdbc/execute-one! tx
+                             (sql/format {:insert-into [:tenant_memberships]
+                                          :values [{:id member-id
+                                                    :tenant_id tenant-id
+                                                    :user_id user-id
+                                                    :role [:cast (name role) :membership_role]
+                                                    :status [:cast "active" :membership_status]
+                                                    :invited_by invited-by
+                                                    :created_at now
+                                                    :updated_at now}]
+                                          :returning [:*]})))]
+          (jdbc/execute-one! tx
+            (sql/format {:update [:tenant_invitations]
+                         :set {:status [:cast "accepted" :invitation_status]
+                               :updated_at now}
+                         :where [:= :id inv-id]}))
 
-        (try
-          (tenant-svc/provision-user-payer! tx tenant-id user-id
-            user-email
-            :full-name (or (:full_name user) (:users/full_name user)))
-          (catch Exception e
-            (log/warn e "Failed to provision user payer on invitation accept"
-              {:tenant-id tenant-id :user-id user-id})))
+          (run-optional-db-step!
+            tx
+            "Failed to provision user payer on invitation accept"
+            {:tenant-id tenant-id :user-id user-id}
+            #(tenant-svc/provision-user-payer! tx tenant-id user-id
+               user-email
+               :full-name (or (:full_name user) (:users/full_name user))))
 
-        (try
-          (onboarding/initialise-delta-onboarding! tx user-id (name role))
-          (catch Exception e
-            (log/warn e "Failed to initialise onboarding on invitation accept"
-              {:user-id user-id :role role})))
+          (run-optional-db-step!
+            tx
+            "Failed to initialise onboarding on invitation accept"
+            {:user-id user-id :role role}
+            #(onboarding/initialise-delta-onboarding! tx user-id (name role)))
 
-        (log/info "Invitation accepted"
-          {:user-ref (email-privacy/user-ref user-id)
-           :tenant-ref (email-privacy/tenant-ref tenant-id)
-           :role role})
-        membership))))
+          (log/info "Invitation accepted"
+            {:user-ref (email-privacy/user-ref user-id)
+             :tenant-ref (email-privacy/tenant-ref tenant-id)
+             :role role})
+          membership)))))
 
 (defn revoke-invitation!
   "Revoke a pending invitation. No-op if already non-pending."

@@ -182,14 +182,14 @@
         (is (>= (count users) 2))))))
 
 (deftest user-search-test
-  (testing "can search users by email"
+  (testing "can search users by full name while returning resolved email"
     (when-let [db fixtures/*test-db*]
       (let [admin (create-test-admin! db)
             admin-plain (plain-keys admin)
             admin-id (:id admin-plain)
             unique-prefix (str "searchable-" (UUID/randomUUID))
             email (str unique-prefix "@test.com")
-            _ (create-test-user! db admin-id {:email email :full_name "Searchable User"})
+            _ (create-test-user! db admin-id {:email email :full_name unique-prefix})
             results (user-service/list-all-users db {:search unique-prefix})
             result-plain (plain-keys (first results))]
         (is (= 1 (count results)))
@@ -286,7 +286,7 @@
   (testing "HoneySQL queries execute correctly"
     (when-let [db fixtures/*test-db*]
       (let [result (jdbc/execute! db
-                     (hsql/format {:select [:id :email]
+                     (hsql/format {:select [:id :email_ciphertext]
                                    :from [:admins]
                                    :limit 5}))]
         (is (coll? result))))))

@@ -13,19 +13,40 @@
 
 (defn- role-name [membership]
   (or (:role membership)
-    (:tenant_memberships/role membership)))
+    (:tenant_memberships/role membership)
+    (:tenant-memberships/role membership)))
 
 (defn- membership-id [membership]
-  (or (:id membership)
-    (:tenant_memberships/id membership)))
+  (or (:tenant_memberships/id membership)
+    (:tenant-memberships/id membership)
+    (:membership/id membership)
+    (:id membership)))
 
 (defn- membership-status [membership]
   (or (:status membership)
-    (:tenant_memberships/status membership)))
+    (:tenant_memberships/status membership)
+    (:tenant-memberships/status membership)))
 
 (defn- membership-user-id [membership]
-  (or (:user_id membership)
-    (:tenant_memberships/user_id membership)))
+  (or (:tenant_memberships/user_id membership)
+    (:tenant-memberships/user-id membership)
+    (:user_id membership)
+    (:user-id membership)))
+
+(defn- membership-tenant-id [membership]
+  (or (:tenant_memberships/tenant_id membership)
+    (:tenant-memberships/tenant-id membership)
+    (:tenant_id membership)
+    (:tenant-id membership)))
+
+(defn- normalize-membership-row [membership]
+  (when membership
+    (cond-> membership
+      (membership-id membership) (assoc :id (membership-id membership))
+      (role-name membership) (assoc :role (role-name membership))
+      (membership-status membership) (assoc :status (membership-status membership))
+      (membership-user-id membership) (assoc :user_id (membership-user-id membership))
+      (membership-tenant-id membership) (assoc :tenant_id (membership-tenant-id membership)))))
 
 (defn- active-membership?
   [membership]
@@ -105,7 +126,7 @@
         (catch Exception e
           (log/warn e "Failed to initialise onboarding on role change"
             {:user-id user-id :new-role new-role}))))
-    result))
+    (normalize-membership-row result)))
 
 (defn superpower-change-role!
   "Platform-admin role change that still preserves tenant ownership invariants."
@@ -126,13 +147,14 @@
 
   (let [target-id (membership-id target-membership)
         now       (java.time.LocalDateTime/now)]
-    (convert-pg-objects
-      (jdbc/execute-one! db
-        (sql/format {:update [:tenant_memberships]
-                     :set    {:role       [:cast new-role :membership_role]
-                              :updated_at now}
-                     :where  [:= :id target-id]
-                     :returning [:*]})))))
+    (normalize-membership-row
+      (convert-pg-objects
+        (jdbc/execute-one! db
+          (sql/format {:update [:tenant_memberships]
+                       :set    {:role       [:cast new-role :membership_role]
+                                :updated_at now}
+                       :where  [:= :id target-id]
+                       :returning [:*]}))))))
 
 (defn superpower-remove-member!
   "Platform-admin member removal that still preserves tenant ownership invariants."
@@ -147,13 +169,14 @@
 
   (let [target-id (membership-id target-membership)
         now       (java.time.LocalDateTime/now)]
-    (convert-pg-objects
-      (jdbc/execute-one! db
-        (sql/format {:update [:tenant_memberships]
-                     :set    {:status     [:cast "suspended" :membership_status]
-                              :updated_at now}
-                     :where  [:= :id target-id]
-                     :returning [:*]})))))
+    (normalize-membership-row
+      (convert-pg-objects
+        (jdbc/execute-one! db
+          (sql/format {:update [:tenant_memberships]
+                       :set    {:status     [:cast "suspended" :membership_status]
+                                :updated_at now}
+                       :where  [:= :id target-id]
+                       :returning [:*]}))))))
 
 ;; ============================================================================
 ;; Ownership Transfer
@@ -185,23 +208,26 @@
   (let [actor-id  (membership-id actor-membership)
         target-id (membership-id target-membership)
         now       (java.time.LocalDateTime/now)]
-    (jdbc/with-transaction [tx db]
-      ;; Actor → admin first so the partial unique owner index never sees two active owners.
-      (let [updated-actor (convert-pg-objects
-                            (jdbc/execute-one! tx
-                              (sql/format {:update [:tenant_memberships]
-                                           :set    {:role [:cast "admin" :membership_role]
-                                                    :updated_at now}
-                                           :where  [:= :id actor-id]
-                                           :returning [:*]})))]
-        ;; Target → owner
-        (jdbc/execute-one! tx
-          (sql/format {:update [:tenant_memberships]
-                       :set    {:role [:cast "owner" :membership_role]
-                                :updated_at now}
-                       :where  [:= :id target-id]}))
-        (log/info "Ownership transferred from" actor-id "to" target-id)
-        updated-actor))))
+    (jdbc/transact db
+      (fn [tx]
+      ;; Swap both roles in one statement so ownership constraints never observe
+      ;; an intermediate zero-owner or two-owner state.
+        (let [updated-rows (map normalize-membership-row
+                             (convert-pg-objects
+                               (jdbc/execute! tx
+                                 ["UPDATE tenant_memberships
+                                   SET role = CASE
+                                                WHEN id = ? THEN 'admin'::membership_role
+                                                WHEN id = ? THEN 'owner'::membership_role
+                                                ELSE role
+                                              END,
+                                       updated_at = ?
+                                   WHERE id IN (?, ?)
+                                   RETURNING *"
+                                  actor-id target-id now actor-id target-id])))
+              updated-actor (some #(when (= (membership-id %) actor-id) %) updated-rows)]
+          (log/info "Ownership transferred from" actor-id "to" target-id)
+          updated-actor)))))
 
 ;; ============================================================================
 ;; Member Removal
@@ -236,12 +262,11 @@
               :errors {:membership ["Only owners and admins can remove members"]}})))
 
   (let [target-id (membership-id target-membership)
-        target-tenant-id (or (:tenant_id target-membership)
-                           (:tenant_memberships/tenant_id target-membership))
-        target-user-id (or (:user_id target-membership)
-                         (:tenant_memberships/user_id target-membership))
+        target-tenant-id (membership-tenant-id target-membership)
+        target-user-id (membership-user-id target-membership)
         now       (java.time.LocalDateTime/now)]
-    (jdbc/with-transaction [tx db]
+    (jdbc/transact db
+      (fn [tx]
       (let [result (convert-pg-objects
                      (jdbc/execute-one! tx
                        (sql/format {:update [:tenant_memberships]
@@ -285,7 +310,7 @@
             (catch Exception e
               (log/warn e "Failed to cleanup payer/settings on member removal"
                 {:tenant-id target-tenant-id :user-id target-user-id}))))
-        result))))
+        (normalize-membership-row result))))))
 
 (defn reinstate-member!
   "Reinstate a suspended membership (set status to active)."
@@ -315,13 +340,14 @@
 
   (let [target-id (membership-id target-membership)
         now       (java.time.LocalDateTime/now)]
-    (convert-pg-objects
-      (jdbc/execute-one! db
-        (sql/format {:update [:tenant_memberships]
-                     :set    {:status     [:cast "active" :membership_status]
-                              :updated_at now}
-                     :where  [:= :id target-id]
-                     :returning [:*]})))))
+    (normalize-membership-row
+      (convert-pg-objects
+        (jdbc/execute-one! db
+          (sql/format {:update [:tenant_memberships]
+                       :set    {:status     [:cast "active" :membership_status]
+                                :updated_at now}
+                       :where  [:= :id target-id]
+                       :returning [:*]}))))))
 
 (comment
   ;; (require 'app.template.backend.services.member :reload)

@@ -4,6 +4,7 @@
     [app.admin.backend.services.admin.admin-invitation :as inv-svc]
     [app.admin.backend.services.admin.auth :as auth]
     [app.backend.fixtures :as fixtures]
+    [app.template.backend.security.email :as email-privacy]
     [app.template.backend.security.tokens :as token-security]
     [clojure.test :refer [deftest is testing use-fixtures]]
     [honey.sql :as sql]
@@ -18,19 +19,22 @@
 
 (defn- create-admin! [db suffix & [{:keys [role] :or {role "admin"}}]]
   (let [id (java.util.UUID/randomUUID)
-        now (java.time.Instant/now)]
-    (jdbc/execute-one! db
-      (sql/format {:insert-into [:admins]
-                   :values [{:id            id
-                             :email         (str "inv-test-" suffix "-" id "@example.com")
-                             :full_name     (str "Admin " suffix)
-                             :password_hash (auth/hash-password "testpassword123")
-                             :role          [:cast role :admin_role]
-                             :status        [:cast "active" :admin_status]
-                             :created_at    now
-                             :updated_at    now}]
-                   :returning [:*]})
-      {:builder-fn rs/as-unqualified-maps})))
+        now (java.time.Instant/now)
+        email (str "inv-test-" suffix "-" id "@example.com")]
+    (assoc
+      (jdbc/execute-one! db
+        (sql/format {:insert-into [:admins]
+                     :values [(merge {:id            id
+                                      :full_name     (str "Admin " suffix)
+                                      :password_hash (auth/hash-password "testpassword123")
+                                      :role          [:cast role :admin_role]
+                                      :status        [:cast "active" :admin_status]
+                                      :created_at    now
+                                      :updated_at    now}
+                                (email-privacy/email-storage email))]
+                     :returning [:*]})
+        {:builder-fn rs/as-unqualified-maps})
+      :email email)))
 
 (defn- unique-email [prefix]
   (str prefix "-" (java.util.UUID/randomUUID) "@example.com"))
@@ -51,7 +55,8 @@
       (is (some? inv))
       (is (= "pending" (str (:status inv))))
       (is (some? (:token inv)))
-      (is (= invite-email (:email inv))))
+      (is (nil? (:email inv)))
+      (is (= (email-privacy/mask-email invite-email) (:email_masked inv))))
 
     (testing "stores only a hash of the invitation token"
       (let [stored (jdbc/execute-one! db

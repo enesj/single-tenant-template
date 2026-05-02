@@ -34,6 +34,7 @@
                     (swap! calls update :resolve-supplier inc)
                     {:supplier {:id (java.util.UUID/randomUUID)}
                      :source :places-api})
+                  stores/resolve-store-from-merchant (fn [& _] nil)
                   article-aliases/find-or-create-alias!
                   (fn [& _]
                     (swap! calls update :article-aliases inc)
@@ -371,6 +372,10 @@
                     (is (= "JADRANKA" (:supplier-display-name opts)))
                     {:store-id inferred-store-id
                      :store-alias-label nil})
+                  stores/get-store
+                  (fn [_db store-id]
+                    {:id store-id
+                     :supplier_id mapped-supplier-id})
 
                   article-aliases/find-or-create-alias!
                   (fn [& _]

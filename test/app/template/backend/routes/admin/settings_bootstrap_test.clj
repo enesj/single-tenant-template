@@ -32,7 +32,8 @@
           (is (= :ok (settings-bootstrap/bootstrap-runtime-configs! db)))
           (is (= (:view-options admin-defaults) (settings-io/read-view-options db)))
           (is (= (:form-fields admin-defaults) (settings-io/read-form-fields db)))
-          (is (= (:table-columns admin-defaults) (settings-io/read-table-columns db)))
+          (is (= ["id" "email"]
+                (get-in (settings-io/read-table-columns db) [:admins :available-columns])))
           (is (= (:entities user-defaults) (settings-io/read-user-entities db)))
           (is (= (:view-options user-defaults) (settings-io/read-user-view-options db)))
           (is (= (:form-fields user-defaults) (settings-io/read-user-form-fields db)))

@@ -3,6 +3,7 @@
     [app.domain.backend.expenses.services.article-aliases :as article-aliases]
     [app.domain.backend.expenses.services.receipts.queries :as receipt-queries]
     [app.domain.backend.expenses.services.receipts.status :as receipt-status]
+            [app.domain.backend.expenses.services.stores :as stores]
     [app.domain.backend.expenses.services.supplier-aliases :as supplier-aliases]
     [app.domain.backend.expenses.services.suppliers :as suppliers]
     [app.domain.backend.expenses.workers.receipt-ocr.extraction :as extraction]
@@ -58,8 +59,9 @@
                                                             :supplier_id mapped-supplier-id})
                   suppliers/resolve-or-create-supplier-with-places! (fn [& _]
                                                                       (throw (ex-info "Should not be called" {})))
+                  stores/resolve-store-from-merchant (fn [& _] nil)
                   article-aliases/find-or-create-alias!
-                  (fn [_db _supplier-id raw-label]
+                  (fn [_db _supplier-id raw-label & _]
                     (swap! calls (fn [m]
                                    (-> m
                                      (update :article-aliases inc)

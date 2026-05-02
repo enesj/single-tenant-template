@@ -2,6 +2,7 @@
   "Tests for invitation create/accept/revoke guards."
   (:require
     [app.backend.fixtures :as fixtures]
+    [app.template.backend.security.email :as email-privacy]
     [app.template.backend.security.tokens :as token-security]
     [app.template.backend.services.invitation :as invitation-svc]
     [app.template.backend.services.tenant :as tenant-svc]
@@ -18,19 +19,22 @@
 
 (defn- create-user! [db suffix]
   (let [id (java.util.UUID/randomUUID)
-        now (java.time.LocalDateTime/now)]
-    (jdbc/execute-one! db
-      (sql/format {:insert-into [:users]
-                   :values [{:id id
-                             :email (str "inv-test-" suffix "-" id "@example.com")
-                             :full_name (str "User " suffix)
-                             :password_hash "placeholder"
-
-                             :status [:cast "active" :user_status]
-                             :auth_provider "password"
-                             :email_verified false
-                             :created_at now :updated_at now}]
-                   :returning [:*]}))))
+        now (java.time.LocalDateTime/now)
+        email (str "inv-test-" suffix "-" id "@example.com")]
+    (assoc
+      (jdbc/execute-one! db
+        (sql/format {:insert-into [:users]
+                     :values [(merge {:id id
+                                      :full_name (str "User " suffix)
+                                      :password_hash "placeholder"
+                                      :status [:cast "active" :user_status]
+                                      :auth_provider "password"
+                                      :email_verified false
+                                      :created_at now
+                                      :updated_at now}
+                                (email-privacy/email-storage email))]
+                     :returning [:*]}))
+      :email email)))
 
 (defn- provision! [db user]
   (tenant-svc/provision-tenant! db {:tenant-defaults {:payers [] :expense-categories []}} user))

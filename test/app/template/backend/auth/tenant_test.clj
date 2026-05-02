@@ -3,6 +3,7 @@
   (:require
     [app.backend.fixtures :as fixtures]
     [app.template.backend.auth.tenant :as tenant-auth]
+    [app.template.backend.security.email :as email-privacy]
     [app.template.backend.services.tenant :as tenant-svc]
     [clojure.test :refer [deftest is testing use-fixtures]]
     [honey.sql :as sql]
@@ -16,18 +17,22 @@
 
 (defn- create-user! [db suffix]
   (let [id (java.util.UUID/randomUUID)
-        now (java.time.Instant/now)]
-    (jdbc/execute-one! db
-      (sql/format {:insert-into [:users]
-                   :values [{:id id
-                             :email (str "auth-tenant-" suffix "-" id "@example.com")
-                             :full_name (str "User " suffix)
-                             :password_hash "placeholder"
-                             :status [:cast "active" :user_status]
-                             :auth_provider "email"
-                             :email_verified false
-                             :created_at now :updated_at now}]
-                   :returning [:*]}))))
+        now (java.time.Instant/now)
+        email (str "auth-tenant-" suffix "-" id "@example.com")]
+    (assoc
+      (jdbc/execute-one! db
+        (sql/format {:insert-into [:users]
+                     :values [(merge {:id id
+                                      :full_name (str "User " suffix)
+                                      :password_hash "placeholder"
+                                      :status [:cast "active" :user_status]
+                                      :auth_provider "email"
+                                      :email_verified false
+                                      :created_at now
+                                      :updated_at now}
+                                (email-privacy/email-storage email))]
+                     :returning [:*]}))
+      :email email)))
 
 (def ^:private test-config
   {:tenant-defaults {:payers [{:label "Cash"}]

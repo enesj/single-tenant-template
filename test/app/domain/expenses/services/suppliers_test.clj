@@ -310,8 +310,8 @@
           (is (= first-id (get-in second-res [:supplier :id])))
           (is (= :db (:source second-res)))
           (is (= 1 @places-calls)))))))
-(deftest delete-supplier-blocked-when-expenses-exist
-  (testing "delete is blocked when supplier has expenses (FK RESTRICT)"
+(deftest delete-supplier-with-expenses-clears-reference
+  (testing "delete succeeds when supplier has expenses and clears the optional FK"
     (when-let [db fixtures/*test-db*]
       (let [supplier-name (str "Delete Supplier Blocked " (java.util.UUID/randomUUID))
             {:keys [supplier]} (suppliers/find-or-create-supplier! db supplier-name {})
@@ -326,21 +326,17 @@
                        :currency "BAM"
                        :items [{:raw_label "Milk" :line_total 10M}]})
             expense-id (:id expense)]
-        (try
-          (suppliers/delete-supplier! db supplier-id)
-          (is false "Expected delete to fail due to FK restrict")
-          (catch org.postgresql.util.PSQLException e
-            (is (= "23503" (.getSQLState e))))
-          (finally
-            ;; Prevent residual rows during standalone REPL runs without rollback fixture.
-            ;; When wrapped in `with-transaction-rollback`, the expected FK exception
-            ;; marks the tx as aborted, so cleanup must be skipped there.
-            (when-not (instance? java.sql.Connection db)
-              (when expense-id
-                (jdbc/execute! db ["delete from expense_items where expense_id = ?" expense-id])
-                (jdbc/execute! db ["delete from expenses where id = ?" expense-id]))
-              (jdbc/execute! db ["delete from suppliers where id = ?" supplier-id])
-              (jdbc/execute! db ["delete from payers where id = ?" (:id payer)]))))))))
+        (is (some? (suppliers/delete-supplier! db supplier-id)))
+        (is (nil? (:supplier_id (jdbc/execute-one!
+                                  db
+                                  ["select supplier_id from expenses where id = ?" expense-id]
+                                  {:builder-fn rs/as-unqualified-lower-maps}))))
+        ;; Prevent residual rows during standalone REPL runs without rollback fixture.
+        (when-not (instance? java.sql.Connection db)
+          (when expense-id
+            (jdbc/execute! db ["delete from expense_items where expense_id = ?" expense-id])
+            (jdbc/execute! db ["delete from expenses where id = ?" expense-id]))
+          (jdbc/execute! db ["delete from payers where id = ?" (:id payer)]))))))
 
 (deftest delete-supplier-succeeds-without-expenses
   (testing "delete succeeds when supplier has no expenses"

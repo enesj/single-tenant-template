@@ -195,10 +195,16 @@
   {:data {:deleted-count n :deleted-ids [...] :errors [...]}}"
   [db]
   (fn [request]
-    (if-not (h/get-user request)
-      (h/unauthorized-response)
-      (if-let [forbidden (h/ensure-admin-or-owner request)]
+    (let [forbidden (when (h/get-user request)
+                      (h/ensure-admin-or-owner request))]
+      (cond
+        (not (h/get-user request))
+        (h/unauthorized-response)
+
         forbidden
+        forbidden
+
+        :else
         (try
           (let [body (h/read-body-params request)
                 tenant-id (h/get-tenant-id request)
@@ -213,8 +219,14 @@
               :else
               (let [delete! (:delete! expense-categories/service)
                     delete-opts (cond-> {}
-                                  tenant-id (assoc :tenant-id tenant-id))]
-                (h/json-response {:data (h/batch-delete-entities #(delete! db % delete-opts) ids)}))))
+                                  tenant-id (assoc :tenant-id tenant-id))
+                    result (h/batch-delete-entities #(delete! db % delete-opts) ids)]
+                (if (and (zero? (:deleted-count result))
+                      (seq (:errors result)))
+                  (h/json-response {:error (:error (first (:errors result)))
+                                    :data result}
+                    400)
+                  (h/json-response {:data result})))))
           (catch clojure.lang.ExceptionInfo e
             (let [status (or (:status (ex-data e)) 400)]
               (h/json-response {:error (ex-message e)} status)))

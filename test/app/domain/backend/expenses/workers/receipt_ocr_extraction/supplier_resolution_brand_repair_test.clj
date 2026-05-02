@@ -13,6 +13,7 @@
 (deftest persist-extract-result-promotes-brand-over-legal-merchant-name-when-branch-present
   (let [receipt-id (java.util.UUID/randomUUID)
         mapped-supplier-id (java.util.UUID/randomUUID)
+      resolved-store-id (java.util.UUID/randomUUID)
         supplier-alias-id (java.util.UUID/randomUUID)
         stored (atom nil)
         calls (atom {:supplier-alias-raw-label nil
@@ -38,11 +39,19 @@
                   (fn [_db _raw-label]
                     {:id (java.util.UUID/randomUUID)
                      :store_id nil})
+                  store-aliases/map-alias-to-store-if-unmapped!
+                  (fn [& _]
+                    nil)
                   stores/resolve-store-from-merchant
                   (fn [_db _supplier-id merchant _opts]
                     (swap! calls assoc :store-merchant merchant)
-                    {:store-id nil
+                    {:store-id resolved-store-id
                      :store-alias-label nil})
+                  stores/get-store
+                  (fn [_db store-id]
+                    (when (= resolved-store-id store-id)
+                      {:id store-id
+                       :supplier_id mapped-supplier-id}))
 
                   article-aliases/find-or-create-alias! (fn [& _]
                                                           {:id (java.util.UUID/randomUUID)})]
@@ -80,6 +89,7 @@
 (deftest persist-extract-result-replaces-store-name-when-it-duplicates-address
   (let [receipt-id (java.util.UUID/randomUUID)
         mapped-supplier-id (java.util.UUID/randomUUID)
+      resolved-store-id (java.util.UUID/randomUUID)
         supplier-alias-id (java.util.UUID/randomUUID)
         stored (atom nil)
         calls (atom {:store-merchant nil})]
@@ -104,11 +114,19 @@
                   (fn [_db _raw-label]
                     {:id (java.util.UUID/randomUUID)
                      :store_id nil})
+                  store-aliases/map-alias-to-store-if-unmapped!
+                  (fn [& _]
+                    nil)
                   stores/resolve-store-from-merchant
                   (fn [_db _supplier-id merchant _opts]
                     (swap! calls assoc :store-merchant merchant)
-                    {:store-id nil
+                    {:store-id resolved-store-id
                      :store-alias-label nil})
+                  stores/get-store
+                  (fn [_db store-id]
+                    (when (= resolved-store-id store-id)
+                      {:id store-id
+                       :supplier_id mapped-supplier-id}))
 
                   article-aliases/find-or-create-alias!
                   (fn [& _]
@@ -139,6 +157,7 @@
 (deftest persist-extract-result-replaces-store-name-when-store-name-is-absent
   (let [receipt-id (java.util.UUID/randomUUID)
         mapped-supplier-id (java.util.UUID/randomUUID)
+      resolved-store-id (java.util.UUID/randomUUID)
         supplier-alias-id (java.util.UUID/randomUUID)
         stored (atom nil)
         calls (atom {:store-merchant nil})]
@@ -163,11 +182,19 @@
                   (fn [_db _raw-label]
                     {:id (java.util.UUID/randomUUID)
                      :store_id nil})
+                  store-aliases/map-alias-to-store-if-unmapped!
+                  (fn [& _]
+                    nil)
                   stores/resolve-store-from-merchant
                   (fn [_db _supplier-id merchant _opts]
                     (swap! calls assoc :store-merchant merchant)
-                    {:store-id nil
+                    {:store-id resolved-store-id
                      :store-alias-label nil})
+                  stores/get-store
+                  (fn [_db store-id]
+                    (when (= resolved-store-id store-id)
+                      {:id store-id
+                       :supplier_id mapped-supplier-id}))
 
                   article-aliases/find-or-create-alias!
                   (fn [& _]
@@ -239,6 +266,10 @@
                     {:id store-id
                      :display_name (:display_name data)
                      :address (:address data)})
+                  stores/resolve-store-from-merchant
+                  (fn [& _]
+                    {:store-id (java.util.UUID/randomUUID)
+                     :store-alias-label "Ogranak Sarajevo 1"})
 
                   suppliers/service
                   {:get (fn [_db supplier-id]

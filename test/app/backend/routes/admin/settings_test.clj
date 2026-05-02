@@ -54,7 +54,8 @@
     (let [db (h/mock-db)
           handler (settings/get-view-options-handler db)
           request (h/mock-admin-request :get "/admin/api/settings/view-options" mock-admin {})]
-      (with-redefs [settings-io/read-view-options (fn [_db] mock-view-options)]
+      (with-redefs [settings-io/read-view-options (fn [_db] mock-view-options)
+                settings-io/read-navigation (fn [_db] {})]
         (let [response (handler request)
               body (h/parse-response-body response)]
           (is (= 200 (:status response)))
@@ -64,7 +65,8 @@
     (let [db (h/mock-db)
           handler (settings/get-view-options-handler db)
           request (h/mock-admin-request :get "/admin/api/settings/view-options" mock-admin {})]
-      (with-redefs [settings-io/read-view-options (fn [_db] {})]
+      (with-redefs [settings-io/read-view-options (fn [_db] {})
+                settings-io/read-navigation (fn [_db] {})]
         (let [response (handler request)
               body (h/parse-response-body response)]
           (is (= 200 (:status response)))
@@ -79,7 +81,8 @@
                     {:body {:view-options new-options}})]
       (with-redefs [settings-io/write-view-options! (fn [_db opts]
                                                       (is (= new-options opts))
-                                                      nil)]
+                                                      nil)
+                    settings-io/read-navigation (fn [_db] {})]
         (let [response (handler request)
               body (h/parse-response-body response)]
           (is (= 200 (:status response)))

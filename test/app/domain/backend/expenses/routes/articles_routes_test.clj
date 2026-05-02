@@ -77,6 +77,8 @@
                   :offset 50
                   :order-by :raw-label
                   :order-dir :asc
+                  :sorts [{:field :raw-label
+                           :direction :asc}]
                   :supplier-name "Acme"
                   :raw-label "Tea"
                   :raw-label-normalized "tea"

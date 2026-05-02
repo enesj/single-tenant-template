@@ -35,6 +35,7 @@
                                                             :supplier_id mapped-supplier-id})
                   suppliers/resolve-or-create-supplier-with-places! (fn [& _]
                                                                       (throw (ex-info "Should not be called" {})))
+                  stores/resolve-store-from-merchant (fn [& _] nil)
 
                   ;; Article alias is created but starts unmapped.
                   article-aliases/find-or-create-alias!
@@ -107,6 +108,7 @@
                                                             :supplier_id mapped-supplier-id})
                   suppliers/resolve-or-create-supplier-with-places! (fn [& _]
                                                                       (throw (ex-info "Should not be called" {})))
+                  stores/resolve-store-from-merchant (fn [& _] nil)
 
                   ;; Alias is already mapped -> skip article creation + mapping.
                   article-aliases/find-or-create-alias!
@@ -157,6 +159,7 @@
                                                             :supplier_id mapped-supplier-id})
                   suppliers/resolve-or-create-supplier-with-places! (fn [& _]
                                                                       (throw (ex-info "Should not be called" {})))
+                  stores/resolve-store-from-merchant (fn [& _] nil)
                   article-aliases/find-or-create-alias!
                   (fn
                     ([_db _supplier-id raw-label]
@@ -219,6 +222,7 @@
                                                             :supplier_id mapped-supplier-id})
                   suppliers/resolve-or-create-supplier-with-places! (fn [& _]
                                                                       (throw (ex-info "Should not be called" {})))
+                  stores/resolve-store-from-merchant (fn [& _] nil)
                   article-aliases/find-or-create-alias!
                   (fn [& _]
                     (swap! article-alias-calls inc)
@@ -267,6 +271,7 @@
                                                             :supplier_id mapped-supplier-id})
                   suppliers/resolve-or-create-supplier-with-places! (fn [& _]
                                                                       (throw (ex-info "Should not be called" {})))
+                  stores/resolve-store-from-merchant (fn [& _] nil)
                   article-aliases/find-or-create-alias!
                   (fn
                     ([_db _supplier-id raw-label]
@@ -352,6 +357,10 @@
                     (is (= "Main Store" (:store_name merchant)))
                     {:store-id store-id
                      :store-alias-label "Main Store"})
+                  stores/get-store
+                  (fn [_db resolved-store-id]
+                    {:id resolved-store-id
+                     :supplier_id mapped-supplier-id})
                   store-aliases/map-alias-to-store-if-unmapped!
                   (fn [_db alias-id mapped-store-id confidence]
                     (is (= store-alias-id alias-id))

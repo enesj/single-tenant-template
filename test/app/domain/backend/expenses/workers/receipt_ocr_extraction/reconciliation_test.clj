@@ -3,6 +3,8 @@
     [app.domain.backend.expenses.services.article-aliases :as article-aliases]
     [app.domain.backend.expenses.services.receipts.queries :as receipt-queries]
     [app.domain.backend.expenses.services.receipts.status :as receipt-status]
+    [app.domain.backend.expenses.services.store-aliases :as store-aliases]
+    [app.domain.backend.expenses.services.stores :as stores]
     [app.domain.backend.expenses.services.supplier-aliases :as supplier-aliases]
     [app.domain.backend.expenses.services.suppliers :as suppliers]
     [app.domain.backend.expenses.workers.receipt-ocr.common :as common]
@@ -28,6 +30,7 @@
                                                             :supplier_id mapped-supplier-id})
                   suppliers/resolve-or-create-supplier-with-places! (fn [& _]
                                                                       (throw (ex-info "Should not be called" {})))
+                  stores/resolve-store-from-merchant (fn [& _] nil)
                   article-aliases/find-or-create-alias!
                   (fn [& _]
                     (swap! calls update :article-aliases inc)
@@ -89,6 +92,7 @@
                   suppliers/resolve-or-create-supplier-with-places!
                   (fn [& _]
                     (throw (ex-info "Should not be called" {})))
+                  stores/resolve-store-from-merchant (fn [& _] nil)
                   article-aliases/find-or-create-alias!
                   (fn [& _]
                     {:id (java.util.UUID/randomUUID)})]
@@ -143,6 +147,7 @@
                   suppliers/resolve-or-create-supplier-with-places!
                   (fn [& _]
                     (throw (ex-info "Should not be called" {})))
+                  stores/resolve-store-from-merchant (fn [& _] nil)
                   article-aliases/find-or-create-alias!
                   (fn [& _]
                     {:id (java.util.UUID/randomUUID)})]
@@ -205,6 +210,7 @@
                   suppliers/resolve-or-create-supplier-with-places!
                   (fn [& _]
                     (throw (ex-info "Should not be called" {})))
+                  stores/resolve-store-from-merchant (fn [& _] nil)
                   article-aliases/find-or-create-alias!
                   (fn [& _]
                     {:id (java.util.UUID/randomUUID)})]
@@ -267,6 +273,7 @@
                   suppliers/resolve-or-create-supplier-with-places!
                   (fn [& _]
                     (throw (ex-info "Should not be called" {})))
+                  stores/resolve-store-from-merchant (fn [& _] nil)
                   article-aliases/find-or-create-alias!
                   (fn [& _]
                     {:id (java.util.UUID/randomUUID)})]
@@ -324,6 +331,19 @@
                                 :display_name supplier-guess
                                 :normalized_key (suppliers/normalize-supplier-key supplier-guess)}
                      :source :places-api})
+                  stores/resolve-store-from-merchant
+                  (fn [& _]
+                    {:store-id ::store-id
+                     :store-alias-label "Pepco B-H Sarajevo"})
+                  store-aliases/find-or-create-alias!
+                  (fn [& _]
+                    {:id ::store-alias-id
+                     :store_id nil})
+                  store-aliases/map-alias-to-store-if-unmapped! (fn [& _] nil)
+                  stores/get-store
+                  (fn [_db store-id]
+                    {:id store-id
+                     :supplier_id mapped-supplier-id})
                   article-aliases/find-or-create-alias!
                   (fn [& _]
                     {:id (java.util.UUID/randomUUID)})]

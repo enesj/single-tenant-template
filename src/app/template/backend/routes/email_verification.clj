@@ -79,7 +79,16 @@
                 already-used?   (= :token-already-used (:error result))
                 should-proceed? (or (:success result) already-used?)
                 user-id         (:user-id result)
-                user-record     (fetch-user-record db user-id)
+                needs-user-row? (and user-id
+                                  (or (nil? (:email result))
+                                    (nil? (:full_name result))))
+                user-record     (when (and needs-user-row?
+                                        (not (keyword? db-conn)))
+                                  (fetch-user-record
+                                    (if (satisfies? db-protocols/DatabaseAdapter db)
+                                      db
+                                      db-conn)
+                                    user-id))
                 user-email      (or (:email result)
                                   (:email user-record))
                 user-full-name  (or (:full_name result)

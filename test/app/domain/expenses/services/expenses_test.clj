@@ -33,7 +33,12 @@
   [db {:keys [currency-code rate-date rate is-fallback]}]
   (jdbc/execute-one!
     db
-    ["insert into daily_exchange_rates (id, currency_code, rate_date, rate, fetched_at, is_fallback, created_at) values (?, ?, ?, ?, now(), ?, now())"
+    ["insert into daily_exchange_rates (id, currency_code, rate_date, rate, fetched_at, is_fallback, created_at)
+      values (?, ?, ?, ?, now(), ?, now())
+      on conflict (currency_code, rate_date)
+      do update set rate = excluded.rate,
+                    fetched_at = excluded.fetched_at,
+                    is_fallback = excluded.is_fallback"
      (UUID/randomUUID) currency-code rate-date rate (boolean is-fallback)]))
 
 (deftest expenses-auto-links-article-when-alias-exists

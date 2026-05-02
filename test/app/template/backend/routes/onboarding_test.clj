@@ -83,7 +83,7 @@
             body (parse-body resp)]
         (is (= 200 (:status resp)))
         (is (some? (:progress body)))
-        (is (= 7 (count (get-in body [:progress :steps]))))))
+        (is (= 8 (count (get-in body [:progress :steps]))))))
 
     (testing "returns nil progress when no onboarding"
       (let [resp (get-progress (auth-request {:user user :tenant-id (UUID/randomUUID) :role "admin"}))
@@ -167,7 +167,7 @@
             body (parse-body resp)]
         (is (= 200 (:status resp)))
         (is (true? (:success body)))
-        (is (= 7 (:skipped-count body)))))))
+        (is (= 8 (:skipped-count body)))))))
 
 ;; ---------------------------------------------------------------------------
 ;; POST /onboarding/dismiss

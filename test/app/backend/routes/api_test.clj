@@ -72,7 +72,8 @@
                                                                           :display-defaults {}
                                                                           :list-config {:form-display :modal}}})
        #'settings-io/read-user-form-fields (fn [_db] {:expenses {:create-fields [:amount]}})
-       #'settings-io/read-user-table-columns (fn [_db] {:expenses {:available-columns [:amount]}})}
+      #'settings-io/read-user-table-columns (fn [_db] {:expenses {:available-columns [:amount]}})
+      #'settings-io/read-user-navigation (fn [_db] {})}
       (fn []
         (let [handler (h/build-handler)
               resp (handler (mock/request :get "/api/v1/config"))

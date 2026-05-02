@@ -4,6 +4,7 @@
     [app.template.backend.auth.protocols :as auth-protocols]
     [app.template.backend.auth.service :as auth-service]
     [app.template.backend.db.protocols :as db-protocols]
+    [app.template.backend.security.email :as email-privacy]
     [clojure.test :refer [deftest is testing]]))
 
 (deftest process-oauth-callback-flags-verification-email-delivery-failure-test
@@ -19,8 +20,8 @@
       (with-redefs [db-protocols/find-by-field
                     (fn [_db entity field value]
                       (is (= :users entity))
-                      (is (= :email field))
-                      (is (= "new.user@example.com" value))
+                      (is (= :email_lookup_hash field))
+                      (is (= (email-privacy/email->lookup-hash "new.user@example.com") value))
                       nil)
 
                     auth-protocols/hash-password

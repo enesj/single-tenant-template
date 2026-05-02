@@ -20,6 +20,7 @@
                   supplier-aliases/map-alias-to-supplier-if-unmapped! (fn [& _] nil)]
       (is (= {:supplier-id supplier-id
               :supplier-alias-id alias-id
+              :alias_action :reused
               :source :ocr-fallback}
             (resolve nil "HESE-KEMERC d.o.o. Sarajevo" {:merchant nil} {})))
       (is (= "HESE-KEMERC" @created-name)))))
@@ -53,6 +54,7 @@
                     nil)]
       (is (= {:supplier-id descriptor-supplier-id
               :supplier-alias-id alias-id
+              :alias_action :reused
               :source :alias_descriptor}
             (resolve nil "Zavod za biomedicinsku dijagnostiku" {:merchant nil} {})))
       (is (= 0 (:resolve-or-create @calls)))
@@ -92,6 +94,7 @@
                      :supplier_id passed-supplier-id})]
       (is (= {:supplier-id descriptor-supplier-id
               :supplier-alias-id alias-id
+              :alias_action :reused
               :source :alias_descriptor_repaired}
             (resolve nil "Zavod za biomedicinsku dijagnostiku" {:merchant nil} {})))
       (is (= 1 (:map-override @calls))))))
